@@ -156,6 +156,17 @@ class ExcelParser:
             "RequestBody": "request_body",
         }
         return mapping.get(field, field.lower())
+    
+    @staticmethod
+    def excel_str_to_dict(s: str) -> Dict[str, Any]:
+        """将Excel中读出的类JSON字符串转为dict"""
+        # 关键：统一替换非标准引号为标准双引号
+        s = s.replace('\u201c', '"')  # " → "
+        s = s.replace('\u201d', '"')  # " → "
+        s = s.replace('\u2018', '"')  # ' → "
+        s = s.replace('\u2019', '"')  # ' → "
+        s = s.replace("'", '"')       # ' → "
+        return json.loads(s)
 
     @staticmethod
     def _safe_parse_json(
@@ -169,13 +180,5 @@ class ExcelParser:
             stripped = raw.strip()
             if not stripped:
                 return {}
-            try:
-                return json.loads(stripped)
-            except json.JSONDecodeError:
-                logger.warning(
-                    "Failed to parse %s as JSON for test case '%s', using empty dict",
-                    field_name,
-                    test_id,
-                )
-                return {}
+            return ExcelParser.excel_str_to_dict(stripped)
         return {}
