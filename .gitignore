@@ -39,3 +39,5 @@ build/
 .vscode/
 
 __pycache__
+
+env-local.yml

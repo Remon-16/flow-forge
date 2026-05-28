@@ -1,6 +1,8 @@
 import logging
 from typing import Any, Dict, List
 
+from core.path_resolver import resolve_path, _Missing
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,7 +67,7 @@ class AssertionEngine:
                 "passed": False,
             }
 
-        actual = AssertionEngine._resolve_path(data, field_path)
+        actual = resolve_path(data, field_path)
 
         if isinstance(actual, _Missing):
             return {
@@ -82,35 +84,3 @@ class AssertionEngine:
             "actual": actual,
             "passed": passed,
         }
-
-    @staticmethod
-    def _resolve_path(data: Any, path: str) -> Any:
-        """Traverse a nested dict/list using dot-notation.
-
-        Example: 'data.items.0.name' -> data['data']['items'][0]['name']
-        """
-        current = data
-        for part in path.split("."):
-            if current is None:
-                return _Missing()
-            if isinstance(current, dict):
-                if part in current:
-                    current = current[part]
-                else:
-                    return _Missing()
-            elif isinstance(current, list):
-                try:
-                    idx = int(part)
-                    if 0 <= idx < len(current):
-                        current = current[idx]
-                    else:
-                        return _Missing()
-                except (ValueError, IndexError):
-                    return _Missing()
-            else:
-                return _Missing()
-        return current
-
-
-class _Missing:
-    """Sentinel indicating a field path could not be resolved."""

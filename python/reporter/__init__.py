@@ -1,3 +1,3 @@
-from .md_writer import MarkdownReportWriter
+from .html_writer import HTMLReportWriter
 
-__all__ = ["MarkdownReportWriter"]
+__all__ = ["HTMLReportWriter"]

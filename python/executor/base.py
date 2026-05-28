@@ -8,10 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class BaseExecutor(ABC):
-    """Abstract executor with built-in thread-pool management.
-
-    Subclasses implement execute_single() for their specific test strategy.
-    """
+    """Abstract executor with built-in thread-pool management."""
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
@@ -56,8 +53,10 @@ class BaseExecutor(ABC):
         return {
             "test_id": case.get("test_id", "unknown"),
             "api_name": case.get("api_name", "unknown"),
+            "app_name": case.get("app_name", ""),
             "method": case.get("method", ""),
             "url": case.get("url", ""),
+            "base_url": case.get("base_url", ""),
             "tag": case.get("tag", ""),
             "remark": case.get("remark", ""),
             "passed": False,

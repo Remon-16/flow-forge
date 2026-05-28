@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import openpyxl
@@ -9,24 +10,43 @@ from core.deep_merge import deep_merge
 
 logger = logging.getLogger(__name__)
 
-_API_SHEET_NAME = 0
-_CASE_SHEET_NAME = 1
+_API_SHEET_INDEX = 0
+_CASE_SHEET_INDEX = 1
+_BIZ_START_SHEET_INDEX = 2
 
-_SIMPLE_FIELDS = ("APIName", "Method", "URL", "StatusCode")
+_SIMPLE_FIELDS = ("APIName", "AppName", "Method", "URL", "StatusCode")
 _JSON_FIELDS = ("RequestHead", "RequestBody")
-_SHEET1_REQUIRED = ("TestID", "APIName", "Method", "URL", "StatusCode")
+_SHEET1_REQUIRED = ("TestID", "APIName", "AppName", "Method", "URL", "StatusCode")
 _SHEET2_REQUIRED = ("TestID", "RelevanceID")
+_BIZ_REQUIRED = ("StepID", "RelevanceID")
+
+_CHINESE_RE = re.compile(r"[一-鿿㐀-䶿豈-﫿]")
+
+
+class ExcelParseError(Exception):
+    """Raised when Excel cell content fails validation."""
+
+
+class StepIDConflictError(Exception):
+    """Raised when duplicate StepID values exist within a biz flow sheet."""
 
 
 class ExcelParser:
-    """Reads a two-sheet Excel test-case file and returns a merged list of test cases."""
+    """Reads a multi-sheet Excel test-case file and returns merged test cases."""
 
     def __init__(self, file_path: str):
         if not os.path.isfile(file_path):
             raise FileNotFoundError(f"Excel file not found: {file_path}")
         self.file_path = file_path
 
-    def parse(self) -> List[Dict[str, Any]]:
+    def parse(self, api_mode: str = "single") -> Dict[str, Any]:
+        """Parse Excel based on apiMode.
+
+        Returns: {"single_cases": [...], "biz_flows": [...]}
+          biz_flows: [{"sheet_name": str, "steps": [...], "parse_error": str|None}]
+        """
+        result: Dict[str, Any] = {"single_cases": [], "biz_flows": []}
+
         wb = openpyxl.load_workbook(self.file_path, data_only=True)
         try:
             if len(wb.sheetnames) < 2:
@@ -34,25 +54,44 @@ class ExcelParser:
                     f"Expected at least 2 sheets, got {len(wb.sheetnames)}: {wb.sheetnames}"
                 )
 
-            api_defs = self._read_api_definitions(wb.worksheets[_API_SHEET_NAME])
+            api_defs = self._read_api_definitions(wb.worksheets[_API_SHEET_INDEX])
             logger.info("Read %d API definitions from sheet 1", len(api_defs))
 
-            test_cases = self._read_test_cases(wb.worksheets[_CASE_SHEET_NAME])
-            logger.info("Read %d test cases from sheet 2", len(test_cases))
+            if api_mode in ("single", "all"):
+                test_cases = self._read_sheet_rows(
+                    wb.worksheets[_CASE_SHEET_INDEX], list(_SHEET2_REQUIRED)
+                )
+                logger.info("Read %d single test cases from sheet 2", len(test_cases))
+                result["single_cases"] = self._merge_cases(api_defs, test_cases)
+                logger.info("Merged into %d single test cases", len(result["single_cases"]))
 
-            merged = self._merge_cases(api_defs, test_cases)
-            logger.info("Merged into %d test cases", len(merged))
-            return merged
+            if api_mode in ("biz", "all"):
+                for idx in range(_BIZ_START_SHEET_INDEX, len(wb.sheetnames)):
+                    ws = wb.worksheets[idx]
+                    sheet_name = ws.title
+                    try:
+                        biz_flow = self._parse_biz_flow(ws, api_defs, sheet_name)
+                        result["biz_flows"].append(biz_flow)
+                    except (ExcelParseError, StepIDConflictError) as e:
+                        logger.error("Biz flow '%s' parse error: %s", sheet_name, e)
+                        result["biz_flows"].append({
+                            "sheet_name": sheet_name,
+                            "steps": [],
+                            "parse_error": str(e),
+                        })
+
+                logger.info("Parsed %d biz flows", len(result["biz_flows"]))
+
+            return result
         finally:
             wb.close()
 
     def _read_api_definitions(self, ws) -> List[Dict[str, Any]]:
-        return self._read_sheet(ws, list(_SHEET1_REQUIRED))
+        return self._read_sheet_rows(ws, list(_SHEET1_REQUIRED))
 
-    def _read_test_cases(self, ws) -> List[Dict[str, Any]]:
-        return self._read_sheet(ws, list(_SHEET2_REQUIRED))
-
-    def _read_sheet(self, ws, required_columns: List[str]) -> List[Dict[str, Any]]:
+    def _read_sheet_rows(
+        self, ws, required_columns: List[str]
+    ) -> List[Dict[str, Any]]:
         headers = []
         for col_idx, cell in enumerate(ws[1], start=1):
             if cell.value is not None:
@@ -77,8 +116,83 @@ class ExcelParser:
 
         return rows
 
+    def _parse_biz_flow(
+        self, ws, api_defs: List[Dict[str, Any]], sheet_name: str
+    ) -> Dict[str, Any]:
+        raw_steps = self._read_sheet_rows(ws, list(_BIZ_REQUIRED))
+
+        step_ids = []
+        for row in raw_steps:
+            sid = str(row.get("StepID", ""))
+            if sid:
+                step_ids.append(sid)
+
+        dupes = {sid for sid in step_ids if step_ids.count(sid) > 1}
+        if dupes:
+            raise StepIDConflictError(
+                f"Duplicate StepID in biz flow '{sheet_name}': {dupes}"
+            )
+
+        for row in raw_steps:
+            trans_val = row.get("Trans")
+            if trans_val not in (None, ""):
+                self._validate_trans(str(trans_val), str(row.get("StepID", "")), sheet_name)
+
+        merged_steps = self._merge_cases(api_defs, raw_steps, is_biz=True)
+        return {"sheet_name": sheet_name, "steps": merged_steps, "parse_error": None}
+
+    def _validate_trans(self, trans_str: str, step_id: str, sheet_name: str) -> None:
+        stripped = trans_str.strip()
+        if not stripped:
+            return
+
+        if _CHINESE_RE.search(stripped):
+            raise ExcelParseError(
+                f"Trans field contains Chinese characters in sheet '{sheet_name}', "
+                f"StepID='{step_id}': {stripped}"
+            )
+
+        pairs = [p.strip() for p in stripped.split(",")]
+        for pair in pairs:
+            if not pair:
+                continue
+            if "=" not in pair:
+                raise ExcelParseError(
+                    f"Trans field format error (expected key=value) in sheet '{sheet_name}', "
+                    f"StepID='{step_id}': '{pair}'"
+                )
+            key, value = pair.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if not key:
+                raise ExcelParseError(
+                    f"Trans field has empty key in sheet '{sheet_name}', "
+                    f"StepID='{step_id}': '{pair}'"
+                )
+            if not value:
+                raise ExcelParseError(
+                    f"Trans field has empty value for key '{key}' in sheet '{sheet_name}', "
+                    f"StepID='{step_id}'"
+                )
+
+            open_brackets = value.count("[") - value.count("]")
+            if open_brackets != 0:
+                raise ExcelParseError(
+                    f"Trans field has mismatched brackets '[' ']' in sheet '{sheet_name}', "
+                    f"StepID='{step_id}', key='{key}': {value}"
+                )
+            open_parens = value.count("(") - value.count(")")
+            if open_parens != 0:
+                raise ExcelParseError(
+                    f"Trans field has mismatched brackets '(' ')' in sheet '{sheet_name}', "
+                    f"StepID='{step_id}', key='{key}': {value}"
+                )
+
     def _merge_cases(
-        self, api_defs: List[Dict[str, Any]], test_cases: List[Dict[str, Any]]
+        self,
+        api_defs: List[Dict[str, Any]],
+        test_cases: List[Dict[str, Any]],
+        is_biz: bool = False,
     ) -> List[Dict[str, Any]]:
         api_lookup: Dict[str, Dict[str, Any]] = {}
         for row in api_defs:
@@ -93,18 +207,21 @@ class ExcelParser:
 
             if api_def is None:
                 logger.warning(
-                    "RelevanceID '%s' not found in API definitions, using test case as-is",
+                    "RelevanceID '%s' not found in API definitions, using row as-is",
                     relevance_id,
                 )
-                merged.append(self._build_result(tc, None))
+                merged.append(self._build_result(tc, None, is_biz))
                 continue
 
-            merged.append(self._build_result(tc, api_def))
+            merged.append(self._build_result(tc, api_def, is_biz))
 
         return merged
 
     def _build_result(
-        self, tc: Dict[str, Any], api_def: Optional[Dict[str, Any]]
+        self,
+        tc: Dict[str, Any],
+        api_def: Optional[Dict[str, Any]],
+        is_biz: bool = False,
     ) -> Dict[str, Any]:
         result = {}
 
@@ -116,9 +233,13 @@ class ExcelParser:
             )
 
         for field in _JSON_FIELDS:
-            tc_json = self._safe_parse_json(tc.get(field), field, tc.get("TestID"))
+            tc_json = self._safe_parse_json(
+                tc.get(field), field, tc.get("TestID") or tc.get("StepID")
+            )
             api_json = (
-                self._safe_parse_json(api_def.get(field), field, api_def.get("TestID"))
+                self._safe_parse_json(
+                    api_def.get(field), field, api_def.get("TestID")
+                )
                 if api_def
                 else {}
             )
@@ -127,7 +248,7 @@ class ExcelParser:
         assert_field = tc.get("AssertDict")
         if assert_field not in (None, ""):
             result["assert_dict"] = self._safe_parse_json(
-                assert_field, "AssertDict", tc.get("TestID")
+                assert_field, "AssertDict", tc.get("TestID") or tc.get("StepID")
             )
         elif api_def:
             api_assert = api_def.get("AssertDict")
@@ -139,7 +260,14 @@ class ExcelParser:
         else:
             result["assert_dict"] = {}
 
-        result["test_id"] = str(tc.get("TestID", ""))
+        if is_biz:
+            result["test_id"] = str(tc.get("StepID", ""))
+            result["step_id"] = str(tc.get("StepID", ""))
+            trans_raw = tc.get("Trans")
+            result["trans"] = str(trans_raw).strip() if trans_raw not in (None, "") else ""
+        else:
+            result["test_id"] = str(tc.get("TestID", ""))
+
         result["tag"] = str(tc.get("Tag", "")) if tc.get("Tag") is not None else ""
         result["remark"] = str(tc.get("Remark", "")) if tc.get("Remark") is not None else ""
 
@@ -149,6 +277,7 @@ class ExcelParser:
     def _normalize_key(field: str) -> str:
         mapping = {
             "APIName": "api_name",
+            "AppName": "app_name",
             "Method": "method",
             "URL": "url",
             "StatusCode": "status_code",
@@ -156,16 +285,14 @@ class ExcelParser:
             "RequestBody": "request_body",
         }
         return mapping.get(field, field.lower())
-    
+
     @staticmethod
     def excel_str_to_dict(s: str) -> Dict[str, Any]:
-        """将Excel中读出的类JSON字符串转为dict"""
-        # 关键：统一替换非标准引号为标准双引号
-        s = s.replace('\u201c', '"')  # " → "
-        s = s.replace('\u201d', '"')  # " → "
-        s = s.replace('\u2018', '"')  # ' → "
-        s = s.replace('\u2019', '"')  # ' → "
-        s = s.replace("'", '"')       # ' → "
+        s = s.replace('“', '"')
+        s = s.replace('”', '"')
+        s = s.replace('‘', '"')
+        s = s.replace('’', '"')
+        s = s.replace("'", '"')
         return json.loads(s)
 
     @staticmethod
@@ -180,5 +307,13 @@ class ExcelParser:
             stripped = raw.strip()
             if not stripped:
                 return {}
-            return ExcelParser.excel_str_to_dict(stripped)
+            try:
+                return ExcelParser.excel_str_to_dict(stripped)
+            except (json.JSONDecodeError, ValueError):
+                logger.warning(
+                    "Failed to parse %s as JSON for '%s', using empty dict",
+                    field_name,
+                    test_id,
+                )
+                return {}
         return {}

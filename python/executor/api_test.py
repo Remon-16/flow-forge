@@ -5,6 +5,8 @@ from typing import Any, Dict
 import requests
 
 from assertion.engine import AssertionEngine
+from auth.login_manager import LoginManager
+from config.config_manager import get_app
 from executor.base import BaseExecutor
 
 logger = logging.getLogger(__name__)
@@ -17,19 +19,26 @@ class ApiTestExecutor(BaseExecutor):
 
     def execute_single(self, case: Dict[str, Any]) -> Dict[str, Any]:
         test_id = case.get("test_id", "unknown")
+        app_name = case.get("app_name") or ""
         method = (case.get("method") or "GET").upper()
-        url = self._build_url(case.get("url", ""))
-        headers = case.get("request_head") or {}
-        body = case.get("request_body") or {}
+        path = case.get("url", "")
+        headers = dict(case.get("request_head") or {})
+        body = dict(case.get("request_body") or {})
         expected_status = case.get("status_code")
 
-        logger.info("[%s] %s %s", test_id, method, url)
+        app_config = get_app(app_name) if app_name else {}
+        base_url = app_config.get("baseURL", "") if app_config else ""
+        url = self._build_url(base_url, path)
+
+        logger.info("[%s] %s %s (app=%s)", test_id, method, url, app_name)
 
         result = {
             "test_id": test_id,
             "api_name": case.get("api_name", ""),
+            "app_name": app_name,
+            "base_url": base_url,
             "method": method,
-            "url": case.get("url", ""),
+            "url": path,
             "tag": case.get("tag", ""),
             "remark": case.get("remark", ""),
             "request_headers": dict(headers),
@@ -40,6 +49,15 @@ class ApiTestExecutor(BaseExecutor):
             "passed": False,
             "error": None,
         }
+
+        resolved_headers, token_error = LoginManager.resolve_token(app_config, headers)
+        if token_error:
+            result["error"] = token_error
+            logger.warning("[%s] Token resolution failed: %s", test_id, token_error)
+            return result
+
+        headers = resolved_headers
+        result["request_headers"] = dict(headers)
 
         try:
             response = self._send_request(method, url, headers, body)
@@ -82,9 +100,10 @@ class ApiTestExecutor(BaseExecutor):
 
         return result
 
-    def _build_url(self, path: str) -> str:
-        base = self.config.get("baseURL", "").rstrip("/")
-        path = path.lstrip("/") if path.startswith("/") else path
+    @staticmethod
+    def _build_url(base_url: str, path: str) -> str:
+        base = base_url.rstrip("/") if base_url else ""
+        path = path.lstrip("/") if path and path.startswith("/") else path
         return f"{base}/{path}" if base else path
 
     def _send_request(
