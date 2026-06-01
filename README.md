@@ -1,10 +1,10 @@
-# Flow Forge — 接口自动化测试平台
+# Flow Forge — 接口自动化测试框架
 
 ![Development Status](https://img.shields.io/badge/状态-开发中-orange) 
 ![Version](https://img.shields.io/badge/版本-v0.1.0--dev-blue)
 ![Branch](https://img.shields.io/badge/最新代码-dev_first-brightgreen)
 
-基于 AI 智能体的接口自动化测试平台。输入需求文档和接口文档，智能体自动生成测试用例 Excel；将 Excel 交给命令行执行器，即可得到测试报告。执行器可无缝集成 Jenkins，实现 CI/CD 流水线。
+基于 AI 智能体的接口自动化测试框架。输入需求文档和接口文档，智能体自动生成测试用例 Excel；将 Excel 交给命令行执行器，即可得到测试报告。执行器可无缝集成 Jenkins，实现 CI/CD 流水线。
 AI智能体可以实现快速的用例输出，但由于AI生成可能产生幻觉，建议人工审核输出的用例。为了更方便人工审核，测试用例和参数放在了同一个Excel内，详细规则见 [agent/README.md](./agent/README.md)。
 
 ## 系统架构
@@ -24,7 +24,7 @@ graph TD
     EXEC --> |退出码| JENKINS
 ```
 
-整个平台由两个核心组件构成：
+整个框架由两个核心组件构成：
 
 - **[agent/](./agent/)** — AI 用例生成智能体：读取需求文档 + 接口文档，经过"计划生成 → 人工审核 → 用例编排"两阶段流水线，输出符合执行器格式的 Excel 用例文件。
 - **[python/](./python/)** — 接口测试执行器：读取 Excel 用例文件，自动管理登录态，多线程执行 HTTP 请求，运行断言，生成自包含 HTML 测试报告。
