@@ -16,7 +16,7 @@ CASE_GENERATION_SYSTEM = """你是一个专业的测试用例编排专家。基�
       "relevance_id": "api_login_post",
       "tag": "P0",
       "api_name": "用户登录",
-      "app_name": "imagocore",
+      "app_name": "someApp",
       "method": "POST",
       "url": "/api/user/login",
       "request_head": {"Content-Type": "application/json"},

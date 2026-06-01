@@ -154,7 +154,7 @@ CLI 参数 > env-{envName}.yml > env.yml > 内置默认值
 配置文件中可以定义多个应用，每个应用可以有多个用户：
 
 ```yaml
-imagocore:
+someApp:
   baseURL: http://localhost:8080
   loginPath: /api/login
   loginBody: userAccount,password

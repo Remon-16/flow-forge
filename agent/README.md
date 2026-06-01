@@ -129,7 +129,7 @@ paths:
 
 | TestID | APIName | AppName | Method | URL | RequestHead | RequestBody | StatusCode | AssertDict |
 |--------|---------|---------|--------|-----|-------------|-------------|------------|------------|
-| api_login_post | 用户登录 | imagocore | POST | /api/user/login | {"Content-Type":"application/json"} | {"username":"","password":""} | 200 | {"status_code":200} |
+| api_login_post | 用户登录 | someApp | POST | /api/user/login | {"Content-Type":"application/json"} | {"username":"","password":""} | 200 | {"status_code":200} |
 
 ## 输出说明
 
