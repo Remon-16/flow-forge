@@ -3,7 +3,6 @@
 import logging
 from typing import Any, Dict, List
 
-from agents.base import BaseAgent
 from config.settings import Settings
 from doc_parser.markdown_parser import MarkdownParser
 from doc_parser.openapi_parser import OpenApiParser
@@ -189,12 +188,6 @@ def analyze_requirement_node(state: GraphState) -> GraphState:
         }
         return state
 
-    try:
-        rag_context = _rag.query("requirement analysis testing", n_results=3)
-        rag_text = "\n".join(rag_context) if rag_context else "(none)"
-    except Exception:
-        rag_text = "(RAG unavailable)"
-
     agent = RequirementAnalyzer(_settings)
     # Inject prompt from registry if available, else agent uses its own defaults
     result = agent.analyze(text)
@@ -215,12 +208,6 @@ def generate_plan_node(state: GraphState) -> GraphState:
 
     analysis = state.get("requirement_analysis", {})
     interfaces = state.get("interfaces", [])
-
-    try:
-        rag_context = _rag.query("test plan generation best practices", n_results=3)
-        rag_text = "\n".join(rag_context) if rag_context else "(none)"
-    except Exception:
-        rag_text = "(RAG unavailable)"
 
     api_summary = state.get("api_summary", [])
     plan_md = agent.generate(analysis, interfaces, api_summary=api_summary)
