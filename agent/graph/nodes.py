@@ -79,6 +79,98 @@ def parse_docs_node(state: GraphState) -> GraphState:
 
 
 # =========================================================================
+# Node: analyze_api — API doc analysis with optional human-in-the-loop
+# =========================================================================
+def analyze_api_node(state: GraphState) -> GraphState:
+    """Analyze API docs and generate structured summaries.
+
+    Self-evaluates quality:
+    - Good quality → auto-pass, continue to next node
+    - Critical uncertainties → optionally ask user for clarification
+    """
+    from langgraph.types import interrupt
+
+    from agents.api_analyzer import ApiAnalyzer
+
+    state.setdefault("errors", [])
+
+    # Already confirmed — skip
+    if state.get("api_summary_confirmed"):
+        return state
+
+    interfaces = state.get("interfaces", [])
+    api_summary = state.get("api_summary", [])
+    feedback = state.get("api_summary_feedback", "")
+
+    agent = ApiAnalyzer(_settings)
+
+    if feedback:
+        summary = agent.revise(interfaces, api_summary, feedback)
+    else:
+        summary = agent.analyze(interfaces)
+
+    state["api_summary"] = summary
+    state["api_summary_feedback"] = ""
+
+    critical = _has_critical_uncertainties(summary)
+
+    if not critical:
+        print("\n[接口分析] 摘要已生成，未发现关键信息缺失，自动通过。")
+        _print_api_summary_brief(summary)
+        state["api_summary_confirmed"] = True
+        return state
+
+    print("\n[接口分析] 发现以下不确定信息：")
+    _print_uncertainties(summary)
+
+    choice = interrupt("是否需要澄清以上问题？(输入修改意见 / 输入 skip 跳过): ")
+
+    if choice.strip().lower() == "skip":
+        state["api_summary_confirmed"] = True
+    else:
+        state["api_summary_feedback"] = choice
+
+    return state
+
+
+def _has_critical_uncertainties(summary: List[Dict]) -> bool:
+    """Check if the summary has any critical unknowns that warrant user input."""
+    for item in summary:
+        if item.get("auth_type") == "不确定":
+            return True
+        if item.get("need_token") is None:
+            return True
+        if not item.get("description") or item.get("description") == "未知":
+            return True
+    return False
+
+
+def _print_api_summary_brief(summary: List[Dict]) -> None:
+    """Print a compact summary table to the console."""
+    print("-" * 60)
+    print(f"{'Endpoint':<30} {'Auth':<15} {'Need Token':<10}")
+    print("-" * 60)
+    for item in summary:
+        path = item.get("api_path", "")[:28]
+        method = item.get("method", "")
+        auth = item.get("auth_type", "none")
+        need_token = "Yes" if item.get("need_token") else "No"
+        print(f"{method} {path:<27} {auth:<15} {need_token:<10}")
+    print("-" * 60)
+
+
+def _print_uncertainties(summary: List[Dict]) -> None:
+    """Print only the items that have uncertainties."""
+    for item in summary:
+        uncertainties = item.get("uncertainties", [])
+        if uncertainties:
+            path = f"{item.get('method', '?')} {item.get('api_path', '?')}"
+            print(f"\n  [{path}]")
+            for u in uncertainties:
+                print(f"    ? {u}")
+
+
+# =========================================================================
 # Node: analyze_requirement
 # =========================================================================
 def analyze_requirement_node(state: GraphState) -> GraphState:
@@ -130,7 +222,8 @@ def generate_plan_node(state: GraphState) -> GraphState:
     except Exception:
         rag_text = "(RAG unavailable)"
 
-    plan_md = agent.generate(analysis, interfaces)
+    api_summary = state.get("api_summary", [])
+    plan_md = agent.generate(analysis, interfaces, api_summary=api_summary)
     state["plan_md"] = plan_md
     return state
 
@@ -186,6 +279,7 @@ def revise_plan_node(state: GraphState) -> GraphState:
     feedback = state.get("plan_feedback", "")
     plan_md = state.get("plan_md", "")
     analysis = state.get("requirement_analysis", {})
+    api_summary = state.get("api_summary", [])
 
     if not feedback.strip():
         logger.warning("revise_plan called without feedback, skipping")
@@ -214,6 +308,7 @@ def revise_plan_node(state: GraphState) -> GraphState:
             "## 原始测试计划\n{{original_plan}}\n\n"
             "## 用户修改意见\n{{feedback}}\n\n"
             "## 需求分析结果（参考）\n```json\n{{requirement_analysis}}\n```\n\n"
+            "## 接口分析摘要\n```json\n{{api_summary}}\n```\n\n"
             "请生成修改后的完整测试计划。"
         )
 
@@ -222,6 +317,7 @@ def revise_plan_node(state: GraphState) -> GraphState:
         original_plan=plan_md,
         feedback=feedback,
         requirement_analysis=str(analysis),
+        api_summary=str(api_summary),
     )
 
     print("\n  正在根据反馈修改计划...")
@@ -306,6 +402,18 @@ def check_confirmed(state: GraphState) -> str:
     if state.get("plan_confirmed"):
         return "confirmed"
     return "rejected"
+
+
+def route_after_api_confirm(state: GraphState) -> str:
+    """Conditional edge after analyze_api_node.
+
+    Returns:
+        "next" → proceed to analyze_requirement
+        "loop" → stay on analyze_api for revision
+    """
+    if state.get("api_summary_confirmed"):
+        return "next"
+    return "loop"
 
 
 # =========================================================================

@@ -29,6 +29,11 @@ class GraphState(TypedDict, total=False):
     plan_md: str
     plan_md_path: str
 
+    # === API Analysis ===
+    api_summary: List[Dict[str, Any]]
+    api_summary_feedback: str
+    api_summary_confirmed: bool
+
     # === Human review ===
     plan_confirmed: bool
     plan_feedback: str

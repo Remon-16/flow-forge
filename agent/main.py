@@ -84,61 +84,72 @@ def _save_plan(plan_md: str) -> str:
     return path
 
 
-def _run_with_review_loop(graph, initial: GraphState, config: dict) -> GraphState:
-    """Run the graph with an interactive review loop at human_confirm.
+def _run_interactive(graph, initial: GraphState, config: dict) -> GraphState:
+    """Run the graph handling all interrupt points.
 
-    When the graph hits the human_confirm interrupt point:
-      - Prints a plan summary
-      - Asks the user: approve (y) or reject with feedback (n)
-      - On reject: resumes with the user's feedback → revise_plan → back to human_confirm
-      - On approve: resumes with "approved" → proceeds to parse_plan
+    Two types of interrupts exist:
+      - analyze_api: Optional — triggered only when critical uncertainties found.
+        User may provide feedback or skip.
+      - human_confirm: Mandatory — always triggered. User must approve (y) or
+        reject with feedback (n).
 
     Ctrl+C at any time to abort.
     """
+
+    def _resume(value):
+        try:
+            return graph.invoke(Command(resume=value), config)
+        except GraphInterrupt:
+            return None
+
+    # Initial invocation
     try:
         result = graph.invoke(initial, config)
     except GraphInterrupt:
         result = None
-        print("\n[审核] 计划已生成，等待审核...")
 
     while True:
-        # Check if graph finished
         snapshot = graph.get_state(config)
         if snapshot is None or not snapshot.next:
             break
 
-        # Show plan status
-        current_state = snapshot.values or {}
-        has_feedback = bool(current_state.get("plan_feedback"))
+        pending = snapshot.next[0] if snapshot.next else ""
 
-        # Get user decision
-        print()
-        choice = input("是否批准此测试计划？(y=批准 / n=提出修改意见): ").strip().lower()
+        if pending == "analyze_api":
+            # Optional interrupt for API analysis clarifications
+            choice = input(
+                "\n是否需要澄清以上问题？(输入修改意见 / skip 跳过): "
+            ).strip()
+            if choice.lower() == "skip":
+                result = _resume("skip")
+            elif choice:
+                result = _resume(choice)
+            else:
+                result = _resume("skip")
 
-        if choice == "y":
-            print("\n计划已批准，继续执行用例生成...")
-            try:
-                result = graph.invoke(Command(resume="approved"), config)
-            except GraphInterrupt:
-                # Should not happen on approval, but handle gracefully
-                result = graph.invoke(Command(resume="approved"), config)
-            break
-        elif choice == "n":
-            feedback = input("请描述需要修改的内容: ").strip()
-            if not feedback:
-                print("修改意见不能为空，请重新输入。")
-                continue
-            print("\n正在根据反馈修改计划...\n")
-            try:
-                result = graph.invoke(Command(resume=feedback), config)
-            except GraphInterrupt:
-                # Back at human_confirm with revised plan — loop continues
+        elif pending == "human_confirm":
+            # Mandatory interrupt for plan review
+            choice = input(
+                "\n是否批准此测试计划？(y=批准 / n=提出修改意见): "
+            ).strip().lower()
+            if choice == "y":
+                print("\n计划已批准，继续执行用例生成...")
+                result = _resume("approved")
+            elif choice == "n":
+                feedback = input("请描述需要修改的内容: ").strip()
+                if not feedback:
+                    print("修改意见不能为空，请重新输入。")
+                    continue
+                print("\n正在根据反馈修改计划...\n")
+                result = _resume(feedback)
+                if result is not None:
+                    # Graph finished (shouldn't happen), but handle gracefully
+                    break
                 print("\n[审核] 计划已修改，请再次审核...")
-                continue
-            # If no interrupt, graph finished (shouldn't happen but handle)
-            break
+            else:
+                print("无效输入，请输入 y 或 n。")
         else:
-            print("无效输入，请输入 y 或 n。")
+            break
 
     return result or {}
 
@@ -182,6 +193,7 @@ def main() -> int:
             "interfaces": [],
             "plan_md": plan_md,
             "plan_confirmed": True,
+            "api_summary_confirmed": True,
         }
 
         result = graph.invoke(initial, config)
@@ -240,7 +252,7 @@ def main() -> int:
     }
     config = {"configurable": {"thread_id": thread_id}}
 
-    result = _run_with_review_loop(graph, initial, config)
+    result = _run_interactive(graph, initial, config)
 
     if result.get("errors"):
         for err in result["errors"]:

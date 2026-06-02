@@ -9,6 +9,7 @@ from langgraph.graph import END, StateGraph
 
 from config.settings import Settings
 from graph.nodes import (
+    analyze_api_node,
     analyze_requirement_node,
     check_confirmed,
     configure,
@@ -18,6 +19,7 @@ from graph.nodes import (
     parse_docs_node,
     parse_plan_node,
     revise_plan_node,
+    route_after_api_confirm,
     write_excel_node,
 )
 from graph.state import GraphState
@@ -54,6 +56,7 @@ def build_workflow(
 
     # --- Add nodes ---
     graph.add_node("parse_docs", parse_docs_node)
+    graph.add_node("analyze_api", analyze_api_node)
     graph.add_node("analyze_requirement", analyze_requirement_node)
     graph.add_node("generate_plan", generate_plan_node)
     graph.add_node("human_confirm", human_confirm_node)
@@ -64,7 +67,11 @@ def build_workflow(
 
     # --- Edges ---
     graph.set_entry_point("parse_docs")
-    graph.add_edge("parse_docs", "analyze_requirement")
+    graph.add_edge("parse_docs", "analyze_api")
+    graph.add_conditional_edges("analyze_api", route_after_api_confirm, {
+        "loop": "analyze_api",
+        "next": "analyze_requirement",
+    })
     graph.add_edge("analyze_requirement", "generate_plan")
     graph.add_edge("generate_plan", "human_confirm")
     graph.add_conditional_edges("human_confirm", check_confirmed, {

@@ -34,6 +34,11 @@ PLAN_GENERATION_USER = """请基于以下信息生成测试计划：
 {{interface_defs}}
 ```
 
+## 接口分析摘要
+```json
+{{api_summary}}
+```
+
 ## RAG 知识库参考
 {{rag_context}}
 

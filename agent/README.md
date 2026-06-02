@@ -8,8 +8,11 @@
 graph TD
     CLI[CLI 入口] --> GRAPH[LangGraph StateGraph]
     GRAPH --> PARSE[parse_docs<br/>文档解析]
-    PARSE --> ANALYZE[analyze_requirement<br/>需求分析]
-    ANALYZE --> GEN_PLAN[generate_plan<br/>测试计划生成]
+    PARSE --> ANALYZE_API[analyze_api<br/>接口分析 + 自评]
+    ANALYZE_API -->|自评通过/用户跳过| ANALYZE_REQ[analyze_requirement<br/>需求分析]
+    ANALYZE_API -.->|关键不确定性| API_ASK{可选询问<br/>用户输入/skip}
+    API_ASK -.->|用户提供反馈| ANALYZE_API
+    ANALYZE_REQ --> GEN_PLAN[generate_plan<br/>测试计划生成]
     GEN_PLAN --> CONFIRM{human_confirm<br/>人工审核中断点}
     CONFIRM -->|批准| PARSE_PLAN[parse_plan<br/>计划解析]
     CONFIRM -->|拒绝| REVISE[revise_plan<br/>根据反馈修改]
@@ -31,13 +34,14 @@ graph TD
 核心流程：
 
 1. **文档解析**：读取需求文档（Markdown / PDF / 纯文本）和接口文档（OpenAPI 3.0 / Markdown 表格）
-2. **需求分析**：LLM 从需求中提取业务流程、用户角色、约束条件、异常场景
-3. **计划生成**：基于分析结果和接口定义生成 Markdown 测试计划
-4. **人工审核**（中断点）：展示计划，用户可批准或提出修改意见
-5. **反馈循环**：用户拒绝时，系统根据反馈修改计划后重新提交审核，直至批准
-6. **计划解析**：将审核通过的计划解析为结构化数据
-7. **用例生成**：生成包含具体参数值的单接口用例和业务链路用例
-8. **Excel 输出**：写入多 Sheet Excel 文件，与执行器格式完全兼容
+2. **接口分析**：分析接口文档完整性——认证方式、参数模式、缺失信息；智能体自评通过则自动继续，仅关键不确定性时询问用户
+3. **需求分析**：LLM 从需求中提取业务流程、用户角色、约束条件、异常场景
+4. **计划生成**：基于分析结果和接口定义生成 Markdown 测试计划
+5. **人工审核**（强制中断点）：展示计划，用户可批准或提出修改意见
+6. **反馈循环**：用户拒绝时，系统根据反馈修改计划后重新提交审核，直至批准
+7. **计划解析**：将审核通过的计划解析为结构化数据
+8. **用例生成**：生成包含具体参数值的单接口用例和业务链路用例
+9. **Excel 输出**：写入多 Sheet Excel 文件，与执行器格式完全兼容
 
 ## 技术栈
 
@@ -106,6 +110,7 @@ agent/
 │   ├── __init__.py
 │   ├── base.py                  # BaseAgent + create_react_agent() 工厂
 │   ├── requirement_analyzer.py  # 需求分析
+│   ├── api_analyzer.py          # 接口分析
 │   ├── plan_generator.py        # 计划生成
 │   ├── plan_parser.py           # 计划解析
 │   ├── case_generator.py        # 用例生成
@@ -294,6 +299,7 @@ optional arguments:
 
 | 智能体 | 职责 | 说明 |
 |--------|------|------|
+| `ApiAnalyzer` | 接口文档分析 | 分析接口完整性、认证方式、生成结构化摘要；自评质量，仅在关键信息缺失时询问用户 |
 | `RequirementAnalyzer` | 需求分析 | 从需求文档提取业务流、角色、约束、异常场景（JSON 输出） |
 | `PlanGenerator` | 计划生成 | 基于需求分析和接口定义生成 Markdown 测试计划 |
 | `PlanParser` | 计划解析 | 将审核通过的 Markdown 计划解析为结构化 TestPlan |
@@ -310,15 +316,23 @@ optional arguments:
 | 节点 | 功能 |
 |------|------|
 | `parse_docs` | 读取需求文件和 API 文档，存入 state |
+| `analyze_api` | 调用 ApiAnalyzer 分析接口文档完整性，生成结构化摘要；自评通过则自动继续，关键不确定性时可选询问用户 |
 | `analyze_requirement` | 调用 RequirementAnalyzer，提取结构化分析结果 |
-| `generate_plan` | 调用 PlanGenerator，生成 Markdown 测试计划 |
-| `human_confirm` | **中断点**，暂停执行等待人工审核 |
+| `generate_plan` | 调用 PlanGenerator，基于分析结果、接口摘要、接口定义生成 Markdown 测试计划 |
+| `human_confirm` | **强制中断点**，暂停执行等待人工审核 |
 | `revise_plan` | 根据用户反馈修改计划，完成后回到 human_confirm |
 | `parse_plan` | 调用 PlanParser，解析计划为结构化数据 |
 | `generate_cases` | 调用 CaseGenerator，生成具体用例 |
 | `write_excel` | 调用 ExcelWriter，输出 Excel 文件 |
 
 ### 中断点与反馈循环
+
+系统包含两种类型的中断点：
+
+| 中断点 | 类型 | 触发条件 | 用户操作 |
+|--------|------|----------|----------|
+| `analyze_api` | **可选** | 智能体发现关键不确定性（认证方式无法推断、接口用途完全不明） | 提供反馈 / 输入 `skip` 跳过 |
+| `human_confirm` | **强制** | 测试计划生成后始终触发 | `y` 批准 / `n` 提出修改意见 |
 
 `human_confirm` 节点使用 LangGraph 的 `interrupt()` 机制暂停执行。CLI 在检测到中断后：
 
@@ -327,6 +341,8 @@ optional arguments:
 3. 批准 → 以 `Command(resume="approved")` 继续，路由到 `parse_plan`
 4. 拒绝 → 以 `Command(resume="反馈内容")` 继续，路由到 `revise_plan` → 修改完成后回到 `human_confirm`
 5. 循环直到用户批准
+
+`analyze_api` 采用智能体自评机制：生成摘要后自动检查是否存在关键不确定性（`auth_type` 不确定、`need_token` 无法判断、接口用途完全不明）。如果摘要质量良好则自动通过不打断用户；仅当存在关键缺失时才询问用户。用户可输入修改意见或输入 `skip` 带着未确定性继续。
 
 用户可通过 `Ctrl+C` 随时终止进程。
 

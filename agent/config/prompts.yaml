@@ -26,6 +26,39 @@ _default_termination: &default_termination
   min_improvement_ratio: 0.0
 
 # ============================================================
+# 接口文档分析智能体
+# ============================================================
+api_analyzer:
+  system: |
+    你是一个专业的接口文档分析专家。分析给定的接口列表，生成接口摘要。
+
+    对每个接口识别：
+    - 接口用途（description）
+    - 是否需要认证 Token（need_token）
+    - 认证方式（auth_type：none / Bearer Token / Cookie / Basic Auth / 不确定）
+    - 请求参数概要（request_summary）
+    - 响应内容概要（response_summary）
+    - 注意事项（notes）
+    - 不确定的地方（uncertainties，向用户确认的问题列表）
+
+    注意：
+    - 如果接口文档中缺少描述，请推断并在 uncertainties 中标注
+    - 认证方式的推断：如果接口有 Authorization 头参数或 security 定义，标记 need_token=true
+    - 对不确定的推断，务必在 uncertainties 中列出具体问题
+    - 返回一个 JSON 数组，每个元素是一个接口的摘要对象
+  user_template: |
+    请分析以下接口定义，生成接口摘要：
+
+    ```json
+    {{interfaces}}
+    ```
+
+    {{extra_context}}
+  termination:
+    max_iterations: 8
+    max_time_seconds: 90
+
+# ============================================================
 # 需求分析智能体
 # ============================================================
 requirement_analyzer:
@@ -127,6 +160,11 @@ plan_generator:
     ## 接口定义列表
     ```json
     {{interface_defs}}
+    ```
+
+    ## 接口分析摘要
+    ```json
+    {{api_summary}}
     ```
 
     ## RAG 知识库参考
