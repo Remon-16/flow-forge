@@ -31,6 +31,8 @@ graph TD
 
 两个组件之间通过 **Excel 文件** 作为契约——智能体生成什么格式，执行器就解析什么格式。用户可以自由选择：用智能体自动生成用例，或手动编写 Excel 后直接用执行器运行。
 
+## 项目结构
+
 ```text
 flow-forge/
 ├── README.md                     # 项目总览（本文件）
@@ -38,11 +40,20 @@ flow-forge/
 │   ├── README.md                 # 智能体使用文档
 │   ├── main.py                   # 智能体 CLI 入口
 │   ├── requirements.txt          # 智能体依赖
-│   ├── agents/                   # 各智能体实现
-│   ├── pipeline/                 # 两阶段流水线
+│   ├── agents/                   # 各智能体实现（ReAct 子图）
+│   ├── graph/                    # LangGraph 编排（StateGraph + 节点 + 条件边）
+│   ├── config/                   # 配置管理 + prompts.yaml
+│   ├── llm/                      # LLM 供应商工厂
+│   ├── tools/                    # 工具注册机制 + 内置工具
+│   │   ├── builtin/              # 内置工具（文件读写、RAG 查询）
+│   │   └── custom/               # 用户自定义工具
+│   ├── skills/                   # Skill 可插拔技能包
+│   │   ├── builtin/              # 内置 Skill（边界测试、SQL 数据获取）
+│   │   └── custom/               # 用户自定义 Skill
+│   ├── prompts/                  # 提示词渲染器 + 注册表
+│   ├── models/                   # 数据模型 + ReAct 状态
 │   ├── doc_parser/               # 文档解析器（OpenAPI/Markdown/PDF）
 │   ├── knowledge/                # RAG 知识库
-│   ├── prompts/                  # LLM 提示词模板
 │   └── docs/                     # 示例文档
 └── python/                       # 接口测试执行器
     ├── README.md                 # 执行器使用文档

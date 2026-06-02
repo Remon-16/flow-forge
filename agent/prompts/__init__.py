@@ -1,4 +1,5 @@
 from .render import render_prompt
+from .registry import PromptRegistry
 from .requirement_analysis import (
     REQUIREMENT_ANALYSIS_SYSTEM,
     REQUIREMENT_ANALYSIS_USER,
@@ -8,6 +9,7 @@ from .case_generation import CASE_GENERATION_SYSTEM, CASE_GENERATION_USER
 
 __all__ = [
     "render_prompt",
+    "PromptRegistry",
     "REQUIREMENT_ANALYSIS_SYSTEM",
     "REQUIREMENT_ANALYSIS_USER",
     "PLAN_GENERATION_SYSTEM",

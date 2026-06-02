@@ -1,6 +1,5 @@
 from .base import BaseAgent, ConvergenceError
 from .requirement_analyzer import RequirementAnalyzer
-from .api_parser import ApiParser
 from .plan_generator import PlanGenerator
 from .plan_parser import PlanParser
 from .case_generator import CaseGenerator
@@ -10,7 +9,6 @@ __all__ = [
     "BaseAgent",
     "ConvergenceError",
     "RequirementAnalyzer",
-    "ApiParser",
     "PlanGenerator",
     "PlanParser",
     "CaseGenerator",

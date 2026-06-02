@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Flow Forge — API Test Case Generation Agent CLI.
+"""Flow Forge — API Test Case Generation Agent CLI (LangGraph + ReAct).
 
 Usage:
     # Generate test plan only (for human review)
@@ -8,7 +8,7 @@ Usage:
     # Generate Excel from a confirmed plan
     python main.py --from-plan plan_20260601_120000.md --api docs/api.yaml --output testcase.xlsx
 
-    # One-shot full pipeline (skip confirmation)
+    # Full pipeline with interactive review loop
     python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
 """
 
@@ -18,9 +18,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from langgraph.errors import GraphInterrupt
+from langgraph.types import Command
+
 from agents.excel_writer import ExcelWriter
 from config.settings import load_settings
-from pipeline.orchestrator import PipelineOrchestrator
+from graph.state import GraphState
+from graph.workflow import build_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +76,76 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _save_plan(plan_md: str) -> str:
+    """Persist plan markdown to a timestamped file, return path."""
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = f"plan_{ts}.md"
+    Path(path).write_text(plan_md, encoding="utf-8")
+    return path
+
+
+def _run_with_review_loop(graph, initial: GraphState, config: dict) -> GraphState:
+    """Run the graph with an interactive review loop at human_confirm.
+
+    When the graph hits the human_confirm interrupt point:
+      - Prints a plan summary
+      - Asks the user: approve (y) or reject with feedback (n)
+      - On reject: resumes with the user's feedback → revise_plan → back to human_confirm
+      - On approve: resumes with "approved" → proceeds to parse_plan
+
+    Ctrl+C at any time to abort.
+    """
+    try:
+        result = graph.invoke(initial, config)
+    except GraphInterrupt:
+        result = None
+        print("\n[审核] 计划已生成，等待审核...")
+
+    while True:
+        # Check if graph finished
+        snapshot = graph.get_state(config)
+        if snapshot is None or not snapshot.next:
+            break
+
+        # Show plan status
+        current_state = snapshot.values or {}
+        has_feedback = bool(current_state.get("plan_feedback"))
+
+        # Get user decision
+        print()
+        choice = input("是否批准此测试计划？(y=批准 / n=提出修改意见): ").strip().lower()
+
+        if choice == "y":
+            print("\n计划已批准，继续执行用例生成...")
+            try:
+                result = graph.invoke(Command(resume="approved"), config)
+            except GraphInterrupt:
+                # Should not happen on approval, but handle gracefully
+                result = graph.invoke(Command(resume="approved"), config)
+            break
+        elif choice == "n":
+            feedback = input("请描述需要修改的内容: ").strip()
+            if not feedback:
+                print("修改意见不能为空，请重新输入。")
+                continue
+            print("\n正在根据反馈修改计划...\n")
+            try:
+                result = graph.invoke(Command(resume=feedback), config)
+            except GraphInterrupt:
+                # Back at human_confirm with revised plan — loop continues
+                print("\n[审核] 计划已修改，请再次审核...")
+                continue
+            # If no interrupt, graph finished (shouldn't happen but handle)
+            break
+        else:
+            print("无效输入，请输入 y 或 n。")
+
+    return result or {}
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-
     setup_logging(args.verbose)
 
     # Load settings
@@ -86,72 +156,101 @@ def main() -> int:
         print("  # Edit .env and add your API key")
         return 2
 
-    orch = PipelineOrchestrator(settings)
-
+    # ------------------------------------------------------------------
     # Phase 2 only: from confirmed plan
+    # ------------------------------------------------------------------
     if args.from_plan:
         if not args.api:
             print("Error: --api is required when using --from-plan")
             return 2
 
-        state = orch.run_phase2(args.from_plan, args.api)
-        if state.errors:
-            for err in state.errors:
+        plan_path = Path(args.from_plan)
+        if not plan_path.exists():
+            print(f"Error: plan file not found: {args.from_plan}")
+            return 2
+        plan_md = plan_path.read_text(encoding="utf-8")
+
+        graph = build_workflow(settings)
+        config = {"configurable": {"thread_id": "phase2"}}
+
+        initial: GraphState = {
+            "requirement_paths": [],
+            "api_path": args.api,
+            "output_path": args.output,
+            "plan_only": False,
+            "requirement_text": "",
+            "interfaces": [],
+            "plan_md": plan_md,
+            "plan_confirmed": True,
+        }
+
+        result = graph.invoke(initial, config)
+
+        if result.get("errors"):
+            for err in result["errors"]:
                 print(f"  Error: {err}")
             return 2
 
-        # Write Excel
-        try:
-            ExcelWriter.write(
-                state.interfaces,
-                state.single_cases,
-                state.biz_flows,
-                args.output,
-            )
-            print(f"\nExcel written to: {args.output}")
-            print(f"  Single cases: {len(state.single_cases)}")
-            print(f"  Biz flows: {len(state.biz_flows)}")
-        except Exception as e:
-            print(f"  Error writing Excel: {e}")
-            return 2
-
+        print(f"\nExcel written to: {args.output}")
+        print(f"  Single cases: {len(result.get('single_cases', []))}")
+        print(f"  Biz flows: {len(result.get('biz_flows', []))}")
         return 0
 
+    # ------------------------------------------------------------------
     # Phase 1 or full pipeline
-    if args.plan_only:
-        if not args.requirement or not args.api:
-            print("Error: --requirement and --api are required")
-            return 2
-
-        state = orch.run_phase1(args.requirement, args.api)
-        if state.errors:
-            for err in state.errors:
-                print(f"  Error: {err}")
-            return 2
-
-        print(f"\nTest plan generated: {state.plan_md_path}")
-        print("\nReview the plan, then run:")
-        print(f"  python main.py --from-plan {state.plan_md_path} --api {args.api} --output testcase.xlsx")
-        return 0
-
-    # Full pipeline
+    # ------------------------------------------------------------------
     if not args.requirement or not args.api:
-        print("Error: --requirement and --api are required for full pipeline")
-        print("  Or use --from-plan to generate from a confirmed plan")
+        print("Error: --requirement and --api are required")
         return 2
 
-    print("Running full pipeline (plan → cases → excel)...")
-    state = orch.run_full(args.requirement, args.api, args.output)
+    graph = build_workflow(settings)
+    thread_id = f"flow_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-    if state.errors:
-        for err in state.errors:
+    if args.plan_only:
+        # Run to generate_plan, then stop (save plan without review loop)
+        initial: GraphState = {
+            "requirement_paths": list(args.requirement),
+            "api_path": args.api,
+            "output_path": args.output,
+            "plan_only": True,
+            "plan_confirmed": True,  # Skip review in plan-only mode
+        }
+        config = {"configurable": {"thread_id": thread_id}}
+
+        result = graph.invoke(initial, config)
+        plan_md = result.get("plan_md", "")
+        if not plan_md:
+            print("Error: plan generation produced no output")
+            return 2
+
+        plan_path = _save_plan(plan_md)
+        print(f"\nTest plan generated: {plan_path}")
+        print("\nReview the plan, then run:")
+        print(f"  python main.py --from-plan {plan_path} --api {args.api} --output testcase.xlsx")
+        return 0
+
+    # Full pipeline with interactive review loop
+    print("Running full pipeline (plan → review → cases → excel)...")
+
+    initial: GraphState = {
+        "requirement_paths": list(args.requirement),
+        "api_path": args.api,
+        "output_path": args.output,
+        "plan_only": False,
+    }
+    config = {"configurable": {"thread_id": thread_id}}
+
+    result = _run_with_review_loop(graph, initial, config)
+
+    if result.get("errors"):
+        for err in result["errors"]:
             print(f"  Error: {err}")
         return 2
 
     print(f"\nAll done! Excel written to: {args.output}")
-    print(f"  Interfaces: {len(state.interfaces)}")
-    print(f"  Single cases: {len(state.single_cases)}")
-    print(f"  Biz flows: {len(state.biz_flows)}")
+    print(f"  Interfaces: {len(result.get('interfaces', []))}")
+    print(f"  Single cases: {len(result.get('single_cases', []))}")
+    print(f"  Biz flows: {len(result.get('biz_flows', []))}")
     return 0
 
 
