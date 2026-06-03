@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 class Settings:
     llm_provider: str = "openai"
     llm_api_key: str = ""
+    llm_base_url: str = ""
     llm_model: str = "gpt-4o"
     llm_temperature: float = 0.3
     llm_max_tokens: int = 4096
@@ -23,6 +24,7 @@ class Settings:
         return {
             "llm_provider": self.llm_provider,
             "llm_api_key": "***",
+            "llm_base_url": self.llm_base_url,
             "llm_model": self.llm_model,
             "llm_temperature": self.llm_temperature,
             "llm_max_tokens": self.llm_max_tokens,
@@ -48,6 +50,7 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
     return Settings(
         llm_provider=os.getenv("LLM_PROVIDER", "openai"),
         llm_api_key=os.getenv("LLM_API_KEY", ""),
+        llm_base_url=os.getenv("LLM_BASE_URL", ""),
         llm_model=os.getenv("LLM_MODEL", "gpt-4o"),
         llm_temperature=temperature,
         llm_max_tokens=max_tokens,

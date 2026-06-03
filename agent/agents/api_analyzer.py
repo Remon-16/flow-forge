@@ -52,6 +52,7 @@ class ApiAnalyzer(BaseAgent):
             max_tokens=settings.llm_max_tokens,
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
+            base_url=settings.llm_base_url,
         )
 
     def analyze(self, interfaces: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

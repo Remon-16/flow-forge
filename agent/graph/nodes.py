@@ -281,6 +281,7 @@ def revise_plan_node(state: GraphState) -> GraphState:
         model=_settings.llm_model,
         temperature=0.3,
         max_tokens=_settings.llm_max_tokens,
+        base_url=_settings.llm_base_url,
     )
 
     # Build system prompt from registry if plan_reviser exists

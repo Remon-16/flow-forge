@@ -31,12 +31,16 @@ def create_chat_model(settings: Settings, **overrides) -> BaseChatModel:
     if provider == "openai":
         from langchain_openai import ChatOpenAI
 
-        return ChatOpenAI(
-            model=model,
-            api_key=settings.llm_api_key,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        chat_kwargs: dict = {
+            "model": model,
+            "api_key": settings.llm_api_key,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if settings.llm_base_url:
+            chat_kwargs["base_url"] = settings.llm_base_url
+
+        return ChatOpenAI(**chat_kwargs)
 
     # Extend here: provider == "azure", "anthropic", "ollama" ...
 

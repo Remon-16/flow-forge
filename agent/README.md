@@ -246,7 +246,8 @@ Markdown 表格示例：
 | 环境变量 | 说明 | 默认值 |
 |----------|------|--------|
 | `LLM_PROVIDER` | LLM 服务提供商 | `openai` |
-| `LLM_API_KEY` | API 密钥 | （必填） |
+| `LLM_API_KEY` | API 密钥 | 必填 |
+| `LLM_BASE_URL` | Base URL | 非必填，默认OpenAI端点 |
 | `LLM_MODEL` | 模型名称 | `gpt-4o` |
 | `LLM_TEMPERATURE` | 生成温度 (0-1) | `0.3` |
 | `LLM_MAX_TOKENS` | 最大输出 Token | `4096` |

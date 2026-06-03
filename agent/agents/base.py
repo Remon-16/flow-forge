@@ -71,8 +71,12 @@ class BaseAgent:
         max_tokens: int = 4096,
         max_retries: int = 3,
         max_steps: int = 10,
+        base_url: str = "",
     ):
-        self._client = OpenAI(api_key=api_key)
+        client_kwargs: Dict[str, Any] = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        self._client = OpenAI(**client_kwargs)
         self._model = model
         self._temperature = temperature
         self._max_tokens = max_tokens
