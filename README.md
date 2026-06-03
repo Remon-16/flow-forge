@@ -13,7 +13,7 @@ AI智能体可以实现快速的用例输出，但由于AI生成可能产生幻�
 graph TD
     REQ[需求文档] --> AGENT[AI 用例生成智能体]
     API[接口文档] --> AGENT
-    KB[(RAG 知识库)] -.-> AGENT
+    KB[(Grep 检索)] -.-> AGENT
     AGENT --> |plan.md| REVIEW[人工审核]
     REVIEW --> |审核确认| AGENT
     AGENT --> |testcase.xlsx| EXEC[测试执行器]
@@ -45,7 +45,7 @@ flow-forge/
 │   ├── config/                   # 配置管理 + prompts.yaml
 │   ├── llm/                      # LLM 供应商工厂
 │   ├── tools/                    # 工具注册机制 + 内置工具
-│   │   ├── builtin/              # 内置工具（文件读写、RAG 查询）
+│   │   ├── builtin/              # 内置工具
 │   │   └── custom/               # 用户自定义工具
 │   ├── skills/                   # Skill 可插拔技能包
 │   │   ├── builtin/              # 内置 Skill（边界测试、SQL 数据获取）
@@ -53,7 +53,7 @@ flow-forge/
 │   ├── prompts/                  # 提示词渲染器 + 注册表
 │   ├── models/                   # 数据模型 + ReAct 状态
 │   ├── doc_parser/               # 文档解析器（OpenAPI/Markdown/PDF）
-│   ├── knowledge/                # RAG 知识库
+│   ├── knowledge/                # 知识库
 │   └── docs/                     # 示例文档
 └── python/                       # 接口测试执行器
     ├── README.md                 # 执行器使用文档
@@ -149,7 +149,7 @@ python main.py --envName local --apiMode all
 
 |组件|技术|
 |------|----|
-|用例生成智能体|Python 3, OpenAI API, ChromaDB (RAG), prance (OpenAPI 解析), pymupdf (PDF 解析)|
+|用例生成智能体|Python 3, OpenAI API, prance (OpenAPI 解析), pymupdf (PDF 解析)|
 |测试执行器|Python 3, requests, openpyxl, pyyaml|
 |配置管理|YAML 多环境配置文件|
 |报告输出|自包含 HTML（无需外部 CSS/JS）|
