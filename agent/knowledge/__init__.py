@@ -1,3 +1,3 @@
-from .rag import RAGKnowledgeBase
+from .search import KnowledgeSearch
 
-__all__ = ["RAGKnowledgeBase"]
+__all__ = ["KnowledgeSearch"]

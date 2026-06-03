@@ -39,8 +39,5 @@ PLAN_GENERATION_USER = """请基于以下信息生成测试计划：
 {{api_summary}}
 ```
 
-## RAG 知识库参考
-{{rag_context}}
-
 请生成完整的测试计划 Markdown 文档。
 """

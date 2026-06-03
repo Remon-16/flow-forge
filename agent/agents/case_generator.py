@@ -2,11 +2,11 @@
 
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent
 from config.settings import Settings
-from knowledge.rag import RAGKnowledgeBase
+from knowledge.search import KnowledgeSearch
 from models.schema import (
     BizFlow,
     BizStep,
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class CaseGenerator(BaseAgent):
     """Generate concrete test cases from a confirmed test plan."""
 
-    def __init__(self, settings: Settings, rag: RAGKnowledgeBase):
+    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -33,7 +33,7 @@ class CaseGenerator(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
         )
-        self._rag = rag
+        self._knowledge = knowledge
 
     def generate(
         self,
@@ -66,15 +66,18 @@ class CaseGenerator(BaseAgent):
                 "remark": iface.remark,
             })
 
-        rag_docs = self._rag.query("test case generation concrete values", n_results=3)
-        rag_context = "\n---\n".join(rag_docs) if rag_docs else "无相关知识库参考"
-
         prompt = render_prompt(
             CASE_GENERATION_USER,
             test_plan=plan_str,
             interface_defs=json.dumps(iface_dicts, ensure_ascii=False, indent=2),
-            rag_context=rag_context,
         )
+
+        # Conditionally append knowledge context
+        if self._knowledge is not None:
+            docs = self._knowledge.search("test case generation concrete values", n_results=3)
+            if docs:
+                knowledge_context = "\n---\n".join(docs)
+                prompt += f"\n\n## 知识库参考\n{knowledge_context}"
 
         logger.info("Generating test cases from plan...")
         result = self.call_llm_json(prompt, CASE_GENERATION_SYSTEM)

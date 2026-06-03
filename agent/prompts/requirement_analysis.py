@@ -49,8 +49,5 @@ REQUIREMENT_ANALYSIS_USER = """请分析以下需求文档，提取测试相关�
 ## 需求文档内容
 {{requirement_text}}
 
-## RAG 知识库参考
-{{rag_context}}
-
 请以上述 JSON 格式返回分析结果。
 """

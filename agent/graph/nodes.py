@@ -1,14 +1,14 @@
 """Workflow nodes — one function per stage in the main StateGraph."""
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from config.settings import Settings
 from doc_parser.markdown_parser import MarkdownParser
 from doc_parser.openapi_parser import OpenApiParser
 from doc_parser.pdf_parser import PdfParser
 from graph.state import GraphState
-from knowledge.rag import RAGKnowledgeBase
+from knowledge.search import KnowledgeSearch
 from models.schema import InterfaceDef
 from prompts.registry import PromptRegistry
 
@@ -17,15 +17,19 @@ logger = logging.getLogger(__name__)
 # Module-level singletons (set by build_workflow and injected into nodes)
 _settings: Settings = None
 _prompt_registry: PromptRegistry = None
-_rag: RAGKnowledgeBase = None
+_knowledge: Optional[KnowledgeSearch] = None
 
 
-def configure(settings: Settings, prompt_registry: PromptRegistry, rag: RAGKnowledgeBase):
+def configure(settings: Settings, prompt_registry: PromptRegistry, knowledge: Optional[KnowledgeSearch]):
     """Wire module-level dependencies before building the graph."""
-    global _settings, _prompt_registry, _rag
+    global _settings, _prompt_registry, _knowledge
     _settings = settings
     _prompt_registry = prompt_registry
-    _rag = rag
+    _knowledge = knowledge
+
+    # Wire grep_knowledge tool if knowledge is available
+    from tools.builtin import set_knowledge_instance
+    set_knowledge_instance(knowledge)
 
 
 # =========================================================================
@@ -188,7 +192,7 @@ def analyze_requirement_node(state: GraphState) -> GraphState:
         }
         return state
 
-    agent = RequirementAnalyzer(_settings)
+    agent = RequirementAnalyzer(_settings, _knowledge)
     # Inject prompt from registry if available, else agent uses its own defaults
     result = agent.analyze(text)
     state["requirement_analysis"] = result
@@ -204,7 +208,7 @@ def generate_plan_node(state: GraphState) -> GraphState:
 
     state.setdefault("errors", [])
 
-    agent = PlanGenerator(_settings)
+    agent = PlanGenerator(_settings, _knowledge)
 
     analysis = state.get("requirement_analysis", {})
     interfaces = state.get("interfaces", [])
@@ -342,7 +346,7 @@ def generate_cases_node(state: GraphState) -> GraphState:
 
     state.setdefault("errors", [])
 
-    agent = CaseGenerator(_settings)
+    agent = CaseGenerator(_settings, _knowledge)
     plan = state.get("plan_parsed")
     interfaces = state.get("interfaces", [])
 

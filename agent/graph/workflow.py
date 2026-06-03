@@ -23,7 +23,7 @@ from graph.nodes import (
     write_excel_node,
 )
 from graph.state import GraphState
-from knowledge.rag import RAGKnowledgeBase
+from knowledge.search import KnowledgeSearch
 from prompts.registry import PromptRegistry
 
 logger = logging.getLogger(__name__)
@@ -32,25 +32,24 @@ logger = logging.getLogger(__name__)
 def build_workflow(
     settings: Settings,
     prompt_registry: PromptRegistry | None = None,
-    rag: RAGKnowledgeBase | None = None,
+    knowledge: KnowledgeSearch | None = None,
 ) -> StateGraph:
     """Build and compile the full test-case-generation StateGraph.
 
     Args:
         settings: Global settings loaded from .env.
         prompt_registry: Optional PromptRegistry. Created from defaults if None.
-        rag: Optional RAG knowledge base. Created and initialized if None.
+        knowledge: Optional KnowledgeSearch. Created if enable_knowledge is on.
 
     Returns:
         A compiled StateGraph ready for ``.invoke()``.
     """
     if prompt_registry is None:
         prompt_registry = PromptRegistry()
-    if rag is None:
-        rag = RAGKnowledgeBase(settings.knowledge_db_path)
-        rag.initialize()
+    if knowledge is None and settings.enable_knowledge:
+        knowledge = KnowledgeSearch(settings.knowledge_dir)
 
-    configure(settings, prompt_registry, rag)
+    configure(settings, prompt_registry, knowledge)
 
     graph = StateGraph(GraphState)
 

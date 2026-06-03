@@ -113,9 +113,6 @@ requirement_analyzer:
     ## 需求文档内容
     {{requirement_text}}
 
-    ## RAG 知识库参考
-    {{rag_context}}
-
     请以上述 JSON 格式返回分析结果。
   termination:
     max_iterations: 8
@@ -166,9 +163,6 @@ plan_generator:
     ```json
     {{api_summary}}
     ```
-
-    ## RAG 知识库参考
-    {{rag_context}}
 
     请生成完整的测试计划 Markdown 文档。
   termination:
@@ -310,9 +304,6 @@ case_generator:
     ```json
     {{interface_defs}}
     ```
-
-    ## RAG 知识库参考
-    {{rag_context}}
 
     请以 JSON 格式返回完整的单接口用例和业务链路用例。
   termination:

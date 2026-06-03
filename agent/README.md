@@ -51,7 +51,6 @@ graph TD
 | `langchain-core` | ChatModel 抽象、消息类型 |
 | `langchain-openai` | OpenAI ChatModel 适配器 |
 | `openai` | 直接 LLM 调用（兼容 OpenAI API） |
-| `chromadb` | RAG 知识库向量存储 |
 | `openpyxl` | Excel 文件写入 |
 | `prance` | OpenAPI 3.0 规范解析 |
 | `pymupdf` | PDF 需求文档文本提取 |
@@ -124,7 +123,15 @@ agent/
 │
 ├── knowledge/
 │   ├── __init__.py
-│   └── rag.py                   # RAG 知识库（ChromaDB + 内存降级）
+│   ├── search.py                  # grep 文本检索知识库（零依赖）
+│   ├── auth_token_convention.md   # Token 传递规范
+│   ├── crud_resource_referencing.md
+│   ├── trans_format.md
+│   ├── pagination_rules.md
+│   ├── monetary_precision.md
+│   ├── datetime_format.md
+│   ├── test_strategy.md
+│   └── trans_specification.md
 │
 ├── doc_parser/
 │   ├── __init__.py
@@ -243,8 +250,8 @@ Markdown 表格示例：
 | `LLM_MODEL` | 模型名称 | `gpt-4o` |
 | `LLM_TEMPERATURE` | 生成温度 (0-1) | `0.3` |
 | `LLM_MAX_TOKENS` | 最大输出 Token | `4096` |
-| `EMBEDDING_MODEL` | 嵌入模型 | `text-embedding-3-small` |
-| `KNOWLEDGE_DB_PATH` | 知识库路径 | `./chroma_data` |
+| `ENABLE_KNOWLEDGE` | 启用外部知识库（grep 文本检索） | `false` |
+| `KNOWLEDGE_DIR` | 知识库 .md 文件目录 | `./knowledge` |
 | `MAX_STEPS` | 单智能体最大步数 | `10` |
 | `MAX_RETRIES` | LLM 调用最大重试 | `3` |
 
@@ -421,18 +428,25 @@ def execute_sql(connection_string: str, query: str) -> list[dict]:
 |------|------|
 | `read_file` | 读取文件内容（需求文档、API 规范、已保存的计划） |
 | `write_file` | 写入内容到文件（保存计划、中间结果） |
-| `query_knowledge` | 查询 RAG 知识库（最佳实践、测试策略、领域规则） |
+| `grep_knowledge` | 搜索知识库 .md 文件（最佳实践、测试策略、领域规则），仅在 ENABLE_KNOWLEDGE=true 时可用 |
 
 ## 知识库
 
-RAG 知识库 (`knowledge/rag.py`) 使用 ChromaDB 存储，为智能体提供领域知识参考。包含以下类型的知识条目：
+知识库 (`knowledge/search.py`) 提供基于 grep 的纯文本关键词搜索，无需 embedding 模型或外部向量数据库。知识以 `.md` 文件形式存放在 `knowledge/` 目录下。
+
+通过 `.env` 中的 `ENABLE_KNOWLEDGE` 开关控制：
+
+- **`ENABLE_KNOWLEDGE=false`（默认）**：不加载知识库。智能体仅依赖自身知识、Skill 注入的提示词和工具完成工作
+- **`ENABLE_KNOWLEDGE=true`**：初始化 `KnowledgeSearch` 实例。智能体在生成 prompt 时通过 grep 搜索 `.md` 文件，将匹配的知识片段追加到 prompt 末尾
+
+知识条目类型：
 
 - **业务规则**：Token 传递规范、CRUD 数据依赖等
 - **测试策略**：正向/负向/边界/业务异常测试方法
 - **参数依赖模式**：Trans 字段格式、`#{varName}` 变量引用语法
 - **缺陷模式**：金额精度、日期格式、空值处理等常见问题
 
-首次运行时自动初始化。ChromaDB 不可用时自动降级为内存关键词匹配。
+用户可以自行在 `knowledge/` 目录下添加 `.md` 文件来扩展知识库。同时注册了 `grep_knowledge` 工具供未来 ReAct 智能体自行决定调用时机。
 
 ## 设计理念
 
@@ -444,11 +458,22 @@ LangGraph 提供了三个关键能力：
 - **中断与恢复**：`interrupt()` + `MemorySaver` 组合原生支持人工审核中断，并可从断点精确恢复
 - **条件路由**：`add_conditional_edges()` 让审核分支（批准/拒绝）成为图的自然组成部分，逻辑清晰可维护
 
+### 为什么用 grep 替代 embedding 检索
+
+Embedding 模型（如 `text-embedding-3-small`）需要额外的 API 调用和费用，检索结果也不一定与当前场景相关。grep 关键词搜索：
+
+- **零成本**：不需要 embedding API 调用
+- **零外部依赖**：仅使用 Python 标准库（`pathlib` + `re`）
+- **可解释**：精确匹配关键词，不会出现语义漂移
+- **可扩展**：用户只需创建 `.md` 文件即可添加知识，无需重建索引
+
+同时，`ENABLE_KNOWLEDGE` 默认为 `false`，让不需要外部知识的场景（弱模型、Skill 已覆盖）不受干扰。
+
 ### 为什么用 ReAct 模式
 
 ReAct（Reasoning + Acting）循环让 LLM 在推理的同时能够调用工具获取外部信息。在测试用例生成场景中，这意味着智能体可以：
 
-- 查询 RAG 知识库获取测试策略参考
+- 通过 `grep_knowledge` 工具搜索知识库获取测试策略参考
 - 读取 API 文档获取接口细节
 - 查询数据库获取真实测试数据
 

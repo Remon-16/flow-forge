@@ -41,25 +41,27 @@ def write_file(path: str, content: str) -> str:
 
 
 # ------------------------------------------------------------------
-# RAG query tool
+# Grep knowledge search tool
 # ------------------------------------------------------------------
-_rag_instance: Optional[Any] = None  # Set by graph node before agent runs
+_knowledge_instance: Optional[Any] = None  # Set by graph node before agent runs
 
 
-def set_rag_instance(rag):
-    global _rag_instance
-    _rag_instance = rag
+def set_knowledge_instance(knowledge):
+    global _knowledge_instance
+    _knowledge_instance = knowledge
 
 
 @ToolRegistry.register(
-    name="query_knowledge",
-    description="Query the RAG knowledge base for best practices, test strategies, and domain rules.",
+    name="grep_knowledge",
+    description="Search the test knowledge base (.md files) for best practices, "
+                "test strategies, business rules, and domain patterns. "
+                "Use this when you need reference information for test case design.",
 )
-def query_knowledge(query: str, top_n: int = 3) -> str:
-    if _rag_instance is None:
-        return "ERROR: RAG knowledge base not available."
+def grep_knowledge(query: str, top_n: int = 3) -> str:
+    if _knowledge_instance is None:
+        return "ERROR: Knowledge base not available (ENABLE_KNOWLEDGE is off)."
     try:
-        results = _rag_instance.query(query, n_results=top_n)
+        results = _knowledge_instance.search(query, n_results=top_n)
         if not results:
             return "(no relevant knowledge found)"
         lines = []
@@ -67,4 +69,4 @@ def query_knowledge(query: str, top_n: int = 3) -> str:
             lines.append(f"{i}. {doc}")
         return "\n".join(lines)
     except Exception as e:
-        return f"ERROR querying knowledge base: {e}"
+        return f"ERROR searching knowledge base: {e}"
