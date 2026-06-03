@@ -13,7 +13,7 @@ AI智能体可以实现快速的用例输出，但由于AI生成可能产生幻�
 graph TD
     REQ[需求文档] --> AGENT[AI 用例生成智能体]
     API[接口文档] --> AGENT
-    KB[(RAG 知识库)] -.-> AGENT
+    KB[(Grep 检索)] -.-> AGENT
     AGENT --> |plan.md| REVIEW[人工审核]
     REVIEW --> |审核确认| AGENT
     AGENT --> |testcase.xlsx| EXEC[测试执行器]
@@ -73,7 +73,7 @@ graph TD
 
 |组件|技术|
 |------|----|
-|用例生成智能体|Python 3, OpenAI API, ChromaDB (RAG), prance (OpenAPI 解析), pymupdf (PDF 解析)|
+|用例生成智能体|Python 3, OpenAI API, prance (OpenAPI 解析), pymupdf (PDF 解析)|
 |测试执行器|Python 3, requests, openpyxl, pyyaml|
 |配置管理|YAML 多环境配置文件|
 |报告输出|自包含 HTML（无需外部 CSS/JS）|
