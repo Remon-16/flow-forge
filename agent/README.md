@@ -36,12 +36,14 @@ graph TD
 1. **文档解析**：读取需求文档（Markdown / PDF / 纯文本）和接口文档（OpenAPI 3.0 / Markdown 表格）
 2. **接口分析**：分析接口文档完整性——认证方式、参数模式、缺失信息；智能体自评通过则自动继续，仅关键不确定性时询问用户
 3. **需求分析**：LLM 从需求中提取业务流程、用户角色、约束条件、异常场景
-4. **计划生成**：基于分析结果和接口定义生成 Markdown 测试计划
+4. **计划生成**：基于分析结果和接口定义生成 Markdown 测试计划，自动保存至 session 目录
 5. **人工审核**（强制中断点）：展示计划，用户可批准或提出修改意见
 6. **反馈循环**：用户拒绝时，系统根据反馈修改计划后重新提交审核，直至批准
 7. **计划解析**：将审核通过的计划解析为结构化数据
 8. **用例生成**：生成包含具体参数值的单接口用例和业务链路用例
 9. **Excel 输出**：写入多 Sheet Excel 文件，与执行器格式完全兼容
+
+每个步骤在 CLI 中均有详细进度输出，包括：当前步骤 [N/8]、文件路径与大小、LLM 调用模型名、生成结果统计。用户始终清楚系统正在做什么。
 
 ## 技术栈
 
@@ -139,6 +141,18 @@ agent/
 │   ├── markdown_parser.py       # Markdown 表格解析器
 │   └── pdf_parser.py            # PDF 文本提取器
 │
+├── utils/
+│   ├── __init__.py
+│   └── session_logger.py        # SessionLogger：会话目录 + 结构化事件日志
+│
+├── logs/                        # 运行日志（自动生成）
+│   └── 2026-06-03_22-30-00/     # 按时间戳命名的会话目录
+│       ├── session.jsonl        # 事件摘要日志（节点、LLM 调用、文件操作）
+│       ├── debug.log            # 调试日志（完整 LLM I/O，仅 --debug 时生成）
+│       ├── plan.md              # 生成的测试计划
+│       ├── state.json           # 最终 GraphState 快照
+│       └── excel_result.xlsx    # 输出 Excel 副本
+│
 └── docs/
     ├── req.md                   # 示例需求文档
     └── api.yaml                 # 示例 OpenAPI 文档
@@ -162,7 +176,7 @@ cp .env.example .env
 python main.py --requirement docs/req.md --api docs/api.yaml --plan-only
 ```
 
-系统生成 `plan_YYYYMMDD_HHMMSS.md`，人工审核后：
+系统生成测试计划并保存至 `logs/YYYY-MM-DD_HH-MM-SS/plan.md`，人工审核后：
 
 ```bash
 # Phase 2: 基于审核通过的计划生成 Excel
@@ -173,6 +187,18 @@ python main.py --from-plan plan_20260601_120000.md --api docs/api.yaml --output 
 
 ```bash
 python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
+```
+
+使用 `--prompt` 注入用户补充指导：
+
+```bash
+python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx     --prompt "关注 VIP 用户的折扣逻辑和节假日特殊定价"
+```
+
+开启调试模式（完整 LLM 输入输出写入 session 目录）：
+
+```bash
+python main.py --requirement docs/req.md --api docs/api.yaml --debug
 ```
 
 系统生成计划后暂停，等待用户审核：
@@ -232,7 +258,9 @@ Markdown 表格示例：
 
 ### 输出
 
-**测试计划** (`plan_*.md`)：Markdown 文档，包含业务理解、单接口测试点、业务链路测试、Mermaid 流程图。
+**测试计划**：Markdown 文档，自动保存至 `logs/YYYY-MM-DD_HH-MM-SS/plan.md`，包含业务理解、单接口测试点、业务链路测试、Mermaid 流程图。
+
+**会话日志**：每次运行在 `logs/` 下创建按时间戳命名的目录，包含 `session.jsonl`（事件流）、`state.json`（最终状态快照）和输出 Excel 副本。使用 `--debug` 时额外生成 `debug.log`（完整 LLM I/O）。
 
 **Excel 用例文件**：多 Sheet 结构，与执行器格式完全兼容：
 - Sheet 1 — API Definitions：接口定义表
@@ -297,9 +325,24 @@ optional arguments:
   --plan-only           仅生成测试计划，不生成 Excel
   --from-plan FROM_PLAN
                         从已审核通过的计划生成 Excel
+  --prompt PROMPT, -p PROMPT
+                        用户补充指导，注入到计划生成和用例生成阶段
   --env ENV             .env 文件路径
-  -v, --verbose         详细日志输出
+  -v, --verbose         详细控制台日志输出
+  --debug               调试模式，在 session 目录中写入完整 LLM 输入输出
 ```
+
+## 会话日志
+
+每次运行会在  目录下创建按时间戳命名的会话目录：
+
+
+
+**session.jsonl** 记录所有关键事件：
+
+
+
+使用  参数时，额外生成 ，包含完整的 LLM system prompt、user prompt、response 全文和工具调用参数/返回值，方便定位问题。
 
 ## 智能体体系
 
@@ -356,7 +399,7 @@ optional arguments:
 
 ### 检查点
 
-通过 `MemorySaver` 检查点机制保存每个节点的执行状态，支持流程中断后的精确恢复。
+通过 `MemorySaver` 检查点机制保存每个节点的执行状态，支持流程中断后的精确恢复。每次运行结束时，完整的 `GraphState` 快照写入 `logs/<session>/state.json`。
 
 ## ReAct 终止条件
 

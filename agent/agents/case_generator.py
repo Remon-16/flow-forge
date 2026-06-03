@@ -40,8 +40,14 @@ class CaseGenerator(BaseAgent):
         self,
         plan: TestPlan,
         interfaces: List[InterfaceDef],
+        user_guidance: str = "",
     ) -> Dict[str, Any]:
         """Generate single and biz test cases.
+
+        Args:
+            plan: Structured TestPlan from PlanParser.
+            interfaces: List of InterfaceDef objects.
+            user_guidance: Optional user guidance from --prompt CLI flag.
 
         Returns dict with keys: 'single_cases', 'biz_flows'
         """
@@ -71,6 +77,7 @@ class CaseGenerator(BaseAgent):
             CASE_GENERATION_USER,
             test_plan=plan_str,
             interface_defs=json.dumps(iface_dicts, ensure_ascii=False, indent=2),
+            user_guidance=user_guidance,
         )
 
         # Conditionally append knowledge context

@@ -67,5 +67,8 @@ CASE_GENERATION_USER = """请基于以下信息生成具体测试用例：
 {{interface_defs}}
 ```
 
+## 用户补充指导
+{{user_guidance}}
+
 请以 JSON 格式返回完整的单接口用例和业务链路用例。
 """

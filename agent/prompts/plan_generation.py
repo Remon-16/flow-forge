@@ -39,5 +39,8 @@ PLAN_GENERATION_USER = """请基于以下信息生成测试计划：
 {{api_summary}}
 ```
 
+## 用户补充指导
+{{user_guidance}}
+
 请生成完整的测试计划 Markdown 文档。
 """

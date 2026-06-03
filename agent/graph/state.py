@@ -28,6 +28,8 @@ class GraphState(TypedDict, total=False):
     # === Plan generation ===
     plan_md: str
     plan_md_path: str
+    plan_parsed: Any  # Structured TestPlan from parse_plan_node
+    user_guidance: str  # User guidance from --prompt CLI flag
 
     # === API Analysis ===
     api_summary: List[Dict[str, Any]]

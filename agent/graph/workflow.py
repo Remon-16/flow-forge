@@ -33,6 +33,7 @@ def build_workflow(
     settings: Settings,
     prompt_registry: PromptRegistry | None = None,
     knowledge: KnowledgeSearch | None = None,
+    session_logger=None,
 ) -> StateGraph:
     """Build and compile the full test-case-generation StateGraph.
 
@@ -40,6 +41,7 @@ def build_workflow(
         settings: Global settings loaded from .env.
         prompt_registry: Optional PromptRegistry. Created from defaults if None.
         knowledge: Optional KnowledgeSearch. Created if enable_knowledge is on.
+        session_logger: Optional SessionLogger for structured event logging.
 
     Returns:
         A compiled StateGraph ready for ``.invoke()``.
@@ -49,7 +51,7 @@ def build_workflow(
     if knowledge is None and settings.enable_knowledge:
         knowledge = KnowledgeSearch(settings.knowledge_dir)
 
-    configure(settings, prompt_registry, knowledge)
+    configure(settings, prompt_registry, knowledge, session_logger)
 
     graph = StateGraph(GraphState)
 
