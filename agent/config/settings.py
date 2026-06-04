@@ -17,6 +17,7 @@ class Settings:
     llm_max_tokens: int = 4096
     enable_knowledge: bool = False
     knowledge_dir: str = "./knowledge"
+    llm_doc_max_chars: int = 30000
     max_steps: int = 10
     max_retries: int = 3
 
@@ -30,6 +31,7 @@ class Settings:
             "llm_max_tokens": self.llm_max_tokens,
             "enable_knowledge": self.enable_knowledge,
             "knowledge_dir": self.knowledge_dir,
+            "llm_doc_max_chars": self.llm_doc_max_chars,
             "max_steps": self.max_steps,
             "max_retries": self.max_retries,
         }
@@ -46,6 +48,7 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
     enable_knowledge = os.getenv("ENABLE_KNOWLEDGE", "false").strip().lower() in (
         "true", "1", "yes", "on"
     )
+    llm_doc_max_chars = int(os.getenv("LLM_DOC_MAX_CHARS", "30000"))
 
     return Settings(
         llm_provider=os.getenv("LLM_PROVIDER", "openai"),
@@ -56,6 +59,7 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
         llm_max_tokens=max_tokens,
         enable_knowledge=enable_knowledge,
         knowledge_dir=os.getenv("KNOWLEDGE_DIR", "./knowledge"),
+        llm_doc_max_chars=llm_doc_max_chars,
         max_steps=max_steps,
         max_retries=max_retries,
     )

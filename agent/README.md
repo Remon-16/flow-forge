@@ -140,6 +140,8 @@ agent/
 │   ├── openapi_parser.py        # OpenAPI 3.0 解析器
 │   ├── markdown_parser.py       # Markdown 表格解析器
 │   └── pdf_parser.py            # PDF 文本提取器
+│   ├── llm_parser.py            # LLM 接口提取器 (--parse-mode llm)
+│   ├── text_extractor.py        # 多格式文本提取 (DOCX/DOC/HTML)
 │
 ├── utils/
 │   ├── __init__.py
@@ -189,10 +191,33 @@ python main.py --from-plan plan_20260601_120000.md --api docs/api.yaml --output 
 python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
 ```
 
+**解析模式说明：**
+
+| 模式 | 命令参数 | 行为 | 适用场景 |
+|------|---------|------|---------|
+| raw (默认) | `-m raw` | 读取 API 文档原文，由 ApiAnalyzer LLM 从文本中识别接口 | 非标准格式但具有一定结构、手写文档、DOCX/PDF |
+| rule | `-m rule` | 使用内置规则解析器（OpenAPI/Markdown）或 `--parser-path` 指定的自定义解析器 | 标准 OpenAPI 3.0 / Markdown 表格 |
+| llm | `-m llm` | 在 parse_docs 阶段用 LLM 预提取结构化接口定义 | 非标准但含 API 信息的文档，结构较弱或者模型较弱 |
+
 使用 `--prompt` 注入用户补充指导：
 
 ```bash
-python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx     --prompt "关注 VIP 用户的折扣逻辑和节假日特殊定价"
+python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx \\
+    --prompt "关注 VIP 用户的折扣逻辑和节假日特殊定价"
+```
+
+使用 `--parse-mode llm` 解析非标准 API 文档：
+
+```bash
+python main.py --requirement docs/req.md --api docs/handwritten_api.md \\
+    -m llm --output testcase.xlsx
+```
+
+使用自定义解析器：
+
+```bash
+python main.py --requirement docs/req.md --api docs/my_api.json \\
+    -m rule --parser-path custom/my_parser.py
 ```
 
 开启调试模式（完整 LLM 输入输出写入 session 目录）：
@@ -281,6 +306,7 @@ Markdown 表格示例：
 | `LLM_MAX_TOKENS` | 最大输出 Token | `4096` |
 | `ENABLE_KNOWLEDGE` | 启用外部知识库（grep 文本检索） | `false` |
 | `KNOWLEDGE_DIR` | 知识库 .md 文件目录 | `./knowledge` |
+| `LLM_DOC_MAX_CHARS` | API 文档解析时发送给 LLM 的最大字符数 | `30000`（8K模型设2000，1M模型设100000+） |
 | `MAX_STEPS` | 单智能体最大步数 | `10` |
 | `MAX_RETRIES` | LLM 调用最大重试 | `3` |
 
@@ -327,10 +353,26 @@ optional arguments:
                         从已审核通过的计划生成 Excel
   --prompt PROMPT, -p PROMPT
                         用户补充指导，注入到计划生成和用例生成阶段
+  --parse-mode {raw,rule,llm}, -m {raw,rule,llm}
+                        API 文档解析模式（默认 raw）
+                          raw  : 提取原文，由 ApiAnalyzer LLM 识别接口
+                          rule : 使用规则解析器（OpenAPI / Markdown）
+                          llm  : 用 LLM 预提取结构化接口定义
+  --parser-path PATH    自定义解析器 .py 文件路径（仅 -m rule 时生效）
   --env ENV             .env 文件路径
   -v, --verbose         详细控制台日志输出
   --debug               调试模式，在 session 目录中写入完整 LLM 输入输出
 ```
+
+## 自定义解析器
+
+用户可编写自己的解析脚本，通过  挂载。解析器需实现以下接口：
+
+
+
+使用方式：
+
+
 
 ## 会话日志
 

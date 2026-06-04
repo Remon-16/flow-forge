@@ -21,6 +21,41 @@ from prompts.render import render_prompt
 logger = logging.getLogger(__name__)
 
 
+def _normalize_interfaces(items: List[Any]) -> List[Dict[str, Any]]:
+    """Convert a mixed list of InterfaceDef/dicts to a unified list of dicts."""
+    result = []
+    for item in items:
+        if isinstance(item, dict):
+            result.append({
+                "test_id": item.get("test_id", ""),
+                "api_name": item.get("api_name", item.get("name", "")),
+                "app_name": item.get("app_name", item.get("app", "")),
+                "method": item.get("method", "GET"),
+                "url": item.get("url", ""),
+                "request_head": item.get("request_head", item.get("headers", {})),
+                "request_body": item.get("request_body", item.get("body", {})),
+                "status_code": item.get("status_code", 200),
+                "assert_dict": item.get("assert_dict", {}),
+                "remark": item.get("remark", item.get("note", "")),
+            })
+        elif hasattr(item, "test_id"):
+            result.append({
+                "test_id": item.test_id,
+                "api_name": item.api_name,
+                "app_name": item.app_name,
+                "method": item.method,
+                "url": item.url,
+                "request_head": item.request_head,
+                "request_body": item.request_body,
+                "status_code": item.status_code,
+                "assert_dict": item.assert_dict,
+                "remark": item.remark,
+            })
+        else:
+            logger.warning("Skipping unrecognized interface item: %s", type(item))
+    return result
+
+
 class CaseGenerator(BaseAgent):
     """Generate concrete test cases from a confirmed test plan."""
 
@@ -39,39 +74,21 @@ class CaseGenerator(BaseAgent):
     def generate(
         self,
         plan: TestPlan,
-        interfaces: List[InterfaceDef],
+        interfaces: List[Any],
         user_guidance: str = "",
     ) -> Dict[str, Any]:
         """Generate single and biz test cases.
 
         Args:
             plan: Structured TestPlan from PlanParser.
-            interfaces: List of InterfaceDef objects.
+            interfaces: List of InterfaceDef objects OR plain dicts from state.
             user_guidance: Optional user guidance from --prompt CLI flag.
 
         Returns dict with keys: 'single_cases', 'biz_flows'
         """
-        # Build interface lookup
-        iface_map: Dict[str, InterfaceDef] = {}
-        for iface in interfaces:
-            iface_map[iface.test_id] = iface
-
         # Serialize plan and interfaces for LLM
         plan_str = self._serialize_plan(plan)
-        iface_dicts = []
-        for iface in interfaces:
-            iface_dicts.append({
-                "test_id": iface.test_id,
-                "api_name": iface.api_name,
-                "app_name": iface.app_name,
-                "method": iface.method,
-                "url": iface.url,
-                "request_head": iface.request_head,
-                "request_body": iface.request_body,
-                "status_code": iface.status_code,
-                "assert_dict": iface.assert_dict,
-                "remark": iface.remark,
-            })
+        iface_dicts = _normalize_interfaces(interfaces)
 
         prompt = render_prompt(
             CASE_GENERATION_USER,

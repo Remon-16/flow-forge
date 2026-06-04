@@ -17,7 +17,21 @@ Usage:
 
     # With debug logging (full LLM I/O written to session debug.log)
     python main.py --requirement docs/req.md --api docs/api.yaml --debug
+
+    # Parse modes for API docs:
+    #   raw (default): pass raw text to ApiAnalyzer LLM
+    #   rule: use built-in OpenAPI/Markdown parser
+    #   llm : pre-extract structured interfaces via LLM
+    python main.py --requirement docs/req.md --api docs/api.docx --parse-mode raw
+    python main.py --requirement docs/req.md --api docs/api.yaml --parse-mode rule
+    python main.py --requirement docs/req.md --api docs/api.md --parse-mode llm
+
+    # Use a custom parser
+    python main.py --requirement docs/req.md --api docs/api.yaml \\
+        --parse-mode rule --parser-path my_parser.py
 """
+
+from __future__ import annotations
 
 import argparse
 import logging
@@ -97,6 +111,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--debug",
         action="store_true",
         help="Enable detailed debug logging (full LLM I/O written to session debug.log)",
+    )
+    p.add_argument(
+        "--parse-mode", "-m",
+        choices=["raw", "rule", "llm"],
+        default="raw",
+        help="API document parse mode (default: raw). "
+             "raw = pass text to ApiAnalyzer LLM; "
+             "rule = use built-in/custom rule parser; "
+             "llm = pre-extract structured interfaces via LLM",
+    )
+    p.add_argument(
+        "--parser-path",
+        default="",
+        help="Path to custom parser .py file (only for --parse-mode rule). "
+             "Must implement: parse(file_path: str) -> List[InterfaceDef]",
     )
     return p
 
@@ -227,6 +256,8 @@ def main() -> int:
             "plan_confirmed": True,
             "api_summary_confirmed": True,
             "user_guidance": args.prompt or "",
+            "parse_mode": args.parse_mode,
+            "parser_path": args.parser_path or "",
         }
 
         result = graph.invoke(initial, config)
@@ -263,6 +294,8 @@ def main() -> int:
             "plan_only": True,
             "plan_confirmed": True,  # Skip review in plan-only mode
             "user_guidance": args.prompt or "",
+            "parse_mode": args.parse_mode,
+            "parser_path": args.parser_path or "",
         }
         config = {"configurable": {"thread_id": thread_id}}
 

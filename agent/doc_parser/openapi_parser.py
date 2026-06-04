@@ -27,7 +27,7 @@ class OpenApiParser:
                 "Install with: pip install prance"
             )
 
-        parser = prance.ResolvingParser(str(path), strict=False)
+        parser = prance.ResolvingParser(str(path), strict=False, recursion_limit=15)
         spec = parser.specification
         return OpenApiParser._extract_interfaces(spec)
 

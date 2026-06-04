@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from config.settings import Settings
+from doc_parser.llm_parser import DocParserAgent
 from doc_parser.markdown_parser import MarkdownParser
 from doc_parser.openapi_parser import OpenApiParser
 from doc_parser.pdf_parser import PdfParser
+from doc_parser.text_extractor import extract_text
 from graph.state import GraphState
 from knowledge.search import KnowledgeSearch
 from models.schema import InterfaceDef
@@ -60,7 +62,13 @@ def _fmt_size(path: str) -> str:
 # Node: parse_docs
 # =========================================================================
 def parse_docs_node(state: GraphState) -> GraphState:
-    """Read requirement files + API spec, store raw text and interfaces."""
+    """Read requirement files + API spec.
+
+    Three parse modes (from ``state["parse_mode"]``):
+    - ``raw`` (default): Extract text, store in api_raw_text. Defer analysis.
+    - ``rule``: Use rule-based parsers (OpenAPI / Markdown / custom).
+    - ``llm``: Use DocParserAgent (LLM) to pre-extract structured interfaces.
+    """
     state.setdefault("errors", [])
 
     print("\n[1/8] 读取文档...")
@@ -101,33 +109,87 @@ def parse_docs_node(state: GraphState) -> GraphState:
 
     # --- API ---
     api_path = state.get("api_path", "")
-    interfaces: List[InterfaceDef] = []
-    if api_path:
-        size_str = _fmt_size(api_path)
-        try:
-            if api_path.endswith((".yaml", ".yml", ".json")):
-                interfaces = OpenApiParser.parse(api_path)
-                print(f"  → 解析 {api_path} (OpenAPI, {size_str}, {len(interfaces)} 个接口)")
-            elif api_path.endswith((".md", ".markdown")):
-                interfaces = MarkdownParser.parse(api_path)
-                print(f"  → 解析 {api_path} (Markdown, {size_str}, {len(interfaces)} 个接口)")
-            else:
-                # Try OpenAPI first, fallback to markdown
-                try:
-                    interfaces = OpenApiParser.parse(api_path)
-                    print(f"  → 解析 {api_path} (OpenAPI, {size_str}, {len(interfaces)} 个接口)")
-                except Exception:
-                    interfaces = MarkdownParser.parse(api_path)
-                    print(f"  → 解析 {api_path} (Markdown, {size_str}, {len(interfaces)} 个接口)")
-            if _sl():
-                _sl().log_file_read(api_path, Path(api_path).stat().st_size)
-        except Exception as e:
-            msg = f"Failed to parse API doc '{api_path}': {e}"
-            logger.error(msg)
-            state["errors"].append(msg)
-            print(f"  ✗ {msg}")
+    parse_mode = state.get("parse_mode", "raw")
+    state["interfaces_from_llm"] = False
 
-    state["interfaces"] = [_iface_to_dict(i) for i in interfaces]
+    if not api_path:
+        state["interfaces"] = []
+        state["interface_extraction_method"] = "none"
+        return state
+
+    size_str = _fmt_size(api_path)
+    ext = Path(api_path).suffix.lower()
+
+    print(f"  → 解析模式: {parse_mode}")
+
+    if parse_mode == "raw":
+        # ---- Raw mode: extract text, pass to analyze_api_node ----
+        raw_text = extract_text(api_path)
+        if not raw_text.strip():
+            raise Exception(f"API 文档 '{api_path}' 内容为空，无法解析。")
+
+        state["api_raw_text"] = raw_text
+        state["interfaces"] = []
+        state["interface_extraction_method"] = "raw"
+        print(f"  → 读取 API 文档原文 ({size_str}, {len(raw_text)} 字符)")
+        print(f"  → 接口识别将在下一步由 ApiAnalyzer 完成")
+
+    elif parse_mode == "rule":
+        # ---- Rule mode: built-in or custom parser ----
+        interfaces = _dispatch_rule_parser(api_path, state.get("parser_path", ""))
+        if len(interfaces) == 0:
+            raise Exception(
+                f"规则解析器未从 '{api_path}' 提取到接口。\n"
+                f"建议：\n"
+                f"  1. 尝试 --parse-mode raw（默认，让 LLM 直接从原文识别接口）\n"
+                f"  2. 尝试 --parse-mode llm（用 LLM 预提取结构化接口）\n"
+                f"  3. 编写自定义解析器: --parser-path /path/to/parser.py"
+            )
+        state["interfaces"] = [_iface_to_dict(i) for i in interfaces]
+        state["interface_extraction_method"] = "rule"
+        print(f"  → 规则解析完成 ({len(interfaces)} 个接口)")
+
+    elif parse_mode == "llm":
+        # ---- LLM mode: pre-extract structured interfaces ----
+        raw_text = extract_text(api_path)
+        if not raw_text.strip():
+            raise Exception(f"API 文档 '{api_path}' 内容为空，无法解析。")
+
+        print(f"  → 读取 API 文档原文 ({size_str}, {len(raw_text)} 字符)")
+        print(f"  → DocParserAgent 正在调用 LLM ({_settings.llm_model}) 提取接口...")
+        if _sl():
+            _sl().log_event("llm_call", agent="DocParserAgent", model=_settings.llm_model,
+                            text_length=len(raw_text))
+
+        parser = DocParserAgent(_settings)
+        interfaces = parser.parse(
+            raw_text=raw_text,
+            file_name=Path(api_path).name,
+            file_type_hint=ext,
+        )
+
+        if len(interfaces) == 0:
+            raise Exception(
+                f"LLM 未从 '{api_path}' 提取到接口。\n"
+                f"建议：\n"
+                f"  1. 尝试 --parse-mode raw（让 ApiAnalyzer 直接从原文分析）\n"
+                f"  2. 检查文件内容是否描述了 API 接口"
+            )
+
+        state["interfaces"] = [_iface_to_dict(i) for i in interfaces]
+        state["interfaces_from_llm"] = True
+        state["interface_extraction_method"] = "llm"
+        print(f"  → LLM 成功提取 {len(interfaces)} 个接口")
+
+    else:
+        raise Exception(
+            f"未知的解析模式: {parse_mode}。"
+            f"支持的模式: raw (默认), rule, llm"
+        )
+
+    if _sl():
+        _sl().log_file_read(api_path, Path(api_path).stat().st_size)
+
     return state
 
 
@@ -152,20 +214,36 @@ def analyze_api_node(state: GraphState) -> GraphState:
         return state
 
     interfaces = state.get("interfaces", [])
+    api_raw_text = state.get("api_raw_text", "")
     api_summary = state.get("api_summary", [])
     feedback = state.get("api_summary_feedback", "")
 
     agent = ApiAnalyzer(_settings)
 
     print(f"\n[2/8] 分析接口文档...")
-    print(f"  → ApiAnalyzer 正在调用 LLM ({_settings.llm_model})...")
-    if _sl():
-        _sl().log_node_start("analyze_api", "2/8")
 
-    if feedback:
-        summary = agent.revise(interfaces, api_summary, feedback)
+    if api_raw_text and not interfaces:
+        # Raw mode: analyze directly from text
+        print(f"  → ApiAnalyzer 正在从原文识别并分析接口 ({_settings.llm_model})...")
+        if _sl():
+            _sl().log_node_start("analyze_api", "2/8")
+            _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
+                            model=_settings.llm_model, text_length=len(api_raw_text))
+
+        if feedback:
+            summary = agent.revise([], api_summary, feedback)
+        else:
+            summary = agent.analyze_raw_text(api_raw_text, Path(state.get("api_path", "")).name)
     else:
-        summary = agent.analyze(interfaces)
+        # Rule/llm mode: analyze from structured interfaces
+        print(f"  → ApiAnalyzer 正在调用 LLM ({_settings.llm_model})...")
+        if _sl():
+            _sl().log_node_start("analyze_api", "2/8")
+
+        if feedback:
+            summary = agent.revise(interfaces, api_summary, feedback)
+        else:
+            summary = agent.analyze(interfaces)
 
     print(f"  → 生成 {len(summary)} 个接口摘要")
     if _sl():
@@ -193,6 +271,67 @@ def analyze_api_node(state: GraphState) -> GraphState:
         state["api_summary_feedback"] = choice
 
     return state
+
+
+def _dispatch_rule_parser(api_path: str, parser_path: str = "") -> List[InterfaceDef]:
+    """Dispatch to the appropriate rule-based parser.
+
+    If ``parser_path`` is set, dynamically load and call the custom parser's
+    ``parse(file_path) -> List[InterfaceDef]`` function.
+    """
+    if parser_path:
+        return _load_custom_parser(parser_path)(api_path)
+
+    ext = Path(api_path).suffix.lower()
+
+    if ext in (".yaml", ".yml", ".json"):
+        print(f"  → 使用 OpenApiParser 解析...")
+        return OpenApiParser.parse(api_path)
+
+    if ext in (".md", ".markdown"):
+        print(f"  → 使用 MarkdownParser 解析...")
+        return MarkdownParser.parse(api_path)
+
+    # Unknown extension: try OpenAPI first, then Markdown
+    try:
+        print(f"  → 尝试 OpenApiParser...")
+        interfaces = OpenApiParser.parse(api_path)
+        if interfaces:
+            return interfaces
+    except Exception:
+        pass
+
+    try:
+        print(f"  → 尝试 MarkdownParser...")
+        interfaces = MarkdownParser.parse(api_path)
+        if interfaces:
+            return interfaces
+    except Exception:
+        pass
+
+    return []
+
+
+def _load_custom_parser(parser_path: str):
+    """Dynamically load a custom parser module and return its ``parse`` function."""
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(parser_path).resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"自定义解析器未找到: {path}")
+
+    spec = importlib.util.spec_from_file_location("custom_parser", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    if not hasattr(module, "parse"):
+        raise AttributeError(
+            f"自定义解析器 {path} 必须实现 parse(file_path: str) -> List[InterfaceDef] 函数"
+        )
+
+    print(f"  → 使用自定义解析器: {path}")
+    return module.parse
 
 
 def _has_critical_uncertainties(summary: List[Dict]) -> bool:
@@ -462,7 +601,7 @@ def generate_cases_node(state: GraphState) -> GraphState:
 
     agent = CaseGenerator(_settings, _knowledge)
     plan = state.get("plan_parsed")
-    interfaces = state.get("interfaces", [])
+    interfaces_raw = state.get("interfaces", [])
     user_guidance = state.get("user_guidance", "")
 
     print(f"\n[7/8] 生成测试用例...")
@@ -470,6 +609,7 @@ def generate_cases_node(state: GraphState) -> GraphState:
     if _sl():
         _sl().log_node_start("generate_cases", "7/8")
 
+    interfaces = _dicts_to_interfaces(interfaces_raw)
     result = agent.generate(plan, interfaces, user_guidance=user_guidance)
     single_cases = result.get("single_cases", [])
     biz_flows = result.get("biz_flows", [])
@@ -494,13 +634,15 @@ def write_excel_node(state: GraphState) -> GraphState:
     state.setdefault("errors", [])
 
     output = state.get("output_path", "test_cases.xlsx")
-    interfaces = state.get("interfaces", [])
+    interfaces_raw = state.get("interfaces", [])
     single = state.get("single_cases", [])
     biz = state.get("biz_flows", [])
 
     print(f"\n[8/8] 写入 Excel...")
     if _sl():
         _sl().log_node_start("write_excel", "8/8")
+
+    interfaces = _dicts_to_interfaces(interfaces_raw)
 
     try:
         ExcelWriter.write(interfaces, single, biz, output)
@@ -569,3 +711,30 @@ def _iface_to_dict(i: InterfaceDef) -> Dict[str, Any]:
         "assert_dict": i.assert_dict,
         "remark": i.remark,
     }
+
+
+def _dicts_to_interfaces(items: List[Any]) -> List[InterfaceDef]:
+    """Convert a mixed list of dicts/InterfaceDef to unified List[InterfaceDef]."""
+    result = []
+    for item in items:
+        if isinstance(item, InterfaceDef):
+            result.append(item)
+        elif isinstance(item, dict):
+            try:
+                result.append(InterfaceDef(
+                    test_id=str(item.get("test_id", "")),
+                    api_name=str(item.get("api_name", item.get("name", ""))),
+                    app_name=str(item.get("app_name", item.get("app", ""))),
+                    method=str(item.get("method", "GET")).upper(),
+                    url=str(item.get("url", "")),
+                    request_head=dict(item.get("request_head", item.get("headers", {})) or {}),
+                    request_body=dict(item.get("request_body", item.get("body", item.get("params", {}))) or {}),
+                    status_code=int(item.get("status_code", 200)),
+                    assert_dict=dict(item.get("assert_dict", item.get("assertion", {})) or {}),
+                    remark=str(item.get("remark", item.get("note", ""))),
+                ))
+            except Exception as e:
+                logger.warning("Failed to convert dict to InterfaceDef: %s", e)
+        else:
+            logger.warning("Unexpected interface item type: %s", type(item))
+    return result

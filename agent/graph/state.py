@@ -21,6 +21,9 @@ class GraphState(TypedDict, total=False):
     # === Document parsing ===
     requirement_text: str
     interfaces: List[Dict[str, Any]]
+    api_raw_text: str          # Raw text of API doc (for --parse-mode raw)
+    parse_mode: str            # "raw" | "rule" | "llm"
+    parser_path: str           # Custom parser script path
 
     # === Requirement analysis ===
     requirement_analysis: Dict[str, Any]
