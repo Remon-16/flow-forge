@@ -1,5 +1,7 @@
 # Flow Forge — 接口自动化测试执行器
 
+[English](README.en.md) | **中文**
+
 基于 Python 3 的 HTTP 接口自动化测试执行器，支持 Excel 驱动的用例管理、多线程并发执行、参数传递链路测试、自动登录态管理和自包含 HTML 报告输出。
 
 ## 系统架构

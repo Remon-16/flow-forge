@@ -1,5 +1,7 @@
 # Flow Forge — 接口自动化用例生成智能体
 
+[English](README.en.md) | **中文**
+
 基于 LangGraph + ReAct 模式的多智能体系统，将需求文档和接口文档转化为符合执行器格式的 Excel 测试用例。
 
 ## 系统架构

@@ -1,5 +1,7 @@
 # Flow Forge — 接口自动化测试框架
 
+[English](README.en.md) | **中文**
+
 ![Development Status](https://img.shields.io/badge/状态-开发中-orange) 
 ![Version](https://img.shields.io/badge/版本-v0.1.0--dev-blue)
 ![Branch](https://img.shields.io/badge/最新代码-dev_first-brightgreen)
