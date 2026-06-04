@@ -47,7 +47,6 @@ class BizFlowExecutor(BaseExecutor):
             }
 
         try:
-            self._step_data = threading.local()
             self._step_data.responses = {}
 
             step_results = []
