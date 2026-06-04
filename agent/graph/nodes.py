@@ -252,6 +252,12 @@ def analyze_api_node(state: GraphState) -> GraphState:
     state["api_summary"] = summary
     state["api_summary_feedback"] = ""
 
+    # In raw mode, reconstruct interfaces from the summary so downstream
+    # nodes (generate_cases, write_excel) have interface definitions.
+    if api_raw_text and not interfaces:
+        state["interfaces"] = _summary_to_interfaces(summary)
+        print(f"  → 从摘要重建 {len(state['interfaces'])} 个接口定义")
+
     critical = _has_critical_uncertainties(summary)
 
     if not critical:
@@ -711,6 +717,52 @@ def _iface_to_dict(i: InterfaceDef) -> Dict[str, Any]:
         "assert_dict": i.assert_dict,
         "remark": i.remark,
     }
+
+
+def _summary_to_interfaces(summary: List[Dict]) -> List[Dict[str, Any]]:
+    """将 ApiAnalyzer 返回的摘要字典列表转换为 InterfaceDef 字典列表。
+
+    api_summary 字段 → InterfaceDef 字段映射：
+    - api_path → url
+    - method → method
+    - description → api_name, remark
+    - notes → remark (追加)
+    """
+    result: List[Dict[str, Any]] = []
+    for item in summary:
+        url = str(item.get("api_path", ""))
+        method = str(item.get("method", "GET")).upper()
+        description = str(item.get("description", ""))
+
+        clean = (
+            url.strip("/")
+            .replace("/", "_")
+            .replace("-", "_")
+            .replace("{", "")
+            .replace("}", "")
+            .lower()
+        )
+        test_id = f"api_{clean}_{method.lower()}" if clean else ""
+
+        name = description or f"{method} {url}"
+        remark = description
+        notes = str(item.get("notes", ""))
+        if notes:
+            remark = f"{description} | {notes}" if description else notes
+
+        result.append({
+            "test_id": test_id,
+            "api_name": name,
+            "app_name": "default",
+            "method": method,
+            "url": url,
+            "request_head": {"Content-Type": "application/json"},
+            "request_body": {},
+            "status_code": 200,
+            "assert_dict": {"status_code": 200},
+            "remark": remark,
+        })
+    return result
 
 
 def _dicts_to_interfaces(items: List[Any]) -> List[InterfaceDef]:
