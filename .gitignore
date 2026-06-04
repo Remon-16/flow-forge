@@ -43,3 +43,4 @@ __pycache__
 env-local.yml
 .env
 logs/
+report/
