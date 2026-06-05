@@ -1,0 +1,224 @@
+openapi: 3.0.0
+info:
+  title: 电商平台优惠券 API
+  version: 1.0.0
+  description: 电商平台优惠券管理接口文档
+servers:
+  - url: https://api.example.com
+    description: 测试环境
+
+paths:
+  /api/user/login:
+    post:
+      summary: 用户登录
+      tags: [用户模块]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  description: 用户名
+                  example: admin
+                password:
+                  type: string
+                  description: 密码
+                  example: "123456"
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                        example: "eyJhbGciOiJIUzI1NiJ9..."
+                      userId:
+                        type: integer
+                        example: 1001
+        '401':
+          description: 用户名或密码错误
+
+  /api/coupon/list:
+    get:
+      summary: 获取可用优惠券列表
+      tags: [优惠券模块]
+      parameters:
+        - name: pageNum
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  data:
+                    type: object
+                    properties:
+                      records:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Coupon'
+
+  /api/coupon/receive:
+    post:
+      summary: 领取优惠券
+      tags: [优惠券模块]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [couponId]
+              properties:
+                couponId:
+                  type: integer
+                  description: 优惠券ID
+                  example: 1
+      responses:
+        '200':
+          description: 领取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  data:
+                    type: object
+                    properties:
+                      couponId:
+                        type: integer
+                      userId:
+                        type: integer
+                      status:
+                        type: string
+                        example: "active"
+        '400':
+          description: 优惠券已领取或不存在
+
+  /api/order/create:
+    post:
+      summary: 创建订单（使用优惠券）
+      tags: [订单模块]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, quantity, amount]
+              properties:
+                productId:
+                  type: integer
+                  example: 100
+                quantity:
+                  type: integer
+                  example: 1
+                amount:
+                  type: number
+                  example: 99.00
+                couponId:
+                  type: integer
+                  description: 使用的优惠券ID（可选）
+                  example: 1
+      responses:
+        '200':
+          description: 订单创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  data:
+                    type: object
+                    properties:
+                      orderId:
+                        type: integer
+                      totalAmount:
+                        type: number
+                      discountAmount:
+                        type: number
+                      finalAmount:
+                        type: number
+
+  /api/order/detail:
+    get:
+      summary: 查询订单详情
+      tags: [订单模块]
+      parameters:
+        - name: orderId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  data:
+                    type: object
+                    properties:
+                      orderId:
+                        type: integer
+                      status:
+                        type: string
+                      totalAmount:
+                        type: number
+                      discountAmount:
+                        type: number
+                      finalAmount:
+                        type: number
+
+components:
+  schemas:
+    Coupon:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        discountAmount:
+          type: number
+        minOrderAmount:
+          type: number
+        expireTime:
+          type: string
+          format: date-time
+        status:
+          type: string

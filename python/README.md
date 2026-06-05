@@ -1,5 +1,7 @@
 # Flow Forge — 接口自动化测试执行器
 
+[English](README.en.md) | **中文**
+
 基于 Python 3 的 HTTP 接口自动化测试执行器，支持 Excel 驱动的用例管理、多线程并发执行、参数传递链路测试、自动登录态管理和自包含 HTML 报告输出。
 
 ## 系统架构
@@ -22,6 +24,57 @@ graph TD
     REPORT --> HTML[自包含 HTML 报告]
 ```
 
+## 目录结构
+
+```
+python/
+├── main.py                      # CLI 入口，流程编排
+├── requirements.txt             # 依赖：requests, openpyxl, pyyaml
+├── env.yml                      # 基础配置（可提交到仓库）
+├── env-local.yml                # 环境特定配置（含登录凭据，不可提交）
+│
+├── config/
+│   ├── __init__.py
+│   └── config_manager.py        # 配置加载、合并、CLI 覆盖
+│
+├── core/
+│   ├── __init__.py
+│   ├── deep_merge.py            # 递归字典深度合并
+│   ├── path_resolver.py         # 点号/括号 JSON 路径解析器
+│   └── script_type.py           # 脚本类型枚举与执行器注册表
+│
+├── excel_reader/
+│   ├── __init__.py
+│   └── excel_parser.py          # 多 Sheet Excel 解析、校验、合并
+│
+├── executor/
+│   ├── __init__.py
+│   ├── base.py                  # BaseExecutor 抽象基类（线程池 + 线程安全）
+│   ├── api_test.py              # ApiTestExecutor：单接口测试
+│   ├── biz_flow.py              # BizFlowExecutor：多步骤业务链路测试
+│   └── factory.py               # 执行器工厂，动态导入
+│
+├── auth/
+│   ├── __init__.py
+│   └── login_manager.py         # 线程安全登录态管理器（Token 缓存 + 细粒度锁）
+│
+├── assertion/
+│   ├── __init__.py
+│   └── engine.py                # 字段级 JSON 路径断言引擎
+│
+└── reporter/
+    ├── __init__.py
+    ├── html_writer.py           # 自包含 HTML 报告生成器
+    └── md_writer.py             # Markdown 报告生成器（备用）
+```
+
+## 安装指南
+
+```bash
+cd python
+pip install -r requirements.txt
+```
+
 ### 依赖说明
 
 | 依赖 | 用途 |
@@ -29,6 +82,41 @@ graph TD
 | `requests` | HTTP 请求发送 |
 | `openpyxl` | Excel 用例文件读取 |
 | `pyyaml` | YAML 配置文件解析 |
+
+## 快速开始
+
+### 1. 配置环境
+
+编辑 `env.yml` 设置基础参数：
+
+```yaml
+scriptType: APITest
+envName: local
+caseFilePath: ./test_cases.xlsx
+maxThread: 5
+reportName: APIReport
+```
+
+编辑 `env-{envName}.yml` 配置被测应用和登录信息（参见[配置说明](#配置说明)）。
+
+### 2. 准备 Excel 用例文件
+
+按照 [Excel 用例格式](#excel-用例格式) 编写测试用例。
+
+### 3. 运行测试
+
+```bash
+# 使用默认配置运行（仅执行单接口用例）
+python main.py
+
+# 指定环境和线程数，执行所有用例
+python main.py --envName prod --maxThread 10 --apiMode all
+
+# 完整参数示例
+python main.py --config /path/to/env.yml --scriptType APITest --envName local \
+               --caseFilePath ./test_cases.xlsx --maxThread 5 --reportName MyReport \
+               --apiMode all
+```
 
 ## 配置说明
 
@@ -341,3 +429,10 @@ sequenceDiagram
     end
 ```
 
+## 退出码
+
+| 退出码 | 含义 |
+|--------|------|
+| `0` | 所有用例通过 |
+| `1` | 部分或全部用例失败 |
+| `2` | 配置错误或文件解析错误（未执行任何用例） |

@@ -41,3 +41,6 @@ build/
 __pycache__
 
 env-local.yml
+.env
+logs/
+report/
