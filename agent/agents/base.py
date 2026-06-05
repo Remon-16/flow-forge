@@ -186,7 +186,7 @@ class BaseAgent:
                 except json.JSONDecodeError:
                     continue
 
-        raise ValueError(f"Failed to parse JSON from LLM response:\n{text[:500]}")
+        raise ValueError(f"Failed to parse JSON from LLM response len: {len(text)} text:\n{text[:500]}")
 
 
 # =========================================================================

@@ -43,6 +43,7 @@ from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
 
 from config.settings import load_settings
+from graph.nodes import revise_plan_node
 from graph.state import GraphState
 from graph.workflow import build_workflow
 from utils.session_logger import SessionLogger
@@ -196,10 +197,19 @@ def _run_interactive(
                     print("修改意见不能为空，请重新输入。")
                     continue
                 print("\n正在根据反馈修改计划...\n")
-                result = _resume(feedback)
-                if result is not None:
-                    break
+
+                # 不通过图的 interrupt/routing 机制处理拒绝。
+                # 直接获取当前 state、调用 revise_plan_node 修订，
+                # 然后 update_state 写回 checkpoint。
+                snapshot = graph.get_state(config)
+                state = dict(snapshot.values)
+                state["plan_feedback"] = feedback
+                state["plan_confirmed"] = False
+                revised_state = revise_plan_node(state)
+                graph.update_state(config, revised_state, as_node="revise_plan")
+
                 print("\n[审核] 计划已修改，请再次审核...")
+                # 继续 while 循环，下一轮显示 human_confirm 待处理
             else:
                 print("无效输入，请输入 y 或 n。")
         else:
@@ -308,7 +318,8 @@ def main() -> int:
 
         # Save to session dir
         plan_path = session_logger.save_plan(plan_md)
-        session_logger.save_state(dict(result))
+        if args.debug:
+            session_logger.save_state(dict(result))
 
         print(f"\nTest plan generated: {plan_path.resolve()}")
         print("\nReview the plan, then run:")
@@ -342,7 +353,8 @@ def main() -> int:
     if plan_md and session_logger:
         session_logger.save_plan(plan_md)
 
-    session_logger.save_state(dict(result))
+    if session_logger.debug:
+        session_logger.save_state(dict(result))
     session_logger.log_session_end("completed")
 
     print(f"\nAll done! Excel written to: {args.output}")

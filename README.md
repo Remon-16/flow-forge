@@ -2,12 +2,39 @@
 
 [English](README.en.md) | **中文**
 
-![Development Status](https://img.shields.io/badge/状态-开发中-orange) 
-![Version](https://img.shields.io/badge/版本-v0.1.0--dev-blue)
-![Branch](https://img.shields.io/badge/最新代码-dev_first-brightgreen)
+![Development Status](https://img.shields.io/badge/状态-早期版本-orange) 
+![Version](https://img.shields.io/badge/版本-v0.1.0--alpha-blue)
+![Branch](https://img.shields.io/badge/开发分支-dev_first-brightgreen)
 
 基于 AI 智能体的接口自动化测试框架。输入需求文档和接口文档，智能体自动生成测试用例 Excel；将 Excel 交给命令行执行器，即可得到测试报告。执行器可无缝集成 Jenkins，实现 CI/CD 流水线。
+
 AI智能体可以实现快速的用例输出，但由于AI生成可能产生幻觉，建议人工审核输出的用例。为了更方便人工审核，测试用例和参数放在了同一个Excel内，详细规则见 [agent/README.md](./agent/README.md)。
+
+## 版本说明
+
+目前已完成最小主要链路的验证。提供需求文档、接口文档和用户描述给智能体。智能体可以给出测试计划。人工审核并通过测试计划之后即可生成单接口和业务链路接口测试用例。拒绝测试计划并提交修改意见后可以正确修改测试计划，审核通过后可以生成测试用例。智能体使用的LLM是deepseek-v4-flash。
+
+智能体使用示例，详情见 [agent/README.md](./agent/README.md)。
+
+```bash
+python agent/main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
+```
+
+执行器能够以单线程和多线程（并发执行多个用例，非压力测试）的方式执行测试用例。执行业务链路用例时，前面步骤的执行结果可以解析到当前步骤，实现测试数据的跨接口传递。断言引擎能够完成基本的“equals”。
+
+执行器使用示例，详情见 [python/README.md](./python/README.md)。
+
+```bash
+python main.py --config /path/to/env.yml --scriptType APITest --envName local \
+               --caseFilePath ./test_cases.xlsx --maxThread 5 --reportName MyReport \
+               --apiMode all
+```
+
+## 后续计划
+
+1. 继续验证其他方面的内容。
+2. 优化Excel修改的交互体验，计划开发网页端。
+3. 提升通用性，比如实现一个转换器，将Excel用例转为postman。
 
 ## 系统架构
 
@@ -33,43 +60,13 @@ graph TD
 
 两个组件之间通过 **Excel 文件** 作为契约——智能体生成什么格式，执行器就解析什么格式。用户可以自由选择：用智能体自动生成用例，或手动编写 Excel 后直接用执行器运行。
 
-## 项目结构
+## 项目基本结构
 
 ```text
 flow-forge/
 ├── README.md                     # 项目总览（本文件）
 ├── agent/                        # AI 用例生成智能体
-│   ├── README.md                 # 智能体使用文档
-│   ├── main.py                   # 智能体 CLI 入口
-│   ├── requirements.txt          # 智能体依赖
-│   ├── agents/                   # 各智能体实现（ReAct 子图）
-│   ├── graph/                    # LangGraph 编排（StateGraph + 节点 + 条件边）
-│   ├── config/                   # 配置管理 + prompts.yaml
-│   ├── llm/                      # LLM 供应商工厂
-│   ├── tools/                    # 工具注册机制 + 内置工具
-│   │   ├── builtin/              # 内置工具
-│   │   └── custom/               # 用户自定义工具
-│   ├── skills/                   # Skill 可插拔技能包
-│   │   ├── builtin/              # 内置 Skill（边界测试、SQL 数据获取）
-│   │   └── custom/               # 用户自定义 Skill
-│   ├── prompts/                  # 提示词渲染器 + 注册表
-│   ├── models/                   # 数据模型 + ReAct 状态
-│   ├── doc_parser/               # 文档解析器（OpenAPI/Markdown/PDF）
-│   ├── knowledge/                # 知识库
-│   └── docs/                     # 示例文档
 └── python/                       # 接口测试执行器
-    ├── README.md                 # 执行器使用文档
-    ├── main.py                   # 执行器 CLI 入口
-    ├── requirements.txt          # 执行器依赖
-    ├── env.yml                   # 基础配置
-    ├── env-local.yml             # 环境配置示例
-    ├── config/                   # 配置管理器
-    ├── core/                     # 核心工具（路径解析、深度合并）
-    ├── excel_reader/             # Excel 解析器
-    ├── executor/                 # 执行器（单接口 + 业务链路）
-    ├── auth/                     # 登录态管理器
-    ├── assertion/                # 断言引擎
-    └── reporter/                 # HTML 报告生成器
 ```
 
 ## 工作流程
@@ -110,42 +107,9 @@ flow-forge/
   查看 HTML 测试报告
 ```
 
-## 快速开始
-
-### 使用 AI 智能体生成用例
-
-详见 [agent/README.md](./agent/README.md)。
-
-```bash
-cd agent
-pip install -r requirements.txt
-cp .env.example .env  # 编辑 .env 填入 LLM API Key
-
-# 生成测试计划
-python main.py --requirement docs/req.md --api docs/api.yaml --plan-only
-
-# 审核计划后生成 Excel
-python main.py --from-plan plan_xxx.md --api docs/api.yaml --output testcase.xlsx
-```
-
-### 使用执行器运行测试
-
-详见 [python/README.md](./python/README.md)。
-
-```bash
-cd python
-pip install -r requirements.txt
-
-# 编辑 env.yml 和 env-local.yml 配置环境
-# 将 testcase.xlsx 放入 python/ 目录
-
-python main.py --envName local --apiMode all
-```
-
 ## CI/CD 集成（Jenkins）
 
 执行器是纯命令行工具，通过退出码反馈执行结果，可直接集成到 Jenkins 流水线中。
-
 
 ## 技术栈
 

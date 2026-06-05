@@ -2,13 +2,39 @@
 
 **English** | [中文](README.md)
 
-![Development Status](https://img.shields.io/badge/status-development-orange)
-![Version](https://img.shields.io/badge/version-v0.1.0--dev-blue)
-![Branch](https://img.shields.io/badge/latest-dev_first-brightgreen)
+![Development Status](https://img.shields.io/badge/status-Alpha-orange)
+![Version](https://img.shields.io/badge/version-v0.1.0--alpha-blue)
+![Branch](https://img.shields.io/badge/dev_brach-dev_first-brigAhtgreen)
 
 An AI agent-based API automation testing framework. Provide requirement documents and API documentation, and the agent automatically generates test case Excel files. Feed the Excel file to the CLI executor, and you get a test report. The executor integrates seamlessly with Jenkins for CI/CD pipelines.
 
 The AI agent enables rapid test case generation, but due to potential AI hallucinations, manual review of the generated output is recommended. To make review easier, test cases and parameters are placed in the same Excel file. For detailed rules, see [agent/README.md](./agent/README.md).
+
+## Current Status
+
+The minimum viable pipeline has been validated end-to-end. Given a set of requirement documents, API documentation, and optional user guidance, the agent produces a test plan for manual review. Once the plan is approved, it generates single-API and business-flow test cases. If the reviewer rejects the plan and provides feedback, the agent revises the plan accordingly; the review loop can iterate until the plan is accepted, at which point test cases are produced. The underlying LLM is deepseek-v4-flash.
+
+**Agent example** — see [agent/README.md](./agent/README.md) for details:
+
+```bash
+python agent/main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
+```
+
+The executor supports both single-threaded and multi-threaded modes (concurrent case execution, not load testing). In business-flow mode, responses from earlier steps can feed data into later steps, enabling cross-API parameter chaining. The assertion engine supports basic equality checks.
+
+**Executor example** — see [python/README.md](./python/README.md) for details:
+
+```bash
+python main.py --config /path/to/env.yml --scriptType APITest --envName local \
+               --caseFilePath ./test_cases.xlsx --maxThread 5 --reportName MyReport \
+               --apiMode all
+```
+
+## Roadmap
+
+1. Broader validation across additional scenarios and document formats.
+2. Improve the Excel review/edit experience — planning a web-based UI for this.
+3. Improve interoperability, such as a converter that exports Excel test cases to Postman collections.
 
 ## System Architecture
 
@@ -38,39 +64,9 @@ The two components are decoupled via **Excel files** as the contract — the age
 
 ```text
 flow-forge/
-├── README.md                     # Project overview (this file)
+├── README.en.md                     # Project overview (this file)
 ├── agent/                        # AI Case Generation Agent
-│   ├── README.md                 # Agent usage documentation
-│   ├── main.py                   # Agent CLI entry point
-│   ├── requirements.txt          # Agent dependencies
-│   ├── agents/                   # Agent implementations (ReAct subgraphs)
-│   ├── graph/                    # LangGraph orchestration (StateGraph + nodes + conditional edges)
-│   ├── config/                   # Configuration management + prompts.yaml
-│   ├── llm/                      # LLM provider factory
-│   ├── tools/                    # Tool registration mechanism + built-in tools
-│   │   ├── builtin/              # Built-in tools
-│   │   └── custom/               # User-defined tools
-│   ├── skills/                   # Pluggable skill packages
-│   │   ├── builtin/              # Built-in skills (boundary testing, SQL data fetch)
-│   │   └── custom/               # User-defined skills
-│   ├── prompts/                  # Prompt renderer + registry
-│   ├── models/                   # Data models + ReAct state
-│   ├── doc_parser/               # Document parsers (OpenAPI/Markdown/PDF)
-│   ├── knowledge/                # Knowledge base
-│   └── docs/                     # Example documents
 └── python/                       # API Test Executor
-    ├── README.md                 # Executor usage documentation
-    ├── main.py                   # Executor CLI entry point
-    ├── requirements.txt          # Executor dependencies
-    ├── env.yml                   # Base configuration
-    ├── env-local.yml             # Environment configuration example
-    ├── config/                   # Configuration manager
-    ├── core/                     # Core utilities (path resolution, deep merge)
-    ├── excel_reader/             # Excel parser
-    ├── executor/                 # Executors (single API + business flow)
-    ├── auth/                     # Login state manager
-    ├── assertion/                # Assertion engine
-    └── reporter/                 # HTML report generator
 ```
 
 ## Workflow
@@ -109,38 +105,6 @@ Manually write Excel cases (executor format)
        │
        ▼
   View HTML test report
-```
-
-## Quick Start
-
-### Using the AI Agent to Generate Cases
-
-See [agent/README.md](./agent/README.md) for details.
-
-```bash
-cd agent
-pip install -r requirements.txt
-cp .env.example .env  # Edit .env to add your LLM API Key
-
-# Generate test plan
-python main.py --requirement docs/req.md --api docs/api.yaml --plan-only
-
-# After reviewing the plan, generate Excel
-python main.py --from-plan plan_xxx.md --api docs/api.yaml --output testcase.xlsx
-```
-
-### Using the Executor to Run Tests
-
-See [python/README.md](./python/README.md) for details.
-
-```bash
-cd python
-pip install -r requirements.txt
-
-# Edit env.yml and env-local.yml to configure the environment
-# Place testcase.xlsx in the python/ directory
-
-python main.py --envName local --apiMode all
 ```
 
 ## CI/CD Integration (Jenkins)
