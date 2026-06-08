@@ -3,8 +3,7 @@
     "file": "文件",
     "new": "新建",
     "open": "打开",
-    "save": "保存",
-    "saveAs": "另存为",
+    "export": "导出",
     "recent": "最近打开",
     "edit": "编辑",
     "undo": "撤销",
@@ -58,6 +57,7 @@
       "List": "列表",
       "Dict": "字典"
     },
+    "details": "详情",
     "parseError": "JSON 解析失败，请检查格式"
   },
   "validator": {

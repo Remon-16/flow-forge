@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { JsonNode } from '../../types/excel'
-import { parseJsonToNodes, nodesToJson, plainToJsonNode } from '../../utils/json-helper'
+import { parseJsonToNodes, plainToJsonNode } from '../../utils/json-helper'
 import JsonNodeComponent from './JsonNode.vue'
 
 const props = defineProps<{
@@ -34,7 +34,15 @@ watch(
 )
 
 function buildNodesFromValue(val: Record<string, unknown>): JsonNode[] {
-  if (!val || Object.keys(val).length === 0) return []
+  // 防御：如果传入的是字符串，先尝试 JSON.parse
+  if (typeof val === 'string') {
+    try {
+      val = JSON.parse(val) as Record<string, unknown>
+    } catch {
+      return []
+    }
+  }
+  if (!val || typeof val !== 'object' || Object.keys(val).length === 0) return []
   return Object.entries(val).map(([k, v]) => plainToJsonNode(k, v))
 }
 
@@ -110,7 +118,7 @@ function updateNodeType(idx: number, type: string) {
 }
 
 function updateNodeValue(idx: number, value: unknown) {
-  nodes.value[idx].value = value as string
+  nodes.value[idx].value = value as JsonNode['value']
 }
 </script>
 

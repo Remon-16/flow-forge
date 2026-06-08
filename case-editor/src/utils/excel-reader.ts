@@ -8,12 +8,32 @@ import type {
 } from '../types/excel'
 import { deepMerge } from './deep-merge'
 
+let uidCounter = 0
+function generateUid(): string {
+  return `_uid_${Date.now()}_${++uidCounter}`
+}
+
 /**
- * Read and parse an Excel workbook into structured WorkbookData.
- * Aligns with python/excel_reader/excel_parser.py merge logic.
+ * Read an Excel file from a file path (Node.js only).
  */
 export function readExcel(filePath: string): WorkbookData {
   const wb = XLSX.readFile(filePath)
+  return parseWorkbook(wb)
+}
+
+/**
+ * Read an Excel file from an ArrayBuffer (browser-compatible).
+ */
+export function readExcelFromBuffer(buffer: ArrayBuffer): WorkbookData {
+  const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
+  return parseWorkbook(wb)
+}
+
+/**
+ * Parse a workbook object into structured WorkbookData.
+ * Aligns with python/excel_reader/excel_parser.py merge logic.
+ */
+export function parseWorkbook(wb: XLSX.WorkBook): WorkbookData {
   const sheetNames = wb.SheetNames
 
   if (sheetNames.length < 2) {
@@ -60,6 +80,13 @@ function readSheetRows<T>(ws: XLSX.WorkSheet): T[] {
     const cleaned: Record<string, unknown> = {}
     for (const [key, val] of Object.entries(row)) {
       cleaned[key.trim()] = val
+    }
+    cleaned._uid = generateUid()
+    // 对 JSON 列统一做 safeParseJson，确保字符串被解析为对象
+    for (const field of ['RequestHead', 'RequestBody', 'AssertDict']) {
+      if (field in cleaned) {
+        cleaned[field] = safeParseJson(cleaned[field])
+      }
     }
     return cleaned as unknown as T
   })
@@ -189,6 +216,7 @@ function serializeRow(row: Record<string, unknown>): Record<string, unknown> {
     }
   }
   // Remove internal editor fields
+  delete result._uid
   delete result._relevanceValid
   delete result._stepIdDuplicate
   delete result._transError

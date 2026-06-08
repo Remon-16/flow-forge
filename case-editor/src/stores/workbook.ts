@@ -7,13 +7,19 @@ import type {
   BizStep,
   WorkbookData,
 } from '../types/excel'
-import { readExcel } from '../utils/excel-reader'
-import { writeExcel } from '../utils/excel-writer'
+import { readExcelFromBuffer } from '../utils/excel-reader'
+import { downloadExcel } from '../utils/excel-writer'
 import { validateRelevanceID, findDuplicateStepIDs, validateTrans } from '../utils/validators'
+
+let uidCounter = 0
+function generateUid(): string {
+  return `_uid_${Date.now()}_${++uidCounter}`
+}
 
 export const useWorkbookStore = defineStore('workbook', () => {
   // --- State ---
   const filePath = ref<string | null>(null)
+  const fileName = ref<string | null>(null)
   const modified = ref(false)
 
   const apiDefinitions = ref<ApiDefinition[]>([])
@@ -28,18 +34,32 @@ export const useWorkbookStore = defineStore('workbook', () => {
 
   // --- Actions ---
 
-  function openFile(path: string) {
-    const data = readExcel(path)
-    filePath.value = path
-    apiDefinitions.value = data.apiDefinitions
-    singleCases.value = data.singleCases
-    bizFlows.value = data.bizFlows
-    modified.value = false
-    runAllValidations()
+  function openFile(file: File) {
+    return new Promise<void>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        try {
+          const data = readExcelFromBuffer(reader.result as ArrayBuffer)
+          filePath.value = null // Browser can't retain file path
+          fileName.value = file.name
+          apiDefinitions.value = data.apiDefinitions
+          singleCases.value = data.singleCases
+          bizFlows.value = data.bizFlows
+          modified.value = false
+          runAllValidations()
+          resolve()
+        } catch (err) {
+          reject(err)
+        }
+      }
+      reader.onerror = () => reject(new Error('读取文件失败'))
+      reader.readAsArrayBuffer(file)
+    })
   }
 
   function newWorkbook() {
     filePath.value = null
+    fileName.value = null
     apiDefinitions.value = []
     singleCases.value = []
     bizFlows.value = []
@@ -47,18 +67,9 @@ export const useWorkbookStore = defineStore('workbook', () => {
   }
 
   function save() {
-    if (!filePath.value) {
-      throw new Error('请先使用"另存为"选择保存路径')
-    }
     const data = buildData()
-    writeExcel(filePath.value, data)
-    modified.value = false
-  }
-
-  function saveAs(path: string) {
-    const data = buildData()
-    writeExcel(path, data)
-    filePath.value = path
+    const name = fileName.value || 'testcase.xlsx'
+    downloadExcel(data, name)
     modified.value = false
   }
 
@@ -80,6 +91,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
 
   function addApiDef() {
     apiDefinitions.value.push({
+      _uid: generateUid(),
       TestID: '',
       APIName: '',
       AppName: '',
@@ -104,6 +116,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
 
   function addSingleCase() {
     singleCases.value.push({
+      _uid: generateUid(),
       TestID: '',
       RelevanceID: '',
       Tag: 'P0',
@@ -148,6 +161,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
 
   function addBizStep(flowIndex: number) {
     bizFlows.value[flowIndex].steps.push({
+      _uid: generateUid(),
       StepID: '',
       RelevanceID: '',
       Trans: '',
@@ -248,6 +262,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
   return {
     // state
     filePath,
+    fileName,
     modified,
     apiDefinitions,
     singleCases,
@@ -259,7 +274,6 @@ export const useWorkbookStore = defineStore('workbook', () => {
     openFile,
     newWorkbook,
     save,
-    saveAs,
     buildData,
     markModified,
     // API defs

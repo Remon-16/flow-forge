@@ -67,10 +67,7 @@ function removeChild(index: number) {
   emit('update:value', children)
 }
 
-// For List items, the value can be complex
-function updateListItem(value: unknown) {
-  emit('update:value', value)
-}
+
 </script>
 
 <template>

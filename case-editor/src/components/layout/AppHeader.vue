@@ -13,34 +13,26 @@ function handleNew() {
   workbook.newWorkbook()
 }
 
-function handleOpen() {
+async function handleOpen() {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = '.xlsx,.xls'
   input.onchange = async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0]
     if (!file) return
-    const path = (file as unknown as { path?: string }).path || file.name
-    workbook.openFile(path)
+    try {
+      await workbook.openFile(file)
+    } catch (err) {
+      console.error('打开文件失败:', err)
+    }
   }
   input.click()
 }
 
-async function handleSave() {
-  try {
-    workbook.save()
-  } catch {
-    await handleSaveAs()
-  }
-}
-
-function handleSaveAs() {
+function handleExport() {
   const data = workbook.buildData()
-  const name = workbook.filePath
-    ? workbook.filePath.split('/').pop() || 'testcase.xlsx'
-    : 'testcase.xlsx'
+  const name = workbook.fileName || 'testcase.xlsx'
   downloadExcel(data, name)
-  workbook.filePath = name
   workbook.modified = false
 }
 
@@ -50,12 +42,9 @@ function handleLanguageChange(lang: string) {
 
 // Keyboard shortcuts
 function onKeyDown(e: KeyboardEvent) {
-  if (e.ctrlKey && e.altKey && e.key === 's') {
+  if (e.ctrlKey && e.key === 's') {
     e.preventDefault()
-    handleSaveAs()
-  } else if (e.ctrlKey && e.key === 's') {
-    e.preventDefault()
-    handleSave()
+    handleExport()
   } else if (e.ctrlKey && e.key === 'o') {
     e.preventDefault()
     handleOpen()
@@ -77,8 +66,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
     <a-button size="small" type="text" @click="handleNew">{{ t('menu.new') }}</a-button>
     <a-button size="small" type="text" @click="handleOpen">{{ t('menu.open') }}</a-button>
-    <a-button size="small" type="text" @click="handleSave">{{ t('menu.save') }}</a-button>
-    <a-button size="small" type="text" @click="handleSaveAs">{{ t('menu.saveAs') }}</a-button>
+    <a-button size="small" type="text" @click="handleExport">{{ t('menu.export') }}</a-button>
 
     <a-divider type="vertical" />
 

@@ -5,6 +5,7 @@ import { useWorkbookStore } from '../../stores/workbook'
 import { BIZ_STEP_COLUMNS, TAG_LEVELS, JSON_COLUMNS } from '../../types/excel'
 import type { BizStep } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
+import { normalizeJsonValue } from '../../utils/json-helper'
 
 const props = defineProps<{ flowIndex: number }>()
 
@@ -30,7 +31,8 @@ watch(
 function openJsonEditor(stepIndex: number, field: string) {
   jsonModalStepIdx.value = stepIndex
   jsonModalField.value = field
-  jsonValue.value = (flow.value.steps[stepIndex] as Record<string, unknown>)[field] as Record<string, unknown> || {}
+  const raw = (flow.value.steps[stepIndex] as Record<string, unknown>)[field]
+  jsonValue.value = normalizeJsonValue(raw)
   jsonModalVisible.value = true
 }
 
@@ -47,6 +49,53 @@ function onCellChange(stepIndex: number, field: string, value: unknown) {
 
 function isJsonColumn(field: string): boolean {
   return (JSON_COLUMNS as readonly string[]).includes(field)
+}
+
+function formatJsonDisplay(val: unknown): string {
+  if (val === null || val === undefined) return ''
+  if (typeof val === 'string') return val
+  return JSON.stringify(val, null, 2)
+}
+
+// Inline JSON editing state per cell
+const jsonEditCache = ref<Record<string, string>>({})
+
+function getJsonEditText(rowIdx: number, col: string, raw: unknown): string {
+  const key = `${rowIdx}_${col}`
+  if (key in jsonEditCache.value) return jsonEditCache.value[key]
+  return formatJsonDisplay(raw)
+}
+
+function onJsonEditChange(rowIdx: number, col: string, text: string) {
+  jsonEditCache.value[`${rowIdx}_${col}`] = text
+}
+
+function onJsonEditBlur(rowIdx: number, col: string) {
+  const key = `${rowIdx}_${col}`
+  const text = jsonEditCache.value[key]
+  if (!text) return
+  try {
+    const parsed = JSON.parse(text)
+    if (parsed && typeof parsed === 'object') {
+      onCellChange(rowIdx, col, parsed)
+      delete jsonEditCache.value[key]
+    }
+  } catch {
+    // keep dirty text for display; validation will show indicator
+  }
+}
+
+function isJsonInvalid(rowIdx: number, col: string): boolean {
+  const text = jsonEditCache.value[`${rowIdx}_${col}`]
+  if (!text || !text.trim()) return false
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false
+  try {
+    JSON.parse(trimmed)
+    return false
+  } catch {
+    return true
+  }
 }
 
 function getColumnLabel(col: string): string {
@@ -92,13 +141,13 @@ function getRowClassName(record: BizStep) {
         bordered
         :scroll="{ x: 1600 }"
         :rowClassName="getRowClassName"
-        rowKey="StepID"
+        :rowKey="(r: any) => r._uid"
       >
         <a-table-column
           v-for="col in BIZ_STEP_COLUMNS"
           :key="col"
           :title="getColumnLabel(col)"
-          :width="col === 'URL' || col === 'Remark' || col === 'Trans' ? 200 : col === 'StepID' ? 100 : 130"
+          :width="isJsonColumn(col) ? 250 : col === 'URL' || col === 'Remark' || col === 'Trans' ? 200 : col === 'StepID' ? 100 : 130"
         >
           <template #default="{ record, index: stepIdx }">
             <!-- StepID with duplicate check -->
@@ -148,19 +197,29 @@ function getRowClassName(record: BizStep) {
               </a-tooltip>
             </template>
 
-            <!-- JSON columns -->
+            <!-- JSON columns: details link + editable textarea -->
             <template v-else-if="isJsonColumn(col)">
-              <a-button
-                size="small"
-                type="link"
-                style="padding: 0;"
-                @click="openJsonEditor(stepIdx, col)"
-              >
-                {{ getColumnLabel(col) }}
-                <span v-if="Object.keys(record[col] || {}).length > 0" style="color: #1677ff;">
-                  ({{ Object.keys(record[col] || {}).length }})
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 200px;">
+                <a-button
+                  size="small"
+                  type="link"
+                  style="padding: 0; text-align: left; height: auto; font-size: 12px;"
+                  @click="openJsonEditor(stepIdx, col)"
+                >
+                  {{ t('jsonEditor.details') }}: {{ getColumnLabel(col) }}
+                </a-button>
+                <a-textarea
+                  :value="getJsonEditText(stepIdx, col, record[col])"
+                  :autoSize="{ minRows: 3, maxRows: 8 }"
+                  size="small"
+                  style="font-family: monospace; font-size: 12px;"
+                  @change="(e: any) => onJsonEditChange(stepIdx, col, e.target.value)"
+                  @blur="() => onJsonEditBlur(stepIdx, col)"
+                />
+                <span v-if="isJsonInvalid(stepIdx, col)" style="color: #ff4d4f; font-size: 11px;">
+                  ✕ {{ t('jsonEditor.parseError') }}
                 </span>
-              </a-button>
+              </div>
             </template>
 
             <!-- Tag -->

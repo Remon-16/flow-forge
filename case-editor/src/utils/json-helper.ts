@@ -10,7 +10,13 @@ export function parseJsonToNodes(raw: string): JsonNode[] {
   } catch {
     return []
   }
-  return objToNodes('', obj) as JsonNode[]
+  // 普通对象：展平顶层 entries，避免额外包裹一层空 key 的 Dict
+  if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+    return Object.entries(obj as Record<string, unknown>).map(
+      ([k, v]) => plainToJsonNode(k, v)
+    )
+  }
+  return [objToNodes('', obj) as JsonNode]
 }
 
 /**
@@ -40,7 +46,7 @@ function objToNodes(key: string, val: unknown): JsonNode[] | JsonNode {
     return { key, type: 'Dict', value: children }
   }
 
-  return { key, type: inferPrimitiveType(val), value: val }
+  return { key, type: inferPrimitiveType(val), value: val as JsonNode['value'] }
 }
 
 function nodesToObj(nodes: JsonNode[]): unknown {
@@ -129,4 +135,25 @@ export function jsonNodeToPlain(node: JsonNode): unknown {
  */
 export function plainToJsonNode(key: string, val: unknown): JsonNode {
   return objToNodes(key, val) as JsonNode
+}
+
+/**
+ * Normalize a value to a plain object for the JSON editor.
+ * Strings are parsed as JSON; non-objects return empty object.
+ */
+export function normalizeJsonValue(val: unknown): Record<string, unknown> {
+  if (val && typeof val === 'object' && !Array.isArray(val)) {
+    return val as Record<string, unknown>
+  }
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>
+      }
+    } catch {
+      // not valid JSON, return empty
+    }
+  }
+  return {}
 }

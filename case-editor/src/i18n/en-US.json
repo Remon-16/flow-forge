@@ -3,8 +3,7 @@
     "file": "File",
     "new": "New",
     "open": "Open",
-    "save": "Save",
-    "saveAs": "Save As",
+    "export": "Export",
     "recent": "Recent Files",
     "edit": "Edit",
     "undo": "Undo",
@@ -58,6 +57,7 @@
       "List": "List",
       "Dict": "Dict"
     },
+    "details": "Details",
     "parseError": "JSON parse failed. Check the format."
   },
   "validator": {

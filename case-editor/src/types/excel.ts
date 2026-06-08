@@ -13,6 +13,8 @@ export interface JsonNode {
 // --- Row-level types matching the Excel sheets ---
 
 export interface ApiDefinition {
+  [key: string]: unknown
+  _uid: string
   TestID: string
   APIName: string
   AppName: string
@@ -26,6 +28,8 @@ export interface ApiDefinition {
 }
 
 export interface SingleTestCase {
+  [key: string]: unknown
+  _uid: string
   TestID: string
   RelevanceID: string
   Tag: string
@@ -42,6 +46,8 @@ export interface SingleTestCase {
 }
 
 export interface BizStep {
+  [key: string]: unknown
+  _uid: string
   StepID: string
   RelevanceID: string
   Trans: string
