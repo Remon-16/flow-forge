@@ -1,0 +1,94 @@
+{
+  "menu": {
+    "file": "File",
+    "new": "New",
+    "open": "Open",
+    "save": "Save",
+    "saveAs": "Save As",
+    "recent": "Recent Files",
+    "edit": "Edit",
+    "undo": "Undo",
+    "redo": "Redo",
+    "settings": "Settings",
+    "language": "Language"
+  },
+  "table": {
+    "TestID": "TestID",
+    "APIName": "API Name",
+    "AppName": "App Name",
+    "Method": "Method",
+    "URL": "URL",
+    "RequestHead": "Request Head",
+    "RequestBody": "Request Body",
+    "StatusCode": "Status Code",
+    "AssertDict": "Assert Dict",
+    "Remark": "Remark",
+    "RelevanceID": "Relevance ID",
+    "Tag": "Tag",
+    "StepID": "Step ID",
+    "Trans": "Trans",
+    "sheetApiDef": "API Definitions",
+    "sheetSingleCase": "Single Cases",
+    "addRow": "Add Row",
+    "deleteRow": "Delete Row",
+    "moveUp": "Move Up",
+    "moveDown": "Move Down",
+    "addBizFlow": "Add Biz Flow",
+    "addStep": "Add Step",
+    "editJson": "Edit JSON",
+    "noData": "No data. Open an Excel file to begin."
+  },
+  "jsonEditor": {
+    "title": "JSON Editor",
+    "pasteHint": "Paste JSON string",
+    "parse": "Parse",
+    "addField": "Add Field",
+    "addItem": "Add Item",
+    "delete": "Delete",
+    "key": "Key",
+    "type": "Type",
+    "value": "Value",
+    "confirm": "OK",
+    "cancel": "Cancel",
+    "types": {
+      "string": "String",
+      "number": "Number",
+      "boolean": "Boolean",
+      "Date": "Date",
+      "List": "List",
+      "Dict": "Dict"
+    },
+    "parseError": "JSON parse failed. Check the format."
+  },
+  "validator": {
+    "relevanceInvalid": "Relevance ID not found in API Definitions",
+    "stepIdDuplicate": "Duplicate Step ID",
+    "transFormat": "Trans format error",
+    "transBracket": "Mismatched brackets",
+    "transChinese": "Contains Chinese characters",
+    "unsavedTitle": "Unsaved Changes",
+    "unsavedContent": "You have unsaved changes. Save before continuing?"
+  },
+  "dialog": {
+    "yes": "Yes",
+    "no": "No",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "zhCN": "中文",
+    "enUS": "English"
+  },
+  "status": {
+    "ready": "Ready",
+    "modified": "Modified",
+    "saved": "Saved",
+    "row": "Row",
+    "col": "Col"
+  },
+  "header": {
+    "title": "Flow Forge — Test Case Editor"
+  }
+}

@@ -1,0 +1,121 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: #f0f0f0;
+}
+
+/* Windows-like app container */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+.app-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.app-sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: #fafafa;
+  border-right: 1px solid #d9d9d9;
+  overflow-y: auto;
+}
+
+.app-content {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+  background: #fff;
+}
+
+/* Validation styles */
+.cell-error {
+  background-color: #fff1f0 !important;
+}
+
+.cell-error input,
+.cell-error .ant-select-selector {
+  border-color: #ff4d4f !important;
+}
+
+.row-error {
+  background-color: #fff1f0 !important;
+}
+
+/* Tooltip for error cells */
+.error-tooltip {
+  color: #ff4d4f;
+  font-size: 12px;
+}
+
+/* JSON editor */
+.json-editor-tree {
+  padding: 8px;
+  background: #fafafa;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  max-height: 400px;
+  overflow: auto;
+}
+
+.json-node-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.json-node-row .key-col {
+  min-width: 120px;
+}
+
+.json-node-row .type-col {
+  width: 100px;
+}
+
+.json-node-row .value-col {
+  flex: 1;
+}
+
+.json-node-children {
+  padding-left: 24px;
+  border-left: 1px dashed #d9d9d9;
+  margin-left: 8px;
+}
+
+/* Status bar */
+.status-bar {
+  height: 28px;
+  line-height: 28px;
+  padding: 0 12px;
+  background: #f0f0f0;
+  border-top: 1px solid #d9d9d9;
+  font-size: 12px;
+  color: #666;
+  display: flex;
+  gap: 24px;
+}
+
+/* Header */
+.app-header {
+  height: 40px;
+  background: #fafafa;
+  border-bottom: 1px solid #d9d9d9;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 4px;
+}
