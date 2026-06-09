@@ -1,0 +1,95 @@
+{
+  "menu": {
+    "file": "文件",
+    "new": "新建",
+    "open": "打开",
+    "export": "导出",
+    "recent": "最近打开",
+    "edit": "编辑",
+    "undo": "撤销",
+    "redo": "重做",
+    "settings": "设置",
+    "language": "语言"
+  },
+  "table": {
+    "TestID": "TestID",
+    "APIName": "接口名称",
+    "AppName": "应用名称",
+    "Method": "请求方法",
+    "URL": "接口地址",
+    "RequestHead": "请求头",
+    "RequestBody": "请求体",
+    "StatusCode": "状态码",
+    "AssertDict": "断言字典",
+    "Remark": "备注",
+    "RelevanceID": "关联ID",
+    "Tag": "级别",
+    "StepID": "步骤ID",
+    "Trans": "参数传递",
+    "sheetApiDef": "接口定义",
+    "sheetSingleCase": "单接口用例",
+    "addRow": "新增行",
+    "deleteRow": "删除行",
+    "moveUp": "上移",
+    "moveDown": "下移",
+    "addBizFlow": "新增业务链路",
+    "addStep": "新增步骤",
+    "editJson": "编辑 JSON",
+    "noData": "暂无数据，请先打开 Excel 文件"
+  },
+  "jsonEditor": {
+    "title": "JSON 编辑器",
+    "pasteHint": "粘贴 JSON 字符串",
+    "parse": "解析",
+    "addField": "添加字段",
+    "addItem": "添加项",
+    "delete": "删除",
+    "key": "键",
+    "type": "类型",
+    "value": "值",
+    "confirm": "确定",
+    "cancel": "取消",
+    "types": {
+      "string": "字符串",
+      "number": "数字",
+      "boolean": "布尔",
+      "Date": "日期",
+      "List": "列表",
+      "Dict": "字典"
+    },
+    "details": "详情",
+    "parseError": "JSON 解析失败，请检查格式"
+  },
+  "validator": {
+    "relevanceInvalid": "关联ID在接口定义中不存在",
+    "stepIdDuplicate": "步骤ID重复",
+    "transFormat": "Trans 格式错误",
+    "transBracket": "括号不匹配",
+    "transChinese": "包含中文字符",
+    "unsavedTitle": "未保存的修改",
+    "unsavedContent": "当前文件有未保存的修改，是否保存？"
+  },
+  "dialog": {
+    "yes": "是",
+    "no": "否",
+    "cancel": "取消",
+    "confirm": "确认"
+  },
+  "settings": {
+    "title": "设置",
+    "language": "语言设置",
+    "zhCN": "中文",
+    "enUS": "English"
+  },
+  "status": {
+    "ready": "就绪",
+    "modified": "已修改",
+    "saved": "已保存",
+    "row": "行",
+    "col": "列"
+  },
+  "header": {
+    "title": "Flow Forge — 测试用例编辑器"
+  },
+  "loading": "正在加载文件..."
+}

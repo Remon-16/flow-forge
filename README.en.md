@@ -3,7 +3,8 @@
 **English** | [中文](README.md)
 
 ![Development Status](https://img.shields.io/badge/status-Alpha-orange)
-![Version](https://img.shields.io/badge/version-v0.1.0--alpha-blue)
+![Version](https://img.shields.io/badge/version-v0.1.1--alpha-blue)
+![Branch](https://img.shields.io/badge/dev_brach-dev_first-brigAhtgreen)
 
 An AI agent-based API automation testing framework. Provide requirement documents and API documentation, and the agent automatically generates test case Excel files. Feed the Excel file to the CLI executor, and you get a test report. The executor integrates seamlessly with Jenkins for CI/CD pipelines.
 
@@ -29,11 +30,13 @@ python main.py --config /path/to/env.yml --scriptType APITest --envName local \
                --apiMode all
 ```
 
+A web-based Excel editor has been implemented. Users can import Excel test cases for editing, with built-in format validation and a user-friendly JSON editor. See [case-editor/README.en.md](./case-editor/README.en.md) for details.
+
 ## Roadmap
 
 1. Broader validation across additional scenarios and document formats.
-2. Improve the Excel review/edit experience — planning a web-based UI for this.
-3. Improve interoperability, such as a converter that exports Excel test cases to Postman collections.
+2. Improve interoperability, such as a converter that exports Excel test cases to Postman collections.
+3. Strengthen the assertion engine to support a broader range of assertion scenarios.
 
 ## System Architecture
 
