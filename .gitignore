@@ -44,3 +44,5 @@ env-local.yml
 .env
 logs/
 report/
+node_modules/
+dist/
