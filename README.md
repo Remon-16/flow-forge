@@ -1,9 +1,9 @@
 # Flow Forge — 接口自动化测试框架
 
-[English](README.en.md) | **中文**
+**中文** | [English](README.en.md)
 
 ![Development Status](https://img.shields.io/badge/状态-早期版本-orange) 
-![Version](https://img.shields.io/badge/版本-v0.1.0--alpha-blue)
+![Version](https://img.shields.io/badge/版本-v0.1.1--alpha-blue)
 ![Branch](https://img.shields.io/badge/开发分支-dev_first-brightgreen)
 
 基于 AI 智能体的接口自动化测试框架。输入需求文档和接口文档，智能体自动生成测试用例 Excel；将 Excel 交给命令行执行器，即可得到测试报告。执行器可无缝集成 Jenkins，实现 CI/CD 流水线。
@@ -30,11 +30,13 @@ python main.py --config /path/to/env.yml --scriptType APITest --envName local \
                --apiMode all
 ```
 
+已实现Excel编辑网页端。用户可以导入Excel用例进行编辑，网页端有格式校验以及更友好的json编辑页。详情见 [case-editor/README.md](./case-editor/README.md)。
+
 ## 后续计划
 
 1. 继续验证其他方面的内容。
-2. 优化Excel修改的交互体验，计划开发网页端。
-3. 提升通用性，比如实现一个转换器，将Excel用例转为postman。
+2. 提升通用性，比如实现一个转换器，将Excel用例转为postman。
+3. 强化断言引擎，支持更多场景的断言。
 
 ## 系统架构
 

@@ -1,5 +1,7 @@
 # Flow Forge — 测试用例编辑器
 
+**中文** | [English](README.en.md)
+
 基于 Vue3 + Ant Design 的 Excel 测试用例可视化编辑器，用于读取和编辑 Flow Forge 框架的测试用例 Excel 文件。
 
 ## 快速开始
@@ -82,20 +84,6 @@ graph TD
     VALIDATE --> STORE
     STORE --> WRITE[xlsx 库写回 Excel]
     WRITE --> SAVE[保存/另存为到文件]
-```
-
-### Excel 合并逻辑
-
-编辑器在读取 Excel 时会自动将单接口用例和业务链路步骤与接口定义页进行合并，与 Python 执行器的行为完全一致：
-
-```mermaid
-graph LR
-    API[接口定义页<br/>Sheet 1] --> |TestID 索引| LOOKUP{RelevanceID 匹配}
-    CASE[单接口用例 / 业务链路步骤<br/>Sheet 2+] --> LOOKUP
-    LOOKUP --> |匹配成功| MERGE[字段合并]
-    LOOKUP --> |匹配失败| RAW[保留原值]
-    MERGE --> |简单字段| SF[用例值优先<br/>为空时取接口定义]
-    MERGE --> |JSON字段| JF[深度合并<br/>用例覆盖 + 接口定义补充缺失字段]
 ```
 
 ## 项目结构
@@ -181,8 +169,7 @@ case-editor/
 
 ### 保存文件
 
-- **保存**（Ctrl+S）：覆盖原文件
-- **另存为**（Ctrl+Alt+S）：选择新路径保存
+- **导出**（Ctrl+S）：下载新的Excel文件
 
 ### 语言切换
 
