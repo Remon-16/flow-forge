@@ -125,6 +125,8 @@ const relevanceOptions = computed(() => workbook.validTestIds)
                 size="small"
                 style="width: 100%;"
                 :status="record._relevanceValid === false ? 'error' : ''"
+                :dropdown-match-select-width="false"
+                :dropdown-style="{ minWidth: '320px' }"
                 @change="(v: string) => onCellChange(index, col, v)"
                 @select="(v: string) => onCellChange(index, col, v)"
               >

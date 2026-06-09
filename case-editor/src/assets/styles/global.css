@@ -24,6 +24,17 @@ html, body, #app {
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .app-sidebar {

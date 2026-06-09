@@ -20,10 +20,10 @@ export interface ApiDefinition {
   AppName: string
   Method: string
   URL: string
-  RequestHead: Record<string, unknown>
-  RequestBody: Record<string, unknown>
+  RequestHead: Record<string, unknown> | null
+  RequestBody: Record<string, unknown> | null
   StatusCode: number | string
-  AssertDict: Record<string, unknown>
+  AssertDict: Record<string, unknown> | null
   Remark: string
 }
 
@@ -37,10 +37,10 @@ export interface SingleTestCase {
   AppName: string
   Method: string
   URL: string
-  RequestHead: Record<string, unknown>
-  RequestBody: Record<string, unknown>
+  RequestHead: Record<string, unknown> | null
+  RequestBody: Record<string, unknown> | null
   StatusCode: number | string
-  AssertDict: Record<string, unknown>
+  AssertDict: Record<string, unknown> | null
   Remark: string
   _relevanceValid?: boolean
 }
@@ -55,10 +55,10 @@ export interface BizStep {
   AppName: string
   Method: string
   URL: string
-  RequestHead: Record<string, unknown>
-  RequestBody: Record<string, unknown>
+  RequestHead: Record<string, unknown> | null
+  RequestBody: Record<string, unknown> | null
   StatusCode: number | string
-  AssertDict: Record<string, unknown>
+  AssertDict: Record<string, unknown> | null
   Tag: string
   Remark: string
   _relevanceValid?: boolean

@@ -174,6 +174,8 @@ function getRowClassName(record: BizStep) {
                 size="small"
                 style="width: 100%;"
                 :status="record._relevanceValid === false ? 'error' : ''"
+                :dropdown-match-select-width="false"
+                :dropdown-style="{ minWidth: '320px' }"
                 @change="(v: string) => onCellChange(stepIdx, col, v)"
                 @select="(v: string) => onCellChange(stepIdx, col, v)"
               >

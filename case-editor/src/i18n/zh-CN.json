@@ -90,5 +90,6 @@
   },
   "header": {
     "title": "Flow Forge — 测试用例编辑器"
-  }
+  },
+  "loading": "正在加载文件..."
 }

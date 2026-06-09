@@ -46,6 +46,7 @@ export function findDuplicateStepIDs(
  * - Each pair must have non-empty key and value
  */
 export function validateTrans(transStr: string, stepId?: string): string | null {
+  if (!transStr) return null
   const stripped = transStr.trim()
   if (!stripped) return null
 

@@ -90,5 +90,6 @@
   },
   "header": {
     "title": "Flow Forge — Test Case Editor"
-  }
+  },
+  "loading": "Loading file..."
 }

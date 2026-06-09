@@ -21,6 +21,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
   const filePath = ref<string | null>(null)
   const fileName = ref<string | null>(null)
   const modified = ref(false)
+  const loading = ref(false)
 
   const apiDefinitions = ref<ApiDefinition[]>([])
   const singleCases = ref<SingleTestCase[]>([])
@@ -36,6 +37,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
 
   function openFile(file: File) {
     return new Promise<void>((resolve, reject) => {
+      loading.value = true
       const reader = new FileReader()
       reader.onload = () => {
         try {
@@ -47,12 +49,17 @@ export const useWorkbookStore = defineStore('workbook', () => {
           bizFlows.value = data.bizFlows
           modified.value = false
           runAllValidations()
+          loading.value = false
           resolve()
         } catch (err) {
+          loading.value = false
           reject(err)
         }
       }
-      reader.onerror = () => reject(new Error('读取文件失败'))
+      reader.onerror = () => {
+        loading.value = false
+        reject(new Error('读取文件失败'))
+      }
       reader.readAsArrayBuffer(file)
     })
   }
@@ -66,10 +73,10 @@ export const useWorkbookStore = defineStore('workbook', () => {
     modified.value = false
   }
 
-  function save() {
+  async function save() {
     const data = buildData()
     const name = fileName.value || 'testcase.xlsx'
-    downloadExcel(data, name)
+    await downloadExcel(data, name)
     modified.value = false
   }
 
@@ -97,10 +104,10 @@ export const useWorkbookStore = defineStore('workbook', () => {
       AppName: '',
       Method: 'GET',
       URL: '',
-      RequestHead: {},
-      RequestBody: {},
+      RequestHead: null,
+      RequestBody: null,
       StatusCode: 200,
-      AssertDict: {},
+      AssertDict: null,
       Remark: '',
     })
     markModified()
@@ -124,10 +131,10 @@ export const useWorkbookStore = defineStore('workbook', () => {
       AppName: '',
       Method: 'GET',
       URL: '',
-      RequestHead: {},
-      RequestBody: {},
+      RequestHead: null,
+      RequestBody: null,
       StatusCode: 200,
-      AssertDict: {},
+      AssertDict: null,
       Remark: '',
       _relevanceValid: true,
     })
@@ -169,10 +176,10 @@ export const useWorkbookStore = defineStore('workbook', () => {
       AppName: '',
       Method: 'GET',
       URL: '',
-      RequestHead: {},
-      RequestBody: {},
+      RequestHead: null,
+      RequestBody: null,
       StatusCode: 200,
-      AssertDict: {},
+      AssertDict: null,
       Tag: 'P0',
       Remark: '',
       _relevanceValid: true,
@@ -264,6 +271,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
     filePath,
     fileName,
     modified,
+    loading,
     apiDefinitions,
     singleCases,
     bizFlows,

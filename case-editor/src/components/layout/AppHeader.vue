@@ -29,10 +29,10 @@ async function handleOpen() {
   input.click()
 }
 
-function handleExport() {
+async function handleExport() {
   const data = workbook.buildData()
   const name = workbook.fileName || 'testcase.xlsx'
-  downloadExcel(data, name)
+  await downloadExcel(data, name)
   workbook.modified = false
 }
 
