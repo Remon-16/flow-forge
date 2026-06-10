@@ -39,13 +39,12 @@ python/
 │
 ├── core/
 │   ├── __init__.py
-│   ├── deep_merge.py            # 递归字典深度合并
 │   ├── path_resolver.py         # 点号/括号 JSON 路径解析器
 │   └── script_type.py           # 脚本类型枚举与执行器注册表
 │
 ├── excel_reader/
 │   ├── __init__.py
-│   └── excel_parser.py          # 多 Sheet Excel 解析、校验、合并
+│   └── excel_parser.py          # 多 Sheet Excel 解析、校验
 │
 ├── executor/
 │   ├── __init__.py
@@ -230,8 +229,8 @@ Excel 文件包含多张 Sheet，结构如下：
 | 列名 | 类型 | 说明 |
 |------|------|------|
 | `TestID` | str | 唯一测试用例标识 |
-| `RelevanceID` | str | 关联到 Sheet 1 的 `TestID`，继承基础配置 |
-| 其他列 | — | 同 Sheet 1，非空值会覆盖 Sheet 1 的对应字段 |
+| `RelevanceID` | str | 关联到 Sheet 1 的 `TestID`，用于接口参考（执行器不强制校验，主要用于用例生成智能体的索引和查询） |
+| 其他列 | — | 同 Sheet 1，用例行的值直接使用，不与 Sheet 1 合并 |
 
 ### Sheet 3+ — Business Flow（业务链路用例）
 
@@ -240,17 +239,13 @@ Excel 文件包含多张 Sheet，结构如下：
 | 列名 | 类型 | 说明 |
 |------|------|------|
 | `StepID` | str | 步骤标识（同一 Sheet 内不可重复），如 `Step01` |
-| `RelevanceID` | str | 关联到 Sheet 1 的 `TestID` |
+| `RelevanceID` | str | 关联到 Sheet 1 的 `TestID`（执行器不强制校验，主要用于用例生成智能体的索引和查询） |
 | `Trans` | str | 步骤间数据传递定义，格式见下文 |
 | 其他列 | — | 同 Sheet 1/Sheet 2 |
 
-### 深度合并规则
+### API Definitions 说明
 
-Sheet 2/Sheet 3+ 中的每一行通过 `RelevanceID` 关联到 Sheet 1 的接口定义，合并规则如下：
-
-- **简单字段**（`APIName`, `AppName`, `Method`, `URL`, `StatusCode`）：用例行值优先，为空则沿用接口定义
-- **JSON 字段**（`RequestHead`, `RequestBody`）：深度合并，接口定义为基底，用例行覆盖
-- **AssertDict**：用例行有值则使用用例行；否则使用接口定义
+Sheet 1（API Definitions）中定义的接口信息作为 Agent 的参考文档，执行器不读取此页。测试用例行的值**直接使用**，不会与 Sheet 1 的定义进行合并或自动填充。`RelevanceID` 字段用于关联参考，主要用于用例生成智能体的索引和查询。
 
 ### Trans 字段语法
 
@@ -304,9 +299,7 @@ Excel 中的 JSON 字段支持以下格式：
 
 ### Excel 解析器 (`excel_reader/excel_parser.py`)
 
-- 读取 Sheet 1 的接口定义作为"模板"
 - 按 `apiMode` 读取 Sheet 2（单接口）和 Sheet 3+（业务链路）
-- 通过 `RelevanceID` 将用例行与接口定义合并
 - 对业务链路执行 `Trans` 字段校验和 `StepID` 去重检查
 - 解析异常时返回 `parse_error`，不阻塞其他用例
 
@@ -394,7 +387,7 @@ sequenceDiagram
 
     CLI->>Config: 加载配置
     Config->>Excel: 解析用例文件
-    Excel->>Executor: 合并后的单接口用例列表
+    Excel->>Executor: 单接口用例列表
     loop 每个用例（线程池并发）
         Executor->>LoginMgr: 解析 Token (#{user})
         LoginMgr-->>Executor: 带 Token 的请求头

@@ -6,17 +6,14 @@ from typing import Any, Dict, List, Optional
 
 import openpyxl
 
-from core.deep_merge import deep_merge
 
 logger = logging.getLogger(__name__)
 
-_API_SHEET_INDEX = 0
 _CASE_SHEET_INDEX = 1
 _BIZ_START_SHEET_INDEX = 2
 
 _SIMPLE_FIELDS = ("APIName", "AppName", "Method", "URL", "StatusCode")
 _JSON_FIELDS = ("RequestHead", "RequestBody")
-_SHEET1_REQUIRED = ("TestID", "APIName", "AppName", "Method", "URL", "StatusCode")
 _SHEET2_REQUIRED = ("TestID", "RelevanceID")
 _BIZ_REQUIRED = ("StepID", "RelevanceID")
 
@@ -54,15 +51,12 @@ class ExcelParser:
                     f"Expected at least 2 sheets, got {len(wb.sheetnames)}: {wb.sheetnames}"
                 )
 
-            api_defs = self._read_api_definitions(wb.worksheets[_API_SHEET_INDEX])
-            logger.info("Read %d API definitions from sheet 1", len(api_defs))
-
             if api_mode in ("single", "all"):
                 test_cases = self._read_sheet_rows(
                     wb.worksheets[_CASE_SHEET_INDEX], list(_SHEET2_REQUIRED)
                 )
                 logger.info("Read %d single test cases from sheet 2", len(test_cases))
-                result["single_cases"] = self._merge_cases(api_defs, test_cases)
+                result["single_cases"] = self._merge_cases(test_cases)
                 logger.info("Merged into %d single test cases", len(result["single_cases"]))
 
             if api_mode in ("biz", "all"):
@@ -70,7 +64,7 @@ class ExcelParser:
                     ws = wb.worksheets[idx]
                     sheet_name = ws.title
                     try:
-                        biz_flow = self._parse_biz_flow(ws, api_defs, sheet_name)
+                        biz_flow = self._parse_biz_flow(ws, sheet_name)
                         result["biz_flows"].append(biz_flow)
                     except (ExcelParseError, StepIDConflictError) as e:
                         logger.error("Biz flow '%s' parse error: %s", sheet_name, e)
@@ -85,9 +79,6 @@ class ExcelParser:
             return result
         finally:
             wb.close()
-
-    def _read_api_definitions(self, ws) -> List[Dict[str, Any]]:
-        return self._read_sheet_rows(ws, list(_SHEET1_REQUIRED))
 
     def _read_sheet_rows(
         self, ws, required_columns: List[str]
@@ -117,7 +108,7 @@ class ExcelParser:
         return rows
 
     def _parse_biz_flow(
-        self, ws, api_defs: List[Dict[str, Any]], sheet_name: str
+        self, ws, sheet_name: str
     ) -> Dict[str, Any]:
         raw_steps = self._read_sheet_rows(ws, list(_BIZ_REQUIRED))
 
@@ -138,7 +129,7 @@ class ExcelParser:
             if trans_val not in (None, ""):
                 self._validate_trans(str(trans_val), str(row.get("StepID", "")), sheet_name)
 
-        merged_steps = self._merge_cases(api_defs, raw_steps, is_biz=True)
+        merged_steps = self._merge_cases(raw_steps, is_biz=True)
         return {"sheet_name": sheet_name, "steps": merged_steps, "parse_error": None}
 
     def _validate_trans(self, trans_str: str, step_id: str, sheet_name: str) -> None:
@@ -190,72 +181,33 @@ class ExcelParser:
 
     def _merge_cases(
         self,
-        api_defs: List[Dict[str, Any]],
         test_cases: List[Dict[str, Any]],
         is_biz: bool = False,
     ) -> List[Dict[str, Any]]:
-        api_lookup: Dict[str, Dict[str, Any]] = {}
-        for row in api_defs:
-            tid = row.get("TestID")
-            if tid:
-                api_lookup[str(tid)] = row
-
         merged = []
         for tc in test_cases:
-            relevance_id = str(tc.get("RelevanceID", ""))
-            api_def = api_lookup.get(relevance_id)
-
-            if api_def is None:
-                logger.warning(
-                    "RelevanceID '%s' not found in API definitions, using row as-is",
-                    relevance_id,
-                )
-                merged.append(self._build_result(tc, None, is_biz))
-                continue
-
-            merged.append(self._build_result(tc, api_def, is_biz))
-
+            merged.append(self._build_result(tc, is_biz))
         return merged
 
     def _build_result(
         self,
         tc: Dict[str, Any],
-        api_def: Optional[Dict[str, Any]],
         is_biz: bool = False,
     ) -> Dict[str, Any]:
         result = {}
 
         for field in _SIMPLE_FIELDS:
-            tc_val = tc.get(field)
-            api_val = api_def.get(field) if api_def else None
-            result[self._normalize_key(field)] = (
-                tc_val if tc_val not in (None, "") else api_val
-            )
+            result[self._normalize_key(field)] = tc.get(field)
 
         for field in _JSON_FIELDS:
-            tc_json = self._safe_parse_json(
+            result[self._normalize_key(field)] = self._safe_parse_json(
                 tc.get(field), field, tc.get("TestID") or tc.get("StepID")
             )
-            api_json = (
-                self._safe_parse_json(
-                    api_def.get(field), field, api_def.get("TestID")
-                )
-                if api_def
-                else {}
-            )
-            result[self._normalize_key(field)] = deep_merge(api_json, tc_json)
 
         assert_field = tc.get("AssertDict")
         if assert_field not in (None, ""):
             result["assert_dict"] = self._safe_parse_json(
                 assert_field, "AssertDict", tc.get("TestID") or tc.get("StepID")
-            )
-        elif api_def:
-            api_assert = api_def.get("AssertDict")
-            result["assert_dict"] = (
-                self._safe_parse_json(api_assert, "AssertDict", api_def.get("TestID"))
-                if api_assert not in (None, "")
-                else {}
             )
         else:
             result["assert_dict"] = {}
