@@ -20,7 +20,7 @@ The minimum viable pipeline has been validated end-to-end. Given a set of requir
 python agent/main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
 ```
 
-The executor supports both single-threaded and multi-threaded modes (concurrent case execution, not load testing). In business-flow mode, responses from earlier steps can feed data into later steps, enabling cross-API parameter chaining. The assertion engine supports basic equality checks.
+The executor supports both single-threaded and multi-threaded modes (concurrent case execution, not load testing). In business-flow mode, responses from earlier steps can feed data into later steps, enabling cross-API parameter chaining. The assertion engine supports both simple equality checks and advanced multi-operator assertion rules (numeric comparisons, regex matching, list aggregation, etc.).
 
 **Executor example** — see [python/README.md](./python/README.md) for details:
 

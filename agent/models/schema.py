@@ -17,6 +17,7 @@ class InterfaceDef:
     request_body: Dict[str, Any] = field(default_factory=dict)
     status_code: int = 200
     assert_dict: Dict[str, Any] = field(default_factory=dict)
+    assert_rules: List[str] = field(default_factory=list)
     remark: str = ""
 
 
@@ -35,6 +36,7 @@ class SingleTestCase:
     request_body: Dict[str, Any] = field(default_factory=dict)
     status_code: int = 200
     assert_dict: Dict[str, Any] = field(default_factory=dict)
+    assert_rules: List[str] = field(default_factory=list)
     remark: str = ""
 
 
@@ -53,6 +55,7 @@ class BizStep:
     request_body: Dict[str, Any] = field(default_factory=dict)
     status_code: int = 200
     assert_dict: Dict[str, Any] = field(default_factory=dict)
+    assert_rules: List[str] = field(default_factory=list)
     tag: str = "P1"
     remark: str = ""
 

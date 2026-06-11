@@ -66,7 +66,8 @@ python/
 │
 ├── assertion/
 │   ├── __init__.py
-│   └── engine.py                # 字段级 JSON 路径断言引擎
+│   ├── engine.py                # 简单等值断言引擎（assert_dict）
+│   └── rules_engine.py          # 高级断言规则引擎（assert_rules）
 │
 └── reporter/
     ├── __init__.py
@@ -251,6 +252,8 @@ status_code: 200
 assert_dict:
   $.code: 0
   $.msg: success
+assert_rules:
+  - "$.data.token is_not_null"
 tag: P0
 remark: 正常登录验证
 ```
@@ -299,7 +302,8 @@ steps:
 | `status_code` | int | 预期 HTTP 状态码 |
 | `request_head` | dict | 请求头，key-value 对象 |
 | `request_body` | dict | 请求体，key-value 对象 |
-| `assert_dict` | dict | 断言字典，key 为响应 JSON 路径，value 为预期值 |
+| `assert_dict` | dict | 简单断言字典，key 为响应 JSON 路径，value 为预期值 |
+| `assert_rules` | list[str] | 高级断言规则列表（可选），每条规则为字符串表达式 |
 | `tag` | str | 标签（如 P0/P1/P2） |
 | `remark` | str | 备注 |
 | `sheet_name` | str | 业务场景名（业务链路用例必填） |
@@ -466,13 +470,39 @@ Excel 中的 JSON 字段支持以下格式：
 - **失败黑名单**：MD5 哈希记录登录失败的用户，避免重复无效请求
 - **Token 缓存**：同一用户只需登录一次，后续复用
 
-### 断言引擎 (`assertion/engine.py`)
+### 断言引擎 (`assertion/engine.py` + `rules_engine.py`)
 
-- 对 HTTP 响应执行字段级断言
+**简单断言（`assert_dict`，`engine.py`）：**
+- 对 HTTP 响应执行字段级等值断言
 - `assert_dict` 的 key 为 JSON 路径（支持点号 + 括号：`data.items[0].name`，也支持 `$.` 前缀）
 - `status_code` 字段特殊处理，针对 `response.status_code` 断言
 - 路径不存在时返回 `<not found>`
-- 比较方式：`str(实际值) == str(预期值)`
+
+**高级断言（`assert_rules`，`rules_engine.py`）：**
+
+每条规则是一个字符串表达式，格式为 `<左表达式> <运算符> [<右表达式>]`。
+
+| 运算符 | 说明 | 示例 |
+|--------|------|------|
+| `==` / `!=` | 等于 / 不等于 | `$.data.id == 1001` |
+| `>` / `>=` / `<` / `<=` | 数值比较 | `$.data.total > 0` |
+| `=~` | 正则匹配 | `$.data.time =~ ^\\d{4}-\\d{2}-\\d{2}$` |
+| `in` | 值在列表中 | `$.data.status in ["PAID", "PENDING"]` |
+| `contains` | 集合包含元素 | `$.data.tags contains "vip"` |
+| `not_contains` | 集合不包含元素 | `$.data.tags not_contains "blocked"` |
+| `is_null` | 值为 null | `$.data.optional is_null` |
+| `is_not_null` | 值不为 null | `$.data.order_id is_not_null` |
+| `typeof` | 类型检查 | `$.data.count typeof int` |
+
+支持函数：
+
+| 函数 | 说明 | 示例 |
+|------|------|------|
+| `.length()` | 数组长度 | `$.data.list.length() == 3` |
+| `SUM(path)` | 数组元素求和 | `SUM($.data.list[*].price)` |
+| `SUM_PRODUCT(p1, p2)` | 两字段乘积求和 | `SUM_PRODUCT($.data.list[*].price, $.data.list[*].count)` |
+
+路径中 `[*]` 表示遍历数组的每个元素，用于 `SUM` 和 `SUM_PRODUCT` 函数。
 
 ### HTML 报告生成器 (`reporter/html_writer.py`)
 

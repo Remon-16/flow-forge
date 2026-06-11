@@ -73,6 +73,7 @@ class CaseValidator(BaseAgent):
             errors.extend(self._check_json_field(case, "request_head"))
             errors.extend(self._check_json_field(case, "request_body"))
             errors.extend(self._check_assert_dict(case))
+            errors.extend(self._check_assert_rules(case))
         elif schema_type == "biz_flow":
             errors.extend(self._check_required(case, _REQUIRED_BIZ_FLOW))
             steps = case.get("steps", [])
@@ -105,6 +106,7 @@ class CaseValidator(BaseAgent):
             [f"{prefix}.{e}" for e in self._check_json_field(step, "request_body")]
         )
         errors.extend([f"{prefix}.{e}" for e in self._check_assert_dict(step)])
+        errors.extend([f"{prefix}.{e}" for e in self._check_assert_rules(step)])
         return errors
 
     @staticmethod
@@ -175,6 +177,23 @@ class CaseValidator(BaseAgent):
                 return ["assert_dict is not valid JSON"]
         if not isinstance(ad, dict):
             return [f"assert_dict must be dict, got {type(ad).__name__}"]
+        return []
+
+    @staticmethod
+    def _check_assert_rules(case: Dict) -> List[str]:
+        ar = case.get("assert_rules")
+        if ar is None or (isinstance(ar, list) and len(ar) == 0):
+            return []
+        if isinstance(ar, str):
+            try:
+                ar = json.loads(ar)
+            except (json.JSONDecodeError, ValueError):
+                return ["assert_rules is not valid JSON"]
+        if not isinstance(ar, list):
+            return [f"assert_rules must be a list, got {type(ar).__name__}"]
+        for i, item in enumerate(ar):
+            if not isinstance(item, str):
+                return [f"assert_rules[{i}] must be a string, got {type(item).__name__}"]
         return []
 
     @staticmethod

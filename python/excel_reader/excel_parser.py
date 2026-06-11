@@ -212,6 +212,15 @@ class ExcelParser:
         else:
             result["assert_dict"] = {}
 
+        assert_rules_field = tc.get("AssertRules")
+        if assert_rules_field not in (None, ""):
+            parsed = self._safe_parse_json(
+                assert_rules_field, "AssertRules", tc.get("TestID") or tc.get("StepID")
+            )
+            result["assert_rules"] = parsed if isinstance(parsed, list) else []
+        else:
+            result["assert_rules"] = []
+
         if is_biz:
             result["test_id"] = str(tc.get("StepID", ""))
             result["step_id"] = str(tc.get("StepID", ""))

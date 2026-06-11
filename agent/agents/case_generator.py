@@ -132,6 +132,7 @@ class CaseGenerator(BaseAgent):
                     request_body=dict(c.get("request_body") or {}),
                     status_code=int(c.get("status_code", 200)),
                     assert_dict=dict(c.get("assert_dict") or {}),
+                    assert_rules=list(c.get("assert_rules") or []),
                     remark=str(c.get("remark", "")),
                 ))
             except Exception as e:
@@ -156,6 +157,7 @@ class CaseGenerator(BaseAgent):
                         request_body=dict(s.get("request_body") or {}),
                         status_code=int(s.get("status_code", 200)),
                         assert_dict=dict(s.get("assert_dict") or {}),
+                        assert_rules=list(s.get("assert_rules") or []),
                         tag=str(s.get("tag", "P1")),
                         remark=str(s.get("remark", "")),
                     ))

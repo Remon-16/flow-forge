@@ -952,6 +952,7 @@ def _dicts_to_interfaces(items: List[Any]) -> List[InterfaceDef]:
                     request_body=dict(item.get("request_body", item.get("body", item.get("params", {}))) or {}),
                     status_code=int(item.get("status_code", 200)),
                     assert_dict=dict(item.get("assert_dict", item.get("assertion", {})) or {}),
+                    assert_rules=list(item.get("assert_rules", []) or []),
                     remark=str(item.get("remark", item.get("note", ""))),
                 ))
             except Exception as e:

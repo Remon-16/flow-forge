@@ -124,7 +124,11 @@ class BizFlowExecutor(BaseExecutor):
             result["response_status"] = response.status_code
             result["response_body"] = self._extract_body(response)
 
-            assertions = AssertionEngine.run(response, step.get("assert_dict", {}))
+            assertions = AssertionEngine.run(
+                response,
+                step.get("assert_dict", {}),
+                step.get("assert_rules", []),
+            )
 
             if expected_status is not None:
                 status_match = int(expected_status) == response.status_code

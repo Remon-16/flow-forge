@@ -2,7 +2,7 @@
 
 **English** | [中文](README.md)
 
-A multi-agent system based on LangGraph + ReAct pattern that transforms requirement documents and API documentation into YAML test cases (with optional Excel export) compatible with the executor.
+A multi-agent system based on LangGraph + ReAct pattern that transforms requirement documents and API documentation into YAML test cases (with optional Excel export) compatible with the executor. Supports both simple assertions (`assert_dict`) and advanced multi-operator assertion rules (`assert_rules`), covering equality checks, numeric comparisons, regex matching, list aggregation, and more.
 
 ## System Architecture
 

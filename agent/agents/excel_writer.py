@@ -17,19 +17,19 @@ logger = logging.getLogger(__name__)
 # Column headers matching executor's ExcelParser expectations
 _API_COLUMNS = [
     "TestID", "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "Remark",
+    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Remark",
 ]
 
 _CASE_COLUMNS = [
     "TestID", "RelevanceID", "Tag",
     "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "Remark",
+    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Remark",
 ]
 
 _BIZ_COLUMNS = [
     "StepID", "RelevanceID", "Trans",
     "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "Tag", "Remark",
+    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Tag", "Remark",
 ]
 
 _HEADER_FONT = Font(name="微软雅黑", bold=True, size=11)
@@ -131,6 +131,7 @@ class ExcelWriter:
                 json.dumps(g("request_body"), ensure_ascii=False) if g("request_body") else "",
                 g("status_code", 200),
                 json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
+                json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
                 g("remark"),
             ])
 
@@ -151,6 +152,7 @@ class ExcelWriter:
                 json.dumps(g("request_body"), ensure_ascii=False) if g("request_body") else "",
                 g("status_code", 200),
                 json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
+                json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
                 g("remark"),
             ])
 
@@ -172,6 +174,7 @@ class ExcelWriter:
                 json.dumps(g("request_body"), ensure_ascii=False) if g("request_body") else "",
                 g("status_code", 200),
                 json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
+                json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
                 g("tag", "P1"),
                 g("remark"),
             ])

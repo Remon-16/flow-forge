@@ -66,7 +66,8 @@ python/
 │
 ├── assertion/
 │   ├── __init__.py
-│   └── engine.py                # Field-level JSON path assertion engine
+│   ├── engine.py                # Simple equality assertion engine (assert_dict)
+│   └── rules_engine.py          # Advanced assertion rules engine (assert_rules)
 │
 └── reporter/
     ├── __init__.py
@@ -251,6 +252,8 @@ status_code: 200
 assert_dict:
   $.code: 0
   $.msg: success
+assert_rules:
+  - "$.data.token is_not_null"
 tag: P0
 remark: Normal login verification
 ```
@@ -299,7 +302,8 @@ steps:
 | `status_code` | int | Expected HTTP status code |
 | `request_head` | dict | Request headers as key-value pairs |
 | `request_body` | dict | Request body as key-value pairs |
-| `assert_dict` | dict | Assertion dictionary; key = response JSON path, value = expected value |
+| `assert_dict` | dict | Simple assertion dictionary; key = response JSON path, value = expected value |
+| `assert_rules` | list[str] | Advanced assertion rules (optional); each entry is a string expression |
 | `tag` | str | Tag (e.g., P0/P1/P2) |
 | `remark` | str | Remarks |
 | `sheet_name` | str | Business scenario name (required for business flow cases) |
@@ -465,13 +469,39 @@ Key design choices:
 - **Failure blacklist**: MD5 hash of failed login credentials to avoid repeated invalid requests
 - **Token cache**: each user logs in only once; subsequent calls reuse the cached token
 
-### Assertion Engine (`assertion/engine.py`)
+### Assertion Engine (`assertion/engine.py` + `rules_engine.py`)
 
-- Performs field-level assertions on HTTP responses
+**Simple Assertions (`assert_dict`, `engine.py`):**
+- Performs field-level equality assertions on HTTP responses
 - `assert_dict` keys are JSON paths (supports dot + bracket notation: `data.items[0].name`, also `$.` prefix)
 - `status_code` field is special-cased, asserting against `response.status_code`
 - Missing path renders as `<not found>`
-- Comparison: `str(actual) == str(expected)`
+
+**Advanced Assertions (`assert_rules`, `rules_engine.py`):**
+
+Each rule is a string expression in the format `<left expression> <operator> [<right expression>]`.
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `==` / `!=` | Equal / Not equal | `$.data.id == 1001` |
+| `>` / `>=` / `<` / `<=` | Numeric comparison | `$.data.total > 0` |
+| `=~` | Regex match | `$.data.time =~ ^\\d{4}-\\d{2}-\\d{2}$` |
+| `in` | Value in list | `$.data.status in ["PAID", "PENDING"]` |
+| `contains` | Collection contains element | `$.data.tags contains "vip"` |
+| `not_contains` | Collection does not contain element | `$.data.tags not_contains "blocked"` |
+| `is_null` | Value is null | `$.data.optional is_null` |
+| `is_not_null` | Value is not null | `$.data.order_id is_not_null` |
+| `typeof` | Type check | `$.data.count typeof int` |
+
+Supported functions:
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `.length()` | Array length | `$.data.list.length() == 3` |
+| `SUM(path)` | Sum of array elements | `SUM($.data.list[*].price)` |
+| `SUM_PRODUCT(p1, p2)` | Sum of products of two fields | `SUM_PRODUCT($.data.list[*].price, $.data.list[*].count)` |
+
+The `[*]` wildcard in paths iterates over each element of an array, used with `SUM` and `SUM_PRODUCT` functions.
 
 ### HTML Report Generator (`reporter/html_writer.py`)
 

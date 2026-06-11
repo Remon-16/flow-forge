@@ -10,27 +10,31 @@ class AssertionEngine:
     """Runs field-level assertions against an HTTP response."""
 
     @staticmethod
-    def run(response: Any, assert_dict: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Execute all assertions in assert_dict against the response.
+    def run(response: Any, assert_dict: Dict[str, Any],
+            assert_rules: List[str] = None) -> List[Dict[str, Any]]:
+        """Execute all assertions in assert_dict and assert_rules against the response.
 
         Returns a list of assertion result dicts, each with keys:
             field, expected, actual, passed
         """
-        if not assert_dict:
-            return []
-
         results = []
-        response_json = AssertionEngine._try_parse_json(response)
 
-        for field, expected in assert_dict.items():
-            if field == "status_code":
-                results.append(
-                    AssertionEngine._assert_status_code(response.status_code, expected)
-                )
-            else:
-                results.append(
-                    AssertionEngine._assert_field(response_json, field, expected)
-                )
+        if assert_dict:
+            response_json = AssertionEngine._try_parse_json(response)
+
+            for field, expected in assert_dict.items():
+                if field == "status_code":
+                    results.append(
+                        AssertionEngine._assert_status_code(response.status_code, expected)
+                    )
+                else:
+                    results.append(
+                        AssertionEngine._assert_field(response_json, field, expected)
+                    )
+
+        if assert_rules:
+            from assertion.rules_engine import AssertRulesEngine
+            results.extend(AssertRulesEngine.run(response, assert_rules))
 
         return results
 
