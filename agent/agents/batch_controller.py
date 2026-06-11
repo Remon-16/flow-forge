@@ -70,7 +70,6 @@ class BatchController(BaseAgent):
         self._enable_validation = settings.enable_validation
         self._max_validation_retries = settings.max_validation_retries
         self._max_steps_no_progress = settings.max_steps_no_progress
-        self._safe_mode = False
         self._reference_dir = ""
 
     # ------------------------------------------------------------------
@@ -91,8 +90,8 @@ class BatchController(BaseAgent):
 
         Args:
             reference_dir: Optional reference directory for incremental
-                updates. When set and equal to output_dir, safe_mode is
-                enabled to avoid overwriting existing case files.
+                updates. Files already on disk are never overwritten —
+                versioned suffixes (_v2, _v3) are appended automatically.
 
         Returns dict with:
           - single_cases: list of generated single case dicts
@@ -100,7 +99,6 @@ class BatchController(BaseAgent):
           - failures: list of cases that failed validation after all retries
         """
         self._reference_dir = reference_dir
-        self._safe_mode = bool(reference_dir and reference_dir == output_dir)
 
         all_single: List[Dict] = []
         all_biz: List[Dict] = []
@@ -311,9 +309,9 @@ class BatchController(BaseAgent):
             # Save
             for case in cases:
                 if batch_type == "single":
-                    YamlWriter.write_single_case(case, output_dir, safe_mode=self._safe_mode)
+                    YamlWriter.write_single_case(case, output_dir)
                 else:
-                    YamlWriter.write_biz_flow(case, output_dir, safe_mode=self._safe_mode)
+                    YamlWriter.write_biz_flow(case, output_dir)
 
             all_cases.extend(cases)
             logger.info("BatchController: saved %d %s cases (total: %d)",
