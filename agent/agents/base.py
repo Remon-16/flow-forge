@@ -83,10 +83,43 @@ class BaseAgent:
         self._max_retries = max_retries
         self._max_steps = max_steps
         self._step_count = 0
+        self._progress_getter: Callable[[], str] | None = None
+        self._last_progress: str | None = None
+
+    def set_progress_getter(
+        self, getter: Callable[[], str], max_no_progress: int = 5
+    ) -> None:
+        """Enable progress-based step counting.
+
+        When set, check_step() compares the current progress string against
+        the previous call. If progress changed, the step counter resets to 1.
+        If progress is unchanged, the step counter increments. Raises
+        ConvergenceError after max_no_progress consecutive no-progress calls.
+
+        Call with getter=None to revert to legacy counting.
+        """
+        self._progress_getter = getter
+        self._last_progress = None
+        self._max_steps = max_no_progress
 
     def check_step(self) -> None:
-        """Increment step counter, raise if max_steps exceeded."""
-        self._step_count += 1
+        """Increment step counter, raise if max_steps exceeded.
+
+        If a progress getter is configured, uses progress-based counting:
+        same progress = increment, different progress = reset to 1.
+        This allows models that make steady progress to continue
+        indefinitely, while catching models that make zero progress quickly.
+        """
+        if self._progress_getter:
+            current = self._progress_getter()
+            if self._last_progress is not None and current == self._last_progress:
+                self._step_count += 1
+            else:
+                self._step_count = 1
+            self._last_progress = current
+        else:
+            self._step_count += 1
+
         if self._step_count > self._max_steps:
             raise ConvergenceError(
                 f"Agent exceeded max_steps ({self._max_steps})"

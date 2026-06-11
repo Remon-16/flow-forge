@@ -12,8 +12,9 @@ from doc_parser.pdf_parser import PdfParser
 from doc_parser.text_extractor import extract_text
 from graph.state import GraphState
 from knowledge.search import KnowledgeSearch
-from models.schema import InterfaceDef
+from models.schema import InterfaceDef, PlanStep, TestPlan
 from prompts.registry import PromptRegistry
+from writers.yaml_writer import YamlWriter
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,73 @@ def _fmt_size(path: str) -> str:
         return "? B"
 
 
+def _summarize_reference_dir(reference_dir: str) -> str:
+    """Scan reference directory for existing test assets and return a
+    summary suitable for injecting into the plan generation prompt.
+
+    Returns "(无)" if the directory is empty or invalid.
+    """
+    if not reference_dir:
+        return "(无)"
+
+    ref_path = Path(reference_dir)
+    parts = []
+
+    # 1. Existing plan
+    plan_path = ref_path / "plan.md"
+    if plan_path.exists():
+        try:
+            plan_text = plan_path.read_text(encoding="utf-8")
+            parts.append(f"### 已有测试计划\n{plan_text[:5000]}")
+        except Exception:
+            pass
+
+    # 2. Existing interfaces
+    try:
+        ifaces = YamlWriter.read_interfaces(reference_dir)
+        if ifaces:
+            lines = [
+                f"- {i.get('test_id', '?')}: {i.get('method', 'GET')} {i.get('url', '')}"
+                for i in ifaces
+            ]
+            parts.append(f"### 已有接口 ({len(ifaces)} 个)\n" + "\n".join(lines))
+    except Exception:
+        pass
+
+    # 3. Existing single cases
+    try:
+        cases = YamlWriter.read_single_cases(reference_dir)
+        if cases:
+            ids = [str(c.get("test_id", "?")) for c in cases]
+            parts.append(
+                f"### 已生成单接口用例 ({len(cases)} 个)\n"
+                f"覆盖: {', '.join(ids[:50])}"
+            )
+    except Exception:
+        pass
+
+    # 4. Existing biz flows
+    try:
+        flows = YamlWriter.read_biz_flows(reference_dir)
+        if flows:
+            names = [str(f.get("sheet_name", "?")) for f in flows]
+            parts.append(
+                f"### 已生成业务链路用例 ({len(flows)} 个)\n"
+                f"{', '.join(names[:20])}"
+            )
+    except Exception:
+        pass
+
+    if not parts:
+        return "(参考目录为空或无法读取)"
+
+    parts.append(
+        "\n请仅对新增或变更的接口和场景进行测试规划。"
+        "已覆盖且未变更的部分无需重复，可在计划中标注'已覆盖'。"
+    )
+    return "\n\n".join(parts)
+
+
 # =========================================================================
 # Node: parse_docs
 # =========================================================================
@@ -71,7 +139,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
     """
     state.setdefault("errors", [])
 
-    print("\n[1/8] 读取文档...")
+    print("\n[1/9] 读取文档...")
 
     # --- Requirements ---
     requirement_text_parts: List[str] = []
@@ -220,13 +288,13 @@ def analyze_api_node(state: GraphState) -> GraphState:
 
     agent = ApiAnalyzer(_settings)
 
-    print(f"\n[2/8] 分析接口文档...")
+    print(f"\n[2/9] 分析接口文档...")
 
     if api_raw_text and not interfaces:
         # Raw mode: analyze directly from text
         print(f"  → ApiAnalyzer 正在从原文识别并分析接口 ({_settings.llm_model})...")
         if _sl():
-            _sl().log_node_start("analyze_api", "2/8")
+            _sl().log_node_start("analyze_api", "2/9")
             _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
                             model=_settings.llm_model, text_length=len(api_raw_text))
 
@@ -238,7 +306,7 @@ def analyze_api_node(state: GraphState) -> GraphState:
         # Rule/llm mode: analyze from structured interfaces
         print(f"  → ApiAnalyzer 正在调用 LLM ({_settings.llm_model})...")
         if _sl():
-            _sl().log_node_start("analyze_api", "2/8")
+            _sl().log_node_start("analyze_api", "2/9")
 
         if feedback:
             summary = agent.revise(interfaces, api_summary, feedback)
@@ -396,10 +464,10 @@ def analyze_requirement_node(state: GraphState) -> GraphState:
         }
         return state
 
-    print(f"\n[3/8] 分析需求文档...")
+    print(f"\n[3/9] 分析需求文档...")
     print(f"  → RequirementAnalyzer 正在调用 LLM ({_settings.llm_model})...")
     if _sl():
-        _sl().log_node_start("analyze_requirement", "3/8")
+        _sl().log_node_start("analyze_requirement", "3/9")
 
     agent = RequirementAnalyzer(_settings, _knowledge)
     result = agent.analyze(text)
@@ -418,10 +486,19 @@ def analyze_requirement_node(state: GraphState) -> GraphState:
 # Node: generate_plan
 # =========================================================================
 def generate_plan_node(state: GraphState) -> GraphState:
-    """Generate a test plan markdown from requirement analysis + interfaces."""
+    """Generate a test plan markdown from requirement analysis + interfaces.
+
+    When ``state["reference_dir"]`` is set, scans that directory for existing
+    plans, interfaces, and cases, and injects a summary into the LLM prompt
+    so that the plan can be generated incrementally.
+    """
     from agents.plan_generator import PlanGenerator
 
     state.setdefault("errors", [])
+
+    # Build reference summary for incremental updates
+    reference_dir = state.get("reference_dir", "")
+    reference_summary = _summarize_reference_dir(reference_dir)
 
     agent = PlanGenerator(_settings, _knowledge)
 
@@ -430,20 +507,34 @@ def generate_plan_node(state: GraphState) -> GraphState:
     api_summary = state.get("api_summary", [])
     user_guidance = state.get("user_guidance", "")
 
-    print(f"\n[4/8] 生成测试计划...")
+    if reference_dir:
+        print(f"\n[4/9] 生成测试计划 (增量模式)...")
+        print(f"  → 参考目录: {reference_dir}")
+    else:
+        print(f"\n[4/9] 生成测试计划...")
     print(f"  → PlanGenerator 正在调用 LLM ({_settings.llm_model})...")
     if _sl():
-        _sl().log_node_start("generate_plan", "4/8")
+        _sl().log_node_start("generate_plan", "4/9")
 
     plan_md = agent.generate(
         analysis,
         interfaces,
         api_summary=api_summary,
         user_guidance=user_guidance,
+        reference_summary=reference_summary,
     )
     state["plan_md"] = plan_md
 
     plan_len = len(plan_md)
+
+    # Save plan.md to output_dir (in addition to session dir)
+    output_dir = state.get("output_dir", "./output")
+    try:
+        plan_path = Path(output_dir) / "plan.md"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        plan_path.write_text(plan_md, encoding="utf-8")
+    except Exception as e:
+        logger.warning("Failed to save plan.md to output_dir: %s", e)
 
     # Write plan to session directory if available
     if _sl():
@@ -472,6 +563,7 @@ def human_confirm_node(state: GraphState) -> GraphState:
     plan_md = state.get("plan_md", "")
     feedback = state.get("plan_feedback", "")
 
+    print(f"\n[5/9] 审核测试计划...")
     print("\n" + "=" * 60)
     if feedback:
         print("  [修改后计划] 已根据您的反馈修改测试计划：")
@@ -483,7 +575,7 @@ def human_confirm_node(state: GraphState) -> GraphState:
     print(preview)
     print("=" * 60)
     if _sl():
-        _sl().log_node_start("human_confirm", "5/8")
+        _sl().log_node_start("human_confirm", "5/9")
 
     # Pause and wait for human decision
     decision = interrupt("请审核测试计划")
@@ -577,10 +669,10 @@ def parse_plan_node(state: GraphState) -> GraphState:
     state.setdefault("errors", [])
     plan_md = state.get("plan_md", "")
 
-    print(f"\n[6/8] 解析测试计划...")
+    print(f"\n[6/9] 解析测试计划...")
     print(f"  → PlanParser 正在调用 LLM ({_settings.llm_model})...")
     if _sl():
-        _sl().log_node_start("parse_plan", "6/8")
+        _sl().log_node_start("parse_plan", "6/9")
 
     agent = PlanParser(_settings)
     plan = agent.parse(plan_md)
@@ -641,6 +733,10 @@ def save_interfaces_node(state: GraphState) -> GraphState:
 
     state.setdefault("errors", [])
 
+    print(f"\n[7/9] 保存接口定义...")
+    if _sl():
+        _sl().log_node_start("save_interfaces", "7/9")
+
     interfaces = state.get("interfaces", [])
     output_dir = state.get("output_dir", "./output")
 
@@ -662,6 +758,7 @@ def save_interfaces_node(state: GraphState) -> GraphState:
     print(f"\n  → 保存 {count} 个接口定义到 {interfaces_dir}")
     if _sl():
         _sl().log_event("save_interfaces", count=count, dir=str(interfaces_dir))
+        _sl().log_node_end("save_interfaces")
 
     return state
 
@@ -674,6 +771,9 @@ def batch_controller_node(state: GraphState) -> GraphState:
 
     Reads interfaces from YAML, generates cases in batches,
     validates (if enabled), and saves to YAML files.
+
+    In resume mode (state["resume"] is True), builds a minimal TestPlan
+    from existing interface YAMLs when no structured plan is available.
     """
     from agents.batch_controller import BatchController
     from agents.case_generator import CaseGenerator
@@ -688,12 +788,43 @@ def batch_controller_node(state: GraphState) -> GraphState:
     batch_size = state.get("batch_size", _settings.batch_size)
     enable_validation = state.get("enable_validation", _settings.enable_validation)
     max_retries = state.get("max_validation_retries", _settings.max_validation_retries)
+    reference_dir = state.get("reference_dir", "")
 
-    step_num = "7/9" if state.get("plan_only") else "7/9"
-    print(f"\n[{step_num}] 分批生成测试用例...")
+    # Resume mode: build minimal TestPlan from existing interface YAMLs
+    if state.get("resume") and (plan is None or not interfaces_raw):
+        existing_ifaces = YamlWriter.read_interfaces(output_dir)
+        if not interfaces_raw:
+            interfaces_raw = existing_ifaces
+        if plan is None:
+            single_tps = {}
+            for iface in existing_ifaces:
+                tid = iface.get("test_id", "")
+                if tid:
+                    single_tps[tid] = [
+                        PlanStep(
+                            test_id=f"{tid}_positive",
+                            description="正向场景", tag="P0",
+                            scenario_type="positive"),
+                        PlanStep(
+                            test_id=f"{tid}_negative",
+                            description="负向场景", tag="P1",
+                            scenario_type="negative"),
+                        PlanStep(
+                            test_id=f"{tid}_boundary",
+                            description="边界场景", tag="P2",
+                            scenario_type="boundary"),
+                    ]
+            plan = TestPlan(
+                business_summary="Resume mode — minimal plan from existing interfaces",
+                single_test_points=single_tps,
+            )
+        state["plan_parsed"] = plan
+        state["interfaces"] = interfaces_raw
+
+    print(f"\n[8/9] 分批生成测试用例...")
     print(f"  → BatchController 启动 (batch_size={batch_size}, validation={enable_validation})")
     if _sl():
-        _sl().log_node_start("batch_controller", step_num)
+        _sl().log_node_start("batch_controller", "8/9")
 
     case_generator = CaseGenerator(_settings, _knowledge)
     validator = CaseValidator(_settings) if enable_validation else None
@@ -713,6 +844,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
             case_generator=case_generator,
             validator=validator,
             user_guidance=user_guidance,
+            reference_dir=reference_dir,
         )
     except Exception as e:
         msg = f"BatchController failed: {e}"
@@ -758,10 +890,9 @@ def write_output_node(state: GraphState) -> GraphState:
     biz = state.get("biz_flows", [])
     failures = state.get("validation_failures", [])
 
-    step_num = "8/9" if state.get("plan_only") else "8/9"
-    print(f"\n[{step_num}] 写入输出...")
+    print(f"\n[9/9] 写入输出...")
     if _sl():
-        _sl().log_node_start("write_output", step_num)
+        _sl().log_node_start("write_output", "9/9")
 
     if output_format in ("excel", "both"):
         try:

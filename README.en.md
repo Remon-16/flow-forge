@@ -3,12 +3,12 @@
 **English** | [中文](README.md)
 
 ![Development Status](https://img.shields.io/badge/status-Alpha-orange)
-![Version](https://img.shields.io/badge/version-v0.2.0--alpha-blue)
+![Version](https://img.shields.io/badge/version-v0.2.1--alpha-blue)
 ![Branch](https://img.shields.io/badge/dev_brach-dev-brigAhtgreen)
 
 An AI agent-based API automation testing framework. Provide requirement documents and API documentation, and the agent automatically generates test case YAML files (with optional Excel export). Feed the cases to the CLI executor, and you get a test report. The executor integrates seamlessly with Jenkins for CI/CD pipelines.
 
-The AI agent enables rapid test case generation, but due to potential AI hallucinations, manual review of the generated output is recommended. Test cases are stored as individual YAML files — one file per case — making them easy to review, version-control with Git, and update incrementally. For detailed rules, see [agent/README.md](./agent/README.md).
+The AI agent enables rapid test case generation, but due to potential AI hallucinations, manual review of the generated output is recommended. Test cases are stored as individual YAML files — one file per case — making them easy to review, version-control with Git, and update incrementally. Supports resumable and incremental generation — resume interrupted runs and update cases after requirement changes without regenerating everything from scratch. For detailed rules, see [agent/README.md](./agent/README.md).
 
 ## Current Status
 

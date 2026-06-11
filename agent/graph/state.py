@@ -58,6 +58,10 @@ class GraphState(TypedDict, total=False):
     batch_state: Dict[str, Any]          # Batch generation progress
     validation_failures: List[Dict]      # Cases that failed validation
 
+    # === Resume & incremental ===
+    resume: bool                         # Skip to batch generation from existing output_dir
+    reference_dir: str                   # Reference directory for incremental updates
+
     # === Shared messages (ReAct agents use add_messages reducer) ===
     messages: Annotated[List, add_messages]
 

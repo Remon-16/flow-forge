@@ -52,12 +52,19 @@ class YamlWriter:
         return str(file_path)
 
     @staticmethod
-    def write_single_case(case: Any, output_dir: str) -> str:
+    def write_single_case(case: Any, output_dir: str, safe_mode: bool = False) -> str:
         d = YamlWriter._to_dict(case)
         d["case_type"] = "single"
         test_id = d.get("test_id", "unknown")
         safe_name = test_id.replace("/", "_").replace("\\", "_").replace(":", "_")
         file_path = Path(output_dir) / "single_cases" / f"{safe_name}.yaml"
+
+        if safe_mode and file_path.exists():
+            i = 2
+            while file_path.exists():
+                file_path = Path(output_dir) / "single_cases" / f"{safe_name}_v{i}.yaml"
+                i += 1
+
         YamlWriter._ensure_dir(file_path.parent)
         with open(file_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(d, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
@@ -65,12 +72,19 @@ class YamlWriter:
         return str(file_path)
 
     @staticmethod
-    def write_biz_flow(flow: Any, output_dir: str) -> str:
+    def write_biz_flow(flow: Any, output_dir: str, safe_mode: bool = False) -> str:
         d = YamlWriter._to_dict(flow)
         d["case_type"] = "biz"
         sheet_name = d.get("sheet_name", "unknown")
         safe_name = sheet_name.replace("/", "_").replace("\\", "_").replace(":", "_")
         file_path = Path(output_dir) / "biz_flows" / f"{safe_name}.yaml"
+
+        if safe_mode and file_path.exists():
+            i = 2
+            while file_path.exists():
+                file_path = Path(output_dir) / "biz_flows" / f"{safe_name}_v{i}.yaml"
+                i += 1
+
         YamlWriter._ensure_dir(file_path.parent)
         with open(file_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(d, f, allow_unicode=True, sort_keys=False, default_flow_style=False)

@@ -3,12 +3,12 @@
 **中文** | [English](README.en.md)
 
 ![Development Status](https://img.shields.io/badge/状态-早期版本-orange) 
-![Version](https://img.shields.io/badge/版本-v0.2.0--alpha-blue)
+![Version](https://img.shields.io/badge/版本-v0.2.1--alpha-blue)
 ![Branch](https://img.shields.io/badge/开发分支-dev-brightgreen)
 
 基于 AI 智能体的接口自动化测试框架。输入需求文档和接口文档，智能体自动生成测试用例 YAML 文件（可选导出 Excel）；将用例交给命令行执行器，即可得到测试报告。执行器可无缝集成 Jenkins，实现 CI/CD 流水线。
 
-AI智能体可以实现快速的用例输出，但由于AI生成可能产生幻觉，建议人工审核输出的用例。测试用例以 YAML 文件形式独立存储，每个用例一个文件，便于 Git 版本管理和增量更新，也方便人工逐文件审核。详细规则见 [agent/README.md](./agent/README.md)。
+AI智能体可以实现快速的用例输出，但由于AI可能产生幻觉，在生成测试用例前需要人工审核智能体给出的测试计划，之后再进行单接口和业务链路用例的生成。测试用例以 YAML 文件形式独立存储，每个用例一个文件，便于 Git 版本管理和增量更新，也方便人工逐文件审核。支持断点续生成与增量更新——用例生成中断后可恢复，需求变更后无需全部重新生成。详细规则见 [agent/README.md](./agent/README.md)。
 
 ## 版本说明
 

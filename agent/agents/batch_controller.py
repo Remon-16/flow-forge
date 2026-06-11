@@ -69,6 +69,9 @@ class BatchController(BaseAgent):
         self._batch_size = settings.batch_size
         self._enable_validation = settings.enable_validation
         self._max_validation_retries = settings.max_validation_retries
+        self._max_steps_no_progress = settings.max_steps_no_progress
+        self._safe_mode = False
+        self._reference_dir = ""
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -82,15 +85,22 @@ class BatchController(BaseAgent):
         case_generator: Any,
         validator: Any = None,
         user_guidance: str = "",
+        reference_dir: str = "",
     ) -> Dict[str, Any]:
         """Run batch generation for both single cases and biz flows.
+
+        Args:
+            reference_dir: Optional reference directory for incremental
+                updates. When set and equal to output_dir, safe_mode is
+                enabled to avoid overwriting existing case files.
 
         Returns dict with:
           - single_cases: list of generated single case dicts
           - biz_flows: list of generated biz flow dicts
           - failures: list of cases that failed validation after all retries
         """
-        self.reset_steps()
+        self._reference_dir = reference_dir
+        self._safe_mode = bool(reference_dir and reference_dir == output_dir)
 
         all_single: List[Dict] = []
         all_biz: List[Dict] = []
@@ -155,9 +165,30 @@ class BatchController(BaseAgent):
         all_failures: List[Dict] = []
         max_iterations = 50  # safety cap
 
-        for iteration in range(1, max_iterations + 1):
-            self.check_step()
+        # Early exit: check if all interfaces already have cases
+        saved_iface_ids = YamlWriter.list_interface_ids(output_dir)
+        generated_ids = YamlWriter.list_generated_case_ids(output_dir, batch_type)
+        if saved_iface_ids and all(i in generated_ids for i in saved_iface_ids):
+            logger.info("BatchController [%s]: all %d interfaces already covered, skipping phase",
+                        batch_type, len(saved_iface_ids))
+            existing = (
+                YamlWriter.read_single_cases(output_dir)
+                if batch_type == "single"
+                else YamlWriter.read_biz_flows(output_dir)
+            )
+            return {"cases": existing, "failures": []}
 
+        # Enable progress-based step counting
+        self.set_progress_getter(
+            lambda: self._compute_progress(output_dir, batch_type),
+            max_no_progress=self._max_steps_no_progress,
+        )
+        logger.info(
+            "BatchController [%s]: starting with %d/%d cases already generated",
+            batch_type, len(generated_ids), len(saved_iface_ids),
+        )
+
+        for iteration in range(1, max_iterations + 1):
             # Build progress snapshot
             saved_iface_ids = YamlWriter.list_interface_ids(output_dir)
             generated_ids = YamlWriter.list_generated_case_ids(output_dir, batch_type)
@@ -196,7 +227,7 @@ class BatchController(BaseAgent):
                 continue
 
             # Resolve test points
-            batch_tps = self._resolve_test_points(plan, batch_iface_ids, batch_tp_ids, batch_type)
+            batch_tps = self._resolve_test_points(plan, batch_iface_ids, batch_tp_ids, batch_type, batch_ifaces)
 
             logger.info("BatchController [%s] batch %d: %d interfaces, %d test points",
                         batch_type, iteration, len(batch_ifaces), len(batch_tps))
@@ -244,9 +275,9 @@ class BatchController(BaseAgent):
             # Save
             for case in cases:
                 if batch_type == "single":
-                    YamlWriter.write_single_case(case, output_dir)
+                    YamlWriter.write_single_case(case, output_dir, safe_mode=self._safe_mode)
                 else:
-                    YamlWriter.write_biz_flow(case, output_dir)
+                    YamlWriter.write_biz_flow(case, output_dir, safe_mode=self._safe_mode)
 
             all_cases.extend(cases)
             logger.info("BatchController: saved %d %s cases (total: %d)",
@@ -276,7 +307,27 @@ class BatchController(BaseAgent):
         generated_ids: List[str],
         batch_type: str,
     ) -> Dict[str, Any]:
-        """Ask the LLM to decide what to generate in the next batch."""
+        """Decide what to generate in the next batch.
+
+        Always computes remaining interfaces first:
+        - If none remaining → done.
+        - If remaining fits in one batch → use fallback (no LLM needed).
+        - Otherwise → ask LLM to prioritize.
+        """
+        remaining = [i for i in saved_interface_ids if i not in generated_ids]
+
+        if not remaining:
+            logger.info("BatchController: all interfaces covered for %s", batch_type)
+            return {"action": "done"}
+
+        if len(remaining) <= self._batch_size:
+            logger.info(
+                "BatchController: %d remaining interfaces fit in batch_size=%d, "
+                "using fallback (no LLM call)",
+                len(remaining), self._batch_size,
+            )
+            return {"action": "generate", "interface_ids": remaining, "test_point_ids": []}
+
         prompt = _BATCH_DECISION_USER.format(
             test_points_summary=test_points_summary,
             saved_interfaces=json.dumps(saved_interface_ids, ensure_ascii=False),
@@ -309,6 +360,16 @@ class BatchController(BaseAgent):
     # Helpers
     # ------------------------------------------------------------------
 
+    def _compute_progress(self, output_dir: str, batch_type: str) -> str:
+        """Build a stable progress string for progress-based step counting.
+
+        Returns something like 'single-[20:200]' meaning 20 of 200
+        single cases generated.
+        """
+        generated = YamlWriter.list_generated_case_ids(output_dir, batch_type)
+        interfaces = YamlWriter.list_interface_ids(output_dir)
+        return f"{batch_type}-[{len(generated)}:{len(interfaces)}]"
+
     @staticmethod
     def _summarize_test_points(plan: TestPlan, batch_type: str) -> str:
         """Build a compact summary of test points for the decision prompt."""
@@ -331,12 +392,24 @@ class BatchController(BaseAgent):
         iface_ids: List[str],
         tp_ids: List[str],
         batch_type: str,
+        interfaces: Optional[List[Dict]] = None,
     ) -> List[Dict]:
-        """Get the test point dicts relevant to the given interface ids."""
+        """Get the test point dicts relevant to the given interface ids.
+
+        Tries exact test_id match first, then falls back to api_name/url
+        matching via the provided interface dicts. If all strategies fail,
+        returns all available test points rather than nothing.
+        """
         result = []
         if batch_type == "single":
             for api_id in iface_ids:
                 points = plan.single_test_points.get(api_id, [])
+                if not points and interfaces:
+                    points = BatchController._match_test_points_by_interface(
+                        plan, api_id, interfaces
+                    )
+                if not points:
+                    continue
                 for p in points:
                     d = {
                         "test_id": p.test_id,
@@ -346,7 +419,47 @@ class BatchController(BaseAgent):
                     }
                     if not tp_ids or p.test_id in tp_ids:
                         result.append(d)
+
+        # Fallback: if no test points matched, return ALL available
+        if not result and batch_type == "single":
+            for api_id, points in plan.single_test_points.items():
+                for p in points:
+                    d = {
+                        "test_id": p.test_id,
+                        "description": p.description,
+                        "tag": p.tag,
+                        "scenario_type": p.scenario_type,
+                    }
+                    if not tp_ids or p.test_id in tp_ids:
+                        result.append(d)
+
         return result
+
+    @staticmethod
+    def _match_test_points_by_interface(
+        plan: TestPlan,
+        api_id: str,
+        interfaces: List[Dict],
+    ) -> List:
+        """Try to match test points by looking up the interface's api_name/url."""
+        iface = next((i for i in interfaces if str(i.get("test_id", "")) == api_id), None)
+        if not iface:
+            return []
+        candidates = [
+            iface.get("api_name", ""),
+            iface.get("name", ""),
+        ]
+        url = iface.get("url", "")
+        if url:
+            # Try URL path segments as keys
+            parts = [p for p in url.strip("/").split("/") if p]
+            for part in parts:
+                candidates.append(f"api_{part}")
+                candidates.append(part)
+        for candidate in candidates:
+            if candidate and candidate in plan.single_test_points:
+                return plan.single_test_points[candidate]
+        return []
 
     @staticmethod
     def _load_interfaces_from_disk(output_dir: str, ids: List[str]) -> List[Dict]:

@@ -73,8 +73,16 @@ def build_workflow(
     graph.add_node("generate_cases", generate_cases_node)
     graph.add_node("write_excel", write_excel_node)
 
+    # --- Entry routing (supports resume mode) ---
+    graph.add_node("entry", lambda s: s)
+    graph.set_entry_point("entry")
+    graph.add_conditional_edges(
+        "entry",
+        lambda s: "batch_controller" if s.get("resume") else "parse_docs",
+        {"parse_docs": "parse_docs", "batch_controller": "batch_controller"},
+    )
+
     # --- Edges ---
-    graph.set_entry_point("parse_docs")
     graph.add_edge("parse_docs", "analyze_api")
     graph.add_conditional_edges("analyze_api", route_after_api_confirm, {
         "loop": "analyze_api",

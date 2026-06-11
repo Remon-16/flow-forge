@@ -25,6 +25,7 @@ class Settings:
     enable_validation: bool = True
     max_validation_retries: int = 3
     output_format: str = "both"
+    max_steps_no_progress: int = 5
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -44,6 +45,7 @@ class Settings:
             "enable_validation": self.enable_validation,
             "max_validation_retries": self.max_validation_retries,
             "output_format": self.output_format,
+            "max_steps_no_progress": self.max_steps_no_progress,
         }
 
 
@@ -64,6 +66,7 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
     )
     batch_size = int(os.getenv("BATCH_SIZE", "10"))
     max_validation_retries = int(os.getenv("MAX_VALIDATION_RETRIES", "3"))
+    max_steps_no_progress = int(os.getenv("MAX_STEPS_NO_PROGRESS", "5"))
 
     return Settings(
         llm_provider=os.getenv("LLM_PROVIDER", "openai"),
@@ -82,4 +85,5 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
         enable_validation=enable_validation,
         max_validation_retries=max_validation_retries,
         output_format=os.getenv("OUTPUT_FORMAT", "both"),
+        max_steps_no_progress=max_steps_no_progress,
     )
