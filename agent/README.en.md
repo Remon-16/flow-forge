@@ -2,7 +2,7 @@
 
 **English** | [中文](README.md)
 
-A multi-agent system based on LangGraph + ReAct pattern that transforms requirement documents and API documentation into Excel test cases compatible with the executor.
+A multi-agent system based on LangGraph + ReAct pattern that transforms requirement documents and API documentation into YAML test cases (with optional Excel export) compatible with the executor.
 
 ## System Architecture
 

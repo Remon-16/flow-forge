@@ -2,7 +2,7 @@
 
 **中文** | [English](README.en.md)
 
-基于 LangGraph + ReAct 模式的多智能体系统，将需求文档和接口文档转化为符合执行器格式的 Excel 测试用例。
+基于 LangGraph + ReAct 模式的多智能体系统，将需求文档和接口文档转化为符合执行器格式的 YAML 测试用例（可选导出 Excel）。
 
 ## 系统架构
 

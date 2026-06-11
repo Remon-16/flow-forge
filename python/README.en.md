@@ -2,7 +2,7 @@
 
 **English** | [中文](README.md)
 
-A Python 3-based HTTP API automation test executor supporting Excel-driven case management, multi-threaded concurrent execution, parameter chaining across steps, automatic login state management, and self-contained HTML report output.
+A Python 3-based HTTP API automation test executor supporting YAML/Excel-driven case management, multi-threaded concurrent execution, parameter chaining across steps, automatic login state management, and self-contained HTML report output.
 
 ## System Architecture
 
@@ -12,9 +12,12 @@ graph TD
     ENV[env.yml] --> CM
     ENV_APP["env-{name}.yml"] --> CM
     CM --> |Merged Config| EXEC[Executor Factory]
+    YAML[YAML Case Dir/Files] --> YP[YAML Parser]
     EXCEL[Excel Case File] --> EP[Excel Parser]
-    EP --> |Single API Cases| API_EXEC[ApiTestExecutor]
-    EP --> |Business Flow Cases| BIZ_EXEC[BizFlowExecutor]
+    YP --> |Single API Cases| API_EXEC[ApiTestExecutor]
+    YP --> |Business Flow Cases| BIZ_EXEC[BizFlowExecutor]
+    EP --> |Single API Cases| API_EXEC
+    EP --> |Business Flow Cases| BIZ_EXEC
     API_EXEC --> LM[Login State Manager]
     BIZ_EXEC --> LM
     API_EXEC --> AE[Assertion Engine]
@@ -45,6 +48,10 @@ python/
 ├── excel_reader/
 │   ├── __init__.py
 │   └── excel_parser.py          # Multi-sheet Excel parsing and validation
+│
+├── yaml_reader/
+│   ├── __init__.py
+│   └── yaml_parser.py           # YAML case file/directory parsing
 │
 ├── executor/
 │   ├── __init__.py
@@ -98,20 +105,40 @@ reportName: APIReport
 
 Edit `env-{envName}.yml` to configure target applications and login info (see [Configuration](#configuration)).
 
-### 2. Prepare Excel Case File
+### 2. Prepare Case Files
+
+**Option 1: Use YAML Cases** (recommended, default agent output)
+
+The agent-generated YAML cases are stored under the `output/` directory:
+
+```
+output/
+├── single_cases/        # Single API test cases (one .yaml per case)
+└── biz_flows/           # Business flow cases (one .yaml per flow)
+```
+
+You can also write YAML cases manually. See [YAML Case Format](#yaml-case-format) for the specification.
+
+**Option 2: Use Excel Cases**
 
 Write test cases according to the [Excel Case Format](#excel-case-format).
 
 ### 3. Run Tests
 
 ```bash
-# Run with default config (single API cases only)
+# YAML directory mode (recommended): execute all YAML cases under a directory
+python main.py --yamlDir ../agent/output --envName local --apiMode all
+
+# YAML files mode: execute specific YAML files
+python main.py --yamlFiles ./case1.yaml,./case2.yaml --envName local
+
+# Excel mode (compatible): run with default config (single API cases only)
 python main.py
 
-# Specify environment and thread count, run all cases
+# Excel mode: specify environment and thread count, run all cases
 python main.py --envName prod --maxThread 10 --apiMode all
 
-# Full parameter example
+# Excel mode: full parameter example
 python main.py --config /path/to/env.yml --scriptType APITest --envName local \
                --caseFilePath ./test_cases.xlsx --maxThread 5 --reportName MyReport \
                --apiMode all
@@ -191,14 +218,94 @@ managerURL:
 | `--maxThread` | int | Max thread count, overrides env.yml |
 | `--reportName` | str | Report name, overrides env.yml |
 | `--apiMode` | str | Execution mode (`single`/`biz`/`all`), overrides env.yml |
+| `--yamlDir` | str | YAML case directory path; recursively scans for all `.yaml`/`.yml` files |
+| `--yamlFiles` | str | Comma-separated list of YAML case file paths |
 
 ### apiMode Values
 
 | Value | Behavior |
 |-------|----------|
-| `single` | Execute only Sheet 2 (single API cases) |
-| `biz` | Execute only Sheet 3+ (business flow cases) |
+| `single` | Execute only single API cases (YAML: `case_type=single`; Excel: Sheet 2) |
+| `biz` | Execute only business flow cases (YAML: `case_type=biz`; Excel: Sheet 3+) |
 | `all` | Execute both single API and business flow cases |
+
+## YAML Case Format
+
+Each test case is an independent `.yaml` file, with a `case_type` field indicating its type. YAML is the default output format of the agent and the recommended input format for the executor.
+
+### Single API Case (case_type: single)
+
+```yaml
+case_type: single
+test_id: TC_LOGIN_001
+api_name: User Login
+app_name: someApp
+method: POST
+url: /api/user/login
+request_head:
+  Content-Type: application/json
+request_body:
+  username: admin
+  password: "123456"
+status_code: 200
+assert_dict:
+  $.code: 0
+  $.msg: success
+tag: P0
+remark: Normal login verification
+```
+
+### Business Flow Case (case_type: biz)
+
+```yaml
+case_type: biz
+sheet_name: User Registration & Login Flow
+steps:
+  - step_id: Step01
+    api_name: Send Verification Code
+    app_name: someApp
+    method: POST
+    url: /api/sms/send
+    request_body:
+      phone: "13800138000"
+    status_code: 200
+    assert_dict:
+      $.code: 0
+    trans: "smsCode=Step01.data.code"
+  - step_id: Step02
+    api_name: User Registration
+    app_name: someApp
+    method: POST
+    url: /api/user/register
+    request_body:
+      phone: "13800138000"
+      code: "#{smsCode}"
+      password: "123456"
+    status_code: 200
+    assert_dict:
+      $.code: 0
+```
+
+### YAML Field Reference
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `case_type` | str | Case type: `single` (single API) or `biz` (business flow) |
+| `test_id` | str | Unique test case identifier (required for single API cases) |
+| `api_name` | str | API name/description |
+| `app_name` | str | Application name, matching the app key in `env-{envName}.yml` |
+| `method` | str | HTTP method: `GET`/`POST`/`PUT`/`DELETE`/`PATCH` |
+| `url` | str | API path (relative to app's `baseURL`), e.g., `/api/user/login` |
+| `status_code` | int | Expected HTTP status code |
+| `request_head` | dict | Request headers as key-value pairs |
+| `request_body` | dict | Request body as key-value pairs |
+| `assert_dict` | dict | Assertion dictionary; key = response JSON path, value = expected value |
+| `tag` | str | Tag (e.g., P0/P1/P2) |
+| `remark` | str | Remarks |
+| `sheet_name` | str | Business scenario name (required for business flow cases) |
+| `steps` | list | List of steps (required for business flow cases) |
+| `step_id` | str | Step identifier (must be unique within the same flow), e.g., `Step01` |
+| `trans` | str | Inter-step data passing definition; same syntax as [Trans Field Syntax](#trans-field-syntax) |
 
 ## Excel Case Format
 
@@ -301,6 +408,14 @@ Singleton global configuration management:
 - Reads Sheet 2 (single API) and Sheet 3+ (business flows) according to `apiMode`
 - Validates `Trans` fields and deduplicates `StepID` for business flows
 - Returns `parse_error` on parsing exceptions without blocking other cases
+
+### YAML Parser (`yaml_reader/yaml_parser.py`)
+
+- Provides two entry points: `parse_directory()` (recursive directory scan) and `parse_files()` (comma-separated file list)
+- Classifies cases by the `case_type` field: `single` for single API cases, `biz` for business flow cases
+- When `case_type` is missing, auto-infers: `steps` present → business flow, `test_id` present → single API
+- Filters by `apiMode` (`single` returns only singles, `biz` returns only biz, `all` returns both)
+- Returns the same data structure as `ExcelParser.parse()`, seamlessly integrating into the execution pipeline
 
 ### Executors
 

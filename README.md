@@ -3,12 +3,12 @@
 **中文** | [English](README.en.md)
 
 ![Development Status](https://img.shields.io/badge/状态-早期版本-orange) 
-![Version](https://img.shields.io/badge/版本-v0.1.2--alpha-blue)
-![Branch](https://img.shields.io/badge/开发分支-dev_first-brightgreen)
+![Version](https://img.shields.io/badge/版本-v0.2.0--alpha-blue)
+![Branch](https://img.shields.io/badge/开发分支-dev-brightgreen)
 
-基于 AI 智能体的接口自动化测试框架。输入需求文档和接口文档，智能体自动生成测试用例 Excel；将 Excel 交给命令行执行器，即可得到测试报告。执行器可无缝集成 Jenkins，实现 CI/CD 流水线。
+基于 AI 智能体的接口自动化测试框架。输入需求文档和接口文档，智能体自动生成测试用例 YAML 文件（可选导出 Excel）；将用例交给命令行执行器，即可得到测试报告。执行器可无缝集成 Jenkins，实现 CI/CD 流水线。
 
-AI智能体可以实现快速的用例输出，但由于AI生成可能产生幻觉，建议人工审核输出的用例。为了更方便人工审核，测试用例和参数放在了同一个Excel内，详细规则见 [agent/README.md](./agent/README.md)。
+AI智能体可以实现快速的用例输出，但由于AI生成可能产生幻觉，建议人工审核输出的用例。测试用例以 YAML 文件形式独立存储，每个用例一个文件，便于 Git 版本管理和增量更新，也方便人工逐文件审核。详细规则见 [agent/README.md](./agent/README.md)。
 
 ## 版本说明
 
@@ -25,6 +25,10 @@ python agent/main.py --requirement docs/req.md --api docs/api.yaml --output test
 执行器使用示例，详情见 [python/README.md](./python/README.md)。
 
 ```bash
+# 方式一：使用 YAML 用例
+python main.py --config /path/to/env.yml --envName local --yamlDir ./output --apiMode all
+
+# 方式二：使用 Excel 用例
 python main.py --config /path/to/env.yml --scriptType APITest --envName local \
                --caseFilePath ./test_cases.xlsx --maxThread 5 --reportName MyReport \
                --apiMode all
@@ -47,7 +51,7 @@ graph TD
     KB[(Grep 检索)] -.-> AGENT
     AGENT --> |plan.md| REVIEW[人工审核]
     REVIEW --> |审核确认| AGENT
-    AGENT --> |testcase.xlsx| EXEC[测试执行器]
+    AGENT --> |YAML/Excel 用例| EXEC[测试执行器]
     EXEC --> LM[登录态管理器]
     EXEC --> AE[断言引擎]
     EXEC --> |HTML 报告| REPORT[测试报告]
@@ -57,10 +61,10 @@ graph TD
 
 整个框架由两个核心组件构成：
 
-- **[agent/](./agent/)** — AI 用例生成智能体：读取需求文档 + 接口文档，经过"计划生成 → 人工审核 → 用例编排"两阶段流水线，输出符合执行器格式的 Excel 用例文件。
-- **[python/](./python/)** — 接口测试执行器：读取 Excel 用例文件，自动管理登录态，多线程执行 HTTP 请求，运行断言，生成自包含 HTML 测试报告。
+- **[agent/](./agent/)** — AI 用例生成智能体：读取需求文档 + 接口文档，经过"计划生成 → 人工审核 → 用例编排"两阶段流水线，输出测试用例 YAML 文件（可选导出 Excel）。
+- **[python/](./python/)** — 接口测试执行器：读取 YAML 用例目录/文件或 Excel 用例文件，自动管理登录态，多线程执行 HTTP 请求，运行断言，生成自包含 HTML 测试报告。
 
-两个组件之间通过 **Excel 文件** 作为契约——智能体生成什么格式，执行器就解析什么格式。用户可以自由选择：用智能体自动生成用例，或手动编写 Excel 后直接用执行器运行。
+两个组件之间通过 **YAML 文件** 作为主要契约（Excel 仍兼容）——智能体生成什么格式，执行器就解析什么格式。用户可以自由选择：用智能体自动生成用例，手动编写 YAML/Excel 用例后直接用执行器运行，或使用 Excel 编辑器编辑用例。
 
 ## 项目基本结构
 
@@ -68,7 +72,8 @@ graph TD
 flow-forge/
 ├── README.md                     # 项目总览（本文件）
 ├── agent/                        # AI 用例生成智能体
-└── python/                       # 接口测试执行器
+├── python/                       # 接口测试执行器
+└── case-editor/                  # Excel 用例在线编辑器
 ```
 
 ## 工作流程
@@ -85,25 +90,25 @@ flow-forge/
   人工审核、修改测试计划
        │
        ▼
-  AI 智能体生成 Excel 用例（testcase.xlsx）
+  AI 智能体生成 YAML 用例（output/ 目录）
        │
        ▼
-  人工审核 Excel（可选修改参数）
+  人工审核 YAML 用例（可选修改参数）
        │
        ▼
-  执行器运行 testcase.xlsx
+  执行器运行 YAML 目录
        │
        ▼
   查看 HTML 测试报告
 ```
 
-### 方式二：手动编写 Excel + 执行器运行
+### 方式二：手动编写 YAML/Excel + 执行器运行
 
 ```text
-手动编写 Excel 用例（按执行器格式）
+手动编写 YAML 或 Excel 用例（按执行器格式）
        │
        ▼
-  执行器运行 testcase.xlsx
+  执行器运行用例（--yamlDir 或 --caseFilePath）
        │
        ▼
   查看 HTML 测试报告
@@ -125,7 +130,7 @@ flow-forge/
 
 ## 设计理念
 
-- **Excel 即契约**：智能体和执行器之间通过 Excel 文件解耦，用户可自由选择生成方式
+- **YAML/Excel 即契约**：智能体和执行器之间通过 YAML/Excel 文件解耦，用户可自由选择生成方式
 - **人工审核节点**：AI 生成的测试计划需要人工确认后才生成最终用例，确保质量可控
 - **命令行驱动**：执行器纯 CLI 设计，无 GUI 依赖，适配 CI/CD 环境
 - **自包含报告**：HTML 报告内嵌所有样式和脚本，可直接在浏览器打开，无需 Web 服务器
