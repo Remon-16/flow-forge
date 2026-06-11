@@ -10,6 +10,7 @@ import type {
 import { readExcelFromBuffer } from '../utils/excel-reader'
 import { downloadExcel } from '../utils/excel-writer'
 import { validateRelevanceID, findDuplicateStepIDs, validateTrans } from '../utils/validators'
+import { isElectron, writeFileBuffer, readFileBuffer } from '../utils/electron-bridge'
 
 let uidCounter = 0
 function generateUid(): string {
@@ -35,33 +36,42 @@ export const useWorkbookStore = defineStore('workbook', () => {
 
   // --- Actions ---
 
-  function openFile(file: File) {
-    return new Promise<void>((resolve, reject) => {
-      loading.value = true
-      const reader = new FileReader()
-      reader.onload = () => {
-        try {
-          const data = readExcelFromBuffer(reader.result as ArrayBuffer)
-          filePath.value = null // Browser can't retain file path
-          fileName.value = file.name
-          apiDefinitions.value = data.apiDefinitions
-          singleCases.value = data.singleCases
-          bizFlows.value = data.bizFlows
-          modified.value = false
-          runAllValidations()
-          loading.value = false
-          resolve()
-        } catch (err) {
-          loading.value = false
-          reject(err)
-        }
+  async function openFile(file: File | string) {
+    loading.value = true
+    try {
+      let buffer: ArrayBuffer
+      let name: string | null = null
+      let filePathToSet: string | null = null
+
+      if (typeof file === 'string') {
+        // Electron mode: file is a path string
+        buffer = await readFileBuffer(file)
+        name = file.split(/[/\\]/).pop() || null
+        filePathToSet = file
+      } else {
+        // Browser mode: file is a File object
+        buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as ArrayBuffer)
+          reader.onerror = () => reject(new Error('Failed to read file'))
+          reader.readAsArrayBuffer(file)
+        })
+        name = file.name
       }
-      reader.onerror = () => {
-        loading.value = false
-        reject(new Error('读取文件失败'))
-      }
-      reader.readAsArrayBuffer(file)
-    })
+
+      const data = readExcelFromBuffer(buffer)
+      filePath.value = filePathToSet
+      fileName.value = name
+      apiDefinitions.value = data.apiDefinitions
+      singleCases.value = data.singleCases
+      bizFlows.value = data.bizFlows
+      modified.value = false
+      runAllValidations()
+      loading.value = false
+    } catch (err) {
+      loading.value = false
+      throw err
+    }
   }
 
   function newWorkbook() {
@@ -75,8 +85,38 @@ export const useWorkbookStore = defineStore('workbook', () => {
 
   async function save() {
     const data = buildData()
-    const name = fileName.value || 'testcase.xlsx'
-    await downloadExcel(data, name)
+    if (isElectron && filePath.value) {
+      const { createWorkbook } = await import('../utils/excel-writer')
+      const wb = await createWorkbook(data)
+      const buffer = await wb.xlsx.writeBuffer()
+      await writeFileBuffer(filePath.value, buffer)
+    } else {
+      const name = fileName.value || 'testcase.xlsx'
+      await downloadExcel(data, name)
+    }
+    modified.value = false
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async function saveAs() {
+    const data = buildData()
+    if (isElectron && window.electronAPI) {
+      const newPath = await (window.electronAPI as any).saveFileDialog?.({
+        filters: [{ name: 'Excel Files', extensions: ['xlsx'] }],
+        defaultPath: fileName.value || 'testcase.xlsx',
+      })
+      if (newPath) {
+        const { createWorkbook } = await import('../utils/excel-writer')
+        const wb = await createWorkbook(data)
+        const buffer = await wb.xlsx.writeBuffer()
+        await writeFileBuffer(newPath, buffer)
+        filePath.value = newPath
+        fileName.value = newPath.split(/[/\\]/).pop() || null
+      }
+    } else {
+      const name = fileName.value || 'testcase.xlsx'
+      await downloadExcel(data, name)
+    }
     modified.value = false
   }
 
@@ -108,6 +148,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
       RequestBody: null,
       StatusCode: 200,
       AssertDict: null,
+      AssertRules: null,
       Remark: '',
     })
     markModified()
@@ -135,6 +176,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
       RequestBody: null,
       StatusCode: 200,
       AssertDict: null,
+      AssertRules: null,
       Remark: '',
       _relevanceValid: true,
     })
@@ -180,6 +222,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
       RequestBody: null,
       StatusCode: 200,
       AssertDict: null,
+      AssertRules: null,
       Tag: 'P0',
       Remark: '',
       _relevanceValid: true,
@@ -282,6 +325,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
     openFile,
     newWorkbook,
     save,
+    saveAs,
     buildData,
     markModified,
     // API defs

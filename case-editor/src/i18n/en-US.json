@@ -21,6 +21,7 @@
     "RequestBody": "Request Body",
     "StatusCode": "Status Code",
     "AssertDict": "Assert Dict",
+    "AssertRules": "Assert Rules",
     "Remark": "Remark",
     "RelevanceID": "Relevance ID",
     "Tag": "Tag",
@@ -89,7 +90,50 @@
     "col": "Col"
   },
   "header": {
-    "title": "Flow Forge — Test Case Editor"
+    "title": "Flow Forge — Test Case Editor",
+    "excelEditor": "Excel Editor",
+    "yamlEditor": "YAML Editor",
+    "backHome": "Back to Home"
   },
-  "loading": "Loading file..."
+  "loading": "Loading file...",
+  "home": {
+    "title": "Flow Forge Test Case Editor",
+    "subtitle": "Choose an editor mode to start editing test cases",
+    "excelTitle": "Excel Editor",
+    "excelDesc": "Edit test case files in .xlsx format. Ideal for small to medium projects, with tabular editing for API definitions, single-API cases, and business flow cases.",
+    "yamlTitle": "YAML Editor",
+    "yamlDesc": "Edit test case files in .yaml format. Form-based structured editing with a code-editor-style directory browser — one case per file.",
+    "open": "Open Editor"
+  },
+  "yaml": {
+    "comingSoon": "YAML Editor coming soon...",
+    "openDir": "Open Directory",
+    "openFile": "Open File",
+    "save": "Save",
+    "saveAs": "Save As",
+    "newFile": "New File",
+    "newFolder": "New Folder",
+    "delete": "Delete",
+    "rename": "Rename",
+    "noFileSelected": "Please select a YAML file",
+    "selectFileHint": "Select a file from the left file tree, or click 'Open File'",
+    "formView": "Form View",
+    "rawView": "YAML Text",
+    "splitView": "Split View"
+  },
+  "assertRules": {
+    "title": "Advanced Assertion Rules",
+    "addRule": "Add Rule",
+    "batchPaste": "Batch Paste",
+    "batchPasteHint": "One rule per line. Paste to auto-parse.",
+    "empty": "No assertion rules",
+    "rulePlaceholder": "e.g. $.data.code == 0",
+    "errors": {
+      "invalidFormat": "Invalid format: expected 'PATH OPERATOR [EXPECTED]'",
+      "unknownOperator": "Unsupported operator",
+      "pathSyntaxError": "Path syntax error",
+      "unknownFunction": "Unsupported function",
+      "missingExpected": "Missing expected value"
+    }
+  }
 }

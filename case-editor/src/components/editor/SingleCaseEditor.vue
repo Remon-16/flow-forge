@@ -5,6 +5,7 @@ import { useWorkbookStore } from '../../stores/workbook'
 import { SINGLE_CASE_COLUMNS, TAG_LEVELS, JSON_COLUMNS } from '../../types/excel'
 import type { SingleTestCase } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
+import AssertRulesEditor from './AssertRulesEditor.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
 const { t } = useI18n()
@@ -183,6 +184,14 @@ const relevanceOptions = computed(() => workbook.validTestIds)
                 :value="String(record[col] ?? '')"
                 size="small"
                 @change="(e: any) => onCellChange(index, col, e.target.value)"
+              />
+            </template>
+
+            <!-- AssertRules editor -->
+            <template v-else-if="col === 'AssertRules'">
+              <AssertRulesEditor
+                :modelValue="record[col] as string[] | null"
+                @update:modelValue="(v: string[] | null) => onCellChange(index, col, v)"
               />
             </template>
 

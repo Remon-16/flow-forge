@@ -34,7 +34,7 @@ python main.py --config /path/to/env.yml --scriptType APITest --envName local \
                --apiMode all
 ```
 
-A web-based Excel editor has been implemented. Users can import Excel test cases for editing, with built-in format validation and a user-friendly JSON editor. See [case-editor/README.en.md](./case-editor/README.en.md) for details.
+An Electron desktop test case editor has been implemented. It supports visual editing of both Excel (.xlsx) and YAML (.yaml) test case formats, featuring form-based YAML editing, an advanced assertion rule editor, a JSON tree editor, and more. See [case-editor/README.en.md](./case-editor/README.en.md) for details.
 
 ## Roadmap
 
@@ -73,7 +73,7 @@ flow-forge/
 ├── README.en.md                  # Project overview (this file)
 ├── agent/                        # AI Case Generation Agent
 ├── python/                       # API Test Executor
-└── case-editor/                  # Excel Case Online Editor
+└── case-editor/                  # Electron Desktop Test Case Editor (Excel + YAML)
 ```
 
 ## Workflow

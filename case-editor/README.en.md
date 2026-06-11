@@ -2,46 +2,71 @@
 
 **English** | [中文](README.md)
 
-A visual editor for Flow Forge test case Excel files, built with Vue 3 and Ant Design Vue.
+A desktop test case editor built with Vue 3 + Ant Design Vue + Electron, supporting visual editing of both Excel (.xlsx) and YAML (.yaml) test case formats.
 
 ## Quick Start
 
 ```bash
 cd case-editor
 npm install
+
+# Browser dev mode
 npm run dev
+
+# Electron desktop app dev mode
+npm run dev:electron
 ```
 
-Open `http://localhost:5173` in your browser.
+- Browser mode: visit `http://localhost:5173`
+- Desktop mode: Electron window launches automatically
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Framework | Vue 3 (Composition API + `<script setup>`) |
+| Frontend Framework | Vue 3 (Composition API + `<script setup>`) |
 | UI Library | Ant Design Vue 4.x |
-| Build Tool | Vite 5.x |
+| Build Tool | Vite 8.x |
+| Desktop Framework | Electron 33.x |
 | State Management | Pinia |
 | Internationalization | vue-i18n 9.x |
-| Excel I/O | SheetJS (xlsx) |
+| Excel I/O | SheetJS (xlsx) + ExcelJS |
+| YAML Parsing | js-yaml 4.x |
 | Language | TypeScript |
 
 ## Features
 
-- Open, edit, and save Excel test case files (`.xlsx` format)
+### General
+- Home page with editor selection (Excel / YAML)
+- Electron desktop app with native local file save to original path
+- Bilingual Chinese/English interface with on-the-fly switching
+- Save (Ctrl+S) and Save As (Ctrl+Alt+S) keyboard shortcuts
+
+### Excel Editor
+- Open / edit / save Excel test case files (.xlsx format)
 - API definition editing (table view with add/delete row support)
 - Single-API test case editing (with RelevanceID cross-reference validation)
 - Business flow test case editing (StepID uniqueness check, Trans field format validation)
-- **Visual JSON editor** — turns JSON fields (RequestHead, RequestBody, AssertDict, etc.) into an interactive tree editor:
+- **Visual JSON Editor**: turns JSON fields (RequestHead, RequestBody, AssertDict, etc.) into an interactive tree editor
   - Paste a JSON string to auto-parse into a tree structure
-  - Each field displays key, type, and value — all three columns are editable
+  - Each field displays key / type / value — all three columns are editable
   - Supports 6 types: string, number, boolean, date, list, dictionary
-  - Each type has a corresponding value input control
   - Recursive editing for nested Dict/List structures
-- Real-time validation (RelevanceID existence, StepID uniqueness, Trans format) — invalid cells are highlighted in red
-- Bilingual Chinese/English interface with on-the-fly switching
-- Save (Ctrl+S) and Save As (Ctrl+Alt+S) keyboard shortcuts
-- Windows-style layout
+- **Advanced Assertion Editor (AssertRules)**: per-rule editing with real-time format validation
+  - Supports 12 operators: `==` `!=` `>` `>=` `<` `<=` `=~` `in` `contains` `not_contains` `is_null` `is_not_null` `typeof`
+  - Supports 3 functions: `.length()` `SUM()` `SUM_PRODUCT()`
+  - Real-time format error hints (operator validity, path syntax, function names, missing expected values, etc.)
+- Real-time validation (RelevanceID existence, StepID uniqueness, Trans format) — invalid cells highlighted in red
+
+### YAML Editor
+- **Form-based editing**: not a text editor — edit YAML cases through structured form fields
+- **Right-side YAML preview panel**: toggle between preview / direct raw YAML text editing (similar to Markdown editor split view)
+- Auto-detect case type via `case_type` field: `single` (single-API case) / `biz` (business flow case)
+- Open a directory (left file tree browsing, VS Code style) or open a single .yaml file
+- Single-API form: full fields (test_id, relevance_id, tag, api_name, method, url, request_head/body, assert_dict/rules, etc.)
+- Business flow form: sheet_name + step list (draggable sort), each step with full fields
+- Reuses Excel editor's JSON Editor and AssertRules Editor
+- Field validation mirrors Excel editor (StepID duplicate, Trans format)
 
 ## Architecture
 
@@ -49,41 +74,46 @@ Open `http://localhost:5173` in your browser.
 
 ```mermaid
 graph TD
-    App[App.vue] --> Header[AppHeader - Top Menu Bar]
-    App --> Sidebar[AppSidebar - Left Navigation]
-    App --> Content[router-view - Main Editing Area]
-    App --> Status[StatusBar - Bottom Status Bar]
+    App[App.vue] --> Home[HomePage - Editor Selection]
+    App --> Layout[Editor Layout - Header + Sidebar + Content + StatusBar]
 
-    Content --> EditorView[EditorView.vue]
-    EditorView --> ApiDefEditor[ApiDefEditor - API Definition Editor]
-    EditorView --> SingleCaseEditor[SingleCaseEditor - Single-API Case Editor]
-    EditorView --> BizFlowEditor[BizFlowEditor - Business Flow Editor]
+    Layout --> Excel[Excel Editor /excel]
+    Layout --> YAML[YAML Editor /yaml]
 
-    ApiDefEditor --> JsonEditor[JsonEditor - JSON Editor Modal]
-    SingleCaseEditor --> JsonEditor
-    BizFlowEditor --> JsonEditor
+    Excel --> ApiDefEditor[ApiDefEditor - API Definition Editor]
+    Excel --> SingleCaseEditor[SingleCaseEditor - Single-API Case Editor]
+    Excel --> BizFlowEditor[BizFlowEditor - Business Flow Editor]
+    Excel --> AssertRulesEditor[AssertRulesEditor - Advanced Assertion Editor]
 
-    JsonEditor --> JsonNode[JsonNode - Recursive Node Component]
-    JsonNode --> ValueInput[ValueInput - Value Input Component]
-    JsonNode --> JsonNode
+    YAML --> FileTree[YamlFileTree - File Tree Sidebar]
+    YAML --> SingleForm[SingleCaseForm - Single-API Form]
+    YAML --> BizForm[BizFlowForm - Business Flow Form]
+    YAML --> RawView[YamlRawView - Raw YAML View]
+    YAML --> StepEditor[StepEditor - Step Sub-form]
 ```
 
 ### Data Flow
 
 ```mermaid
 graph TD
-    OPEN[Open Excel File] --> READ[xlsx library reads raw data]
-    READ --> PARSE[excel-reader.ts parses + merges with API definitions]
-    PARSE --> STORE[Pinia workbook store]
-    STORE --> API[ApiDefEditor]
-    STORE --> SINGLE[SingleCaseEditor]
-    STORE --> BIZ[BizFlowEditor]
-    API --> VALIDATE[validators.ts - real-time validation]
-    SINGLE --> VALIDATE
-    BIZ --> VALIDATE
-    VALIDATE --> STORE
-    STORE --> WRITE[xlsx library writes back to Excel]
-    WRITE --> SAVE[Save / Save As to file]
+    subgraph Excel Editor
+        OPEN_E[Open Excel File] --> READ_E[xlsx Library Read]
+        READ_E --> STORE_E[workbook store]
+        STORE_E --> EDITORS[ApiDefEditor / SingleCaseEditor / BizFlowEditor]
+        EDITORS --> STORE_E
+        STORE_E --> WRITE_E[ExcelJS Write Back]
+        WRITE_E --> SAVE_E[Save to Local / Download]
+    end
+
+    subgraph YAML Editor
+        OPEN_Y[Open YAML Dir/File] --> READ_Y[IPC File Read]
+        READ_Y --> PARSE_Y[js-yaml Parse]
+        PARSE_Y --> STORE_Y[yaml-store]
+        STORE_Y --> FORMS[SingleCaseForm / BizFlowForm]
+        FORMS --> STORE_Y
+        STORE_Y --> STRINGIFY[js-yaml Serialize]
+        STRINGIFY --> WRITE_Y[IPC Write to Original Path]
+    end
 ```
 
 ## Project Structure
@@ -95,90 +125,136 @@ case-editor/
 ├── package.json
 ├── vite.config.ts
 ├── tsconfig.json
+├── electron-builder.yml              # Electron packaging config
 ├── index.html
+├── electron/                          # Electron main process
+│   ├── main.ts                        # Main process entry
+│   ├── preload.ts                     # Preload script (IPC bridge)
+│   └── ipc/
+│       ├── file-handlers.ts           # File read/write IPC
+│       └── dialog-handlers.ts         # System dialog IPC
 └── src/
-    ├── main.ts                     # Entry point, plugin registration
-    ├── App.vue                     # Root component, global layout
-    ├── router/index.ts             # Vue Router configuration
+    ├── main.ts                        # Renderer process entry
+    ├── App.vue                        # Root component, conditional layout
+    ├── env.d.ts                       # Type declarations
+    ├── router/index.ts                # Three routes: /, /excel, /yaml
     ├── stores/
-    │   ├── workbook.ts             # Workbook data (core store)
-    │   ├── editor.ts               # Editor UI state
-    │   └── settings.ts             # Settings (language)
+    │   ├── workbook.ts                # Excel workbook data (core store)
+    │   ├── yaml-store.ts             # YAML editor data store
+    │   ├── editor.ts                  # Editor UI state
+    │   └── settings.ts               # Settings (language)
     ├── i18n/
-    │   ├── index.ts                # vue-i18n initialization
-    │   ├── zh-CN.json              # Chinese locale
-    │   └── en-US.json              # English locale
+    │   ├── index.ts                   # vue-i18n initialization
+    │   ├── zh-CN.json                 # Chinese locale
+    │   └── en-US.json                 # English locale
     ├── types/
-    │   ├── excel.ts                # Excel data type definitions
-    │   └── editor.ts              # Editor UI type definitions
+    │   ├── excel.ts                   # Excel data type definitions
+    │   ├── yaml.ts                    # YAML data type definitions
+    │   └── editor.ts                  # Editor UI type definitions
     ├── utils/
-    │   ├── excel-reader.ts         # Excel read + merge logic
-    │   ├── excel-writer.ts         # Excel write logic
-    │   ├── validators.ts           # Validation utilities
-    │   ├── deep-merge.ts           # Deep merge utility
-    │   └── json-helper.ts          # JSON parse/serialize helpers
+    │   ├── excel-reader.ts            # Excel read + parse
+    │   ├── excel-writer.ts            # Excel write logic
+    │   ├── yaml-parser.ts            # YAML parse / serialize
+    │   ├── assert-rules-validator.ts  # AssertRules format validation engine
+    │   ├── validators.ts             # General validation utilities
+    │   ├── electron-bridge.ts        # Electron IPC bridge + browser fallback
+    │   ├── deep-merge.ts             # Deep merge utility
+    │   └── json-helper.ts            # JSON parse / serialize helpers
     ├── components/
     │   ├── layout/
-    │   │   ├── AppHeader.vue       # Top menu bar
-    │   │   ├── AppSidebar.vue      # Left sheet navigation
-    │   │   └── StatusBar.vue       # Bottom status bar
+    │   │   ├── AppHeader.vue          # Top menu bar
+    │   │   ├── AppSidebar.vue         # Left navigation
+    │   │   └── StatusBar.vue          # Bottom status bar
     │   ├── editor/
-    │   │   ├── ApiDefEditor.vue    # API definition editor
-    │   │   ├── SingleCaseEditor.vue # Single-API case editor
-    │   │   └── BizFlowEditor.vue   # Business flow editor
+    │   │   ├── ApiDefEditor.vue       # API definition editor
+    │   │   ├── SingleCaseEditor.vue   # Single-API case editor
+    │   │   ├── BizFlowEditor.vue      # Business flow editor
+    │   │   └── AssertRulesEditor.vue  # Advanced assertion rule editor
+    │   ├── yaml-editor/
+    │   │   ├── YamlFileTree.vue       # YAML file tree sidebar
+    │   │   ├── SingleCaseForm.vue     # Single-API case form
+    │   │   ├── BizFlowForm.vue        # Business flow form
+    │   │   ├── StepEditor.vue         # Step sub-form
+    │   │   └── YamlRawView.vue        # Raw YAML text view
     │   └── json-editor/
-    │       ├── JsonEditor.vue      # JSON editor modal
-    │       ├── JsonNode.vue        # Recursive node component
-    │       └── ValueInput.vue      # Value input component
+    │       ├── JsonEditor.vue         # JSON editor modal
+    │       ├── JsonNode.vue           # Recursive node component
+    │       └── ValueInput.vue         # Value input component
     ├── views/
-    │   └── EditorView.vue          # Main editor view
+    │   ├── HomePage.vue              # Home page (editor selection)
+    │   ├── EditorView.vue            # Excel editor view
+    │   └── YamlEditorView.vue        # YAML editor view
     └── assets/styles/
-        └── global.css              # Global styles
+        └── global.css                 # Global styles
 ```
 
 ## User Guide
 
-### Opening a File
+### Home Page
 
-Click the **Open** button in the top toolbar (or press Ctrl+O), then select a `.xlsx` test case file. The editor will automatically read and merge the data.
+The app opens to a home page with two selection cards:
+- **Excel Editor**: click to enter Excel spreadsheet editing mode
+- **YAML Editor**: click to enter YAML form-based editing mode
 
-### Editing API Definitions
+### Excel Editor
+
+#### Opening a File
+
+Click the **Open** button in the top toolbar (or press Ctrl+O), then select a `.xlsx` test case file. In Electron mode, the file is read directly from the local path; in browser mode, it is read via a file dialog.
+
+#### Editing API Definitions
 
 Click **API Definitions** in the left sidebar to switch to the API definition sheet. Edit fields directly in the table:
 
-- Plain text columns (TestID, APIName, etc.): direct input
+- Plain text columns: direct input
 - Method column: dropdown to select HTTP method
-- StatusCode column: numeric input
-- RequestHead / RequestBody / AssertDict columns: click the button to open the JSON editor
+- StatusCode column: text input
+- RequestHead / RequestBody / AssertDict columns: click the button to open the JSON Editor
+- AssertRules column: per-rule editor with real-time format validation
 
-### JSON Editor
+#### Editing AssertRules
 
-1. **Paste mode**: paste a JSON string into the text area at the top and click **Parse** to auto-generate the tree structure
-2. **Tree editing mode**:
-   - Each field displays three columns: **key** (field name), **type** (data type), **value** (current value)
-   - Changing the type automatically resets the corresponding value
-   - Dict/List types can be expanded/collapsed and support recursive child node editing
-   - Click **Add Field** to add a top-level field
-3. Click **OK** to save changes, or **Cancel** to discard them
+The AssertRules column provides a per-rule editor, with each rule independently entered and validated:
+- Click **Add Rule** to add a new empty rule row
+- Enter the rule in the input field (e.g., `$.data.code == 0`)
+- Correct format shows a green ✓ at the end of the row; incorrect format shows a red ✗ with a specific error message
+- **Batch Paste** is supported: paste multiple lines of rules at once, and they will be automatically split
 
-### Editing Business Flows
+#### Saving Files
 
-Click a business flow name in the left sidebar to switch to that sheet:
+- **Save** (Ctrl+S): in Electron mode, writes directly back to the original file path; in browser mode, downloads a new file
+- **Save As** (Ctrl+Alt+S): opens a save dialog to choose a new path
 
-- **StepID**: duplicate values are highlighted in red
-- **RelevanceID**: type manually or select from a dropdown (sourced from the API definition TestID column); non-existent IDs are highlighted in red
-- **Trans**: format validation (`key=value, key=value...`); mismatched brackets or Chinese characters are flagged in red with an error tooltip
-- Steps can be reordered (move up / move down)
+### YAML Editor
 
-### Saving Files
+#### Opening Cases
 
-- **Export** (Ctrl+S): downloads a new Excel file
+- **Open Directory**: select a directory containing .yaml files; a file tree appears on the left
+- **Open File**: directly select a single .yaml file to edit
 
-### Language Switching
+#### Form Editing
 
-Use the dropdown on the right side of the top menu bar to switch between Chinese and English. The selection takes effect immediately and is persisted to the browser's localStorage.
+The form type automatically switches based on the `case_type` field in the YAML file:
+- `single`: single-API case form (test_id, relevance_id, api_name, method, url, etc.)
+- `biz`: business flow form (sheet_name + step list)
+
+All form fields correspond to columns in the Excel editor. JSON fields reuse the JSON Editor, and assertion rules reuse the AssertRules Editor.
+
+#### YAML Preview Panel
+
+The right-side panel can be toggled between:
+- Collapsed: only shows the toggle button
+- Preview mode: displays the serialized YAML text from the current form data in real time (read-only)
+- Edit mode: allows direct editing of YAML text; auto-parses back to the form on blur
+
+#### Saving
+
+- **Save** (Ctrl+S): writes directly back to the original file
+- **Save As** (Ctrl+Alt+S): opens a save dialog to choose a new path
 
 ## Validation Rules
+
+### Excel Editor
 
 | Rule | Applies To | Description | UI Indicator |
 |------|-----------|-------------|--------------|
@@ -187,6 +263,44 @@ Use the dropdown on the right side of the top menu bar to switch between Chinese
 | Trans format | Business flows | `key=value, key=value` format | Red cell + tooltip |
 | Trans brackets | Business flows | `[` and `]` counts must match; `(` and `)` counts must match | Red cell + tooltip |
 | Trans Chinese chars | Business flows | Chinese characters are not allowed | Red cell + tooltip |
+| AssertRules format | All | Operator validity, path syntax, function names, expected values | Red ✗ icon + tooltip |
+| JSON format | JSON fields | Must be valid JSON string | Red hint below text area |
+
+### YAML Editor
+
+| Rule | Applies To | Description | UI Indicator |
+|------|-----------|-------------|--------------|
+| StepID | Business flows | Must be unique within the same file | Red input highlight |
+| Trans format | Business flows | `key=value, key=value` format, bracket matching, no Chinese chars | Red input + tooltip |
+| AssertRules format | All | Same as Excel editor | Red ✗ icon + tooltip |
+
+## AssertRules Operators & Functions Reference
+
+### Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `==` | Equal to | `$.data.code == 0` |
+| `!=` | Not equal to | `$.data.status != ERROR` |
+| `>` | Greater than (numeric) | `$.data.price > 10.5` |
+| `>=` | Greater than or equal (numeric) | `$.data.total >= 100` |
+| `<` | Less than (numeric) | `$.data.age < 150` |
+| `<=` | Less than or equal (numeric) | `$.data.size <= 1000` |
+| `=~` | Regex match | `$.data.time =~ ^\\d{4}-\\d{2}-\\d{2}$` |
+| `in` | Value in list | `$.data.status in ["PAID","PENDING"]` |
+| `contains` | Contains substring | `$.data.tags contains "premium"` |
+| `not_contains` | Does not contain substring | `$.data.error not_contains "timeout"` |
+| `is_null` | Is null/empty | `$.data.error is_null` |
+| `is_not_null` | Is not null/empty | `$.data.token is_not_null` |
+| `typeof` | Type check | `$.data.count typeof int` |
+
+### Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `.length()` | Array length | `$.data.list.length() == 3` |
+| `SUM(path)` | Sum over wildcard path | `SUM($.data.list[*].price)` |
+| `SUM_PRODUCT(p1, p2)` | Element-wise product sum over two wildcard paths | `SUM_PRODUCT($.data.items[*].price, $.data.items[*].qty)` |
 
 ## Keyboard Shortcuts
 
@@ -202,29 +316,35 @@ Use the dropdown on the right side of the top menu bar to switch between Chinese
 ### Local Development
 
 ```bash
-npm install
+# Pure browser mode (no Electron dependency)
 npm run dev
+
+# Electron desktop app mode
+npm run dev:electron
 ```
 
-### Production Build
+### Build
 
 ```bash
+# Pure web build (static file deployment)
 npm run build
+
+# Electron desktop app packaging
+npm run build:electron
 ```
 
-Output goes to the `dist/` directory, which can be deployed to any static file server.
+- Web build output goes to `dist/`
+- Electron package output goes to `dist-electron/`
 
 ### Extending the Editor
 
 - **Add a new JSON type**: add the type to `JsonType` in `types/excel.ts`, then add the corresponding input control in `ValueInput.vue`
-- **Add a new validation rule**: add the validation function in `utils/validators.ts`, then invoke it in `runAllValidations()` in `stores/workbook.ts`
+- **Add a new validation rule**: add the validation function in `utils/validators.ts`, then invoke it in the corresponding store
 - **Add a new locale**: add a new locale JSON file in `i18n/`, then register it in `i18n/index.ts`
 
 ### Compatibility with the Python Executor
 
-The Excel format read and written by the editor is fully compatible with `python/excel_reader/excel_parser.py`:
+The Excel/YAML formats read and written by the editor are fully compatible with the `python/` executor:
 
-- Sheet order: API Definitions → Single-API Cases → Business Flows
-- Merge logic: case-level values take precedence, supplemented by API definitions
-- JSON field serialization: compact JSON strings
-- Column names are identical
+- **Excel**: sheet order is API Definitions → Single-API Cases → Business Flows; column names are identical; JSON fields use compact JSON serialization
+- **YAML**: one `.yaml` file per case; `case_type` field distinguishes type (`single`/`biz`); field names use snake_case, fully compatible with the executor's YAML parser

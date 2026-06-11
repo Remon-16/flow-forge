@@ -1,39 +1,73 @@
 <script setup lang="ts">
+import { computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useWorkbookStore } from '../../stores/workbook'
+import { useYamlStore } from '../../stores/yaml-store'
 import { useSettingsStore } from '../../stores/settings'
-import { downloadExcel } from '../../utils/excel-writer'
-import { onMounted, onUnmounted } from 'vue'
+import { isElectron } from '../../utils/electron-bridge'
 
+const route = useRoute()
+const router = useRouter()
 const { t } = useI18n()
 const workbook = useWorkbookStore()
+const yamlStore = useYamlStore()
 const settings = useSettingsStore()
 
+const isExcelMode = computed(() => route.name === 'excel-editor')
+const modeTitle = computed(() => isExcelMode.value ? t('header.excelEditor') : t('header.yamlEditor'))
+
+function goHome() {
+  router.push('/')
+}
+
 function handleNew() {
-  workbook.newWorkbook()
+  if (isExcelMode.value) {
+    workbook.newWorkbook()
+  } else {
+    yamlStore.newFile('single')
+  }
 }
 
 async function handleOpen() {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = '.xlsx,.xls'
-  input.onchange = async (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0]
-    if (!file) return
-    try {
-      await workbook.openFile(file)
-    } catch (err) {
-      console.error('打开文件失败:', err)
+  if (isExcelMode.value) {
+    if (isElectron && window.electronAPI) {
+      const filePath = await window.electronAPI.openFileDialog({
+        filters: [{ name: 'Excel Files', extensions: ['xlsx', 'xls'] }],
+      })
+      if (filePath) {
+        await workbook.openFile(filePath)
+      }
+    } else {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.xlsx,.xls'
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0]
+        if (!file) return
+        try { await workbook.openFile(file) } catch (err) { console.error(err) }
+      }
+      input.click()
     }
+  } else {
+    yamlStore.openFile()
   }
-  input.click()
 }
 
-async function handleExport() {
-  const data = workbook.buildData()
-  const name = workbook.fileName || 'testcase.xlsx'
-  await downloadExcel(data, name)
-  workbook.modified = false
+async function handleSave() {
+  if (isExcelMode.value) {
+    await workbook.save()
+  } else {
+    await yamlStore.save()
+  }
+}
+
+async function handleSaveAs() {
+  if (isExcelMode.value) {
+    await workbook.saveAs()
+  } else {
+    await yamlStore.saveAs()
+  }
 }
 
 function handleLanguageChange(lang: string) {
@@ -42,9 +76,12 @@ function handleLanguageChange(lang: string) {
 
 // Keyboard shortcuts
 function onKeyDown(e: KeyboardEvent) {
-  if (e.ctrlKey && e.key === 's') {
+  if (e.ctrlKey && e.key === 's' && !e.altKey) {
     e.preventDefault()
-    handleExport()
+    handleSave()
+  } else if (e.ctrlKey && e.altKey && e.key === 's') {
+    e.preventDefault()
+    handleSaveAs()
   } else if (e.ctrlKey && e.key === 'o') {
     e.preventDefault()
     handleOpen()
@@ -60,13 +97,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 <template>
   <header class="app-header">
-    <span style="font-weight: 600; margin-right: 16px; font-size: 14px; white-space: nowrap;">
-      {{ t('header.title') }}
+    <a-button size="small" type="text" @click="goHome">
+      &#8592; {{ t('header.backHome') }}
+    </a-button>
+
+    <span style="font-weight: 600; margin: 0 16px; font-size: 14px; white-space: nowrap;">
+      {{ modeTitle }}
     </span>
 
     <a-button size="small" type="text" @click="handleNew">{{ t('menu.new') }}</a-button>
     <a-button size="small" type="text" @click="handleOpen">{{ t('menu.open') }}</a-button>
-    <a-button size="small" type="text" @click="handleExport">{{ t('menu.export') }}</a-button>
+    <a-button size="small" type="text" @click="handleSave">{{ t('yaml.save') }}</a-button>
+    <a-button size="small" type="text" @click="handleSaveAs">{{ t('yaml.saveAs') }}</a-button>
 
     <a-divider type="vertical" />
 

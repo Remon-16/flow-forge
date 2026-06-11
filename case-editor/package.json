@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:electron": "vite --mode electron",
     "build": "vue-tsc -b && vite build",
+    "build:electron": "vue-tsc -b && vite build --mode electron && electron-builder",
     "preview": "vite preview"
   },
   "dependencies": {
     "ant-design-vue": "^4.2.6",
     "exceljs": "^4.4.0",
+    "js-yaml": "^4.2.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.34",
     "vue-i18n": "^9.14.5",
@@ -18,11 +21,16 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.12.3",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.2",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
+    "vite-plugin-electron": "^1.0.4",
+    "vite-plugin-electron-renderer": "^1.0.0",
     "vue-tsc": "^3.2.8"
   }
 }

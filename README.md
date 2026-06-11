@@ -34,7 +34,7 @@ python main.py --config /path/to/env.yml --scriptType APITest --envName local \
                --apiMode all
 ```
 
-已实现Excel编辑网页端。用户可以导入Excel用例进行编辑，网页端有格式校验以及更友好的json编辑页。详情见 [case-editor/README.md](./case-editor/README.md)。
+已实现 Electron 桌面测试用例编辑器。支持 Excel (.xlsx) 和 YAML (.yaml) 两种用例格式的可视化编辑，提供表单化 YAML 编辑、高级断言规则编辑器、JSON 树形编辑器等功能。详情见 [case-editor/README.md](./case-editor/README.md)。
 
 ## 后续计划
 
@@ -73,7 +73,7 @@ flow-forge/
 ├── README.md                     # 项目总览（本文件）
 ├── agent/                        # AI 用例生成智能体
 ├── python/                       # 接口测试执行器
-└── case-editor/                  # Excel 用例在线编辑器
+└── case-editor/                  # Electron 桌面测试用例编辑器（Excel + YAML）
 ```
 
 ## 工作流程

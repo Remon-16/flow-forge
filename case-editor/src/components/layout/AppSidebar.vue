@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useWorkbookStore } from '../../stores/workbook'
 import { useEditorStore } from '../../stores/editor'
-import { computed } from 'vue'
 
+const route = useRoute()
 const { t } = useI18n()
 const workbook = useWorkbookStore()
 const editor = useEditorStore()
@@ -55,16 +57,19 @@ function onAddBizFlow() {
   workbook.addBizFlow(name)
 }
 
-// Convert index to menu key for selectedKeys
 const selectedKey = computed(() => {
   if (editor.activeSheetIndex === -1) return ['apiDef']
   if (editor.activeSheetIndex === 0) return ['singleCase']
   return [`biz_${editor.activeSheetIndex - 1}`]
 })
+
+// Hide sidebar in YAML mode (YamlFileTree replaces it)
+const isYamlMode = computed(() => route.name === 'yaml-editor')
 </script>
 
 <template>
-  <div style="padding: 8px;">
+  <div v-if="isYamlMode" class="sidebar-hidden" />
+  <div v-else style="padding: 8px;">
     <a-menu
       mode="inline"
       :selectedKeys="selectedKey"
@@ -86,3 +91,10 @@ const selectedKey = computed(() => {
     </a-button>
   </div>
 </template>
+
+<style scoped>
+.sidebar-hidden {
+  width: 0;
+  overflow: hidden;
+}
+</style>

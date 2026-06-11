@@ -5,6 +5,7 @@ import { useWorkbookStore } from '../../stores/workbook'
 import { BIZ_STEP_COLUMNS, TAG_LEVELS, JSON_COLUMNS } from '../../types/excel'
 import type { BizStep } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
+import AssertRulesEditor from './AssertRulesEditor.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
 const props = defineProps<{ flowIndex: number }>()
@@ -244,6 +245,14 @@ function getRowClassName(record: BizStep) {
                 :value="String(record[col] ?? '')"
                 size="small"
                 @change="(e: any) => onCellChange(stepIdx, col, e.target.value)"
+              />
+            </template>
+
+            <!-- AssertRules editor -->
+            <template v-else-if="col === 'AssertRules'">
+              <AssertRulesEditor
+                :modelValue="record[col] as string[] | null"
+                @update:modelValue="(v: string[] | null) => onCellChange(stepIdx, col, v)"
               />
             </template>
 
