@@ -355,7 +355,11 @@ class BatchController(BaseAgent):
         return [i for i in all_ifaces if str(i.get("test_id", "")) in ids]
 
     @staticmethod
-    def _case_key(case: Dict, batch_type: str) -> str:
+    def _case_key(case, batch_type: str) -> str:
         if batch_type == "single":
-            return str(case.get("test_id", ""))
-        return str(case.get("sheet_name", ""))
+            if isinstance(case, dict):
+                return str(case.get("test_id", ""))
+            return str(getattr(case, "test_id", ""))
+        if isinstance(case, dict):
+            return str(case.get("sheet_name", ""))
+        return str(getattr(case, "sheet_name", ""))

@@ -10,6 +10,14 @@ from config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
+
+def _get_field(obj, field, default=None):
+    """Get a field value from a dict or a dataclass/object."""
+    if isinstance(obj, dict):
+        return obj.get(field, default)
+    return getattr(obj, field, default)
+
+
 _VAR_REF_RE = re.compile(r"#\{([^}]+)\}")
 
 _REQUIRED_SINGLE = ["test_id", "relevance_id", "api_name", "method", "url"]
@@ -53,7 +61,7 @@ class CaseValidator(BaseAgent):
             if case_errors:
                 invalid.append(case)
                 errors.append(
-                    f"Case[{i}] {case.get('test_id', case.get('sheet_name', 'unknown'))}: "
+                    f"Case[{i}] {_get_field(case, 'test_id') or _get_field(case, 'sheet_name', 'unknown')}: "
                     + "; ".join(case_errors)
                 )
             else:
@@ -76,14 +84,14 @@ class CaseValidator(BaseAgent):
             errors.extend(self._check_assert_rules(case))
         elif schema_type == "biz_flow":
             errors.extend(self._check_required(case, _REQUIRED_BIZ_FLOW))
-            steps = case.get("steps", [])
+            steps = _get_field(case, "steps", [])
             if not isinstance(steps, list) or len(steps) == 0:
                 errors.append("steps must be a non-empty list")
             else:
                 for si, step in enumerate(steps):
                     step_errors = self._validate_one_biz_step(step, si)
                     errors.extend(step_errors)
-                    step_trans = str(step.get("trans", ""))
+                    step_trans = str(_get_field(step, "trans", ""))
                     if step_trans:
                         errors.extend(self._check_trans_refs(step_trans, steps))
 
@@ -113,35 +121,35 @@ class CaseValidator(BaseAgent):
     def _check_required(case: Dict, required: List[str]) -> List[str]:
         errors = []
         for field in required:
-            val = case.get(field)
+            val = _get_field(case, field)
             if val is None or (isinstance(val, str) and not val.strip()):
                 errors.append(f"missing required field '{field}'")
         return errors
 
     @staticmethod
     def _check_method(case: Dict) -> List[str]:
-        method = str(case.get("method", "")).upper()
+        method = str(_get_field(case, "method", "")).upper()
         if method and method not in _VALID_HTTP_METHODS:
             return [f"invalid HTTP method '{method}'"]
         return []
 
     @staticmethod
     def _check_tag(case: Dict) -> List[str]:
-        tag = str(case.get("tag", ""))
+        tag = str(_get_field(case, "tag", ""))
         if tag and tag not in _VALID_TAGS:
             return [f"invalid tag '{tag}' (expected P0-P3)"]
         return []
 
     @staticmethod
     def _check_url(case: Dict) -> List[str]:
-        url = str(case.get("url", ""))
+        url = str(_get_field(case, "url", ""))
         if url and "\n" in url:
             return ["url contains newline"]
         return []
 
     @staticmethod
     def _check_status_code(case: Dict) -> List[str]:
-        sc = case.get("status_code")
+        sc = _get_field(case, "status_code")
         if sc is not None:
             try:
                 code = int(sc)
@@ -153,7 +161,7 @@ class CaseValidator(BaseAgent):
 
     @staticmethod
     def _check_json_field(case: Dict, field: str) -> List[str]:
-        val = case.get(field)
+        val = _get_field(case, field)
         if val is None:
             return []
         if isinstance(val, str):
@@ -167,7 +175,7 @@ class CaseValidator(BaseAgent):
 
     @staticmethod
     def _check_assert_dict(case: Dict) -> List[str]:
-        ad = case.get("assert_dict", {})
+        ad = _get_field(case, "assert_dict", {})
         if not ad:
             return []
         if isinstance(ad, str):
@@ -181,7 +189,7 @@ class CaseValidator(BaseAgent):
 
     @staticmethod
     def _check_assert_rules(case: Dict) -> List[str]:
-        ar = case.get("assert_rules")
+        ar = _get_field(case, "assert_rules")
         if ar is None or (isinstance(ar, list) and len(ar) == 0):
             return []
         if isinstance(ar, str):
@@ -200,7 +208,7 @@ class CaseValidator(BaseAgent):
     def _check_trans_refs(trans: str, steps: List[Dict]) -> List[str]:
         errors = []
         var_refs = re.findall(r"#\{([^}]+)\}", trans)
-        step_ids = {str(s.get("step_id", "")) for s in steps}
+        step_ids = {str(_get_field(s, "step_id", "")) for s in steps}
 
         for pair in trans.split(","):
             pair = pair.strip()
@@ -253,7 +261,7 @@ class CaseValidator(BaseAgent):
             except Exception as e:
                 logger.warning("Retry %d generation failed: %s", retry, e)
                 for case in pending:
-                    cid = case.get("test_id", case.get("sheet_name", "unknown"))
+                    cid = _get_field(case, "test_id") or _get_field(case, "sheet_name", "unknown")
                     if cid not in failure_log:
                         failure_log[cid] = {"case": case, "errors": [str(e)], "retries": retry}
                 break
@@ -261,7 +269,7 @@ class CaseValidator(BaseAgent):
             new_cases = regenerated if isinstance(regenerated, list) else regenerated.get("cases", [])
             if not new_cases:
                 for case in pending:
-                    cid = case.get("test_id", case.get("sheet_name", "unknown"))
+                    cid = _get_field(case, "test_id") or _get_field(case, "sheet_name", "unknown")
                     if cid not in failure_log:
                         failure_log[cid] = {"case": case, "errors": ["regeneration returned empty"], "retries": retry}
                 break
@@ -271,7 +279,7 @@ class CaseValidator(BaseAgent):
 
             next_pending = []
             for case, err in zip(invalid, errors):
-                cid = case.get("test_id", case.get("sheet_name", "unknown"))
+                cid = _get_field(case, "test_id") or _get_field(case, "sheet_name", "unknown")
                 if cid not in failure_log:
                     failure_log[cid] = {"case": case, "errors": [], "retries": 0}
                 failure_log[cid]["errors"].append(err)
