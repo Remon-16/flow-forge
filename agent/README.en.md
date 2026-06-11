@@ -19,8 +19,9 @@ graph TD
     CONFIRM -->|Approved| PARSE_PLAN[parse_plan<br/>Plan Parsing]
     CONFIRM -->|Rejected| REVISE[revise_plan<br/>Revise Based on Feedback]
     REVISE --> CONFIRM
-    PARSE_PLAN --> GEN_CASES[generate_cases<br/>Case Generation]
-    GEN_CASES --> WRITE[write_excel<br/>Excel Output]
+    PARSE_PLAN --> SAVE_IFACES[save_interfaces<br/>Save Interface YAMLs]
+    SAVE_IFACES --> BATCH[batch_controller<br/>Batch Case Generation]
+    BATCH --> WRITE[write_output<br/>YAML + Optional Excel]
     WRITE --> END((End))
 
     subgraph ReAct Subgraph
@@ -41,11 +42,12 @@ Core workflow:
 4. **Plan Generation**: Generate a Markdown test plan based on analysis results and interface definitions, automatically saved to the session directory
 5. **Manual Review** (Mandatory interrupt): Display the plan; user can approve or provide revision feedback
 6. **Feedback Loop**: When rejected, the system revises the plan based on feedback and resubmits for review, looping until approval
-7. **Plan Parsing**: Parse the approved plan into structured data
-8. **Case Generation**: Generate single-API and business flow test cases with concrete parameter values
-9. **Excel Output**: Write multi-sheet Excel file fully compatible with the executor format
+7. **Save Interfaces**: Write analyzed interface definitions to `output/interfaces/` directory, one YAML file per interface for version control
+8. **Batch Case Generation** (BatchController): Read interfaces from YAML, generate cases in configurable-size batches via CaseGenerator. Supports incremental generation — already-generated cases are automatically skipped on re-runs
+9. **Validation** (Optional): CaseValidator checks each batch's format; errors trigger automatic retries (up to 3 times), with a final failure report
+10. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
 
-Each step provides detailed progress output in the CLI, including: current step [N/8], file path and size, LLM model name, and generation statistics. Users always know what the system is doing.
+Each step provides detailed progress output in the CLI, including: current step [N/9], file path and size, LLM model name, and generation statistics. Users always know what the system is doing.
 
 ## Technology Stack
 
@@ -289,7 +291,9 @@ Markdown table example:
 
 **Session Log**: Each run creates a timestamped directory under `logs/` containing `session.jsonl` (event stream), `state.json` (final state snapshot), and a copy of the output Excel. Use `--debug` to additionally generate `debug.log` (full LLM I/O).
 
-**Excel Case File**: Multi-sheet structure, fully compatible with executor format:
+**YAML Case Files** (default): Each interface/case is a separate `.yaml` file stored in `output/interfaces/`, `output/single_cases/`, `output/biz_flows/` directories. Enables Git version control, incremental generation, and resumable generation.
+
+**Excel Case File** (optional): Set `OUTPUT_FORMAT=excel` or `both` to convert from YAML. Multi-sheet structure, fully compatible with executor format:
 - Sheet 1 — API Definitions: interface definition table
 - Sheet 2 — Single Cases: single-API test cases
 - Sheet 3+ — Business Flow Cases (one sheet per business flow)
@@ -311,6 +315,24 @@ Markdown table example:
 | `LLM_DOC_MAX_CHARS` | Max characters sent to LLM during API doc parsing | `30000` (set 2000 for 8K models, 100000+ for 1M models) |
 | `MAX_STEPS` | Max steps per agent | `10` |
 | `MAX_RETRIES` | Max LLM call retries | `3` |
+| `OUTPUT_DIR` | YAML output root directory | `./output` |
+| `BATCH_SIZE` | Max cases per generation batch | `10` |
+| `ENABLE_VALIDATION` | Enable case format validation | `true` |
+| `MAX_VALIDATION_RETRIES` | Max validation retries | `3` |
+| `OUTPUT_FORMAT` | Output format (`yaml` / `excel` / `both`) | `both` |
+
+### Output Directory Structure
+
+When using YAML mode, the output directory looks like:
+
+```
+output/
+├── interfaces/          # Interface definitions, one .yaml per interface
+├── single_cases/        # Single API test cases, one .yaml per case
+├── biz_flows/           # Business flow cases, one .yaml per flow
+├── failures.yaml        # Cases that failed validation (if any)
+└── test_cases.xlsx      # (Optional) Excel converted from YAML
+```
 
 ### config/prompts.yaml — Prompts & Termination Conditions
 

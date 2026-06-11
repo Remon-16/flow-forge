@@ -631,10 +631,179 @@ def generate_cases_node(state: GraphState) -> GraphState:
 
 
 # =========================================================================
-# Node: write_excel
+# Node: save_interfaces
+# =========================================================================
+def save_interfaces_node(state: GraphState) -> GraphState:
+    """Save parsed interface definitions as YAML files in output_dir/interfaces/."""
+    from pathlib import Path
+
+    from writers.yaml_writer import YamlWriter
+
+    state.setdefault("errors", [])
+
+    interfaces = state.get("interfaces", [])
+    output_dir = state.get("output_dir", "./output")
+
+    if not interfaces:
+        logger.warning("No interfaces to save")
+        return state
+
+    interfaces_dir = Path(output_dir) / "interfaces"
+    interfaces_dir.mkdir(parents=True, exist_ok=True)
+
+    count = 0
+    for iface in interfaces:
+        try:
+            YamlWriter.write_interface(iface, output_dir)
+            count += 1
+        except Exception as e:
+            logger.warning("Failed to save interface: %s", e)
+
+    print(f"\n  → 保存 {count} 个接口定义到 {interfaces_dir}")
+    if _sl():
+        _sl().log_event("save_interfaces", count=count, dir=str(interfaces_dir))
+
+    return state
+
+
+# =========================================================================
+# Node: batch_controller
+# =========================================================================
+def batch_controller_node(state: GraphState) -> GraphState:
+    """Run batch controller to generate test cases in batches.
+
+    Reads interfaces from YAML, generates cases in batches,
+    validates (if enabled), and saves to YAML files.
+    """
+    from agents.batch_controller import BatchController
+    from agents.case_generator import CaseGenerator
+    from validators.case_validator import CaseValidator
+
+    state.setdefault("errors", [])
+
+    plan = state.get("plan_parsed")
+    interfaces_raw = state.get("interfaces", [])
+    output_dir = state.get("output_dir", "./output")
+    user_guidance = state.get("user_guidance", "")
+    batch_size = state.get("batch_size", _settings.batch_size)
+    enable_validation = state.get("enable_validation", _settings.enable_validation)
+    max_retries = state.get("max_validation_retries", _settings.max_validation_retries)
+
+    step_num = "7/9" if state.get("plan_only") else "7/9"
+    print(f"\n[{step_num}] 分批生成测试用例...")
+    print(f"  → BatchController 启动 (batch_size={batch_size}, validation={enable_validation})")
+    if _sl():
+        _sl().log_node_start("batch_controller", step_num)
+
+    case_generator = CaseGenerator(_settings, _knowledge)
+    validator = CaseValidator(_settings) if enable_validation else None
+
+    controller = BatchController(_settings)
+    controller._batch_size = batch_size
+    controller._enable_validation = enable_validation
+    controller._max_validation_retries = max_retries
+
+    interfaces = _dicts_to_interfaces(interfaces_raw)
+
+    try:
+        result = controller.run(
+            plan=plan,
+            interfaces=interfaces_raw,
+            output_dir=output_dir,
+            case_generator=case_generator,
+            validator=validator,
+            user_guidance=user_guidance,
+        )
+    except Exception as e:
+        msg = f"BatchController failed: {e}"
+        logger.exception(msg)
+        state["errors"].append(msg)
+        print(f"  ✗ {msg}")
+        state["single_cases"] = []
+        state["biz_flows"] = []
+        state["validation_failures"] = []
+        return state
+
+    single_cases = result.get("single_cases", [])
+    biz_flows = result.get("biz_flows", [])
+    failures = result.get("failures", [])
+
+    state["single_cases"] = single_cases
+    state["biz_flows"] = biz_flows
+    state["validation_failures"] = failures
+
+    print(f"  → 生成 {len(single_cases)} 条单接口用例, {len(biz_flows)} 条业务链路")
+    if failures:
+        print(f"  → {len(failures)} 个用例校验失败 (详见 {output_dir}/failures.yaml)")
+
+    if _sl():
+        _sl().log_node_end("batch_controller")
+
+    return state
+
+
+# =========================================================================
+# Node: write_output
+# =========================================================================
+def write_output_node(state: GraphState) -> GraphState:
+    """Write final output: YAML is already saved; optionally convert to Excel."""
+    from agents.excel_writer import ExcelWriter
+
+    state.setdefault("errors", [])
+
+    output_format = state.get("output_format", "both")
+    output_dir = state.get("output_dir", "./output")
+    output_path = state.get("output_path", "test_cases.xlsx")
+    single = state.get("single_cases", [])
+    biz = state.get("biz_flows", [])
+    failures = state.get("validation_failures", [])
+
+    step_num = "8/9" if state.get("plan_only") else "8/9"
+    print(f"\n[{step_num}] 写入输出...")
+    if _sl():
+        _sl().log_node_start("write_output", step_num)
+
+    if output_format in ("excel", "both"):
+        try:
+            ExcelWriter.yaml_to_excel(output_dir, output_path)
+            print(f"  → Excel 已写入 {output_path}")
+
+            if _sl():
+                excel_copy = _sl().save_excel(output_path)
+                if excel_copy:
+                    print(f"  → 已备份至 {excel_copy}")
+        except Exception as e:
+            msg = f"Failed to write Excel: {e}"
+            logger.error(msg)
+            state["errors"].append(msg)
+            print(f"  ✗ {msg}")
+
+    if output_format in ("yaml", "both"):
+        print(f"  → YAML 用例已保存到 {output_dir}")
+        print(f"     interfaces/: {_count_yaml(output_dir, 'interfaces')} 个")
+        print(f"     single_cases/: {_count_yaml(output_dir, 'single_cases')} 个")
+        print(f"     biz_flows/: {_count_yaml(output_dir, 'biz_flows')} 个")
+
+    if failures:
+        print(f"  → 校验失败: {len(failures)} 个 (详见 {output_dir}/failures.yaml)")
+
+    if _sl():
+        _sl().log_node_end("write_output")
+
+    return state
+
+
+def _count_yaml(output_dir: str, subdir: str) -> int:
+    from pathlib import Path
+    p = Path(output_dir) / subdir
+    return len(list(p.glob("*.yaml"))) if p.is_dir() else 0
+
+
+# =========================================================================
+# Node: write_excel (legacy — kept for backward compatibility)
 # =========================================================================
 def write_excel_node(state: GraphState) -> GraphState:
-    """Write the final test case Excel file."""
+    """Write the final test case Excel file (legacy single-shot mode)."""
     from agents.excel_writer import ExcelWriter
 
     state.setdefault("errors", [])

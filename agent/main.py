@@ -81,7 +81,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--output",
         default=f"testcase_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-        help="Output Excel file path",
+        help="Output Excel file path (used when output-format includes excel)",
+    )
+    p.add_argument(
+        "--output-dir",
+        default="",
+        help="YAML output root directory (default: ./output, or from .env)",
+    )
+    p.add_argument(
+        "--output-format",
+        choices=["yaml", "excel", "both"],
+        default="",
+        help="Output format: yaml, excel, or both (default: both, or from .env)",
+    )
+    p.add_argument(
+        "--batch-size",
+        type=int,
+        default=0,
+        help="Max cases per generation batch (default: 10, or from .env)",
     )
     p.add_argument(
         "--plan-only",
@@ -259,6 +276,11 @@ def main() -> int:
             "requirement_paths": [],
             "api_path": args.api,
             "output_path": args.output,
+            "output_dir": args.output_dir or settings.output_dir,
+            "output_format": args.output_format or settings.output_format,
+            "batch_size": args.batch_size or settings.batch_size,
+            "enable_validation": settings.enable_validation,
+            "max_validation_retries": settings.max_validation_retries,
             "plan_only": False,
             "requirement_text": "",
             "interfaces": [],
@@ -301,6 +323,11 @@ def main() -> int:
             "requirement_paths": list(args.requirement),
             "api_path": args.api,
             "output_path": args.output,
+            "output_dir": args.output_dir or settings.output_dir,
+            "output_format": args.output_format or settings.output_format,
+            "batch_size": args.batch_size or settings.batch_size,
+            "enable_validation": settings.enable_validation,
+            "max_validation_retries": settings.max_validation_retries,
             "plan_only": True,
             "plan_confirmed": True,  # Skip review in plan-only mode
             "user_guidance": args.prompt or "",
@@ -335,6 +362,11 @@ def main() -> int:
         "requirement_paths": list(args.requirement),
         "api_path": args.api,
         "output_path": args.output,
+        "output_dir": args.output_dir or settings.output_dir,
+        "output_format": args.output_format or settings.output_format,
+        "batch_size": args.batch_size or settings.batch_size,
+        "enable_validation": settings.enable_validation,
+        "max_validation_retries": settings.max_validation_retries,
         "plan_only": False,
         "user_guidance": args.prompt or "",
     }

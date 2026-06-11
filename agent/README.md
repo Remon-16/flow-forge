@@ -19,8 +19,9 @@ graph TD
     CONFIRM -->|批准| PARSE_PLAN[parse_plan<br/>计划解析]
     CONFIRM -->|拒绝| REVISE[revise_plan<br/>根据反馈修改]
     REVISE --> CONFIRM
-    PARSE_PLAN --> GEN_CASES[generate_cases<br/>用例生成]
-    GEN_CASES --> WRITE[write_excel<br/>Excel 写入]
+    PARSE_PLAN --> SAVE_IFACES[save_interfaces<br/>保存接口 YAML]
+    SAVE_IFACES --> BATCH[batch_controller<br/>分批生成用例]
+    BATCH --> WRITE[write_output<br/>YAML + 可选 Excel]
     WRITE --> END((结束))
 
     subgraph ReAct 子图内部
@@ -41,11 +42,12 @@ graph TD
 4. **计划生成**：基于分析结果和接口定义生成 Markdown 测试计划，自动保存至 session 目录
 5. **人工审核**（强制中断点）：展示计划，用户可批准或提出修改意见
 6. **反馈循环**：用户拒绝时，系统根据反馈修改计划后重新提交审核，直至批准
-7. **计划解析**：将审核通过的计划解析为结构化数据
-8. **用例生成**：生成包含具体参数值的单接口用例和业务链路用例
-9. **Excel 输出**：写入多 Sheet Excel 文件，与执行器格式完全兼容
+7. **保存接口定义**：将分析后的接口定义写入 `output/interfaces/` 目录，每个接口一个 YAML 文件，便于版本管理
+8. **分批用例生成**（BatchController）：从 `interfaces/` 读取接口定义，分批调用 CaseGenerator 生成用例，每批大小可配置。支持断点续生成——已生成的用例在下次运行时自动跳过
+9. **格式校验**（可选）：CaseValidator 校验每批生成的用例格式，错误自动重试（最多 3 次），最终报告失败用例
+10. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出
 
-每个步骤在 CLI 中均有详细进度输出，包括：当前步骤 [N/8]、文件路径与大小、LLM 调用模型名、生成结果统计。用户始终清楚系统正在做什么。
+每个步骤在 CLI 中均有详细进度输出，包括：当前步骤 [N/9]、文件路径与大小、LLM 调用模型名、生成结果统计。用户始终清楚系统正在做什么。
 
 ## 技术栈
 
@@ -289,7 +291,9 @@ Markdown 表格示例：
 
 **会话日志**：每次运行在 `logs/` 下创建按时间戳命名的目录，包含 `session.jsonl`（事件流）、`state.json`（最终状态快照）和输出 Excel 副本。使用 `--debug` 时额外生成 `debug.log`（完整 LLM I/O）。
 
-**Excel 用例文件**：多 Sheet 结构，与执行器格式完全兼容：
+**YAML 用例文件**（默认）：每个接口/用例独立一个 `.yaml` 文件，存放在 `output/interfaces/`、`output/single_cases/`、`output/biz_flows/` 目录下。便于 Git 版本管理、增量生成和断点续生成。
+
+**Excel 用例文件**（可选）：设置 `OUTPUT_FORMAT=excel` 或 `both` 时从 YAML 转换生成，多 Sheet 结构，与执行器格式完全兼容：
 - Sheet 1 — API Definitions：接口定义表
 - Sheet 2 — Single Cases：单接口测试用例
 - Sheet 3+ — 业务链路用例（每个业务流一个 Sheet）
@@ -311,6 +315,24 @@ Markdown 表格示例：
 | `LLM_DOC_MAX_CHARS` | API 文档解析时发送给 LLM 的最大字符数 | `30000`（8K模型设2000，1M模型设100000+） |
 | `MAX_STEPS` | 单智能体最大步数 | `10` |
 | `MAX_RETRIES` | LLM 调用最大重试 | `3` |
+| `OUTPUT_DIR` | YAML 用例输出根目录 | `./output` |
+| `BATCH_SIZE` | 每批生成用例数上限 | `10` |
+| `ENABLE_VALIDATION` | 是否启用用例格式校验 | `true` |
+| `MAX_VALIDATION_RETRIES` | 校验失败最大重试次数 | `3` |
+| `OUTPUT_FORMAT` | 输出格式（`yaml` / `excel` / `both`） | `both` |
+
+### 输出目录结构
+
+YAML 模式下，输出目录结构如下：
+
+```
+output/
+├── interfaces/          # 接口定义，每个接口一个 .yaml
+├── single_cases/        # 单接口用例，每个用例一个 .yaml
+├── biz_flows/           # 业务链路用例，每个链路一个 .yaml
+├── failures.yaml        # 校验失败的用例（如有）
+└── test_cases.xlsx      # (可选) 从 YAML 转换的 Excel
+```
 
 ### config/prompts.yaml — 提示词与终止条件
 
@@ -349,10 +371,16 @@ optional arguments:
   --requirement REQUIREMENT [REQUIREMENT ...]
                         需求文档路径（支持 .txt, .md, .pdf）
   --api API             接口文档路径（OpenAPI .yaml/.json 或 Markdown .md）
-  --output OUTPUT       输出 Excel 文件路径
-  --plan-only           仅生成测试计划，不生成 Excel
+  --output OUTPUT       输出 Excel 文件路径（output-format 含 excel 时使用）
+  --output-dir OUTPUT_DIR
+                        YAML 用例输出根目录（默认 ./output）
+  --output-format {yaml,excel,both}
+                        输出格式（默认 both）
+  --batch-size BATCH_SIZE
+                        每批最大用例数（默认 10）
+  --plan-only           仅生成测试计划，不生成用例
   --from-plan FROM_PLAN
-                        从已审核通过的计划生成 Excel
+                        从已审核通过的计划生成用例
   --prompt PROMPT, -p PROMPT
                         用户补充指导，注入到计划生成和用例生成阶段
   --parse-mode {raw,rule,llm}, -m {raw,rule,llm}
@@ -398,9 +426,12 @@ optional arguments:
 | `RequirementAnalyzer` | 需求分析 | 从需求文档提取业务流、角色、约束、异常场景（JSON 输出） |
 | `PlanGenerator` | 计划生成 | 基于需求分析和接口定义生成 Markdown 测试计划 |
 | `PlanParser` | 计划解析 | 将审核通过的 Markdown 计划解析为结构化 TestPlan |
-| `CaseGenerator` | 用例生成 | 生成包含具体参数值的单接口用例和业务链路用例 |
+| `CaseGenerator` | 用例生成 | 生成包含具体参数值的单接口用例和业务链路用例；支持分批生成 |
+| `BatchController` | 分批编排 | 读取接口定义，决定每批生成内容，调度生成→校验→保存循环 |
+| `CaseValidator` | 格式校验 | 校验用例结构完整性，错误自动重试（最多 3 次），汇总失败报告 |
 | `PlanReviser` | 计划修改 | 在审核反馈循环中，根据用户意见修改测试计划 |
 | `ExcelWriter` | Excel 写入 | 将用例写入多 Sheet Excel 文件（不需要 LLM） |
+| `YamlWriter` | YAML 读写 | 接口/用例的 YAML 文件读写（不需要 LLM） |
 
 ## LangGraph 编排
 
@@ -417,8 +448,9 @@ optional arguments:
 | `human_confirm` | **强制中断点**，暂停执行等待人工审核 |
 | `revise_plan` | 根据用户反馈修改计划，完成后回到 human_confirm |
 | `parse_plan` | 调用 PlanParser，解析计划为结构化数据 |
-| `generate_cases` | 调用 CaseGenerator，生成具体用例 |
-| `write_excel` | 调用 ExcelWriter，输出 Excel 文件 |
+| `save_interfaces` | 将接口定义保存为 YAML 文件到 output/interfaces/ |
+| `batch_controller` | 运行 BatchController，分批生成用例（支持断点续生成） |
+| `write_output` | 根据 output_format 输出 YAML + 可选 Excel |
 
 ### 中断点与反馈循环
 

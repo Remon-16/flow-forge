@@ -167,6 +167,80 @@ class CaseGenerator(BaseAgent):
                 logger.warning("Failed to parse biz flow: %s", e)
         return flows
 
+    def generate_batch(
+        self,
+        interfaces: List[Any],
+        test_points: List[Dict],
+        batch_type: str,
+        user_guidance: str = "",
+        previous_errors: Optional[List[Dict]] = None,
+    ) -> Dict[str, Any]:
+        """Generate a batch of test cases for specific interfaces.
+
+        Args:
+            interfaces: Interface definitions relevant to this batch.
+            test_points: Test points to cover in this batch.
+            batch_type: "single" or "biz".
+            user_guidance: Optional user guidance.
+            previous_errors: Previous validation errors for retry context.
+
+        Returns dict with 'single_cases' or 'biz_flows' key.
+        """
+        iface_dicts = _normalize_interfaces(interfaces)
+
+        tp_summary = json.dumps(
+            [{
+                "test_id": tp.get("test_id", ""),
+                "description": tp.get("description", ""),
+                "tag": tp.get("tag", "P1"),
+                "scenario_type": tp.get("scenario_type", "positive"),
+            } for tp in test_points],
+            ensure_ascii=False, indent=2,
+        )
+
+        error_context = ""
+        if previous_errors:
+            error_context = (
+                "\n\n## 上次生成校验失败，请修正以下问题\n"
+                + json.dumps(previous_errors, ensure_ascii=False, indent=2)
+                + "\n请确保 JSON 格式正确，所有必填字段完整。"
+            )
+
+        if batch_type == "single":
+            system = CASE_GENERATION_SYSTEM
+            prompt = (
+                f"## 本批接口定义\n```json\n{json.dumps(iface_dicts, ensure_ascii=False, indent=2)}\n```\n\n"
+                f"## 本批测试点\n```json\n{tp_summary}\n```\n\n"
+                f"## 用户指导\n{user_guidance or '(无)'}\n"
+                f"{error_context}\n\n"
+                f"请生成以上接口的单接口测试用例，只生成一个 JSON 对象，包含 single_cases 字段。"
+            )
+
+            result = self.call_llm_json(prompt, system)
+            single_cases = self._parse_single_cases(result.get("single_cases", []))
+            return {"single_cases": single_cases}
+        else:
+            scenarios = []
+            for tp in test_points:
+                scenarios.append({
+                    "name": tp.get("name", tp.get("test_id", "")),
+                    "description": tp.get("description", ""),
+                })
+
+            system = CASE_GENERATION_SYSTEM
+            prompt = (
+                f"## 本批接口定义\n```json\n{json.dumps(iface_dicts, ensure_ascii=False, indent=2)}\n```\n\n"
+                f"## 本批业务链路场景\n```json\n{json.dumps(scenarios, ensure_ascii=False, indent=2)}\n```\n\n"
+                f"## 用户指导\n{user_guidance or '(无)'}\n"
+                f"{error_context}\n\n"
+                f"请生成以上业务链路的测试用例，每个链路包含多个步骤。"
+                f"只生成一个 JSON 对象，包含 biz_flows 字段。"
+            )
+
+            result = self.call_llm_json(prompt, system)
+            biz_flows = self._parse_biz_flows(result.get("biz_flows", []))
+            return {"biz_flows": biz_flows}
+
     @staticmethod
     def _serialize_plan(plan: TestPlan) -> str:
         """Serialize TestPlan to a readable string for the LLM prompt."""

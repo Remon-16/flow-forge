@@ -11,6 +11,7 @@ from config.settings import Settings
 from graph.nodes import (
     analyze_api_node,
     analyze_requirement_node,
+    batch_controller_node,
     check_confirmed,
     configure,
     generate_cases_node,
@@ -20,7 +21,9 @@ from graph.nodes import (
     parse_plan_node,
     revise_plan_node,
     route_after_api_confirm,
+    save_interfaces_node,
     write_excel_node,
+    write_output_node,
 )
 from graph.state import GraphState
 from knowledge.search import KnowledgeSearch
@@ -63,6 +66,10 @@ def build_workflow(
     graph.add_node("human_confirm", human_confirm_node)
     graph.add_node("revise_plan", revise_plan_node)
     graph.add_node("parse_plan", parse_plan_node)
+    graph.add_node("save_interfaces", save_interfaces_node)
+    graph.add_node("batch_controller", batch_controller_node)
+    graph.add_node("write_output", write_output_node)
+    # Legacy nodes (non-batch mode)
     graph.add_node("generate_cases", generate_cases_node)
     graph.add_node("write_excel", write_excel_node)
 
@@ -80,8 +87,9 @@ def build_workflow(
         "rejected": "revise_plan",
     })
     graph.add_edge("revise_plan", "human_confirm")  # Feedback loop
-    graph.add_edge("parse_plan", "generate_cases")
-    graph.add_edge("generate_cases", "write_excel")
-    graph.add_edge("write_excel", END)
+    graph.add_edge("parse_plan", "save_interfaces")
+    graph.add_edge("save_interfaces", "batch_controller")
+    graph.add_edge("batch_controller", "write_output")
+    graph.add_edge("write_output", END)
 
     return graph.compile(checkpointer=MemorySaver())
