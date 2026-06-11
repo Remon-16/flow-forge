@@ -39,13 +39,12 @@ python/
 │
 ├── core/
 │   ├── __init__.py
-│   ├── deep_merge.py            # Recursive dict deep merge
 │   ├── path_resolver.py         # Dot/bracket JSON path resolver
 │   └── script_type.py           # Script type enum & executor registry
 │
 ├── excel_reader/
 │   ├── __init__.py
-│   └── excel_parser.py          # Multi-sheet Excel parsing, validation, merging
+│   └── excel_parser.py          # Multi-sheet Excel parsing and validation
 │
 ├── executor/
 │   ├── __init__.py
@@ -230,8 +229,8 @@ Required columns: `TestID`, `RelevanceID`
 | Column | Type | Description |
 |--------|------|-------------|
 | `TestID` | str | Unique test case identifier |
-| `RelevanceID` | str | References a `TestID` in Sheet 1; inherits base configuration |
-| Other columns | — | Same as Sheet 1; non-empty values override Sheet 1's corresponding fields |
+| `RelevanceID` | str | References a `TestID` in Sheet 1; used for API reference (not enforced by executor; primarily for case generation agent indexing and querying) |
+| Other columns | — | Same as Sheet 1; test case values are used directly, no merge with Sheet 1 |
 
 ### Sheet 3+ — Business Flow
 
@@ -240,17 +239,13 @@ Each sheet represents a business scenario; the sheet name is the scenario name. 
 | Column | Type | Description |
 |--------|------|-------------|
 | `StepID` | str | Step identifier (must be unique within the same sheet), e.g., `Step01` |
-| `RelevanceID` | str | References a `TestID` in Sheet 1 |
+| `RelevanceID` | str | References a `TestID` in Sheet 1 (not enforced by executor; primarily for case generation agent indexing and querying) |
 | `Trans` | str | Inter-step data passing definition (see syntax below) |
 | Other columns | — | Same as Sheet 1/Sheet 2 |
 
-### Deep Merge Rules
+### API Definitions Notes
 
-Each row in Sheet 2/Sheet 3+ is linked to a Sheet 1 interface definition via `RelevanceID`. Merge rules:
-
-- **Simple fields** (`APIName`, `AppName`, `Method`, `URL`, `StatusCode`): case row value takes priority; if empty, inherit from interface definition
-- **JSON fields** (`RequestHead`, `RequestBody`): deep merge — interface definition as base, case row overrides
-- **AssertDict**: use case row value if present; otherwise use interface definition
+Sheet 1 (API Definitions) serves as reference documentation for the AI agent and is not read by the executor. Test case row values are **used directly** — they are not merged or auto-filled from API definitions. The `RelevanceID` field is for reference association, primarily used by the case generation agent for indexing and querying.
 
 ### Trans Field Syntax
 
@@ -303,9 +298,7 @@ Singleton global configuration management:
 
 ### Excel Parser (`excel_reader/excel_parser.py`)
 
-- Reads Sheet 1 interface definitions as "templates"
 - Reads Sheet 2 (single API) and Sheet 3+ (business flows) according to `apiMode`
-- Merges case rows with interface definitions via `RelevanceID`
 - Validates `Trans` fields and deduplicates `StepID` for business flows
 - Returns `parse_error` on parsing exceptions without blocking other cases
 
@@ -393,7 +386,7 @@ sequenceDiagram
 
     CLI->>Config: Load config
     Config->>Excel: Parse case file
-    Excel->>Executor: Merged single API case list
+    Excel->>Executor: Single API case list
     loop Each case (thread pool concurrent)
         Executor->>LoginMgr: Resolve token (#{user})
         LoginMgr-->>Executor: Headers with token
