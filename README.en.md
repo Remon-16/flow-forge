@@ -3,7 +3,7 @@
 **English** | [中文](README.md)
 
 ![Development Status](https://img.shields.io/badge/status-Alpha-orange)
-![Version](https://img.shields.io/badge/version-v0.1.1--alpha-blue)
+![Version](https://img.shields.io/badge/version-v0.1.2--alpha-blue)
 ![Branch](https://img.shields.io/badge/dev_brach-dev_first-brigAhtgreen)
 
 An AI agent-based API automation testing framework. Provide requirement documents and API documentation, and the agent automatically generates test case Excel files. Feed the Excel file to the CLI executor, and you get a test report. The executor integrates seamlessly with Jenkins for CI/CD pipelines.
