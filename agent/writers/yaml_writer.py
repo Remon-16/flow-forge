@@ -167,6 +167,33 @@ class YamlWriter:
         return ids
 
     @staticmethod
+    def list_covered_interface_ids(output_dir: str, case_type: str) -> List[str]:
+        """Return the interface IDs covered by already-generated cases.
+
+        Reads relevance_id from each case YAML file. Unlike
+        list_generated_case_ids (which returns case-level test_id like
+        TC_001), this returns the interface-level IDs (like
+        api_api_user_login_post) so we can tell which interfaces
+        already have cases and avoid duplicates.
+        """
+        subdir = "single_cases" if case_type == "single" else "biz_flows"
+        dir_path = Path(output_dir) / subdir
+        if not dir_path.is_dir():
+            return []
+        ids = []
+        for f in sorted(dir_path.glob("*.yaml")):
+            try:
+                with open(f, "r", encoding="utf-8") as fh:
+                    data = yaml.safe_load(fh)
+                if isinstance(data, dict):
+                    rid = data.get("relevance_id")
+                    if rid:
+                        ids.append(str(rid))
+            except Exception:
+                pass
+        return ids
+
+    @staticmethod
     def count_generated(output_dir: str, case_type: str) -> int:
         subdir = "single_cases" if case_type == "single" else "biz_flows"
         dir_path = Path(output_dir) / subdir

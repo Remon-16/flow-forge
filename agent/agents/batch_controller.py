@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agents.base import BaseAgent
+from agents.base import BaseAgent, ConvergenceError
 from config.settings import Settings
 from models.schema import TestPlan
 from writers.yaml_writer import YamlWriter
@@ -122,6 +122,8 @@ class BatchController(BaseAgent):
 
         # ---- Phase 2: Biz flows ----
         if plan.biz_flow_scenarios:
+            case_generator.reset_steps()
+            self.reset_steps()
             logger.info("BatchController: starting biz-flow generation")
             biz_result = self._generate_phase(
                 plan=plan,
@@ -167,8 +169,8 @@ class BatchController(BaseAgent):
 
         # Early exit: check if all interfaces already have cases
         saved_iface_ids = YamlWriter.list_interface_ids(output_dir)
-        generated_ids = YamlWriter.list_generated_case_ids(output_dir, batch_type)
-        if saved_iface_ids and all(i in generated_ids for i in saved_iface_ids):
+        covered_ids = YamlWriter.list_covered_interface_ids(output_dir, batch_type)
+        if saved_iface_ids and all(i in covered_ids for i in saved_iface_ids):
             logger.info("BatchController [%s]: all %d interfaces already covered, skipping phase",
                         batch_type, len(saved_iface_ids))
             existing = (
@@ -184,21 +186,21 @@ class BatchController(BaseAgent):
             max_no_progress=self._max_steps_no_progress,
         )
         logger.info(
-            "BatchController [%s]: starting with %d/%d cases already generated",
-            batch_type, len(generated_ids), len(saved_iface_ids),
+            "BatchController [%s]: starting with %d/%d interfaces already covered",
+            batch_type, len(set(covered_ids)), len(saved_iface_ids),
         )
 
         for iteration in range(1, max_iterations + 1):
             # Build progress snapshot
             saved_iface_ids = YamlWriter.list_interface_ids(output_dir)
-            generated_ids = YamlWriter.list_generated_case_ids(output_dir, batch_type)
+            covered_ids = YamlWriter.list_covered_interface_ids(output_dir, batch_type)
             test_points_summary = self._summarize_test_points(plan, batch_type)
 
             # Ask LLM to decide next batch
             decision = self._decide_batch(
                 test_points_summary=test_points_summary,
                 saved_interface_ids=saved_iface_ids,
-                generated_ids=generated_ids,
+                generated_ids=covered_ids,
                 batch_type=batch_type,
             )
 
@@ -223,16 +225,42 @@ class BatchController(BaseAgent):
                 batch_ifaces = self._load_interfaces_from_disk(output_dir, batch_iface_ids)
 
             if not batch_ifaces:
-                logger.warning("BatchController: no matching interfaces found for %s", batch_iface_ids)
+                batch_ifaces = self._match_interfaces_fuzzy(
+                    interfaces, batch_iface_ids, output_dir,
+                )
+
+            if not batch_ifaces:
+                remaining_iface_ids = [
+                    i for i in saved_iface_ids if i not in covered_ids
+                ]
+                logger.warning(
+                    "BatchController: no matching interfaces for %s, "
+                    "falling back to %d remaining",
+                    batch_iface_ids, len(remaining_iface_ids),
+                )
+                batch_ifaces = [
+                    i for i in interfaces
+                    if str(i.get("test_id", "")) in remaining_iface_ids
+                ][:self._batch_size]
+
+            if not batch_ifaces:
+                logger.warning(
+                    "BatchController: still no interfaces, skipping batch"
+                )
                 continue
 
             # Resolve test points
-            batch_tps = self._resolve_test_points(plan, batch_iface_ids, batch_tp_ids, batch_type, batch_ifaces)
+            batch_tps = self._resolve_test_points(
+                plan, batch_iface_ids, batch_tp_ids, batch_type, batch_ifaces,
+            )
 
-            logger.info("BatchController [%s] batch %d: %d interfaces, %d test points",
-                        batch_type, iteration, len(batch_ifaces), len(batch_tps))
+            logger.info(
+                "BatchController [%s] batch %d: %d interfaces, %d test points",
+                batch_type, iteration, len(batch_ifaces), len(batch_tps),
+            )
 
             # Generate
+            case_generator.reset_steps()
             try:
                 generated = case_generator.generate_batch(
                     interfaces=batch_ifaces,
@@ -240,8 +268,16 @@ class BatchController(BaseAgent):
                     batch_type=batch_type,
                     user_guidance=user_guidance,
                 )
+            except ConvergenceError as e:
+                logger.warning(
+                    "BatchController: convergence reached for %s batch %d: %s",
+                    batch_type, iteration, e,
+                )
+                break
             except Exception as e:
-                logger.exception("BatchController: generation failed for batch %d", iteration)
+                logger.exception(
+                    "BatchController: generation failed for batch %d", iteration,
+                )
                 continue
 
             if not generated:
@@ -364,11 +400,12 @@ class BatchController(BaseAgent):
         """Build a stable progress string for progress-based step counting.
 
         Returns something like 'single-[20:200]' meaning 20 of 200
-        single cases generated.
+        interfaces covered by generated cases.
         """
-        generated = YamlWriter.list_generated_case_ids(output_dir, batch_type)
+        covered = YamlWriter.list_covered_interface_ids(output_dir, batch_type)
         interfaces = YamlWriter.list_interface_ids(output_dir)
-        return f"{batch_type}-[{len(generated)}:{len(interfaces)}]"
+        covered_unique = len(set(covered))
+        return f"{batch_type}-[{covered_unique}:{len(interfaces)}]"
 
     @staticmethod
     def _summarize_test_points(plan: TestPlan, batch_type: str) -> str:
@@ -466,6 +503,47 @@ class BatchController(BaseAgent):
         """Load specific interfaces from the YAML directory."""
         all_ifaces = YamlWriter.read_interfaces(output_dir)
         return [i for i in all_ifaces if str(i.get("test_id", "")) in ids]
+
+    @staticmethod
+    def _match_interfaces_fuzzy(
+        interfaces: List[Dict], ids: List[str], output_dir: str,
+    ) -> List[Dict]:
+        """Try matching interfaces by api_name, url, or partial test_id.
+
+        Used as a fallback when exact test_id matching fails (e.g. the
+        LLM returned interface identifiers that don't exactly match any
+        stored interface's test_id field).
+        """
+        all_ifaces = list(interfaces)
+        if not all_ifaces:
+            all_ifaces = YamlWriter.read_interfaces(output_dir)
+
+        result: List[Dict] = []
+        seen: set = set()
+        for iface in all_ifaces:
+            iface_id = str(iface.get("test_id", ""))
+            api_name = str(iface.get("api_name", iface.get("name", "")))
+            url = str(iface.get("url", ""))
+            for target in ids:
+                if iface_id in seen:
+                    break
+                if iface_id == target:
+                    result.append(iface)
+                    seen.add(iface_id)
+                    break
+                if api_name and target in api_name:
+                    result.append(iface)
+                    seen.add(iface_id)
+                    break
+                if url and target in url:
+                    result.append(iface)
+                    seen.add(iface_id)
+                    break
+                if target and target in iface_id:
+                    result.append(iface)
+                    seen.add(iface_id)
+                    break
+        return result
 
     @staticmethod
     def _case_key(case, batch_type: str) -> str:
