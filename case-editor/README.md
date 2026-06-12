@@ -2,7 +2,7 @@
 
 **中文** | [English](README.en.md)
 
-基于 Vue 3 + Ant Design Vue + Electron 的桌面测试用例编辑器，支持 Excel (.xlsx) 和 YAML (.yaml) 两种用例格式的可视化编辑。
+基于 Vue 3 + Ant Design Vue + Tauri 2 的桌面测试用例编辑器，支持 Excel (.xlsx) 和 YAML (.yaml) 两种用例格式的可视化编辑。
 
 ## 快速开始
 
@@ -13,12 +13,12 @@ npm install
 # 浏览器开发模式
 npm run dev
 
-# Electron 桌面应用开发模式
-npm run dev:electron
+# Tauri 桌面应用开发模式
+npm run dev:desktop
 ```
 
 - 浏览器模式：访问 `http://localhost:5173`
-- 桌面模式：自动启动 Electron 窗口
+- 桌面模式：自动启动 Tauri 窗口
 
 ## 技术栈
 
@@ -27,7 +27,7 @@ npm run dev:electron
 | 前端框架 | Vue 3 (Composition API + `<script setup>`) |
 | UI 组件库 | Ant Design Vue 4.x |
 | 构建工具 | Vite 8.x |
-| 桌面框架 | Electron 33.x |
+| 桌面框架 | Tauri 2.x |
 | 状态管理 | Pinia |
 | 国际化 | vue-i18n 9.x |
 | Excel 读写 | SheetJS (xlsx) + ExcelJS |
@@ -38,7 +38,7 @@ npm run dev:electron
 
 ### 通用
 - 首页编辑器选择（Excel / YAML）
-- Electron 桌面应用，支持本地文件保存回原路径
+- Tauri 桌面应用，支持本地文件保存回原路径
 - 中英文双语界面，可随时切换
 - 保存（Ctrl+S）和另存为（Ctrl+Alt+S）快捷键
 
@@ -106,13 +106,13 @@ graph TD
     end
 
     subgraph YAML 编辑器
-        OPEN_Y[打开 YAML 目录/文件] --> READ_Y[IPC 文件读取]
+        OPEN_Y[打开 YAML 目录/文件] --> READ_Y[Tauri API 文件读取]
         READ_Y --> PARSE_Y[js-yaml 解析]
         PARSE_Y --> STORE_Y[yaml-store]
         STORE_Y --> FORMS[SingleCaseForm / BizFlowForm]
         FORMS --> STORE_Y
         STORE_Y --> STRINGIFY[js-yaml 序列化]
-        STRINGIFY --> WRITE_Y[IPC 写回原路径]
+        STRINGIFY --> WRITE_Y[Tauri API 写回原路径]
     end
 ```
 
@@ -125,14 +125,16 @@ case-editor/
 ├── package.json
 ├── vite.config.ts
 ├── tsconfig.json
-├── electron-builder.yml              # Electron 打包配置
+├── tauri.conf.json
 ├── index.html
-├── electron/                          # Electron 主进程
-│   ├── main.ts                        # 主进程入口
-│   ├── preload.ts                     # 预加载脚本（IPC 桥接）
-│   └── ipc/
-│       ├── file-handlers.ts           # 文件读写 IPC
-│       └── dialog-handlers.ts         # 系统对话框 IPC
+├── src-tauri/                         # Tauri Rust 后端
+│   ├── Cargo.toml
+│   ├── src/
+│   │   ├── main.rs
+│   │   └── lib.rs                    # 插件注册 + 自定义 command
+│   ├── capabilities/
+│   │   └── default.json              # 权限配置
+│   └── icons/
 └── src/
     ├── main.ts                        # 渲染进程入口
     ├── App.vue                        # 根组件，条件布局
@@ -157,7 +159,7 @@ case-editor/
     │   ├── yaml-parser.ts            # YAML 解析 / 序列化
     │   ├── assert-rules-validator.ts  # AssertRules 格式校验引擎
     │   ├── validators.ts             # 通用校验工具
-    │   ├── electron-bridge.ts        # Electron IPC 桥接 + 浏览器降级
+    │   ├── desktop-bridge.ts         # Tauri API 桥接 + 浏览器降级
     │   ├── deep-merge.ts             # 深度合并
     │   └── json-helper.ts            # JSON 解析 / 序列化辅助
     ├── components/
@@ -200,7 +202,7 @@ case-editor/
 
 #### 打开文件
 
-点击顶部工具栏「打开」按钮（或 Ctrl+O），选择 `.xlsx` 格式的测试用例文件。Electron 模式下直接读取本地文件并记录路径，浏览器模式通过文件对话框读取。
+点击顶部工具栏「打开」按钮（或 Ctrl+O），选择 `.xlsx` 格式的测试用例文件。Tauri 模式下直接读取本地文件并记录路径，浏览器模式通过文件对话框读取。
 
 #### 编辑接口定义
 
@@ -221,7 +223,7 @@ AssertRules 列提供逐条规则的编辑器，每条规则独立输入和校�
 
 #### 保存文件
 
-- **保存**（Ctrl+S）：Electron 模式下直接写回原始文件路径；浏览器模式下载新文件
+- **保存**（Ctrl+S）：Tauri 模式下直接写回原始文件路径；浏览器模式下载新文件
 - **另存为**（Ctrl+Alt+S）：弹出保存对话框选择新路径
 
 ### YAML 编辑器
@@ -315,11 +317,11 @@ AssertRules 列提供逐条规则的编辑器，每条规则独立输入和校�
 ### 本地开发
 
 ```bash
-# 纯浏览器模式（不依赖 Electron）
+# 纯浏览器模式（不依赖 Tauri）
 npm run dev
 
-# Electron 桌面应用模式
-npm run dev:electron
+# Tauri 桌面应用模式
+npm run dev:desktop
 ```
 
 ### 构建
@@ -328,12 +330,12 @@ npm run dev:electron
 # 纯 Web 构建（静态文件部署）
 npm run build
 
-# Electron 桌面应用打包
-npm run build:electron
+# Tauri 桌面应用打包
+npm run build:desktop
 ```
 
 - Web 构建产物输出到 `dist/`
-- Electron 打包产物输出到 `dist-electron/`
+- Tauri 打包产物输出到 `src-tauri/target/release/`
 
 ### 扩展开发
 

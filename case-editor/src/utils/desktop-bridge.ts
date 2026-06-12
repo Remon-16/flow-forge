@@ -1,19 +1,18 @@
-import type { ElectronAPI } from '../../electron/preload'
+import { open, save } from '@tauri-apps/plugin-dialog'
+import { readTextFile, readFile as tauriReadFile, writeTextFile, writeFile as tauriWriteFile, exists as tauriExists, mkdir as tauriMkdir } from '@tauri-apps/plugin-fs'
+import { invoke } from '@tauri-apps/api/core'
 
-const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI
-
-function getAPI(): ElectronAPI | null {
-  if (!isElectron) return null
-  return (window as any).electronAPI as ElectronAPI
-}
+const isDesktop = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
 
 export async function openFileDialog(
   filters?: { name: string; extensions: string[] }[],
 ): Promise<string | null> {
-  const api = getAPI()
-  if (api) return api.openFileDialog({ filters })
+  if (isDesktop) {
+    const selected = await open({ filters })
+    return selected ?? null
+  }
 
-  // Browser fallback: use hidden file input
+  // Browser fallback
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
@@ -26,11 +25,10 @@ export async function openFileDialog(
       if (!file) { resolve(null); return }
       const reader = new FileReader()
       reader.onload = () => {
-        // Store file data in a temp path (won't persist, but consistent API)
         ;(input as any)._result = { name: file.name, data: reader.result }
-        resolve(file.name) // Return file name; handling is done in the caller
+        resolve(file.name)
       }
-      ;(reader as FileReader).readAsArrayBuffer(file)
+      reader.readAsArrayBuffer(file)
     }
     input.oncancel = () => resolve(null)
     input.click()
@@ -38,58 +36,68 @@ export async function openFileDialog(
 }
 
 export async function openDirectoryDialog(): Promise<string | null> {
-  const api = getAPI()
-  if (api) return api.openDirectoryDialog()
+  if (isDesktop) {
+    const selected = await open({ directory: true })
+    return selected ?? null
+  }
   throw new Error('Directory selection is not supported in browser mode. Please use the desktop app.')
 }
 
-export async function readFile(filePath: string, encoding: string = 'utf-8'): Promise<string> {
-  const api = getAPI()
-  if (api) return api.readFile(filePath, encoding)
+export async function saveFileDialog(
+  options?: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] },
+): Promise<string | null> {
+  if (isDesktop) {
+    const selected = await save(options)
+    return selected ?? null
+  }
+  throw new Error('Save dialog is not supported in browser mode. Please use the desktop app.')
+}
+
+export async function readFile(filePath: string): Promise<string> {
+  if (isDesktop) return readTextFile(filePath)
   throw new Error('Direct file reading is not supported in browser mode. Please use "Open File" instead.')
 }
 
 export async function readFileBuffer(filePath: string): Promise<ArrayBuffer> {
-  const api = getAPI()
-  if (api) return api.readFileBuffer(filePath)
+  if (isDesktop) {
+    const data = await tauriReadFile(filePath)
+    return new Uint8Array(data).buffer as ArrayBuffer
+  }
   throw new Error('Direct file reading is not supported in browser mode.')
 }
 
 export async function writeFile(filePath: string, content: string): Promise<void> {
-  const api = getAPI()
-  if (api) return api.writeFile(filePath, content)
+  if (isDesktop) return writeTextFile(filePath, content)
   throw new Error('Direct file writing is not supported in browser mode. Please use "Save As" instead.')
 }
 
 export async function writeFileBuffer(filePath: string, buffer: ArrayBuffer): Promise<void> {
-  const api = getAPI()
-  if (api) return api.writeFileBuffer(filePath, buffer)
+  if (isDesktop) return tauriWriteFile(filePath, new Uint8Array(buffer))
   throw new Error('Direct file writing is not supported in browser mode.')
 }
 
-export async function readDirectory(dirPath: string): Promise<ElectronAPI['readDirectory'] extends (...args: any[]) => any ? ReturnType<ElectronAPI['readDirectory']> : never> {
-  const api = getAPI()
-  if (api) return api.readDirectory(dirPath) as any
+export async function readDirectory(dirPath: string): Promise<FileEntry[]> {
+  if (isDesktop) return invoke<FileEntry[]>('read_dir_recursive', { dirPath })
   throw new Error('Directory reading is not supported in browser mode.')
 }
 
 export async function exists(filePath: string): Promise<boolean> {
-  const api = getAPI()
-  if (api) return api.exists(filePath)
+  if (isDesktop) return tauriExists(filePath)
   return false
 }
 
 export async function mkdir(dirPath: string): Promise<void> {
-  const api = getAPI()
-  if (api) return api.mkdir(dirPath)
+  if (isDesktop) {
+    await tauriMkdir(dirPath, { recursive: true })
+  }
 }
 
 export function getPlatform(): string {
-  const api = getAPI()
-  if (api) return api.getPlatform()
+  if (isDesktop) {
+    // platform() returns a Promise, but we need synchronous behavior
+    return 'desktop'
+  }
   return 'browser'
 }
 
-export { isElectron }
-
-export type { ElectronAPI }
+export { isDesktop }

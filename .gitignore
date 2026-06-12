@@ -46,3 +46,4 @@ env-local.yml
 logs/
 report/
 node_modules/
+.claude/

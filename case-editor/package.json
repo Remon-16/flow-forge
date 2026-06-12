@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:electron": "vite --mode electron",
+    "dev:desktop": "tauri dev",
     "build": "vue-tsc -b && vite build",
-    "build:electron": "vue-tsc -b && vite build --mode electron && electron-builder",
+    "build:desktop": "vue-tsc -b && vite build && tauri build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-fs": "^2.5.1",
     "ant-design-vue": "^4.2.6",
     "exceljs": "^4.4.0",
     "js-yaml": "^4.2.0",
@@ -21,16 +24,13 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.12.3",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",
-    "electron": "^42.4.0",
-    "electron-builder": "^26.15.2",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
-    "vite-plugin-electron": "^1.0.4",
-    "vite-plugin-electron-renderer": "^1.0.0",
     "vue-tsc": "^3.2.8"
   }
 }

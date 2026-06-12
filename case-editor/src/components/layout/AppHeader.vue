@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useWorkbookStore } from '../../stores/workbook'
 import { useYamlStore } from '../../stores/yaml-store'
 import { useSettingsStore } from '../../stores/settings'
-import { isElectron } from '../../utils/electron-bridge'
+import { isDesktop, openFileDialog } from '../../utils/desktop-bridge'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,8 +31,8 @@ function handleNew() {
 
 async function handleOpen() {
   if (isExcelMode.value) {
-    if (isElectron && window.electronAPI) {
-      const filePath = await window.electronAPI.openFileDialog({
+    if (isDesktop) {
+      const filePath = await openFileDialog({
         filters: [{ name: 'Excel Files', extensions: ['xlsx', 'xls'] }],
       })
       if (filePath) {

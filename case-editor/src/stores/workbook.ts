@@ -10,7 +10,7 @@ import type {
 import { readExcelFromBuffer } from '../utils/excel-reader'
 import { downloadExcel } from '../utils/excel-writer'
 import { validateRelevanceID, findDuplicateStepIDs, validateTrans } from '../utils/validators'
-import { isElectron, writeFileBuffer, readFileBuffer } from '../utils/electron-bridge'
+import { isDesktop, writeFileBuffer, readFileBuffer, saveFileDialog } from '../utils/desktop-bridge'
 
 let uidCounter = 0
 function generateUid(): string {
@@ -44,7 +44,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
       let filePathToSet: string | null = null
 
       if (typeof file === 'string') {
-        // Electron mode: file is a path string
+        // Desktop mode: file is a path string
         buffer = await readFileBuffer(file)
         name = file.split(/[/\\]/).pop() || null
         filePathToSet = file
@@ -85,7 +85,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
 
   async function save() {
     const data = buildData()
-    if (isElectron && filePath.value) {
+    if (isDesktop && filePath.value) {
       const { createWorkbook } = await import('../utils/excel-writer')
       const wb = await createWorkbook(data)
       const buffer = await wb.xlsx.writeBuffer()
@@ -100,8 +100,8 @@ export const useWorkbookStore = defineStore('workbook', () => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function saveAs() {
     const data = buildData()
-    if (isElectron && window.electronAPI) {
-      const newPath = await (window.electronAPI as any).saveFileDialog?.({
+    if (isDesktop) {
+      const newPath = await saveFileDialog({
         filters: [{ name: 'Excel Files', extensions: ['xlsx'] }],
         defaultPath: fileName.value || 'testcase.xlsx',
       })

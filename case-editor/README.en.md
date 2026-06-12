@@ -2,7 +2,7 @@
 
 **English** | [中文](README.md)
 
-A desktop test case editor built with Vue 3 + Ant Design Vue + Electron, supporting visual editing of both Excel (.xlsx) and YAML (.yaml) test case formats.
+A desktop test case editor built with Vue 3 + Ant Design Vue + Tauri 2, supporting visual editing of both Excel (.xlsx) and YAML (.yaml) test case formats.
 
 ## Quick Start
 
@@ -13,12 +13,12 @@ npm install
 # Browser dev mode
 npm run dev
 
-# Electron desktop app dev mode
-npm run dev:electron
+# Tauri desktop app dev mode
+npm run dev:desktop
 ```
 
 - Browser mode: visit `http://localhost:5173`
-- Desktop mode: Electron window launches automatically
+- Desktop mode: Tauri window launches automatically
 
 ## Tech Stack
 
@@ -27,7 +27,7 @@ npm run dev:electron
 | Frontend Framework | Vue 3 (Composition API + `<script setup>`) |
 | UI Library | Ant Design Vue 4.x |
 | Build Tool | Vite 8.x |
-| Desktop Framework | Electron 33.x |
+| Desktop Framework | Tauri 2.x |
 | State Management | Pinia |
 | Internationalization | vue-i18n 9.x |
 | Excel I/O | SheetJS (xlsx) + ExcelJS |
@@ -38,7 +38,7 @@ npm run dev:electron
 
 ### General
 - Home page with editor selection (Excel / YAML)
-- Electron desktop app with native local file save to original path
+- Tauri desktop app with native local file save to original path
 - Bilingual Chinese/English interface with on-the-fly switching
 - Save (Ctrl+S) and Save As (Ctrl+Alt+S) keyboard shortcuts
 
@@ -106,13 +106,13 @@ graph TD
     end
 
     subgraph YAML Editor
-        OPEN_Y[Open YAML Dir/File] --> READ_Y[IPC File Read]
+        OPEN_Y[Open YAML Dir/File] --> READ_Y[Tauri API File Read]
         READ_Y --> PARSE_Y[js-yaml Parse]
         PARSE_Y --> STORE_Y[yaml-store]
         STORE_Y --> FORMS[SingleCaseForm / BizFlowForm]
         FORMS --> STORE_Y
         STORE_Y --> STRINGIFY[js-yaml Serialize]
-        STRINGIFY --> WRITE_Y[IPC Write to Original Path]
+        STRINGIFY --> WRITE_Y[Tauri API Write to Original Path]
     end
 ```
 
@@ -125,14 +125,16 @@ case-editor/
 ├── package.json
 ├── vite.config.ts
 ├── tsconfig.json
-├── electron-builder.yml              # Electron packaging config
+├── tauri.conf.json
 ├── index.html
-├── electron/                          # Electron main process
-│   ├── main.ts                        # Main process entry
-│   ├── preload.ts                     # Preload script (IPC bridge)
-│   └── ipc/
-│       ├── file-handlers.ts           # File read/write IPC
-│       └── dialog-handlers.ts         # System dialog IPC
+├── src-tauri/                         # Tauri Rust backend
+│   ├── Cargo.toml
+│   ├── src/
+│   │   ├── main.rs
+│   │   └── lib.rs                    # Plugin registration + custom commands
+│   ├── capabilities/
+│   │   └── default.json              # Permission configuration
+│   └── icons/
 └── src/
     ├── main.ts                        # Renderer process entry
     ├── App.vue                        # Root component, conditional layout
@@ -157,7 +159,7 @@ case-editor/
     │   ├── yaml-parser.ts            # YAML parse / serialize
     │   ├── assert-rules-validator.ts  # AssertRules format validation engine
     │   ├── validators.ts             # General validation utilities
-    │   ├── electron-bridge.ts        # Electron IPC bridge + browser fallback
+    │   ├── desktop-bridge.ts         # Tauri API bridge + browser fallback
     │   ├── deep-merge.ts             # Deep merge utility
     │   └── json-helper.ts            # JSON parse / serialize helpers
     ├── components/
@@ -200,7 +202,7 @@ The app opens to a home page with two selection cards:
 
 #### Opening a File
 
-Click the **Open** button in the top toolbar (or press Ctrl+O), then select a `.xlsx` test case file. In Electron mode, the file is read directly from the local path; in browser mode, it is read via a file dialog.
+Click the **Open** button in the top toolbar (or press Ctrl+O), then select a `.xlsx` test case file. In Tauri mode, the file is read directly from the local path; in browser mode, it is read via a file dialog.
 
 #### Editing API Definitions
 
@@ -222,7 +224,7 @@ The AssertRules column provides a per-rule editor, with each rule independently 
 
 #### Saving Files
 
-- **Save** (Ctrl+S): in Electron mode, writes directly back to the original file path; in browser mode, downloads a new file
+- **Save** (Ctrl+S): in Tauri mode, writes directly back to the original file path; in browser mode, downloads a new file
 - **Save As** (Ctrl+Alt+S): opens a save dialog to choose a new path
 
 ### YAML Editor
@@ -316,11 +318,11 @@ The right-side panel can be toggled between:
 ### Local Development
 
 ```bash
-# Pure browser mode (no Electron dependency)
+# Pure browser mode (no Tauri dependency)
 npm run dev
 
-# Electron desktop app mode
-npm run dev:electron
+# Tauri desktop app mode
+npm run dev:desktop
 ```
 
 ### Build
@@ -329,12 +331,12 @@ npm run dev:electron
 # Pure web build (static file deployment)
 npm run build
 
-# Electron desktop app packaging
-npm run build:electron
+# Tauri desktop app packaging
+npm run build:desktop
 ```
 
 - Web build output goes to `dist/`
-- Electron package output goes to `dist-electron/`
+- Tauri package output goes to `src-tauri/target/release/`
 
 ### Extending the Editor
 

@@ -4,12 +4,14 @@ import type { YamlCase, SingleYamlCase, BizYamlCase, YamlBizStep } from '../type
 import { createDefaultSingleCase, createDefaultBizCase, createDefaultBizStep } from '../types/yaml'
 import { parseYaml, stringifyYaml } from '../utils/yaml-parser'
 import {
-  isElectron,
+  isDesktop,
   readFile,
   writeFile,
   readDirectory,
   openDirectoryDialog,
-} from '../utils/electron-bridge'
+  openFileDialog,
+  saveFileDialog,
+} from '../utils/desktop-bridge'
 import { findDuplicateStepIDs, validateTrans } from '../utils/validators'
 
 export interface FileEntry {
@@ -45,7 +47,7 @@ export const useYamlStore = defineStore('yaml', () => {
 
     rootPath.value = targetPath
 
-    if (isElectron) {
+    if (isDesktop) {
       fileTree.value = await readDirectory(targetPath) as unknown as FileEntry[]
     } else {
       fileTree.value = []
@@ -56,13 +58,10 @@ export const useYamlStore = defineStore('yaml', () => {
     // If no explicit path, use file dialog
     let targetPath = filePath
     if (!targetPath) {
-      if (isElectron) {
-        const api = (window as any).electronAPI
-        if (api) {
-          targetPath = await api.openFileDialog({
-            filters: [{ name: 'YAML Files', extensions: ['yaml', 'yml'] }],
-          })
-        }
+      if (isDesktop) {
+        targetPath = await openFileDialog({
+          filters: [{ name: 'YAML Files', extensions: ['yaml', 'yml'] }],
+        })
       }
       if (!targetPath) return
     }
@@ -94,9 +93,8 @@ export const useYamlStore = defineStore('yaml', () => {
   async function saveAs() {
     if (!currentCase.value) return
 
-    const api = (window as any).electronAPI
-    if (api && isElectron) {
-      const newPath = await api.saveFileDialog({
+    if (isDesktop) {
+      const newPath = await saveFileDialog({
         filters: [{ name: 'YAML Files', extensions: ['yaml', 'yml'] }],
         defaultPath: currentFileName.value || 'testcase.yaml',
       })
