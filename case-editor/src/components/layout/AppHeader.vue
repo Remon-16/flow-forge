@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { useWorkbookStore } from '../../stores/workbook'
 import { useYamlStore } from '../../stores/yaml-store'
 import { useSettingsStore } from '../../stores/settings'
@@ -20,6 +20,30 @@ const isYamlMode = computed(() => route.name === 'yaml-editor')
 const modeTitle = computed(() => isExcelMode.value ? t('header.excelEditor') : t('header.yamlEditor'))
 
 function goHome() {
+  if (isYamlMode.value && yamlStore.hasUnsavedTabs) {
+    Modal.confirm({
+      title: t('validator.unsavedTitle'),
+      content: t('yaml.unsavedGoHome'),
+      okText: t('dialog.yes'),
+      cancelText: t('dialog.cancel'),
+      onOk: () => {
+        yamlStore.openTabs.length = 0
+        yamlStore.activeTabIndex = -1
+        router.push('/')
+      },
+    })
+    return
+  }
+  if (isExcelMode.value && workbook.modified) {
+    Modal.confirm({
+      title: t('validator.unsavedTitle'),
+      content: t('yaml.unsavedGoHome'),
+      okText: t('dialog.yes'),
+      cancelText: t('dialog.cancel'),
+      onOk: () => router.push('/'),
+    })
+    return
+  }
   router.push('/')
 }
 
@@ -119,10 +143,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 <template>
   <header class="app-header">
-    <a-button size="small" type="text" @click="goHome">
-      &#8592; {{ t('header.backHome') }}
-    </a-button>
-
     <span style="font-weight: 600; margin: 0 16px; font-size: 14px; white-space: nowrap;">
       {{ modeTitle }}
     </span>
@@ -158,5 +178,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
       <a-select-option value="zh-CN">中文</a-select-option>
       <a-select-option value="en-US">English</a-select-option>
     </a-select>
+
+    <div style="flex: 1;"></div>
+    <a-button size="small" type="text" @click="goHome">
+      &#8592; {{ t('header.backHome') }}
+    </a-button>
   </header>
 </template>

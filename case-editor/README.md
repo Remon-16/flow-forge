@@ -215,15 +215,15 @@ case-editor/
 - Method 列：下拉选择 HTTP 方法
 - StatusCode 列：文本输入
 - RequestHead / RequestBody / AssertDict 列：点击按钮弹出 JSON 编辑器
-- AssertRules 列：逐条规则编辑器，支持实时格式校验
+- AssertRules 列：只读预览区 + 「编辑详情」按钮，点击打开结构化断言规则编辑弹窗
 
 #### 编辑高级断言（AssertRules）
 
-AssertRules 列提供逐条规则的编辑器，每条规则独立输入和校验：
-- 点击「添加规则」新增空规则行
-- 在输入框中输入规则（如 `$.data.code == 0`）
-- 格式正确时行尾显示绿色 ✓，格式错误时显示红色 ✗ 并提示具体错误
-- 支持「批量粘贴」：一次性粘贴多行规则，自动拆分
+AssertRules 列显示只读预览区（每行一条规则），点击「编辑详情」按钮打开结构化编辑弹窗：
+- 每条规则分为路径、运算符、期望值三列独立编辑
+- 支持 12 种运算符（== != > >= < <= =~ contains not_contains in typeof is_null is_not_null）
+- 实时校验格式并提示错误
+- 支持「批量粘贴」：一次性粘贴多行规则，自动拆分解析
 
 #### 保存文件
 

@@ -1,4 +1,5 @@
 import yaml from 'js-yaml'
+import { toRaw } from 'vue'
 import type { YamlCase, SingleYamlCase, BizYamlCase } from '../types/yaml'
 
 /**
@@ -25,7 +26,7 @@ export function parseYaml(content: string): YamlCase {
  */
 export function stringifyYaml(data: YamlCase): string {
   try {
-    const clean = cleanNulls(structuredClone(data) as unknown as Record<string, unknown>)
+    const clean = cleanNulls(structuredClone(toRaw(data)) as unknown as Record<string, unknown>)
     return yaml.dump(clean, {
       indent: 2,
       lineWidth: -1,
@@ -58,31 +59,37 @@ function normalizeSingleCase(raw: Record<string, unknown>): SingleYamlCase {
   }
 }
 
+function getField(raw: Record<string, unknown>, pascal: string, snake: string): unknown {
+  if (pascal in raw) return raw[pascal]
+  return raw[snake]
+}
+
 function normalizeBizCase(raw: Record<string, unknown>): BizYamlCase {
-  const rawSteps = Array.isArray(raw['steps']) ? raw['steps'] as Record<string, unknown>[] : []
+  const stepsVal = getField(raw, 'steps', 'Steps')
+  const rawSteps = Array.isArray(stepsVal) ? stepsVal as Record<string, unknown>[] : []
   return {
     case_type: 'biz',
-    sheet_name: String(raw['sheet_name'] ?? ''),
+    sheet_name: String(getField(raw, 'SheetName', 'sheet_name') ?? ''),
     steps: rawSteps.map(normalizeBizStep),
   }
 }
 
 function normalizeBizStep(raw: Record<string, unknown>): any {
   return {
-    StepID: String(raw['StepID'] ?? ''),
-    RelevanceID: String(raw['RelevanceID'] ?? ''),
-    Trans: String(raw['Trans'] ?? ''),
-    APIName: String(raw['APIName'] ?? ''),
-    AppName: String(raw['AppName'] ?? ''),
-    Method: String(raw['Method'] ?? 'GET'),
-    URL: String(raw['URL'] ?? ''),
-    RequestHead: asObject(raw['RequestHead']),
-    RequestBody: asObject(raw['RequestBody']),
-    StatusCode: raw['StatusCode'] ?? 200,
-    AssertDict: asObject(raw['AssertDict']),
-    AssertRules: asStringArray(raw['AssertRules']),
-    Tag: String(raw['Tag'] ?? 'P0'),
-    Remark: String(raw['Remark'] ?? ''),
+    StepID: String(getField(raw, 'StepID', 'step_id') ?? ''),
+    RelevanceID: String(getField(raw, 'RelevanceID', 'relevance_id') ?? ''),
+    Trans: String(getField(raw, 'Trans', 'trans') ?? ''),
+    APIName: String(getField(raw, 'APIName', 'api_name') ?? ''),
+    AppName: String(getField(raw, 'AppName', 'app_name') ?? ''),
+    Method: String(getField(raw, 'Method', 'method') ?? 'GET'),
+    URL: String(getField(raw, 'URL', 'url') ?? ''),
+    RequestHead: asObject(getField(raw, 'RequestHead', 'request_head')),
+    RequestBody: asObject(getField(raw, 'RequestBody', 'request_body')),
+    StatusCode: getField(raw, 'StatusCode', 'status_code') ?? 200,
+    AssertDict: asObject(getField(raw, 'AssertDict', 'assert_dict')),
+    AssertRules: asStringArray(getField(raw, 'AssertRules', 'assert_rules')),
+    Tag: String(getField(raw, 'Tag', 'tag') ?? 'P0'),
+    Remark: String(getField(raw, 'Remark', 'remark') ?? ''),
   }
 }
 

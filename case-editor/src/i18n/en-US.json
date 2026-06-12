@@ -128,7 +128,10 @@
     "newFileCreated": "New file created. Please edit and save.",
     "untitled": "Untitled",
     "closeTab": "Close Tab",
-    "unsavedPrompt": "Unsaved changes. Close anyway?"
+    "unsavedPrompt": "Unsaved changes. Close anyway?",
+    "unsavedGoHome": "You have unsaved changes. Leave anyway?",
+    "discardChanges": "Don't Save",
+    "saveAndClose": "Save & Close"
   },
   "assertRules": {
     "title": "Advanced Assertion Rules",

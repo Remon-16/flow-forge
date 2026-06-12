@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useYamlStore } from '../stores/yaml-store'
 import YamlFileTree from '../components/yaml-editor/YamlFileTree.vue'
@@ -18,12 +19,34 @@ function onTabSwitch(index: number) {
   yamlStore.switchTab(index)
 }
 
+// Close confirm modal
+const closeConfirmVisible = ref(false)
+const closeConfirmIndex = ref(-1)
+
 function onTabClose(index: number) {
   const tab = yamlStore.openTabs[index]
   if (tab && tab.modified) {
-    if (!confirm(t('yaml.unsavedPrompt'))) return
+    closeConfirmIndex.value = index
+    closeConfirmVisible.value = true
+    yamlStore.switchTab(index)
+  } else {
+    yamlStore.closeTab(index)
   }
-  yamlStore.closeTab(index)
+}
+
+async function handleSaveAndClose() {
+  await yamlStore.save()
+  yamlStore.closeTab(closeConfirmIndex.value)
+  closeConfirmVisible.value = false
+}
+
+function handleDiscardAndClose() {
+  yamlStore.closeTab(closeConfirmIndex.value)
+  closeConfirmVisible.value = false
+}
+
+function handleCancelClose() {
+  closeConfirmVisible.value = false
 }
 </script>
 
@@ -75,6 +98,20 @@ function onTabClose(index: number) {
 
     <!-- Right: Raw YAML view -->
     <YamlRawView />
+
+    <!-- Close confirm modal -->
+    <a-modal
+      v-model:open="closeConfirmVisible"
+      :title="t('validator.unsavedTitle')"
+      @cancel="handleCancelClose"
+    >
+      <p>{{ t('yaml.unsavedPrompt') }}</p>
+      <template #footer>
+        <a-button @click="handleCancelClose">{{ t('dialog.cancel') }}</a-button>
+        <a-button @click="handleDiscardAndClose">{{ t('yaml.discardChanges') }}</a-button>
+        <a-button type="primary" @click="handleSaveAndClose">{{ t('yaml.saveAndClose') }}</a-button>
+      </template>
+    </a-modal>
   </div>
 </template>
 

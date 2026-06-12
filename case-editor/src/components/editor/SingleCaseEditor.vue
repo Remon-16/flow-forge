@@ -5,7 +5,7 @@ import { useWorkbookStore } from '../../stores/workbook'
 import { SINGLE_CASE_COLUMNS, TAG_LEVELS, JSON_COLUMNS } from '../../types/excel'
 import type { SingleTestCase } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
-import AssertRulesEditor from './AssertRulesEditor.vue'
+import AssertRulesModal from './AssertRulesModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
 const { t } = useI18n()
@@ -88,6 +88,29 @@ function isJsonInvalid(rowIdx: number, col: string): boolean {
 
 function getColumnLabel(col: string): string {
   return t(`table.${col}`)
+}
+
+// AssertRules modal state
+const assertRulesModalVisible = ref(false)
+const assertRulesModalRow = ref(-1)
+const assertRulesValue = ref<string[] | null>(null)
+
+function openAssertRulesEditor(rowIndex: number) {
+  assertRulesModalRow.value = rowIndex
+  assertRulesValue.value = workbook.singleCases[rowIndex].AssertRules as string[] | null
+  assertRulesModalVisible.value = true
+}
+
+function onAssertRulesConfirm(rules: string[]) {
+  if (assertRulesModalRow.value >= 0) {
+    workbook.updateSingleCaseField(assertRulesModalRow.value, 'AssertRules', rules.length > 0 ? rules : null)
+  }
+  assertRulesModalVisible.value = false
+}
+
+function formatRules(val: string[] | null): string {
+  if (!val || val.length === 0) return ''
+  return val.join('\n')
 }
 
 // Filtered relevance options based on input
@@ -187,12 +210,21 @@ const relevanceOptions = computed(() => workbook.validTestIds)
               />
             </template>
 
-            <!-- AssertRules editor -->
+            <!-- AssertRules: textarea + edit details button -->
             <template v-else-if="col === 'AssertRules'">
-              <AssertRulesEditor
-                :modelValue="record[col] as string[] | null"
-                @update:modelValue="(v: string[] | null) => onCellChange(index, col, v)"
-              />
+              <div style="display: flex; gap: 4px; align-items: flex-start; min-width: 200px;">
+                <a-textarea
+                  :value="formatRules(record[col] as string[] | null)"
+                  :rows="2"
+                  readonly
+                  size="small"
+                  style="font-family: monospace; font-size: 12px; flex: 1;"
+                  :placeholder="t('assertRules.empty')"
+                />
+                <a-button size="small" @click="openAssertRulesEditor(index)" style="flex-shrink: 0;">
+                  {{ t('assertRules.editDetails') }}
+                </a-button>
+              </div>
             </template>
 
             <!-- Default text input -->
@@ -227,6 +259,14 @@ const relevanceOptions = computed(() => workbook.validTestIds)
       :title="jsonModalField"
       @confirm="onJsonConfirm"
       @cancel="jsonModalVisible = false"
+    />
+
+    <!-- AssertRules Modal -->
+    <AssertRulesModal
+      :visible="assertRulesModalVisible"
+      :rules="assertRulesValue"
+      @confirm="onAssertRulesConfirm"
+      @cancel="assertRulesModalVisible = false"
     />
   </div>
 </template>

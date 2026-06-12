@@ -75,6 +75,8 @@ export const useYamlStore = defineStore('yaml', () => {
   const isSingleCase = computed(() => currentCase.value?.case_type === 'single')
   const isBizCase = computed(() => currentCase.value?.case_type === 'biz')
 
+  const hasUnsavedTabs = computed(() => openTabs.value.some(t => t.modified))
+
   // --- Actions ---
 
   async function openDirectory(dirPath?: string) {
@@ -167,6 +169,16 @@ export const useYamlStore = defineStore('yaml', () => {
     }
   }
 
+  function downloadYamlBlob(yamlStr: string) {
+    const blob = new Blob([yamlStr], { type: 'text/yaml' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = currentFileName.value || 'testcase.yaml'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function save() {
     if (!currentCase.value) return
 
@@ -178,7 +190,11 @@ export const useYamlStore = defineStore('yaml', () => {
 
     try {
       const yamlStr = stringifyYaml(currentCase.value)
-      await writeFile(currentFilePath.value, yamlStr)
+      if (isDesktop) {
+        await writeFile(currentFilePath.value, yamlStr)
+      } else {
+        downloadYamlBlob(yamlStr)
+      }
       modified.value = false
       // Sync tab state
       saveCurrentTabState()
@@ -207,13 +223,7 @@ export const useYamlStore = defineStore('yaml', () => {
       await save()
     } else {
       const yamlStr = stringifyYaml(currentCase.value)
-      const blob = new Blob([yamlStr], { type: 'text/yaml' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = currentFileName.value || 'testcase.yaml'
-      a.click()
-      URL.revokeObjectURL(url)
+      downloadYamlBlob(yamlStr)
       modified.value = false
       saveCurrentTabState()
     }
@@ -380,6 +390,7 @@ export const useYamlStore = defineStore('yaml', () => {
     currentFileName,
     isSingleCase,
     isBizCase,
+    hasUnsavedTabs,
     // actions
     openDirectory,
     openFile,

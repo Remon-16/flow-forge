@@ -5,7 +5,7 @@ import { useWorkbookStore } from '../../stores/workbook'
 import { BIZ_STEP_COLUMNS, TAG_LEVELS, JSON_COLUMNS } from '../../types/excel'
 import type { BizStep } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
-import AssertRulesEditor from './AssertRulesEditor.vue'
+import AssertRulesModal from './AssertRulesModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
 const props = defineProps<{ flowIndex: number }>()
@@ -101,6 +101,29 @@ function isJsonInvalid(rowIdx: number, col: string): boolean {
 
 function getColumnLabel(col: string): string {
   return t(`table.${col}`)
+}
+
+// AssertRules modal state
+const assertRulesModalVisible = ref(false)
+const assertRulesModalStepIdx = ref(-1)
+const assertRulesValue = ref<string[] | null>(null)
+
+function openAssertRulesEditor(stepIndex: number) {
+  assertRulesModalStepIdx.value = stepIndex
+  assertRulesValue.value = flow.value.steps[stepIndex].AssertRules as string[] | null
+  assertRulesModalVisible.value = true
+}
+
+function onAssertRulesConfirm(rules: string[]) {
+  if (assertRulesModalStepIdx.value >= 0) {
+    workbook.updateBizStepField(props.flowIndex, assertRulesModalStepIdx.value, 'AssertRules', rules.length > 0 ? rules : null)
+  }
+  assertRulesModalVisible.value = false
+}
+
+function formatRules(val: string[] | null): string {
+  if (!val || val.length === 0) return ''
+  return val.join('\n')
 }
 
 const relevanceOptions = computed(() => workbook.validTestIds)
@@ -248,12 +271,21 @@ function getRowClassName(record: BizStep) {
               />
             </template>
 
-            <!-- AssertRules editor -->
+            <!-- AssertRules: textarea + edit details button -->
             <template v-else-if="col === 'AssertRules'">
-              <AssertRulesEditor
-                :modelValue="record[col] as string[] | null"
-                @update:modelValue="(v: string[] | null) => onCellChange(stepIdx, col, v)"
-              />
+              <div style="display: flex; gap: 4px; align-items: flex-start; min-width: 200px;">
+                <a-textarea
+                  :value="formatRules(record[col] as string[] | null)"
+                  :rows="2"
+                  readonly
+                  size="small"
+                  style="font-family: monospace; font-size: 12px; flex: 1;"
+                  :placeholder="t('assertRules.empty')"
+                />
+                <a-button size="small" @click="openAssertRulesEditor(stepIdx)" style="flex-shrink: 0;">
+                  {{ t('assertRules.editDetails') }}
+                </a-button>
+              </div>
             </template>
 
             <!-- Default -->
@@ -305,6 +337,14 @@ function getRowClassName(record: BizStep) {
       :title="jsonModalField"
       @confirm="onJsonConfirm"
       @cancel="jsonModalVisible = false"
+    />
+
+    <!-- AssertRules Modal -->
+    <AssertRulesModal
+      :visible="assertRulesModalVisible"
+      :rules="assertRulesValue"
+      @confirm="onAssertRulesConfirm"
+      @cancel="assertRulesModalVisible = false"
     />
   </div>
 </template>

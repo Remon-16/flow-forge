@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h } from 'vue'
+import { computed, h, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileEntry } from '../../stores/yaml-store'
 
@@ -12,6 +12,19 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'select-file', path: string): void
 }>()
+
+// Expanded keys state
+const expandedKeys = ref<string[]>([])
+
+watch(
+  () => props.files,
+  (files) => {
+    expandedKeys.value = files
+      .filter(f => f.isDirectory)
+      .map(f => f.path)
+  },
+  { immediate: true }
+)
 
 // Convert FileEntry[] to Ant Design tree data format
 const treeData = computed(() => props.files.map(toTreeNode))
@@ -54,7 +67,7 @@ function onContextMenu(e: MouseEvent) {
       <a-tree
         v-if="files.length > 0"
         :tree-data="treeData"
-        :default-expand-all="false"
+        v-model:expanded-keys="expandedKeys"
         :show-line="true"
         :show-icon="true"
         block-node

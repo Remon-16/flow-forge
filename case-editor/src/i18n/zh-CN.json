@@ -128,7 +128,10 @@
     "newFileCreated": "已创建新文件，请编辑后保存",
     "untitled": "未命名",
     "closeTab": "关闭标签页",
-    "unsavedPrompt": "有未保存的修改，是否关闭？"
+    "unsavedPrompt": "有未保存的修改，是否关闭？",
+    "unsavedGoHome": "有未保存的修改，确定离开吗？",
+    "discardChanges": "不保存",
+    "saveAndClose": "保存并关闭"
   },
   "assertRules": {
     "title": "高级断言规则",

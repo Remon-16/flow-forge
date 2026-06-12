@@ -216,15 +216,15 @@ Click **API Definitions** in the left sidebar to switch to the API definition sh
 - Method column: dropdown to select HTTP method
 - StatusCode column: text input
 - RequestHead / RequestBody / AssertDict columns: click the button to open the JSON Editor
-- AssertRules column: per-rule editor with real-time format validation
+- AssertRules column: read-only preview area + "Edit Details" button, opens the structured assertion rules editing modal
 
 #### Editing AssertRules
 
-The AssertRules column provides a per-rule editor, with each rule independently entered and validated:
-- Click **Add Rule** to add a new empty rule row
-- Enter the rule in the input field (e.g., `$.data.code == 0`)
-- Correct format shows a green ✓ at the end of the row; incorrect format shows a red ✗ with a specific error message
-- **Batch Paste** is supported: paste multiple lines of rules at once, and they will be automatically split
+The AssertRules column shows a read-only preview area (one rule per line). Click the **Edit Details** button to open the structured editing modal:
+- Each rule is edited with three separate fields: Path, Operator, Expected
+- Supports 12 operators (== != > >= < <= =~ contains not_contains in typeof is_null is_not_null)
+- Real-time format validation with error hints
+- **Batch Paste** is supported: paste multiple lines and they are auto-parsed into structured rows
 
 #### Saving Files
 
