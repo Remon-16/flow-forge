@@ -54,8 +54,9 @@ function formatRules(val: string[] | null): string {
       </div>
     </div>
 
+    <!-- Row 1: StepID + RelevanceID -->
     <a-row :gutter="12">
-      <a-col :span="24">
+      <a-col :span="12">
         <a-form-item :label="t('table.StepID')" class="compact-item">
           <a-input
             :value="step.StepID"
@@ -71,10 +72,7 @@ function formatRules(val: string[] | null): string {
           </a-input>
         </a-form-item>
       </a-col>
-    </a-row>
-
-    <a-row :gutter="12">
-      <a-col :span="24">
+      <a-col :span="12">
         <a-form-item :label="t('table.RelevanceID')" class="compact-item">
           <a-input
             :value="step.RelevanceID"
@@ -85,8 +83,9 @@ function formatRules(val: string[] | null): string {
       </a-col>
     </a-row>
 
+    <!-- Row 2: Tag + Trans -->
     <a-row :gutter="12">
-      <a-col :span="24">
+      <a-col :span="12">
         <a-form-item :label="t('table.Tag')" class="compact-item">
           <a-select
             :value="step.Tag"
@@ -99,10 +98,7 @@ function formatRules(val: string[] | null): string {
           </a-select>
         </a-form-item>
       </a-col>
-    </a-row>
-
-    <a-row :gutter="12">
-      <a-col :span="24">
+      <a-col :span="12">
         <a-form-item :label="t('table.Trans')" class="compact-item">
           <a-tooltip :title="step._transError || ''">
             <a-input
@@ -116,8 +112,9 @@ function formatRules(val: string[] | null): string {
       </a-col>
     </a-row>
 
+    <!-- Row 3: APIName + Method -->
     <a-row :gutter="12">
-      <a-col :span="24">
+      <a-col :span="12">
         <a-form-item :label="t('table.APIName')" class="compact-item">
           <a-input
             :value="step.APIName"
@@ -126,22 +123,7 @@ function formatRules(val: string[] | null): string {
           />
         </a-form-item>
       </a-col>
-    </a-row>
-
-    <a-row :gutter="12">
-      <a-col :span="24">
-        <a-form-item :label="t('table.AppName')" class="compact-item">
-          <a-input
-            :value="step.AppName"
-            size="small"
-            @change="(e: any) => onFieldChange('AppName', e.target.value)"
-          />
-        </a-form-item>
-      </a-col>
-    </a-row>
-
-    <a-row :gutter="12">
-      <a-col :span="24">
+      <a-col :span="12">
         <a-form-item :label="t('table.Method')" class="compact-item">
           <a-select
             :value="step.Method"
@@ -156,8 +138,18 @@ function formatRules(val: string[] | null): string {
       </a-col>
     </a-row>
 
+    <!-- Row 4: AppName + URL -->
     <a-row :gutter="12">
-      <a-col :span="24">
+      <a-col :span="12">
+        <a-form-item :label="t('table.AppName')" class="compact-item">
+          <a-input
+            :value="step.AppName"
+            size="small"
+            @change="(e: any) => onFieldChange('AppName', e.target.value)"
+          />
+        </a-form-item>
+      </a-col>
+      <a-col :span="12">
         <a-form-item :label="t('table.URL')" class="compact-item">
           <a-input
             :value="step.URL"
@@ -168,8 +160,9 @@ function formatRules(val: string[] | null): string {
       </a-col>
     </a-row>
 
+    <!-- Row 5: StatusCode + Remark -->
     <a-row :gutter="12">
-      <a-col :span="24">
+      <a-col :span="12">
         <a-form-item :label="t('table.StatusCode')" class="compact-item">
           <a-input
             :value="String(step.StatusCode ?? '')"
@@ -178,95 +171,116 @@ function formatRules(val: string[] | null): string {
           />
         </a-form-item>
       </a-col>
-    </a-row>
-
-    <!-- RequestHead -->
-    <a-row :gutter="12">
-      <a-col :span="24">
-        <a-form-item :label="t('table.RequestHead')" class="compact-item">
-          <div class="field-with-detail">
-            <a-textarea
-              :value="formatJson(step.RequestHead)"
-              :rows="2"
-              readonly
-              size="small"
-              :placeholder="t('jsonEditor.noData')"
-            />
-            <a-button size="small" @click="emit('openJson', index, 'RequestHead')">
-              {{ t('jsonEditor.editDetails') }}
-            </a-button>
-          </div>
-        </a-form-item>
-      </a-col>
-    </a-row>
-
-    <!-- RequestBody -->
-    <a-row :gutter="12">
-      <a-col :span="24">
-        <a-form-item :label="t('table.RequestBody')" class="compact-item">
-          <div class="field-with-detail">
-            <a-textarea
-              :value="formatJson(step.RequestBody)"
-              :rows="2"
-              readonly
-              size="small"
-              :placeholder="t('jsonEditor.noData')"
-            />
-            <a-button size="small" @click="emit('openJson', index, 'RequestBody')">
-              {{ t('jsonEditor.editDetails') }}
-            </a-button>
-          </div>
-        </a-form-item>
-      </a-col>
-    </a-row>
-
-    <!-- AssertDict -->
-    <a-row :gutter="12">
-      <a-col :span="24">
-        <a-form-item :label="t('table.AssertDict')" class="compact-item">
-          <div class="field-with-detail">
-            <a-textarea
-              :value="formatJson(step.AssertDict)"
-              :rows="2"
-              readonly
-              size="small"
-              :placeholder="t('jsonEditor.noData')"
-            />
-            <a-button size="small" @click="emit('openJson', index, 'AssertDict')">
-              {{ t('jsonEditor.editDetails') }}
-            </a-button>
-          </div>
-        </a-form-item>
-      </a-col>
-    </a-row>
-
-    <!-- AssertRules -->
-    <a-row :gutter="12">
-      <a-col :span="24">
-        <a-form-item :label="t('assertRules.title')" class="compact-item">
-          <div class="field-with-detail">
-            <a-textarea
-              :value="formatRules(step.AssertRules)"
-              :rows="2"
-              readonly
-              size="small"
-              :placeholder="t('assertRules.empty')"
-            />
-            <a-button size="small" @click="emit('openAssertRules', index)">
-              {{ t('assertRules.editDetails') }}
-            </a-button>
-          </div>
-        </a-form-item>
-      </a-col>
-    </a-row>
-
-    <a-row :gutter="12">
-      <a-col :span="24">
+      <a-col :span="12">
         <a-form-item :label="t('table.Remark')" class="compact-item">
           <a-input
             :value="step.Remark"
             size="small"
             @change="(e: any) => onFieldChange('Remark', e.target.value)"
+          />
+        </a-form-item>
+      </a-col>
+    </a-row>
+
+    <!-- RequestHead (full width) -->
+    <a-row :gutter="12">
+      <a-col :span="24">
+        <a-form-item class="compact-item">
+          <template #label>
+            <span>{{ t('table.RequestHead') }}</span>
+            <a-button
+              size="small"
+              type="link"
+              style="padding: 0 0 0 8px; font-size: 11px;"
+              @click="emit('openJson', index, 'RequestHead')"
+            >
+              {{ t('jsonEditor.editDetails') }}
+            </a-button>
+          </template>
+          <a-textarea
+            :value="formatJson(step.RequestHead)"
+            :auto-size="{ minRows: 2, maxRows: 8 }"
+            readonly
+            size="small"
+            :placeholder="t('jsonEditor.noData')"
+          />
+        </a-form-item>
+      </a-col>
+    </a-row>
+
+    <!-- RequestBody (full width) -->
+    <a-row :gutter="12">
+      <a-col :span="24">
+        <a-form-item class="compact-item">
+          <template #label>
+            <span>{{ t('table.RequestBody') }}</span>
+            <a-button
+              size="small"
+              type="link"
+              style="padding: 0 0 0 8px; font-size: 11px;"
+              @click="emit('openJson', index, 'RequestBody')"
+            >
+              {{ t('jsonEditor.editDetails') }}
+            </a-button>
+          </template>
+          <a-textarea
+            :value="formatJson(step.RequestBody)"
+            :auto-size="{ minRows: 2, maxRows: 8 }"
+            readonly
+            size="small"
+            :placeholder="t('jsonEditor.noData')"
+          />
+        </a-form-item>
+      </a-col>
+    </a-row>
+
+    <!-- AssertDict (full width) -->
+    <a-row :gutter="12">
+      <a-col :span="24">
+        <a-form-item class="compact-item">
+          <template #label>
+            <span>{{ t('table.AssertDict') }}</span>
+            <a-button
+              size="small"
+              type="link"
+              style="padding: 0 0 0 8px; font-size: 11px;"
+              @click="emit('openJson', index, 'AssertDict')"
+            >
+              {{ t('jsonEditor.editDetails') }}
+            </a-button>
+          </template>
+          <a-textarea
+            :value="formatJson(step.AssertDict)"
+            :auto-size="{ minRows: 2, maxRows: 8 }"
+            readonly
+            size="small"
+            :placeholder="t('jsonEditor.noData')"
+          />
+        </a-form-item>
+      </a-col>
+    </a-row>
+
+    <!-- AssertRules (full width) -->
+    <a-row :gutter="12">
+      <a-col :span="24">
+        <a-form-item class="compact-item">
+          <template #label>
+            <span>{{ t('assertRules.title') }}</span>
+            <a-button
+              size="small"
+              type="link"
+              style="padding: 0 0 0 8px; font-size: 11px;"
+              @click="emit('openAssertRules', index)"
+            >
+              {{ t('assertRules.editDetails') }}
+            </a-button>
+          </template>
+          <a-textarea
+            :value="formatRules(step.AssertRules)"
+            :auto-size="{ minRows: 2, maxRows: 8 }"
+            readonly
+            size="small"
+            :placeholder="t('assertRules.empty')"
           />
         </a-form-item>
       </a-col>
@@ -311,20 +325,5 @@ function formatRules(val: string[] | null): string {
 .compact-item :deep(.ant-form-item-label > label) {
   font-size: 11px;
   height: auto;
-}
-
-.field-with-detail {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-.field-with-detail :deep(.ant-input-textarea) {
-  flex: 1;
-}
-
-.field-with-detail .ant-btn {
-  flex-shrink: 0;
-  margin-top: 2px;
 }
 </style>

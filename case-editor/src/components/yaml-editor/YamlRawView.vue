@@ -8,8 +8,10 @@ const { t } = useI18n()
 const yamlStore = useYamlStore()
 
 const isOpen = ref(false)
-const editMode = ref(false) // false = read-only preview, true = editable
+const editMode = ref(true) // default to editable mode
 const editText = ref('')
+
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const yamlText = computed(() => {
   if (!yamlStore.currentCase) return ''
@@ -21,44 +23,63 @@ const yamlText = computed(() => {
   }
 })
 
-// Sync when current case changes
+// Sync when current case changes (form -> raw)
 watch(
   () => yamlStore.currentCase,
   () => {
-    editText.value = yamlText.value
+    if (editMode.value) {
+      editText.value = yamlText.value
+    }
   },
   { immediate: true }
 )
+
+// Debounced sync from raw text -> form
+watch(editText, (newText) => {
+  if (!editMode.value) return
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    try {
+      const parsed = parseYaml(newText)
+      if (parsed && parsed.case_type === yamlStore.currentCase?.case_type) {
+        yamlStore.currentCase = parsed
+        yamlStore.markModified()
+      }
+    } catch {
+      // Ignore parse errors during typing
+    }
+  }, 500)
+})
 
 function togglePanel() {
   isOpen.value = !isOpen.value
   if (isOpen.value) {
     editText.value = yamlText.value
+    editMode.value = true
   }
 }
 
 function toggleEditMode() {
   if (editMode.value) {
-    // Switching from edit back to preview: parse and apply
-    try {
-      const parsed = parseYaml(editText.value)
-      yamlStore.currentCase = parsed
-    } catch (err) {
-      // Just keep the text as is and show an error
-      console.warn('YAML parse error:', err)
-    }
+    // Switching from edit back to preview
+    editMode.value = false
   } else {
-    // Switching to edit: copy current
+    // Switching to edit: copy current YAML text
     editText.value = yamlText.value
+    editMode.value = true
   }
-  editMode.value = !editMode.value
 }
 
 function onTextBlur() {
-  // Try to apply changes when leaving text area
+  // Try to apply changes immediately when leaving text area
+  if (!editMode.value) return
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
   try {
     const parsed = parseYaml(editText.value)
-    if (parsed.case_type === yamlStore.currentCase?.case_type) {
+    if (parsed && parsed.case_type === yamlStore.currentCase?.case_type) {
       yamlStore.currentCase = parsed
       yamlStore.markModified()
     }
@@ -86,17 +107,17 @@ function onTextBlur() {
         </a-button>
       </div>
 
-      <!-- Read-only preview -->
-      <pre v-if="!editMode" class="raw-preview">{{ yamlText }}</pre>
-
-      <!-- Editable textarea -->
+      <!-- Editable textarea (default) -->
       <a-textarea
-        v-else
+        v-if="editMode"
         v-model:value="editText"
         class="raw-editor"
         :auto-size="false"
         @blur="onTextBlur"
       />
+
+      <!-- Read-only preview -->
+      <pre v-else class="raw-preview">{{ yamlText }}</pre>
     </div>
   </div>
 </template>

@@ -1,5 +1,5 @@
 import { open, save } from '@tauri-apps/plugin-dialog'
-import { readTextFile, readFile as tauriReadFile, writeTextFile, writeFile as tauriWriteFile, exists as tauriExists, mkdir as tauriMkdir } from '@tauri-apps/plugin-fs'
+import { exists as tauriExists, mkdir as tauriMkdir } from '@tauri-apps/plugin-fs'
 import { invoke } from '@tauri-apps/api/core'
 
 export interface FileEntry {
@@ -61,25 +61,25 @@ export async function saveFileDialog(
 }
 
 export async function readFile(filePath: string): Promise<string> {
-  if (isDesktop) return readTextFile(filePath)
+  if (isDesktop) return invoke<string>('read_file_text', { path: filePath })
   throw new Error('Direct file reading is not supported in browser mode. Please use "Open File" instead.')
 }
 
 export async function readFileBuffer(filePath: string): Promise<ArrayBuffer> {
   if (isDesktop) {
-    const data = await tauriReadFile(filePath)
+    const data = await invoke<number[]>('read_file_bytes', { path: filePath })
     return new Uint8Array(data).buffer as ArrayBuffer
   }
   throw new Error('Direct file reading is not supported in browser mode.')
 }
 
 export async function writeFile(filePath: string, content: string): Promise<void> {
-  if (isDesktop) return writeTextFile(filePath, content)
+  if (isDesktop) return invoke<void>('write_file_text', { path: filePath, content })
   throw new Error('Direct file writing is not supported in browser mode. Please use "Save As" instead.')
 }
 
 export async function writeFileBuffer(filePath: string, buffer: ArrayBuffer): Promise<void> {
-  if (isDesktop) return tauriWriteFile(filePath, new Uint8Array(buffer))
+  if (isDesktop) return invoke<void>('write_file_bytes', { path: filePath, data: Array.from(new Uint8Array(buffer)) })
   throw new Error('Direct file writing is not supported in browser mode.')
 }
 

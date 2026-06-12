@@ -60,7 +60,7 @@ npm run dev:desktop
 
 ### YAML Editor
 - **Form-based editing**: not a text editor — edit YAML cases through structured form fields
-- **Right-side YAML preview panel**: toggle between preview / direct raw YAML text editing (similar to Markdown editor split view)
+- **Right-side YAML edit panel**: direct raw YAML editing by default with real-time auto-sync to form (500ms debounce); toggle to read-only preview mode (similar to Markdown editor split view)
 - Auto-detect case type via `case_type` field: `single` (single-API case) / `biz` (business flow case)
 - Open a directory (left file tree browsing, VS Code style) or open a single .yaml file (via header "Open" dropdown menu)
 - **File tabs**: open multiple files simultaneously, switch between them via tabs (similar to VS Code)
@@ -245,14 +245,14 @@ The form type automatically switches based on the `case_type` field in the YAML 
 - `single`: single-API case form (test_id, relevance_id, api_name, method, url, etc.)
 - `biz`: business flow form (sheet_name + step list)
 
-Each field occupies its own row. JSON fields (RequestHead, RequestBody, AssertDict) and AssertRules field display a read-only preview area with an "Edit Details" button to open the corresponding editor modal for structured editing.
+Simple fields are arranged in a two-column grid layout, while JSON fields (RequestHead, RequestBody, AssertDict), AssertRules, and Remark each occupy a full row. The "Edit Details" button sits beside the field label (e.g., `RequestBody  Edit Details`). JSON text areas auto-size to fit content.
 
 #### YAML Preview Panel
 
 The right-side panel can be toggled between:
 - Collapsed: only shows the toggle button
+- Edit mode (default): allows direct editing of YAML text with real-time auto-parse to the form (500ms debounce), ideal for bulk copy-paste workflows
 - Preview mode: displays the serialized YAML text from the current form data in real time (read-only)
-- Edit mode: allows direct editing of YAML text; auto-parses back to the form on blur
 
 #### Saving
 

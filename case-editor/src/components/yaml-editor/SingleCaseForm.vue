@@ -66,8 +66,9 @@ function onAssertRulesConfirm(rules: string[]) {
 <template>
   <div class="single-case-form" v-if="currentCase">
     <a-form layout="vertical" :model="currentCase" size="small">
+      <!-- Row 1: TestID + RelevanceID -->
       <a-row :gutter="16">
-        <a-col :span="24">
+        <a-col :span="12">
           <a-form-item :label="t('table.TestID')">
             <a-input
               :value="currentCase.test_id"
@@ -75,10 +76,7 @@ function onAssertRulesConfirm(rules: string[]) {
             />
           </a-form-item>
         </a-col>
-      </a-row>
-
-      <a-row :gutter="16">
-        <a-col :span="24">
+        <a-col :span="12">
           <a-form-item :label="t('table.RelevanceID')">
             <a-input
               :value="currentCase.relevance_id"
@@ -88,8 +86,9 @@ function onAssertRulesConfirm(rules: string[]) {
         </a-col>
       </a-row>
 
+      <!-- Row 2: Tag + APIName -->
       <a-row :gutter="16">
-        <a-col :span="24">
+        <a-col :span="12">
           <a-form-item :label="t('table.Tag')">
             <a-select
               :value="currentCase.tag"
@@ -101,10 +100,7 @@ function onAssertRulesConfirm(rules: string[]) {
             </a-select>
           </a-form-item>
         </a-col>
-      </a-row>
-
-      <a-row :gutter="16">
-        <a-col :span="24">
+        <a-col :span="12">
           <a-form-item :label="t('table.APIName')">
             <a-input
               :value="currentCase.api_name"
@@ -114,8 +110,9 @@ function onAssertRulesConfirm(rules: string[]) {
         </a-col>
       </a-row>
 
+      <!-- Row 3: AppName + Method -->
       <a-row :gutter="16">
-        <a-col :span="24">
+        <a-col :span="12">
           <a-form-item :label="t('table.AppName')">
             <a-input
               :value="currentCase.app_name"
@@ -123,10 +120,7 @@ function onAssertRulesConfirm(rules: string[]) {
             />
           </a-form-item>
         </a-col>
-      </a-row>
-
-      <a-row :gutter="16">
-        <a-col :span="24">
+        <a-col :span="12">
           <a-form-item :label="t('table.Method')">
             <a-select
               :value="currentCase.method"
@@ -140,8 +134,9 @@ function onAssertRulesConfirm(rules: string[]) {
         </a-col>
       </a-row>
 
+      <!-- Row 4: URL + StatusCode -->
       <a-row :gutter="16">
-        <a-col :span="24">
+        <a-col :span="12">
           <a-form-item :label="t('table.URL')">
             <a-input
               :value="currentCase.url"
@@ -149,10 +144,7 @@ function onAssertRulesConfirm(rules: string[]) {
             />
           </a-form-item>
         </a-col>
-      </a-row>
-
-      <a-row :gutter="16">
-        <a-col :span="24">
+        <a-col :span="12">
           <a-form-item :label="t('table.StatusCode')">
             <a-input
               :value="String(currentCase.status_code ?? '')"
@@ -162,88 +154,113 @@ function onAssertRulesConfirm(rules: string[]) {
         </a-col>
       </a-row>
 
-      <!-- RequestHead -->
+      <!-- RequestHead (full width) -->
       <a-row :gutter="16">
         <a-col :span="24">
-          <a-form-item :label="t('table.RequestHead')">
-            <div class="field-with-detail">
-              <a-textarea
-                :value="formatJson(currentCase.request_head)"
-                :rows="3"
-                readonly
-                :placeholder="t('jsonEditor.noData')"
-              />
-              <a-button size="small" @click="openJsonEditor('request_head')">
+          <a-form-item>
+            <template #label>
+              <span>{{ t('table.RequestHead') }}</span>
+              <a-button
+                size="small"
+                type="link"
+                style="padding: 0 0 0 8px; font-size: 12px;"
+                @click="openJsonEditor('request_head')"
+              >
                 {{ t('jsonEditor.editDetails') }}
               </a-button>
-            </div>
+            </template>
+            <a-textarea
+              :value="formatJson(currentCase.request_head)"
+              :auto-size="{ minRows: 2, maxRows: 12 }"
+              readonly
+              :placeholder="t('jsonEditor.noData')"
+            />
           </a-form-item>
         </a-col>
       </a-row>
 
-      <!-- RequestBody -->
+      <!-- RequestBody (full width) -->
       <a-row :gutter="16">
         <a-col :span="24">
-          <a-form-item :label="t('table.RequestBody')">
-            <div class="field-with-detail">
-              <a-textarea
-                :value="formatJson(currentCase.request_body)"
-                :rows="3"
-                readonly
-                :placeholder="t('jsonEditor.noData')"
-              />
-              <a-button size="small" @click="openJsonEditor('request_body')">
+          <a-form-item>
+            <template #label>
+              <span>{{ t('table.RequestBody') }}</span>
+              <a-button
+                size="small"
+                type="link"
+                style="padding: 0 0 0 8px; font-size: 12px;"
+                @click="openJsonEditor('request_body')"
+              >
                 {{ t('jsonEditor.editDetails') }}
               </a-button>
-            </div>
+            </template>
+            <a-textarea
+              :value="formatJson(currentCase.request_body)"
+              :auto-size="{ minRows: 2, maxRows: 12 }"
+              readonly
+              :placeholder="t('jsonEditor.noData')"
+            />
           </a-form-item>
         </a-col>
       </a-row>
 
-      <!-- AssertDict -->
+      <!-- AssertDict (full width) -->
       <a-row :gutter="16">
         <a-col :span="24">
-          <a-form-item :label="t('table.AssertDict')">
-            <div class="field-with-detail">
-              <a-textarea
-                :value="formatJson(currentCase.assert_dict)"
-                :rows="3"
-                readonly
-                :placeholder="t('jsonEditor.noData')"
-              />
-              <a-button size="small" @click="openJsonEditor('assert_dict')">
+          <a-form-item>
+            <template #label>
+              <span>{{ t('table.AssertDict') }}</span>
+              <a-button
+                size="small"
+                type="link"
+                style="padding: 0 0 0 8px; font-size: 12px;"
+                @click="openJsonEditor('assert_dict')"
+              >
                 {{ t('jsonEditor.editDetails') }}
               </a-button>
-            </div>
+            </template>
+            <a-textarea
+              :value="formatJson(currentCase.assert_dict)"
+              :auto-size="{ minRows: 2, maxRows: 12 }"
+              readonly
+              :placeholder="t('jsonEditor.noData')"
+            />
           </a-form-item>
         </a-col>
       </a-row>
 
-      <!-- AssertRules -->
+      <!-- AssertRules (full width) -->
       <a-row :gutter="16">
         <a-col :span="24">
-          <a-form-item :label="t('assertRules.title')">
-            <div class="field-with-detail">
-              <a-textarea
-                :value="formatRules(currentCase.assert_rules)"
-                :rows="3"
-                readonly
-                :placeholder="t('assertRules.empty')"
-              />
-              <a-button size="small" @click="openAssertRulesEditor">
+          <a-form-item>
+            <template #label>
+              <span>{{ t('assertRules.title') }}</span>
+              <a-button
+                size="small"
+                type="link"
+                style="padding: 0 0 0 8px; font-size: 12px;"
+                @click="openAssertRulesEditor"
+              >
                 {{ t('assertRules.editDetails') }}
               </a-button>
-            </div>
+            </template>
+            <a-textarea
+              :value="formatRules(currentCase.assert_rules)"
+              :auto-size="{ minRows: 2, maxRows: 12 }"
+              readonly
+              :placeholder="t('assertRules.empty')"
+            />
           </a-form-item>
         </a-col>
       </a-row>
 
+      <!-- Remark (full width) -->
       <a-row :gutter="16">
         <a-col :span="24">
           <a-form-item :label="t('table.Remark')">
             <a-textarea
               :value="currentCase.remark"
-              :rows="2"
+              :auto-size="{ minRows: 2, maxRows: 8 }"
               @change="(e: any) => updateField('remark', e.target.value)"
             />
           </a-form-item>
@@ -275,20 +292,5 @@ function onAssertRulesConfirm(rules: string[]) {
   padding: 16px;
   overflow: auto;
   height: 100%;
-}
-
-.field-with-detail {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-.field-with-detail .ant-textarea {
-  flex: 1;
-}
-
-.field-with-detail .ant-btn {
-  flex-shrink: 0;
-  margin-top: 2px;
 }
 </style>

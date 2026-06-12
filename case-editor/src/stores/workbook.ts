@@ -85,16 +85,21 @@ export const useWorkbookStore = defineStore('workbook', () => {
 
   async function save() {
     const data = buildData()
-    if (isDesktop && filePath.value) {
-      const { createWorkbook } = await import('../utils/excel-writer')
-      const wb = await createWorkbook(data)
-      const buffer = await wb.xlsx.writeBuffer()
-      await writeFileBuffer(filePath.value, buffer)
-    } else {
-      const name = fileName.value || 'testcase.xlsx'
-      await downloadExcel(data, name)
+    try {
+      if (isDesktop && filePath.value) {
+        const { createWorkbook } = await import('../utils/excel-writer')
+        const wb = await createWorkbook(data)
+        const buffer = await wb.xlsx.writeBuffer()
+        await writeFileBuffer(filePath.value, buffer)
+      } else {
+        const name = fileName.value || 'testcase.xlsx'
+        await downloadExcel(data, name)
+      }
+      modified.value = false
+    } catch (err) {
+      console.error('Excel save failed:', err)
+      throw err
     }
-    modified.value = false
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

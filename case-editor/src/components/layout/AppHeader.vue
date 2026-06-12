@@ -143,7 +143,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 <template>
   <header class="app-header">
-    <span style="font-weight: 600; margin: 0 16px; font-size: 14px; white-space: nowrap;">
+    <span
+      style="position: absolute; left: 50%; transform: translateX(-50%); font-weight: 600; font-size: 14px; white-space: nowrap; pointer-events: none;"
+    >
       {{ modeTitle }}
     </span>
 
