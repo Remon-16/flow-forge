@@ -12,6 +12,7 @@ const editMode = ref(true) // default to editable mode
 const editText = ref('')
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
+let suppressSync = false
 
 const yamlText = computed(() => {
   if (!yamlStore.currentCase) return ''
@@ -28,6 +29,7 @@ watch(
   () => yamlStore.currentCase,
   () => {
     if (editMode.value) {
+      suppressSync = true
       editText.value = yamlText.value
     }
   },
@@ -36,6 +38,10 @@ watch(
 
 // Debounced sync from raw text -> form
 watch(editText, (newText) => {
+  if (suppressSync) {
+    suppressSync = false
+    return
+  }
   if (!editMode.value) return
   if (debounceTimer) clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
