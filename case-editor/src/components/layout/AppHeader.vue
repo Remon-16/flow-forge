@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { message } from 'ant-design-vue'
 import { useWorkbookStore } from '../../stores/workbook'
 import { useYamlStore } from '../../stores/yaml-store'
 import { useSettingsStore } from '../../stores/settings'
@@ -15,6 +16,7 @@ const yamlStore = useYamlStore()
 const settings = useSettingsStore()
 
 const isExcelMode = computed(() => route.name === 'excel-editor')
+const isYamlMode = computed(() => route.name === 'yaml-editor')
 const modeTitle = computed(() => isExcelMode.value ? t('header.excelEditor') : t('header.yamlEditor'))
 
 function goHome() {
@@ -24,17 +26,19 @@ function goHome() {
 function handleNew() {
   if (isExcelMode.value) {
     workbook.newWorkbook()
+    message.info(t('yaml.newFileCreated'))
   } else {
     yamlStore.newFile('single')
+    message.info(t('yaml.newFileCreated'))
   }
 }
 
 async function handleOpen() {
   if (isExcelMode.value) {
     if (isDesktop) {
-      const filePath = await openFileDialog({
-        filters: [{ name: 'Excel Files', extensions: ['xlsx', 'xls'] }],
-      })
+      const filePath = await openFileDialog(
+        [{ name: 'Excel Files', extensions: ['xlsx', 'xls'] }],
+      )
       if (filePath) {
         await workbook.openFile(filePath)
       }
@@ -54,19 +58,37 @@ async function handleOpen() {
   }
 }
 
+function handleOpenMenuClick({ key }: { key: string }) {
+  if (key === 'open-directory') {
+    yamlStore.openDirectory()
+  } else if (key === 'open-file') {
+    yamlStore.openFile()
+  }
+}
+
 async function handleSave() {
-  if (isExcelMode.value) {
-    await workbook.save()
-  } else {
-    await yamlStore.save()
+  try {
+    if (isExcelMode.value) {
+      await workbook.save()
+    } else {
+      await yamlStore.save()
+    }
+    message.success(t('yaml.saved'))
+  } catch (err) {
+    console.error('Save failed:', err)
+    message.error(t('yaml.saveFailed'))
   }
 }
 
 async function handleSaveAs() {
-  if (isExcelMode.value) {
-    await workbook.saveAs()
-  } else {
-    await yamlStore.saveAs()
+  try {
+    if (isExcelMode.value) {
+      await workbook.saveAs()
+    } else {
+      await yamlStore.saveAs()
+    }
+  } catch (err) {
+    console.error('Save As failed:', err)
   }
 }
 
@@ -106,7 +128,22 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
     </span>
 
     <a-button size="small" type="text" @click="handleNew">{{ t('menu.new') }}</a-button>
-    <a-button size="small" type="text" @click="handleOpen">{{ t('menu.open') }}</a-button>
+
+    <a-dropdown v-if="isYamlMode">
+      <a-button size="small" type="text">{{ t('menu.open') }}</a-button>
+      <template #overlay>
+        <a-menu @click="handleOpenMenuClick">
+          <a-menu-item key="open-directory">
+            <span>&#128193;</span> {{ t('yaml.openDir') }}
+          </a-menu-item>
+          <a-menu-item key="open-file">
+            <span>&#128196;</span> {{ t('yaml.openFile') }}
+          </a-menu-item>
+        </a-menu>
+      </template>
+    </a-dropdown>
+    <a-button v-else size="small" type="text" @click="handleOpen">{{ t('menu.open') }}</a-button>
+
     <a-button size="small" type="text" @click="handleSave">{{ t('yaml.save') }}</a-button>
     <a-button size="small" type="text" @click="handleSaveAs">{{ t('yaml.saveAs') }}</a-button>
 

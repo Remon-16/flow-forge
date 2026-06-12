@@ -62,7 +62,8 @@ npm run dev:desktop
 - **Form-based editing**: not a text editor — edit YAML cases through structured form fields
 - **Right-side YAML preview panel**: toggle between preview / direct raw YAML text editing (similar to Markdown editor split view)
 - Auto-detect case type via `case_type` field: `single` (single-API case) / `biz` (business flow case)
-- Open a directory (left file tree browsing, VS Code style) or open a single .yaml file
+- Open a directory (left file tree browsing, VS Code style) or open a single .yaml file (via header "Open" dropdown menu)
+- **File tabs**: open multiple files simultaneously, switch between them via tabs (similar to VS Code)
 - Single-API form: full fields (test_id, relevance_id, tag, api_name, method, url, request_head/body, assert_dict/rules, etc.)
 - Business flow form: sheet_name + step list (draggable sort), each step with full fields
 - Reuses Excel editor's JSON Editor and AssertRules Editor
@@ -86,6 +87,7 @@ graph TD
     Excel --> AssertRulesEditor[AssertRulesEditor - Advanced Assertion Editor]
 
     YAML --> FileTree[YamlFileTree - File Tree Sidebar]
+    YAML --> TabBar[YamlTabBar - File Tab Bar]
     YAML --> SingleForm[SingleCaseForm - Single-API Form]
     YAML --> BizForm[BizFlowForm - Business Flow Form]
     YAML --> RawView[YamlRawView - Raw YAML View]
@@ -168,16 +170,18 @@ case-editor/
     │   │   ├── AppSidebar.vue         # Left navigation
     │   │   └── StatusBar.vue          # Bottom status bar
     │   ├── editor/
-    │   │   ├── ApiDefEditor.vue       # API definition editor
-    │   │   ├── SingleCaseEditor.vue   # Single-API case editor
-    │   │   ├── BizFlowEditor.vue      # Business flow editor
-    │   │   └── AssertRulesEditor.vue  # Advanced assertion rule editor
+    │   │   ├── ApiDefEditor.vue         # API definition editor
+    │   │   ├── SingleCaseEditor.vue     # Single-API case editor
+    │   │   ├── BizFlowEditor.vue        # Business flow editor
+    │   │   ├── AssertRulesEditor.vue    # Advanced assertion rule editor
+    │   │   └── AssertRulesModal.vue     # Assertion rules structured editor modal
     │   ├── yaml-editor/
-    │   │   ├── YamlFileTree.vue       # YAML file tree sidebar
-    │   │   ├── SingleCaseForm.vue     # Single-API case form
-    │   │   ├── BizFlowForm.vue        # Business flow form
-    │   │   ├── StepEditor.vue         # Step sub-form
-    │   │   └── YamlRawView.vue        # Raw YAML text view
+    │   │   ├── YamlFileTree.vue         # YAML file tree sidebar
+    │   │   ├── YamlTabBar.vue           # File tab bar
+    │   │   ├── SingleCaseForm.vue       # Single-API case form
+    │   │   ├── BizFlowForm.vue          # Business flow form
+    │   │   ├── StepEditor.vue           # Step sub-form
+    │   │   └── YamlRawView.vue          # Raw YAML text view
     │   └── json-editor/
     │       ├── JsonEditor.vue         # JSON editor modal
     │       ├── JsonNode.vue           # Recursive node component
@@ -231,8 +235,9 @@ The AssertRules column provides a per-rule editor, with each rule independently 
 
 #### Opening Cases
 
-- **Open Directory**: select a directory containing .yaml files; a file tree appears on the left
-- **Open File**: directly select a single .yaml file to edit
+- **Open Directory**: Click header "Open" → "Open Directory" to select a directory containing .yaml files; a file tree appears on the left
+- **Open File**: Click header "Open" → "Open File" to directly select a single .yaml file to edit
+- **File Tabs**: Open multiple files simultaneously, switch between them via tabs, click × to close
 
 #### Form Editing
 
@@ -240,7 +245,7 @@ The form type automatically switches based on the `case_type` field in the YAML 
 - `single`: single-API case form (test_id, relevance_id, api_name, method, url, etc.)
 - `biz`: business flow form (sheet_name + step list)
 
-All form fields correspond to columns in the Excel editor. JSON fields reuse the JSON Editor, and assertion rules reuse the AssertRules Editor.
+Each field occupies its own row. JSON fields (RequestHead, RequestBody, AssertDict) and AssertRules field display a read-only preview area with an "Edit Details" button to open the corresponding editor modal for structured editing.
 
 #### YAML Preview Panel
 

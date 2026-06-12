@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useWorkbookStore } from '../../stores/workbook'
 import { useEditorStore } from '../../stores/editor'
 
-const route = useRoute()
 const { t } = useI18n()
 const workbook = useWorkbookStore()
 const editor = useEditorStore()
@@ -63,13 +61,10 @@ const selectedKey = computed(() => {
   return [`biz_${editor.activeSheetIndex - 1}`]
 })
 
-// Hide sidebar in YAML mode (YamlFileTree replaces it)
-const isYamlMode = computed(() => route.name === 'yaml-editor')
 </script>
 
 <template>
-  <div v-if="isYamlMode" class="sidebar-hidden" />
-  <div v-else style="padding: 8px;">
+  <div style="padding: 8px;">
     <a-menu
       mode="inline"
       :selectedKeys="selectedKey"
@@ -93,8 +88,4 @@ const isYamlMode = computed(() => route.name === 'yaml-editor')
 </template>
 
 <style scoped>
-.sidebar-hidden {
-  width: 0;
-  overflow: hidden;
-}
 </style>

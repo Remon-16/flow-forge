@@ -2,6 +2,13 @@ import { open, save } from '@tauri-apps/plugin-dialog'
 import { readTextFile, readFile as tauriReadFile, writeTextFile, writeFile as tauriWriteFile, exists as tauriExists, mkdir as tauriMkdir } from '@tauri-apps/plugin-fs'
 import { invoke } from '@tauri-apps/api/core'
 
+export interface FileEntry {
+  name: string
+  path: string
+  isDirectory: boolean
+  children?: FileEntry[]
+}
+
 const isDesktop = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
 
 export async function openFileDialog(

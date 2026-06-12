@@ -5,6 +5,7 @@ import { useYamlStore } from '../../stores/yaml-store'
 import type { BizYamlCase, YamlBizStep } from '../../types/yaml'
 import StepEditor from './StepEditor.vue'
 import JsonEditor from '../json-editor/JsonEditor.vue'
+import AssertRulesModal from '../editor/AssertRulesModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
 const { t } = useI18n()
@@ -52,6 +53,24 @@ function onJsonConfirm(value: Record<string, unknown>) {
   }
   jsonModalVisible.value = false
 }
+
+// AssertRules editor
+const assertRulesModalVisible = ref(false)
+const assertRulesModalStep = ref(-1)
+const assertRulesValue = ref<string[] | null>(null)
+
+function openAssertRulesEditor(stepIdx: number) {
+  assertRulesModalStep.value = stepIdx
+  assertRulesValue.value = (currentCase.value!.steps[stepIdx] as unknown as Record<string, unknown>)['AssertRules'] as string[] | null
+  assertRulesModalVisible.value = true
+}
+
+function onAssertRulesConfirm(rules: string[]) {
+  if (assertRulesModalStep.value >= 0) {
+    yamlStore.updateBizStepField(assertRulesModalStep.value, 'AssertRules', rules.length > 0 ? rules : null)
+  }
+  assertRulesModalVisible.value = false
+}
 </script>
 
 <template>
@@ -80,6 +99,7 @@ function onJsonConfirm(value: Record<string, unknown>) {
         @remove="removeStep"
         @move="moveStep"
         @open-json="openJsonEditor"
+        @open-assert-rules="openAssertRulesEditor"
       />
 
       <div v-if="currentCase.steps.length === 0" class="no-steps">
@@ -93,6 +113,13 @@ function onJsonConfirm(value: Record<string, unknown>) {
       :title="jsonModalField"
       @confirm="onJsonConfirm"
       @cancel="jsonModalVisible = false"
+    />
+
+    <AssertRulesModal
+      :visible="assertRulesModalVisible"
+      :rules="assertRulesValue"
+      @confirm="onAssertRulesConfirm"
+      @cancel="assertRulesModalVisible = false"
     />
   </div>
 </template>

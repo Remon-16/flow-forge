@@ -13,7 +13,12 @@ const editText = ref('')
 
 const yamlText = computed(() => {
   if (!yamlStore.currentCase) return ''
-  return stringifyYaml(yamlStore.currentCase)
+  try {
+    return stringifyYaml(yamlStore.currentCase)
+  } catch (err) {
+    console.error('Failed to stringify YAML:', err)
+    return '# Error: Failed to generate YAML'
+  }
 })
 
 // Sync when current case changes
@@ -65,11 +70,11 @@ function onTextBlur() {
 
 <template>
   <div class="yaml-raw-view" :class="{ open: isOpen }">
-    <div class="raw-toggle" @click="togglePanel">
+    <div class="raw-toggle" @click="togglePanel" :title="t('yaml.rawView')">
       <span class="toggle-label">
-        {{ isOpen ? t('yaml.rawView') : '' }}
+        <span v-if="!isOpen" class="toggle-hint">YAML</span>
+        <span v-else>{{ t('yaml.rawView') }}</span>
         <span class="toggle-arrow">{{ isOpen ? '▶' : '◀' }}</span>
-        {{ !isOpen ? '' : '' }}
       </span>
     </div>
 
@@ -135,6 +140,11 @@ function onTextBlur() {
 .toggle-label {
   font-size: 12px;
   color: #999;
+}
+
+.toggle-hint {
+  font-size: 11px;
+  letter-spacing: 2px;
 }
 
 .toggle-arrow {

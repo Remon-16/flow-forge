@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useSettingsStore } from '../stores/settings'
 
 const router = useRouter()
 const { t } = useI18n()
+const settings = useSettingsStore()
 
 function goExcel() {
   router.push('/excel')
@@ -12,10 +14,26 @@ function goExcel() {
 function goYaml() {
   router.push('/yaml')
 }
+
+function handleLanguageChange(lang: string) {
+  settings.setLanguage(lang as 'zh-CN' | 'en-US')
+}
 </script>
 
 <template>
   <div class="home-page">
+    <div class="home-lang-switch">
+      <a-select
+        :value="settings.language"
+        size="small"
+        style="width: 90px"
+        @change="handleLanguageChange"
+      >
+        <a-select-option value="zh-CN">中文</a-select-option>
+        <a-select-option value="en-US">English</a-select-option>
+      </a-select>
+    </div>
+
     <div class="home-header">
       <h1 class="home-title">{{ t('home.title') }}</h1>
       <p class="home-subtitle">{{ t('home.subtitle') }}</p>
@@ -114,6 +132,13 @@ function goYaml() {
   margin: 0 0 20px 0;
   font-size: 14px;
   line-height: 1.5;
+}
+
+.home-lang-switch {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  z-index: 10;
 }
 
 .card-icon {

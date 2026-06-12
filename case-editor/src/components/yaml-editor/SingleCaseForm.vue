@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useYamlStore } from '../../stores/yaml-store'
 import { TAG_LEVELS, HTTP_METHODS } from '../../types/excel'
 import type { SingleYamlCase } from '../../types/yaml'
-import AssertRulesEditor from '../editor/AssertRulesEditor.vue'
 import JsonEditor from '../json-editor/JsonEditor.vue'
+import AssertRulesModal from '../editor/AssertRulesModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
 const { t } = useI18n()
@@ -17,7 +17,21 @@ function updateField(field: string, value: unknown) {
   yamlStore.updateSingleField(field as keyof SingleYamlCase, value)
 }
 
-// JSON editor state
+function formatJson(val: unknown): string {
+  if (!val) return ''
+  try {
+    return JSON.stringify(val, null, 2)
+  } catch {
+    return String(val)
+  }
+}
+
+function formatRules(val: string[] | null): string {
+  if (!val || val.length === 0) return ''
+  return val.join('\n')
+}
+
+// JSON editor
 const jsonModalVisible = ref(false)
 const jsonModalField = ref('')
 const jsonValue = ref<Record<string, unknown>>({})
@@ -36,15 +50,24 @@ function onJsonConfirm(value: Record<string, unknown>) {
   jsonModalVisible.value = false
 }
 
-import { ref } from 'vue'
+// AssertRules editor
+const assertRulesModalVisible = ref(false)
+
+function openAssertRulesEditor() {
+  assertRulesModalVisible.value = true
+}
+
+function onAssertRulesConfirm(rules: string[]) {
+  updateField('assert_rules', rules.length > 0 ? rules : null)
+  assertRulesModalVisible.value = false
+}
 </script>
 
 <template>
   <div class="single-case-form" v-if="currentCase">
     <a-form layout="vertical" :model="currentCase" size="small">
       <a-row :gutter="16">
-        <!-- Row 1 -->
-        <a-col :span="12">
+        <a-col :span="24">
           <a-form-item :label="t('table.TestID')">
             <a-input
               :value="currentCase.test_id"
@@ -52,7 +75,10 @@ import { ref } from 'vue'
             />
           </a-form-item>
         </a-col>
-        <a-col :span="12">
+      </a-row>
+
+      <a-row :gutter="16">
+        <a-col :span="24">
           <a-form-item :label="t('table.RelevanceID')">
             <a-input
               :value="currentCase.relevance_id"
@@ -60,9 +86,10 @@ import { ref } from 'vue'
             />
           </a-form-item>
         </a-col>
+      </a-row>
 
-        <!-- Row 2 -->
-        <a-col :span="8">
+      <a-row :gutter="16">
+        <a-col :span="24">
           <a-form-item :label="t('table.Tag')">
             <a-select
               :value="currentCase.tag"
@@ -74,7 +101,10 @@ import { ref } from 'vue'
             </a-select>
           </a-form-item>
         </a-col>
-        <a-col :span="8">
+      </a-row>
+
+      <a-row :gutter="16">
+        <a-col :span="24">
           <a-form-item :label="t('table.APIName')">
             <a-input
               :value="currentCase.api_name"
@@ -82,7 +112,10 @@ import { ref } from 'vue'
             />
           </a-form-item>
         </a-col>
-        <a-col :span="8">
+      </a-row>
+
+      <a-row :gutter="16">
+        <a-col :span="24">
           <a-form-item :label="t('table.AppName')">
             <a-input
               :value="currentCase.app_name"
@@ -90,9 +123,10 @@ import { ref } from 'vue'
             />
           </a-form-item>
         </a-col>
+      </a-row>
 
-        <!-- Row 3 -->
-        <a-col :span="8">
+      <a-row :gutter="16">
+        <a-col :span="24">
           <a-form-item :label="t('table.Method')">
             <a-select
               :value="currentCase.method"
@@ -104,7 +138,10 @@ import { ref } from 'vue'
             </a-select>
           </a-form-item>
         </a-col>
-        <a-col :span="16">
+      </a-row>
+
+      <a-row :gutter="16">
+        <a-col :span="24">
           <a-form-item :label="t('table.URL')">
             <a-input
               :value="currentCase.url"
@@ -112,9 +149,10 @@ import { ref } from 'vue'
             />
           </a-form-item>
         </a-col>
+      </a-row>
 
-        <!-- Row 4: JSON fields -->
-        <a-col :span="8">
+      <a-row :gutter="16">
+        <a-col :span="24">
           <a-form-item :label="t('table.StatusCode')">
             <a-input
               :value="String(currentCase.status_code ?? '')"
@@ -122,39 +160,85 @@ import { ref } from 'vue'
             />
           </a-form-item>
         </a-col>
-        <a-col :span="7">
+      </a-row>
+
+      <!-- RequestHead -->
+      <a-row :gutter="16">
+        <a-col :span="24">
           <a-form-item :label="t('table.RequestHead')">
-            <a-button size="small" block @click="openJsonEditor('request_head')">
-              {{ t('jsonEditor.details') }}
-            </a-button>
+            <div class="field-with-detail">
+              <a-textarea
+                :value="formatJson(currentCase.request_head)"
+                :rows="3"
+                readonly
+                :placeholder="t('jsonEditor.noData')"
+              />
+              <a-button size="small" @click="openJsonEditor('request_head')">
+                {{ t('jsonEditor.editDetails') }}
+              </a-button>
+            </div>
           </a-form-item>
         </a-col>
-        <a-col :span="9">
+      </a-row>
+
+      <!-- RequestBody -->
+      <a-row :gutter="16">
+        <a-col :span="24">
           <a-form-item :label="t('table.RequestBody')">
-            <a-button size="small" block @click="openJsonEditor('request_body')">
-              {{ t('jsonEditor.details') }}
-            </a-button>
+            <div class="field-with-detail">
+              <a-textarea
+                :value="formatJson(currentCase.request_body)"
+                :rows="3"
+                readonly
+                :placeholder="t('jsonEditor.noData')"
+              />
+              <a-button size="small" @click="openJsonEditor('request_body')">
+                {{ t('jsonEditor.editDetails') }}
+              </a-button>
+            </div>
           </a-form-item>
         </a-col>
+      </a-row>
 
-        <!-- Row 5: AssertDict and AssertRules -->
-        <a-col :span="8">
+      <!-- AssertDict -->
+      <a-row :gutter="16">
+        <a-col :span="24">
           <a-form-item :label="t('table.AssertDict')">
-            <a-button size="small" block @click="openJsonEditor('assert_dict')">
-              {{ t('jsonEditor.details') }}
-            </a-button>
+            <div class="field-with-detail">
+              <a-textarea
+                :value="formatJson(currentCase.assert_dict)"
+                :rows="3"
+                readonly
+                :placeholder="t('jsonEditor.noData')"
+              />
+              <a-button size="small" @click="openJsonEditor('assert_dict')">
+                {{ t('jsonEditor.editDetails') }}
+              </a-button>
+            </div>
           </a-form-item>
         </a-col>
-        <a-col :span="16">
-          <a-form-item :label="t('assertRules.title')">
-            <AssertRulesEditor
-              :modelValue="currentCase.assert_rules"
-              @update:modelValue="(v: string[] | null) => updateField('assert_rules', v)"
-            />
-          </a-form-item>
-        </a-col>
+      </a-row>
 
-        <!-- Row 6: Remark -->
+      <!-- AssertRules -->
+      <a-row :gutter="16">
+        <a-col :span="24">
+          <a-form-item :label="t('assertRules.title')">
+            <div class="field-with-detail">
+              <a-textarea
+                :value="formatRules(currentCase.assert_rules)"
+                :rows="3"
+                readonly
+                :placeholder="t('assertRules.empty')"
+              />
+              <a-button size="small" @click="openAssertRulesEditor">
+                {{ t('assertRules.editDetails') }}
+              </a-button>
+            </div>
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <a-row :gutter="16">
         <a-col :span="24">
           <a-form-item :label="t('table.Remark')">
             <a-textarea
@@ -175,6 +259,14 @@ import { ref } from 'vue'
       @confirm="onJsonConfirm"
       @cancel="jsonModalVisible = false"
     />
+
+    <!-- AssertRules Editor Modal -->
+    <AssertRulesModal
+      :visible="assertRulesModalVisible"
+      :rules="currentCase.assert_rules"
+      @confirm="onAssertRulesConfirm"
+      @cancel="assertRulesModalVisible = false"
+    />
   </div>
 </template>
 
@@ -183,5 +275,20 @@ import { ref } from 'vue'
   padding: 16px;
   overflow: auto;
   height: 100%;
+}
+
+.field-with-detail {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.field-with-detail .ant-textarea {
+  flex: 1;
+}
+
+.field-with-detail .ant-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 </style>

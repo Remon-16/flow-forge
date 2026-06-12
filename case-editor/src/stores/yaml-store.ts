@@ -21,6 +21,15 @@ export interface FileEntry {
   children?: FileEntry[]
 }
 
+export interface OpenTab {
+  path: string | null
+  title: string
+  case: YamlCase
+  modified: boolean
+}
+
+let untitledCounter = 0
+
 export const useYamlStore = defineStore('yaml', () => {
   // --- State ---
   const rootPath = ref<string | null>(null)
@@ -29,6 +38,33 @@ export const useYamlStore = defineStore('yaml', () => {
   const currentCase = ref<YamlCase | null>(null)
   const modified = ref(false)
   const loading = ref(false)
+
+  const openTabs = ref<OpenTab[]>([])
+  const activeTabIndex = ref<number>(-1)
+
+  // --- Tab helpers ---
+
+  function saveCurrentTabState() {
+    const idx = activeTabIndex.value
+    if (idx >= 0 && idx < openTabs.value.length) {
+      openTabs.value[idx].case = currentCase.value!
+      openTabs.value[idx].path = currentFilePath.value
+      openTabs.value[idx].modified = modified.value
+    }
+  }
+
+  function loadTabState(index: number) {
+    const tab = openTabs.value[index]
+    if (tab) {
+      currentCase.value = tab.case
+      currentFilePath.value = tab.path
+      modified.value = tab.modified
+    } else {
+      currentCase.value = null
+      currentFilePath.value = null
+      modified.value = false
+    }
+  }
 
   // --- Getters ---
   const currentFileName = computed(() => {
@@ -55,24 +91,73 @@ export const useYamlStore = defineStore('yaml', () => {
   }
 
   async function openFile(filePath?: string) {
-    // If no explicit path, use file dialog
-    let targetPath = filePath
+    let targetPath: string | null | undefined = filePath
     if (!targetPath) {
       if (isDesktop) {
-        targetPath = await openFileDialog({
-          filters: [{ name: 'YAML Files', extensions: ['yaml', 'yml'] }],
+        targetPath = await openFileDialog(
+          [{ name: 'YAML Files', extensions: ['yaml', 'yml'] }],
+        )
+      } else {
+        // Browser fallback
+        targetPath = await new Promise<string | null>((resolve) => {
+          const input = document.createElement('input')
+          input.type = 'file'
+          input.accept = '.yaml,.yml'
+          input.onchange = async () => {
+            const file = input.files?.[0]
+            if (!file) { resolve(null); return }
+            try {
+              const text = await file.text()
+              const parsed = parseYaml(text)
+              // Check if already open
+              const existingIdx = openTabs.value.findIndex(t => t.path === file.name)
+              if (existingIdx >= 0) {
+                saveCurrentTabState()
+                activeTabIndex.value = existingIdx
+                loadTabState(existingIdx)
+              } else {
+                const title = file.name
+                saveCurrentTabState()
+                openTabs.value.push({ path: file.name, title, case: parsed, modified: false })
+                activeTabIndex.value = openTabs.value.length - 1
+                loadTabState(activeTabIndex.value)
+              }
+              runValidations()
+              resolve(file.name)
+            } catch (err) {
+              console.error('Failed to open YAML file:', err)
+              resolve(null)
+            }
+          }
+          input.oncancel = () => resolve(null)
+          input.click()
         })
+        if (!targetPath) return
+        return // Already processed above
       }
       if (!targetPath) return
+    }
+
+    // Check if file is already open in a tab (desktop mode)
+    if (targetPath) {
+      const existingIdx = openTabs.value.findIndex(t => t.path === targetPath)
+      if (existingIdx >= 0) {
+        saveCurrentTabState()
+        activeTabIndex.value = existingIdx
+        loadTabState(existingIdx)
+        return
+      }
     }
 
     loading.value = true
     try {
       const content = await readFile(targetPath)
       const parsed = parseYaml(content)
-      currentFilePath.value = targetPath
-      currentCase.value = parsed
-      modified.value = false
+      const title = targetPath.split(/[/\\]/).pop() || targetPath
+      saveCurrentTabState()
+      openTabs.value.push({ path: targetPath, title, case: parsed, modified: false })
+      activeTabIndex.value = openTabs.value.length - 1
+      loadTabState(activeTabIndex.value)
       runValidations()
     } catch (err) {
       console.error('Failed to open YAML file:', err)
@@ -83,11 +168,24 @@ export const useYamlStore = defineStore('yaml', () => {
   }
 
   async function save() {
-    if (!currentFilePath.value || !currentCase.value) return
+    if (!currentCase.value) return
 
-    const yamlStr = stringifyYaml(currentCase.value)
-    await writeFile(currentFilePath.value, yamlStr)
-    modified.value = false
+    // New file without a path: fall back to Save As
+    if (!currentFilePath.value) {
+      await saveAs()
+      return
+    }
+
+    try {
+      const yamlStr = stringifyYaml(currentCase.value)
+      await writeFile(currentFilePath.value, yamlStr)
+      modified.value = false
+      // Sync tab state
+      saveCurrentTabState()
+    } catch (err) {
+      console.error('Save failed:', err)
+      throw err
+    }
   }
 
   async function saveAs() {
@@ -100,9 +198,14 @@ export const useYamlStore = defineStore('yaml', () => {
       })
       if (!newPath) return
       currentFilePath.value = newPath
+      // Update tab title and path
+      const idx = activeTabIndex.value
+      if (idx >= 0 && idx < openTabs.value.length) {
+        openTabs.value[idx].path = newPath
+        openTabs.value[idx].title = newPath.split(/[/\\]/).pop() || newPath
+      }
       await save()
     } else {
-      // Browser fallback: download
       const yamlStr = stringifyYaml(currentCase.value)
       const blob = new Blob([yamlStr], { type: 'text/yaml' })
       const url = URL.createObjectURL(blob)
@@ -112,27 +215,71 @@ export const useYamlStore = defineStore('yaml', () => {
       a.click()
       URL.revokeObjectURL(url)
       modified.value = false
+      saveCurrentTabState()
     }
   }
 
   function newFile(caseType: 'single' | 'biz') {
-    currentFilePath.value = null
-    currentCase.value = caseType === 'single'
+    untitledCounter++
+    const title = `Untitled-${untitledCounter}`
+    const newCase = caseType === 'single'
       ? createDefaultSingleCase()
       : createDefaultBizCase()
-    modified.value = true
+    saveCurrentTabState()
+    openTabs.value.push({ path: null, title, case: newCase, modified: true })
+    activeTabIndex.value = openTabs.value.length - 1
+    loadTabState(activeTabIndex.value)
+  }
+
+  function switchTab(index: number) {
+    if (index < 0 || index >= openTabs.value.length) return
+    saveCurrentTabState()
+    activeTabIndex.value = index
+    loadTabState(index)
+  }
+
+  function closeTab(index: number) {
+    if (index < 0 || index >= openTabs.value.length) return
+    openTabs.value.splice(index, 1)
+
+    if (openTabs.value.length === 0) {
+      activeTabIndex.value = -1
+      currentCase.value = null
+      currentFilePath.value = null
+      modified.value = false
+    } else if (activeTabIndex.value >= openTabs.value.length) {
+      activeTabIndex.value = openTabs.value.length - 1
+      loadTabState(activeTabIndex.value)
+    } else if (activeTabIndex.value === index) {
+      // Same index or we need to adjust
+      if (activeTabIndex.value >= openTabs.value.length) {
+        activeTabIndex.value = openTabs.value.length - 1
+      }
+      loadTabState(activeTabIndex.value)
+    } else if (activeTabIndex.value > index) {
+      activeTabIndex.value--
+      loadTabState(activeTabIndex.value)
+    }
   }
 
   function closeFile() {
-    currentFilePath.value = null
-    currentCase.value = null
-    modified.value = false
+    if (activeTabIndex.value >= 0) {
+      closeTab(activeTabIndex.value)
+    } else {
+      currentFilePath.value = null
+      currentCase.value = null
+      modified.value = false
+    }
   }
 
   // --- Mutations ---
 
   function markModified() {
     modified.value = true
+    const idx = activeTabIndex.value
+    if (idx >= 0 && idx < openTabs.value.length) {
+      openTabs.value[idx].modified = true
+    }
   }
 
   // Single case field update
@@ -180,8 +327,6 @@ export const useYamlStore = defineStore('yaml', () => {
   }
 
   // --- YAML Validation ---
-  // YAML validation doesn't need test_id reference like Excel does,
-  // since YAML files are self-contained. But we validate StepID duplicates and Trans format.
 
   function runValidations() {
     if (isBizCase.value && currentCase.value) {
@@ -229,6 +374,8 @@ export const useYamlStore = defineStore('yaml', () => {
     currentCase,
     modified,
     loading,
+    openTabs,
+    activeTabIndex,
     // getters
     currentFileName,
     isSingleCase,
@@ -240,6 +387,8 @@ export const useYamlStore = defineStore('yaml', () => {
     saveAs,
     newFile,
     closeFile,
+    switchTab,
+    closeTab,
     // mutations
     markModified,
     updateSingleField,

@@ -14,6 +14,7 @@ const settings = useSettingsStore()
 const workbook = useWorkbookStore()
 
 const isHome = computed(() => route.name === 'home')
+const isYamlMode = computed(() => route.name === 'yaml-editor')
 
 watch(
   () => settings.language,
@@ -37,7 +38,7 @@ watch(
       <div v-if="workbook.loading" class="loading-overlay">
         <a-spin size="large" :tip="t('loading')" />
       </div>
-      <AppSidebar class="app-sidebar" />
+      <AppSidebar v-if="!isYamlMode" class="app-sidebar" />
       <div class="app-content">
         <router-view />
       </div>

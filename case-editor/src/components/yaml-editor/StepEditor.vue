@@ -2,7 +2,6 @@
 import { useI18n } from 'vue-i18n'
 import { TAG_LEVELS, HTTP_METHODS } from '../../types/excel'
 import type { YamlBizStep } from '../../types/yaml'
-import AssertRulesEditor from '../editor/AssertRulesEditor.vue'
 
 const { t } = useI18n()
 
@@ -16,10 +15,25 @@ const emit = defineEmits<{
   (e: 'remove', index: number): void
   (e: 'move', index: number, direction: 'up' | 'down'): void
   (e: 'openJson', index: number, field: string): void
+  (e: 'openAssertRules', index: number): void
 }>()
 
 function onFieldChange(field: string, value: unknown) {
   emit('update', props.index, field, value)
+}
+
+function formatJson(val: unknown): string {
+  if (!val) return ''
+  try {
+    return JSON.stringify(val, null, 2)
+  } catch {
+    return String(val)
+  }
+}
+
+function formatRules(val: string[] | null): string {
+  if (!val || val.length === 0) return ''
+  return val.join('\n')
 }
 </script>
 
@@ -41,7 +55,7 @@ function onFieldChange(field: string, value: unknown) {
     </div>
 
     <a-row :gutter="12">
-      <a-col :span="6">
+      <a-col :span="24">
         <a-form-item :label="t('table.StepID')" class="compact-item">
           <a-input
             :value="step.StepID"
@@ -57,7 +71,10 @@ function onFieldChange(field: string, value: unknown) {
           </a-input>
         </a-form-item>
       </a-col>
-      <a-col :span="6">
+    </a-row>
+
+    <a-row :gutter="12">
+      <a-col :span="24">
         <a-form-item :label="t('table.RelevanceID')" class="compact-item">
           <a-input
             :value="step.RelevanceID"
@@ -66,7 +83,10 @@ function onFieldChange(field: string, value: unknown) {
           />
         </a-form-item>
       </a-col>
-      <a-col :span="6">
+    </a-row>
+
+    <a-row :gutter="12">
+      <a-col :span="24">
         <a-form-item :label="t('table.Tag')" class="compact-item">
           <a-select
             :value="step.Tag"
@@ -79,7 +99,10 @@ function onFieldChange(field: string, value: unknown) {
           </a-select>
         </a-form-item>
       </a-col>
-      <a-col :span="6">
+    </a-row>
+
+    <a-row :gutter="12">
+      <a-col :span="24">
         <a-form-item :label="t('table.Trans')" class="compact-item">
           <a-tooltip :title="step._transError || ''">
             <a-input
@@ -94,7 +117,7 @@ function onFieldChange(field: string, value: unknown) {
     </a-row>
 
     <a-row :gutter="12">
-      <a-col :span="6">
+      <a-col :span="24">
         <a-form-item :label="t('table.APIName')" class="compact-item">
           <a-input
             :value="step.APIName"
@@ -103,7 +126,10 @@ function onFieldChange(field: string, value: unknown) {
           />
         </a-form-item>
       </a-col>
-      <a-col :span="6">
+    </a-row>
+
+    <a-row :gutter="12">
+      <a-col :span="24">
         <a-form-item :label="t('table.AppName')" class="compact-item">
           <a-input
             :value="step.AppName"
@@ -112,7 +138,10 @@ function onFieldChange(field: string, value: unknown) {
           />
         </a-form-item>
       </a-col>
-      <a-col :span="4">
+    </a-row>
+
+    <a-row :gutter="12">
+      <a-col :span="24">
         <a-form-item :label="t('table.Method')" class="compact-item">
           <a-select
             :value="step.Method"
@@ -125,7 +154,10 @@ function onFieldChange(field: string, value: unknown) {
           </a-select>
         </a-form-item>
       </a-col>
-      <a-col :span="8">
+    </a-row>
+
+    <a-row :gutter="12">
+      <a-col :span="24">
         <a-form-item :label="t('table.URL')" class="compact-item">
           <a-input
             :value="step.URL"
@@ -137,7 +169,7 @@ function onFieldChange(field: string, value: unknown) {
     </a-row>
 
     <a-row :gutter="12">
-      <a-col :span="4">
+      <a-col :span="24">
         <a-form-item :label="t('table.StatusCode')" class="compact-item">
           <a-input
             :value="String(step.StatusCode ?? '')"
@@ -146,44 +178,95 @@ function onFieldChange(field: string, value: unknown) {
           />
         </a-form-item>
       </a-col>
-      <a-col :span="5">
+    </a-row>
+
+    <!-- RequestHead -->
+    <a-row :gutter="12">
+      <a-col :span="24">
         <a-form-item :label="t('table.RequestHead')" class="compact-item">
-          <a-button size="small" block @click="emit('openJson', index, 'RequestHead')">
-            {{ t('jsonEditor.details') }}
-          </a-button>
+          <div class="field-with-detail">
+            <a-textarea
+              :value="formatJson(step.RequestHead)"
+              :rows="2"
+              readonly
+              size="small"
+              :placeholder="t('jsonEditor.noData')"
+            />
+            <a-button size="small" @click="emit('openJson', index, 'RequestHead')">
+              {{ t('jsonEditor.editDetails') }}
+            </a-button>
+          </div>
         </a-form-item>
       </a-col>
-      <a-col :span="5">
+    </a-row>
+
+    <!-- RequestBody -->
+    <a-row :gutter="12">
+      <a-col :span="24">
         <a-form-item :label="t('table.RequestBody')" class="compact-item">
-          <a-button size="small" block @click="emit('openJson', index, 'RequestBody')">
-            {{ t('jsonEditor.details') }}
-          </a-button>
+          <div class="field-with-detail">
+            <a-textarea
+              :value="formatJson(step.RequestBody)"
+              :rows="2"
+              readonly
+              size="small"
+              :placeholder="t('jsonEditor.noData')"
+            />
+            <a-button size="small" @click="emit('openJson', index, 'RequestBody')">
+              {{ t('jsonEditor.editDetails') }}
+            </a-button>
+          </div>
         </a-form-item>
       </a-col>
-      <a-col :span="5">
+    </a-row>
+
+    <!-- AssertDict -->
+    <a-row :gutter="12">
+      <a-col :span="24">
         <a-form-item :label="t('table.AssertDict')" class="compact-item">
-          <a-button size="small" block @click="emit('openJson', index, 'AssertDict')">
-            {{ t('jsonEditor.details') }}
-          </a-button>
+          <div class="field-with-detail">
+            <a-textarea
+              :value="formatJson(step.AssertDict)"
+              :rows="2"
+              readonly
+              size="small"
+              :placeholder="t('jsonEditor.noData')"
+            />
+            <a-button size="small" @click="emit('openJson', index, 'AssertDict')">
+              {{ t('jsonEditor.editDetails') }}
+            </a-button>
+          </div>
         </a-form-item>
       </a-col>
-      <a-col :span="5">
+    </a-row>
+
+    <!-- AssertRules -->
+    <a-row :gutter="12">
+      <a-col :span="24">
+        <a-form-item :label="t('assertRules.title')" class="compact-item">
+          <div class="field-with-detail">
+            <a-textarea
+              :value="formatRules(step.AssertRules)"
+              :rows="2"
+              readonly
+              size="small"
+              :placeholder="t('assertRules.empty')"
+            />
+            <a-button size="small" @click="emit('openAssertRules', index)">
+              {{ t('assertRules.editDetails') }}
+            </a-button>
+          </div>
+        </a-form-item>
+      </a-col>
+    </a-row>
+
+    <a-row :gutter="12">
+      <a-col :span="24">
         <a-form-item :label="t('table.Remark')" class="compact-item">
           <a-input
             :value="step.Remark"
             size="small"
             @change="(e: any) => onFieldChange('Remark', e.target.value)"
-          />
-        </a-form-item>
-      </a-col>
-    </a-row>
-
-    <a-row>
-      <a-col :span="24">
-        <a-form-item :label="t('assertRules.title')" class="compact-item">
-          <AssertRulesEditor
-            :modelValue="step.AssertRules"
-            @update:modelValue="(v: string[] | null) => onFieldChange('AssertRules', v)"
           />
         </a-form-item>
       </a-col>
@@ -228,5 +311,20 @@ function onFieldChange(field: string, value: unknown) {
 .compact-item :deep(.ant-form-item-label > label) {
   font-size: 11px;
   height: auto;
+}
+
+.field-with-detail {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.field-with-detail :deep(.ant-input-textarea) {
+  flex: 1;
+}
+
+.field-with-detail .ant-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 </style>

@@ -59,6 +59,8 @@
       "Dict": "Dict"
     },
     "details": "Details",
+    "editDetails": "Edit Details",
+    "noData": "No data",
     "parseError": "JSON parse failed. Check the format."
   },
   "validator": {
@@ -117,9 +119,16 @@
     "rename": "Rename",
     "noFileSelected": "Please select a YAML file",
     "selectFileHint": "Select a file from the left file tree, or click 'Open File'",
+    "selectFileHintUpdated": "Select a file from the left tree, or use the 'Open' menu above",
     "formView": "Form View",
     "rawView": "YAML Text",
-    "splitView": "Split View"
+    "splitView": "Split View",
+    "saved": "Saved",
+    "saveFailed": "Save failed",
+    "newFileCreated": "New file created. Please edit and save.",
+    "untitled": "Untitled",
+    "closeTab": "Close Tab",
+    "unsavedPrompt": "Unsaved changes. Close anyway?"
   },
   "assertRules": {
     "title": "Advanced Assertion Rules",
@@ -128,6 +137,15 @@
     "batchPasteHint": "One rule per line. Paste to auto-parse.",
     "empty": "No assertion rules",
     "rulePlaceholder": "e.g. $.data.code == 0",
+    "editDetails": "Edit Details",
+    "modal": {
+      "title": "Edit Assertion Rules",
+      "path": "Path",
+      "operator": "Operator",
+      "expected": "Expected",
+      "pathPlaceholder": "e.g. $.data.code",
+      "expectedPlaceholder": "Expected value"
+    },
     "errors": {
       "invalidFormat": "Invalid format: expected 'PATH OPERATOR [EXPECTED]'",
       "unknownOperator": "Unsupported operator",

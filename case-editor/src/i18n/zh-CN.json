@@ -59,6 +59,8 @@
       "Dict": "字典"
     },
     "details": "详情",
+    "editDetails": "编辑详情",
+    "noData": "暂无数据",
     "parseError": "JSON 解析失败，请检查格式"
   },
   "validator": {
@@ -117,9 +119,16 @@
     "rename": "重命名",
     "noFileSelected": "请选择一个 YAML 文件",
     "selectFileHint": "从左侧文件树选择文件，或点击「打开文件」按钮",
+    "selectFileHintUpdated": "从左侧文件树选择文件，或点击上方「打开」菜单",
     "formView": "表单编辑",
     "rawView": "YAML 文本",
-    "splitView": "分屏视图"
+    "splitView": "分屏视图",
+    "saved": "已保存",
+    "saveFailed": "保存失败",
+    "newFileCreated": "已创建新文件，请编辑后保存",
+    "untitled": "未命名",
+    "closeTab": "关闭标签页",
+    "unsavedPrompt": "有未保存的修改，是否关闭？"
   },
   "assertRules": {
     "title": "高级断言规则",
@@ -128,6 +137,15 @@
     "batchPasteHint": "每行一条规则，粘贴后自动解析",
     "empty": "暂无断言规则",
     "rulePlaceholder": "如: $.data.code == 0",
+    "editDetails": "编辑详情",
+    "modal": {
+      "title": "编辑断言规则",
+      "path": "路径",
+      "operator": "运算符",
+      "expected": "期望值",
+      "pathPlaceholder": "如: $.data.code",
+      "expectedPlaceholder": "期望值"
+    },
     "errors": {
       "invalidFormat": "格式错误：应为 'PATH OPERATOR [EXPECTED]'",
       "unknownOperator": "不支持的运算符",

@@ -62,7 +62,8 @@ npm run dev:desktop
 - **表单化编辑**：非文本编辑器，通过结构化表单字段编辑 YAML 用例
 - **右侧 YAML 预览面板**：可切换查看/直接编辑原生 YAML 文本（类似 Markdown 编辑器分屏视图）
 - 通过 `case_type` 字段自动识别用例类型：`single`（单接口用例）/ `biz`（业务链路用例）
-- 支持打开目录（左侧文件树浏览，VS Code 风格）或单独打开 .yaml 文件
+- 支持打开目录（左侧文件树浏览，VS Code 风格）或单独打开 .yaml 文件（通过头部「打开」下拉菜单）
+- **文件标签页**：支持同时打开多个文件，通过标签页切换（类似 VS Code）
 - 单接口表单：完整字段（test_id、relevance_id、tag、api_name、method、url、request_head/body、assert_dict/rules 等）
 - 业务链路表单：sheet_name + 步骤列表（可拖拽排序），每步含完整字段
 - 复用 Excel 编辑器的 JSON 编辑器和 AssertRules 编辑器
@@ -86,6 +87,7 @@ graph TD
     Excel --> AssertRulesEditor[AssertRulesEditor 高级断言编辑器]
 
     YAML --> FileTree[YamlFileTree 文件树侧栏]
+    YAML --> TabBar[YamlTabBar 文件标签栏]
     YAML --> SingleForm[SingleCaseForm 单接口表单]
     YAML --> BizForm[BizFlowForm 业务链路表单]
     YAML --> RawView[YamlRawView 原始 YAML 视图]
@@ -168,16 +170,18 @@ case-editor/
     │   │   ├── AppSidebar.vue         # 左侧导航
     │   │   └── StatusBar.vue          # 底部状态栏
     │   ├── editor/
-    │   │   ├── ApiDefEditor.vue       # 接口定义页编辑器
-    │   │   ├── SingleCaseEditor.vue   # 单接口用例编辑
-    │   │   ├── BizFlowEditor.vue      # 业务链路编辑
-    │   │   └── AssertRulesEditor.vue  # 高级断言规则编辑器
+    │   │   ├── ApiDefEditor.vue         # 接口定义页编辑器
+    │   │   ├── SingleCaseEditor.vue     # 单接口用例编辑
+    │   │   ├── BizFlowEditor.vue        # 业务链路编辑
+    │   │   ├── AssertRulesEditor.vue    # 高级断言规则编辑器
+    │   │   └── AssertRulesModal.vue     # 断言规则结构化编辑弹窗
     │   ├── yaml-editor/
-    │   │   ├── YamlFileTree.vue       # YAML 文件树侧栏
-    │   │   ├── SingleCaseForm.vue     # 单接口用例表单
-    │   │   ├── BizFlowForm.vue        # 业务链路表单
-    │   │   ├── StepEditor.vue         # 步骤子表单
-    │   │   └── YamlRawView.vue        # 原始 YAML 文本视图
+    │   │   ├── YamlFileTree.vue         # YAML 文件树侧栏
+    │   │   ├── YamlTabBar.vue           # 文件标签栏
+    │   │   ├── SingleCaseForm.vue       # 单接口用例表单
+    │   │   ├── BizFlowForm.vue          # 业务链路表单
+    │   │   ├── StepEditor.vue           # 步骤子表单
+    │   │   └── YamlRawView.vue          # 原始 YAML 文本视图
     │   └── json-editor/
     │       ├── JsonEditor.vue         # JSON 编辑器弹窗
     │       ├── JsonNode.vue           # 递归节点组件
@@ -230,8 +234,9 @@ AssertRules 列提供逐条规则的编辑器，每条规则独立输入和校�
 
 #### 打开用例
 
-- **打开目录**：选择包含 .yaml 文件的目录，左侧显示文件树
-- **打开文件**：直接选择一个 .yaml 文件进行编辑
+- **打开目录**：点击头部「打开」→「打开目录」，选择包含 .yaml 文件的目录，左侧显示文件树
+- **打开文件**：点击头部「打开」→「打开文件」，直接选择一个 .yaml 文件进行编辑
+- **文件标签页**：支持同时打开多个文件，通过标签页切换，点击 × 关闭标签
 
 #### 表单编辑
 
@@ -239,7 +244,7 @@ AssertRules 列提供逐条规则的编辑器，每条规则独立输入和校�
 - `single`：单接口用例表单（test_id、relevance_id、api_name、method、url 等字段）
 - `biz`：业务链路表单（sheet_name + 步骤列表）
 
-所有表单字段与 Excel 编辑器中的列对应，JSON 字段复用 JSON 编辑器，断言规则复用 AssertRules 编辑器。
+每个字段独占一行。JSON 字段（RequestHead、RequestBody、AssertDict）和 AssertRules 字段在表单中显示为只读预览区，点击「编辑详情」按钮打开对应的编辑器弹窗进行结构化编辑。
 
 #### YAML 预览面板
 

@@ -24,15 +24,19 @@ export function parseYaml(content: string): YamlCase {
  * Serialize a YamlCase object to a YAML string.
  */
 export function stringifyYaml(data: YamlCase): string {
-  // Build clean output: remove null fields for cleaner YAML
-  const clean = cleanNulls(structuredClone(data) as unknown as Record<string, unknown>)
-  return yaml.dump(clean, {
-    indent: 2,
-    lineWidth: -1,
-    noRefs: true,
-    sortKeys: false,
-    flowLevel: -1,
-  })
+  try {
+    const clean = cleanNulls(structuredClone(data) as unknown as Record<string, unknown>)
+    return yaml.dump(clean, {
+      indent: 2,
+      lineWidth: -1,
+      noRefs: true,
+      sortKeys: false,
+      flowLevel: -1,
+    })
+  } catch (err) {
+    console.error('stringifyYaml failed:', err)
+    return '# Error serializing YAML'
+  }
 }
 
 function normalizeSingleCase(raw: Record<string, unknown>): SingleYamlCase {

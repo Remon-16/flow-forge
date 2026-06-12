@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, h } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileEntry } from '../../stores/yaml-store'
 
@@ -11,8 +11,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'select-file', path: string): void
-  (e: 'open-directory'): void
-  (e: 'open-file'): void
 }>()
 
 // Convert FileEntry[] to Ant Design tree data format
@@ -26,10 +24,8 @@ function toTreeNode(entry: FileEntry): any {
     isLeaf: !entry.isDirectory,
     selectable: isYaml,
     icon: entry.isDirectory
-      ? undefined // use default folder icon
-      : entry.name.toLowerCase().includes('biz')
-        ? undefined // use default file icon
-        : undefined,
+      ? () => h('span', { style: 'font-size:14px;' }, '📁')
+      : () => h('span', { style: 'font-size:14px;' }, '📄'),
   }
 
   if (entry.children && entry.children.length > 0) {
@@ -54,21 +50,6 @@ function onContextMenu(e: MouseEvent) {
 
 <template>
   <div class="yaml-file-tree">
-    <div class="file-tree-toolbar">
-      <a-button size="small" type="text" @click="emit('open-directory')">
-        <template #icon>
-          <span>&#128193;</span>
-        </template>
-        {{ t('yaml.openDir') }}
-      </a-button>
-      <a-button size="small" type="text" @click="emit('open-file')">
-        <template #icon>
-          <span>&#128196;</span>
-        </template>
-        {{ t('yaml.openFile') }}
-      </a-button>
-    </div>
-
     <div class="file-tree-content" @contextmenu="onContextMenu">
       <a-tree
         v-if="files.length > 0"
@@ -86,7 +67,7 @@ function onContextMenu(e: MouseEvent) {
 
       <div v-else class="tree-empty">
         <p>{{ t('yaml.noFileSelected') }}</p>
-        <p class="tree-hint">{{ t('yaml.selectFileHint') }}</p>
+        <p class="tree-hint">{{ t('yaml.selectFileHintUpdated') }}</p>
       </div>
     </div>
   </div>
@@ -99,14 +80,6 @@ function onContextMenu(e: MouseEvent) {
   flex-direction: column;
   background: #fafafa;
   border-right: 1px solid #e8e8e8;
-}
-
-.file-tree-toolbar {
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  border-bottom: 1px solid #e8e8e8;
 }
 
 .file-tree-content {
