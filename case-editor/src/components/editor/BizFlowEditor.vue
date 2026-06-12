@@ -156,14 +156,14 @@ function getRowClassName(record: BizStep) {
     </div>
 
     <!-- Steps table -->
-    <div style="flex: 1; overflow: auto;">
+    <div style="flex: 1; min-height: 0;">
       <a-table
         v-if="flow"
         :dataSource="flow.steps"
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 1600 }"
+        :scroll="{ x: 2000, y: 'calc(100vh - 200px)' }"
         :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >
@@ -171,7 +171,7 @@ function getRowClassName(record: BizStep) {
           v-for="col in BIZ_STEP_COLUMNS"
           :key="col"
           :title="getColumnLabel(col)"
-          :width="isJsonColumn(col) ? 250 : col === 'URL' || col === 'Remark' || col === 'Trans' ? 200 : col === 'StepID' ? 100 : 130"
+          :width="isJsonColumn(col) ? 250 : col === 'URL' || col === 'Remark' || col === 'Trans' || col === 'AssertRules' ? 200 : col === 'StepID' ? 100 : 130"
         >
           <template #default="{ record, index: stepIdx }">
             <!-- StepID with duplicate check -->
@@ -271,20 +271,24 @@ function getRowClassName(record: BizStep) {
               />
             </template>
 
-            <!-- AssertRules: textarea + edit details button -->
+            <!-- AssertRules: edit details button + textarea -->
             <template v-else-if="col === 'AssertRules'">
-              <div style="display: flex; gap: 4px; align-items: flex-start; min-width: 200px;">
-                <a-textarea
-                  :value="formatRules(record[col] as string[] | null)"
-                  :rows="2"
-                  readonly
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 200px;">
+                <a-button
                   size="small"
-                  style="font-family: monospace; font-size: 12px; flex: 1;"
-                  :placeholder="t('assertRules.empty')"
-                />
-                <a-button size="small" @click="openAssertRulesEditor(stepIdx)" style="flex-shrink: 0;">
+                  type="link"
+                  style="padding: 0; text-align: left; height: auto; font-size: 12px;"
+                  @click="openAssertRulesEditor(stepIdx)"
+                >
                   {{ t('assertRules.editDetails') }}
                 </a-button>
+                <a-textarea
+                  :value="formatRules(record[col] as string[] | null)"
+                  :autoSize="{ minRows: 3, maxRows: 8 }"
+                  size="small"
+                  style="font-family: monospace; font-size: 12px;"
+                  :placeholder="t('assertRules.empty')"
+                />
               </div>
             </template>
 

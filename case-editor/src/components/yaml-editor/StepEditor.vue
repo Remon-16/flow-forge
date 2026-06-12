@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TAG_LEVELS, HTTP_METHODS } from '../../types/excel'
 import type { YamlBizStep } from '../../types/yaml'
@@ -16,6 +17,7 @@ const emit = defineEmits<{
   (e: 'move', index: number, direction: 'up' | 'down'): void
   (e: 'openJson', index: number, field: string): void
   (e: 'openAssertRules', index: number): void
+  (e: 'updateRules', index: number, rules: string[] | null): void
 }>()
 
 function onFieldChange(field: string, value: unknown) {
@@ -34,6 +36,61 @@ function formatJson(val: unknown): string {
 function formatRules(val: string[] | null): string {
   if (!val || val.length === 0) return ''
   return val.join('\n')
+}
+
+// Inline JSON editing cache
+const jsonEditCache = ref<Record<string, string>>({})
+
+function getJsonEditText(field: string, value: unknown): string {
+  const key = `${props.index}_${field}`
+  if (key in jsonEditCache.value) return jsonEditCache.value[key]
+  return formatJson(value)
+}
+
+function onJsonEditChange(field: string, text: string) {
+  const key = `${props.index}_${field}`
+  jsonEditCache.value = { ...jsonEditCache.value, [key]: text }
+}
+
+function onJsonEditBlur(field: string) {
+  const key = `${props.index}_${field}`
+  const text = (jsonEditCache.value[key] || '').trim()
+  if (!text) {
+    emit('update', props.index, field, null)
+    delete jsonEditCache.value[key]
+    return
+  }
+  try {
+    const parsed = JSON.parse(text)
+    emit('update', props.index, field, parsed)
+    delete jsonEditCache.value[key]
+  } catch {
+    // Keep cache so user can fix
+  }
+}
+
+// Inline assert rules editing
+const rulesEditText = ref('')
+
+function getRulesEditText(val: string[] | null): string {
+  if (rulesEditText.value) return rulesEditText.value
+  return formatRules(val)
+}
+
+function onRulesEditChange(text: string) {
+  rulesEditText.value = text
+}
+
+function onRulesEditBlur() {
+  const text = rulesEditText.value.trim()
+  if (!text) {
+    emit('updateRules', props.index, null)
+    rulesEditText.value = ''
+    return
+  }
+  const rules = text.split('\n').map(r => r.trim()).filter(r => r.length > 0)
+  emit('updateRules', props.index, rules)
+  rulesEditText.value = ''
 }
 </script>
 
@@ -198,11 +255,12 @@ function formatRules(val: string[] | null): string {
             </a-button>
           </template>
           <a-textarea
-            :value="formatJson(step.RequestHead)"
+            :value="getJsonEditText('RequestHead', step.RequestHead)"
             :auto-size="{ minRows: 2, maxRows: 8 }"
-            readonly
             size="small"
             :placeholder="t('jsonEditor.noData')"
+            @change="(e: any) => onJsonEditChange('RequestHead', e.target.value)"
+            @blur="() => onJsonEditBlur('RequestHead')"
           />
         </a-form-item>
       </a-col>
@@ -224,11 +282,12 @@ function formatRules(val: string[] | null): string {
             </a-button>
           </template>
           <a-textarea
-            :value="formatJson(step.RequestBody)"
+            :value="getJsonEditText('RequestBody', step.RequestBody)"
             :auto-size="{ minRows: 2, maxRows: 8 }"
-            readonly
             size="small"
             :placeholder="t('jsonEditor.noData')"
+            @change="(e: any) => onJsonEditChange('RequestBody', e.target.value)"
+            @blur="() => onJsonEditBlur('RequestBody')"
           />
         </a-form-item>
       </a-col>
@@ -250,11 +309,12 @@ function formatRules(val: string[] | null): string {
             </a-button>
           </template>
           <a-textarea
-            :value="formatJson(step.AssertDict)"
+            :value="getJsonEditText('AssertDict', step.AssertDict)"
             :auto-size="{ minRows: 2, maxRows: 8 }"
-            readonly
             size="small"
             :placeholder="t('jsonEditor.noData')"
+            @change="(e: any) => onJsonEditChange('AssertDict', e.target.value)"
+            @blur="() => onJsonEditBlur('AssertDict')"
           />
         </a-form-item>
       </a-col>
@@ -276,11 +336,12 @@ function formatRules(val: string[] | null): string {
             </a-button>
           </template>
           <a-textarea
-            :value="formatRules(step.AssertRules)"
+            :value="getRulesEditText(step.AssertRules)"
             :auto-size="{ minRows: 2, maxRows: 8 }"
-            readonly
             size="small"
             :placeholder="t('assertRules.empty')"
+            @change="(e: any) => onRulesEditChange(e.target.value)"
+            @blur="onRulesEditBlur"
           />
         </a-form-item>
       </a-col>

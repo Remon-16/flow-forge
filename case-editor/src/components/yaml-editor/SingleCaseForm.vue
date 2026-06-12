@@ -31,7 +31,59 @@ function formatRules(val: string[] | null): string {
   return val.join('\n')
 }
 
-// JSON editor
+// Inline JSON editing cache
+const jsonEditCache = ref<Record<string, string>>({})
+
+function getJsonEditText(field: string, value: unknown): string {
+  if (field in jsonEditCache.value) return jsonEditCache.value[field]
+  return formatJson(value)
+}
+
+function onJsonEditChange(field: string, text: string) {
+  jsonEditCache.value = { ...jsonEditCache.value, [field]: text }
+}
+
+function onJsonEditBlur(field: string) {
+  const text = (jsonEditCache.value[field] || '').trim()
+  if (!text) {
+    updateField(field, null)
+    delete jsonEditCache.value[field]
+    return
+  }
+  try {
+    const parsed = JSON.parse(text)
+    updateField(field, parsed)
+    delete jsonEditCache.value[field]
+  } catch {
+    // Keep cache so user can fix, but don't update store
+  }
+}
+
+// Inline assert rules editing
+const rulesEditText = ref('')
+
+function getRulesEditText(val: string[] | null): string {
+  if (rulesEditText.value) return rulesEditText.value
+  return formatRules(val)
+}
+
+function onRulesEditChange(text: string) {
+  rulesEditText.value = text
+}
+
+function onRulesEditBlur() {
+  const text = rulesEditText.value.trim()
+  if (!text) {
+    updateField('assert_rules', null)
+    rulesEditText.value = ''
+    return
+  }
+  const rules = text.split('\n').map(r => r.trim()).filter(r => r.length > 0)
+  updateField('assert_rules', rules)
+  rulesEditText.value = ''
+}
+
+// JSON editor modal
 const jsonModalVisible = ref(false)
 const jsonModalField = ref('')
 const jsonValue = ref<Record<string, unknown>>({})
@@ -50,7 +102,7 @@ function onJsonConfirm(value: Record<string, unknown>) {
   jsonModalVisible.value = false
 }
 
-// AssertRules editor
+// AssertRules editor modal
 const assertRulesModalVisible = ref(false)
 
 function openAssertRulesEditor() {
@@ -170,10 +222,11 @@ function onAssertRulesConfirm(rules: string[]) {
               </a-button>
             </template>
             <a-textarea
-              :value="formatJson(currentCase.request_head)"
+              :value="getJsonEditText('request_head', currentCase.request_head)"
               :auto-size="{ minRows: 2, maxRows: 12 }"
-              readonly
               :placeholder="t('jsonEditor.noData')"
+              @change="(e: any) => onJsonEditChange('request_head', e.target.value)"
+              @blur="() => onJsonEditBlur('request_head')"
             />
           </a-form-item>
         </a-col>
@@ -195,10 +248,11 @@ function onAssertRulesConfirm(rules: string[]) {
               </a-button>
             </template>
             <a-textarea
-              :value="formatJson(currentCase.request_body)"
+              :value="getJsonEditText('request_body', currentCase.request_body)"
               :auto-size="{ minRows: 2, maxRows: 12 }"
-              readonly
               :placeholder="t('jsonEditor.noData')"
+              @change="(e: any) => onJsonEditChange('request_body', e.target.value)"
+              @blur="() => onJsonEditBlur('request_body')"
             />
           </a-form-item>
         </a-col>
@@ -220,10 +274,11 @@ function onAssertRulesConfirm(rules: string[]) {
               </a-button>
             </template>
             <a-textarea
-              :value="formatJson(currentCase.assert_dict)"
+              :value="getJsonEditText('assert_dict', currentCase.assert_dict)"
               :auto-size="{ minRows: 2, maxRows: 12 }"
-              readonly
               :placeholder="t('jsonEditor.noData')"
+              @change="(e: any) => onJsonEditChange('assert_dict', e.target.value)"
+              @blur="() => onJsonEditBlur('assert_dict')"
             />
           </a-form-item>
         </a-col>
@@ -245,10 +300,11 @@ function onAssertRulesConfirm(rules: string[]) {
               </a-button>
             </template>
             <a-textarea
-              :value="formatRules(currentCase.assert_rules)"
+              :value="getRulesEditText(currentCase.assert_rules)"
               :auto-size="{ minRows: 2, maxRows: 12 }"
-              readonly
               :placeholder="t('assertRules.empty')"
+              @change="(e: any) => onRulesEditChange(e.target.value)"
+              @blur="onRulesEditBlur"
             />
           </a-form-item>
         </a-col>

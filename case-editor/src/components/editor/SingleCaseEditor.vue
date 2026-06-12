@@ -125,20 +125,20 @@ const relevanceOptions = computed(() => workbook.validTestIds)
       </a-button>
     </div>
 
-    <div style="flex: 1; overflow: auto;">
+    <div style="flex: 1; min-height: 0;">
       <a-table
         :dataSource="workbook.singleCases"
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 1400 }"
+        :scroll="{ x: 1900, y: 'calc(100vh - 200px)' }"
         :rowKey="(r: any) => r._uid"
       >
         <a-table-column
           v-for="col in SINGLE_CASE_COLUMNS"
           :key="col"
           :title="getColumnLabel(col)"
-          :width="isJsonColumn(col) ? 250 : col === 'URL' || col === 'Remark' ? 200 : col === 'TestID' ? 150 : 130"
+          :width="isJsonColumn(col) ? 250 : col === 'URL' || col === 'Remark' || col === 'AssertRules' ? 200 : col === 'TestID' ? 150 : 130"
         >
           <template #default="{ record, index }">
             <!-- RelevanceID with validation -->
@@ -210,20 +210,24 @@ const relevanceOptions = computed(() => workbook.validTestIds)
               />
             </template>
 
-            <!-- AssertRules: textarea + edit details button -->
+            <!-- AssertRules: edit details button + textarea -->
             <template v-else-if="col === 'AssertRules'">
-              <div style="display: flex; gap: 4px; align-items: flex-start; min-width: 200px;">
-                <a-textarea
-                  :value="formatRules(record[col] as string[] | null)"
-                  :rows="2"
-                  readonly
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 200px;">
+                <a-button
                   size="small"
-                  style="font-family: monospace; font-size: 12px; flex: 1;"
-                  :placeholder="t('assertRules.empty')"
-                />
-                <a-button size="small" @click="openAssertRulesEditor(index)" style="flex-shrink: 0;">
+                  type="link"
+                  style="padding: 0; text-align: left; height: auto; font-size: 12px;"
+                  @click="openAssertRulesEditor(index)"
+                >
                   {{ t('assertRules.editDetails') }}
                 </a-button>
+                <a-textarea
+                  :value="formatRules(record[col] as string[] | null)"
+                  :autoSize="{ minRows: 3, maxRows: 8 }"
+                  size="small"
+                  style="font-family: monospace; font-size: 12px;"
+                  :placeholder="t('assertRules.empty')"
+                />
               </div>
             </template>
 

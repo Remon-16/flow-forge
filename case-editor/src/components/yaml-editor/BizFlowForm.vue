@@ -33,6 +33,10 @@ function onStepFieldChange(index: number, field: string, value: unknown) {
   yamlStore.updateBizStepField(index, field as keyof YamlBizStep, value)
 }
 
+function onStepRulesUpdate(index: number, rules: string[] | null) {
+  yamlStore.updateBizStepField(index, 'AssertRules', rules)
+}
+
 // JSON editor
 const jsonModalVisible = ref(false)
 const jsonModalField = ref('')
@@ -100,6 +104,7 @@ function onAssertRulesConfirm(rules: string[]) {
         @move="moveStep"
         @open-json="openJsonEditor"
         @open-assert-rules="openAssertRulesEditor"
+        @update-rules="(idx: number, rules: string[] | null) => onStepRulesUpdate(idx, rules)"
       />
 
       <div v-if="currentCase.steps.length === 0" class="no-steps">

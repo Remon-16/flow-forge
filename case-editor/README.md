@@ -244,7 +244,7 @@ AssertRules 列显示只读预览区（每行一条规则），点击「编辑�
 - `single`：单接口用例表单（test_id、relevance_id、api_name、method、url 等字段）
 - `biz`：业务链路表单（sheet_name + 步骤列表）
 
-简单字段以两列网格布局呈现，JSON 字段（RequestHead、RequestBody、AssertDict）、AssertRules 和备注字段独占一行。「编辑详情」按钮位于字段标签旁（如 `请求体 编辑详情`），点击打开对应的编辑器弹窗进行结构化编辑。JSON 文本区域高度自适应内容。
+简单字段以两列网格布局呈现，JSON 字段（RequestHead、RequestBody、AssertDict）、AssertRules 和备注字段独占一行。JSON 和 AssertRules 字段可直接在文本框中编辑原始内容（失焦自动保存），也可点击「编辑详情」按钮打开结构化编辑器进行可视化编辑。JSON 文本区域高度自适应内容。
 
 #### YAML 预览面板
 

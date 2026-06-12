@@ -245,7 +245,7 @@ The form type automatically switches based on the `case_type` field in the YAML 
 - `single`: single-API case form (test_id, relevance_id, api_name, method, url, etc.)
 - `biz`: business flow form (sheet_name + step list)
 
-Simple fields are arranged in a two-column grid layout, while JSON fields (RequestHead, RequestBody, AssertDict), AssertRules, and Remark each occupy a full row. The "Edit Details" button sits beside the field label (e.g., `RequestBody  Edit Details`). JSON text areas auto-size to fit content.
+Simple fields are arranged in a two-column grid layout, while JSON fields (RequestHead, RequestBody, AssertDict), AssertRules, and Remark each occupy a full row. JSON and AssertRules fields can be edited directly in the text area (auto-saves on blur), or the "Edit Details" button opens a structured editor for visual editing. JSON text areas auto-size to fit content.
 
 #### YAML Preview Panel
 

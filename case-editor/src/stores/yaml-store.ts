@@ -295,43 +295,51 @@ export const useYamlStore = defineStore('yaml', () => {
   // Single case field update
   function updateSingleField(field: keyof SingleYamlCase, value: unknown) {
     if (!isSingleCase.value || !currentCase.value) return
-    ;(currentCase.value as Record<string, unknown>)[field] = value
+    currentCase.value = { ...currentCase.value, [field]: value }
     markModified()
   }
 
   // Biz flow field update
   function updateBizField(field: 'sheet_name', value: unknown) {
     if (!isBizCase.value || !currentCase.value) return
-    ;(currentCase.value as Record<string, unknown>)[field] = value
+    currentCase.value = { ...currentCase.value, [field]: value } as BizYamlCase
     markModified()
   }
 
   function addBizStep() {
     if (!isBizCase.value) return
-    ;(currentCase.value as BizYamlCase).steps.push(createDefaultBizStep())
+    const bizCase = currentCase.value as BizYamlCase
+    currentCase.value = { ...bizCase, steps: [...bizCase.steps, createDefaultBizStep()] }
     markModified()
   }
 
   function removeBizStep(index: number) {
     if (!isBizCase.value) return
-    ;(currentCase.value as BizYamlCase).steps.splice(index, 1)
+    const bizCase = currentCase.value as BizYamlCase
+    const steps = [...bizCase.steps]
+    steps.splice(index, 1)
+    currentCase.value = { ...bizCase, steps }
     markModified()
     validateBizSteps()
   }
 
   function moveBizStep(index: number, direction: 'up' | 'down') {
     if (!isBizCase.value) return
-    const steps = (currentCase.value as BizYamlCase).steps
+    const bizCase = currentCase.value as BizYamlCase
+    const steps = [...bizCase.steps]
     const targetIdx = direction === 'up' ? index - 1 : index + 1
     if (targetIdx < 0 || targetIdx >= steps.length) return
     ;[steps[index], steps[targetIdx]] = [steps[targetIdx], steps[index]]
+    currentCase.value = { ...bizCase, steps }
     markModified()
   }
 
   function updateBizStepField(stepIndex: number, field: keyof YamlBizStep, value: unknown) {
     if (!isBizCase.value) return
-    const step = (currentCase.value as BizYamlCase).steps[stepIndex]
-    ;(step as unknown as Record<string, unknown>)[field] = value
+    const bizCase = currentCase.value as BizYamlCase
+    const steps = [...bizCase.steps]
+    steps[stepIndex] = { ...steps[stepIndex], [field]: value }
+    currentCase.value = { ...bizCase, steps }
     markModified()
     validateBizSteps()
   }
