@@ -83,10 +83,43 @@ class BaseAgent:
         self._max_retries = max_retries
         self._max_steps = max_steps
         self._step_count = 0
+        self._progress_getter: Callable[[], str] | None = None
+        self._last_progress: str | None = None
+
+    def set_progress_getter(
+        self, getter: Callable[[], str], max_no_progress: int = 5
+    ) -> None:
+        """Enable progress-based step counting.
+
+        When set, check_step() compares the current progress string against
+        the previous call. If progress changed, the step counter resets to 1.
+        If progress is unchanged, the step counter increments. Raises
+        ConvergenceError after max_no_progress consecutive no-progress calls.
+
+        Call with getter=None to revert to legacy counting.
+        """
+        self._progress_getter = getter
+        self._last_progress = None
+        self._max_steps = max_no_progress
 
     def check_step(self) -> None:
-        """Increment step counter, raise if max_steps exceeded."""
-        self._step_count += 1
+        """Increment step counter, raise if max_steps exceeded.
+
+        If a progress getter is configured, uses progress-based counting:
+        same progress = increment, different progress = reset to 1.
+        This allows models that make steady progress to continue
+        indefinitely, while catching models that make zero progress quickly.
+        """
+        if self._progress_getter:
+            current = self._progress_getter()
+            if self._last_progress is not None and current == self._last_progress:
+                self._step_count += 1
+            else:
+                self._step_count = 1
+            self._last_progress = current
+        else:
+            self._step_count += 1
+
         if self._step_count > self._max_steps:
             raise ConvergenceError(
                 f"Agent exceeded max_steps ({self._max_steps})"
@@ -142,21 +175,87 @@ class BaseAgent:
         prompt: str,
         system_msg: str = "You are a helpful assistant.",
     ) -> Any:
-        """Call LLM and parse response as JSON."""
+        """Call LLM and parse response as JSON.
+
+        On parse failure, retries once with a fix-prompt asking the
+        model to output valid JSON only.
+        """
         text = self.call_llm(prompt, system_msg, response_format="json_object")
-        return self._extract_json(text)
+        try:
+            return self._extract_json(text)
+        except ValueError:
+            logger.warning(
+                "JSON parse failed (len=%d), retrying with fix prompt",
+                len(text),
+            )
+            fix_prompt = (
+                "你上一次的回复不是合法的 JSON。请严格只输出一个 JSON 对象，"
+                "不要包含任何 markdown 标记、解释文字或其他非 JSON 内容。"
+            )
+            retry_text = self.call_llm(
+                fix_prompt, system_msg, response_format="json_object"
+            )
+            return self._extract_json(retry_text)
+
+    @staticmethod
+    def _extract_json_by_brace_count(text: str) -> str | None:
+        """Extract the outermost JSON object/array using brace counting.
+
+        Unlike greedy regex, this handles nested structures correctly
+        and stops at the matching close-brace. Returns None if no
+        balanced braces are found (truncated JSON).
+        """
+        start_obj = text.find("{")
+        start_arr = text.find("[")
+
+        if start_obj == -1 and start_arr == -1:
+            return None
+
+        if start_obj != -1 and (start_arr == -1 or start_obj < start_arr):
+            start = start_obj
+            open_char, close_char = "{", "}"
+        else:
+            start = start_arr
+            open_char, close_char = "[", "]"
+
+        depth = 0
+        in_string = False
+        escape = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == open_char:
+                depth += 1
+            elif ch == close_char:
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+
+        return None
 
     @staticmethod
     def _extract_json(text: str) -> Any:
         """Extract and parse JSON from LLM response.
 
         Handles responses wrapped in ```json fences or plain text.
+        Uses brace counting for precise extraction of nested structures.
         """
-        # Try direct parse first
         text = text.strip()
+
+        # Try direct parse first
         try:
             return json.loads(text)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, RecursionError):
             pass
 
         # Try extracting from ```json ... ``` fence
@@ -164,7 +263,7 @@ class BaseAgent:
         if match:
             try:
                 return json.loads(match.group(1))
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, RecursionError):
                 pass
 
         # Try extracting from ``` ... ``` fence
@@ -172,21 +271,29 @@ class BaseAgent:
         if match:
             try:
                 return json.loads(match.group(1))
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, RecursionError):
                 pass
 
-        # Try to find a JSON object/array in the text
-        brace_match = re.search(r'\{[\s\S]*\}', text)
-        bracket_match = re.search(r'\[[\s\S]*\]', text)
+        # Brace-counting extraction (replaces greedy regex)
+        extracted = BaseAgent._extract_json_by_brace_count(text)
+        if extracted is not None:
+            try:
+                return json.loads(extracted)
+            except (json.JSONDecodeError, RecursionError):
+                pass
 
-        for m in (brace_match, bracket_match):
-            if m:
-                try:
-                    return json.loads(m.group(0))
-                except json.JSONDecodeError:
-                    continue
+        # Detect truncation
+        last_char = text.rstrip()[-1] if text.rstrip() else ""
+        if last_char not in ("}", "]", '"'):
+            logger.warning(
+                "JSON response may be truncated (ends with %r), length=%d",
+                last_char, len(text),
+            )
 
-        raise ValueError(f"Failed to parse JSON from LLM response len: {len(text)} text:\n{text[:500]}")
+        raise ValueError(
+            f"Failed to parse JSON from LLM response len: {len(text)} "
+            f"text:\n{text[:500]}"
+        )
 
 
 # =========================================================================

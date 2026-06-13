@@ -64,7 +64,11 @@ class ApiTestExecutor(BaseExecutor):
             result["response_status"] = response.status_code
             result["response_body"] = self._extract_body(response)
 
-            assertions = AssertionEngine.run(response, case.get("assert_dict", {}))
+            assertions = AssertionEngine.run(
+                response,
+                case.get("assert_dict", {}),
+                case.get("assert_rules", []),
+            )
 
             if expected_status is not None:
                 status_match = int(expected_status) == response.status_code

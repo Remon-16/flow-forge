@@ -1,14 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkbookStore } from '../../stores/workbook'
 import { API_DEF_COLUMNS, HTTP_METHODS, JSON_COLUMNS } from '../../types/excel'
 import type { ApiDefinition } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
+import AssertRulesModal from './AssertRulesModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
+
+const props = defineProps<{ searchBarVisible?: boolean }>()
 
 const { t } = useI18n()
 const workbook = useWorkbookStore()
+
+const scrollY = computed(() => {
+  const base = 200
+  const searchBar = props.searchBarVisible ? 85 : 0
+  return `calc(100vh - ${base + searchBar}px)`
+})
 
 // JSON editor modal state
 const jsonModalVisible = ref(false)
@@ -89,6 +98,35 @@ function isJsonInvalid(rowIdx: number, col: string): boolean {
 function getColumnLabel(col: string): string {
   return t(`table.${col}`)
 }
+
+// AssertRules modal state
+const assertRulesModalVisible = ref(false)
+const assertRulesModalRow = ref(-1)
+const assertRulesValue = ref<string[] | null>(null)
+
+function openAssertRulesEditor(rowIndex: number) {
+  assertRulesModalRow.value = rowIndex
+  assertRulesValue.value = workbook.apiDefinitions[rowIndex].AssertRules as string[] | null
+  assertRulesModalVisible.value = true
+}
+
+function onAssertRulesConfirm(rules: string[]) {
+  if (assertRulesModalRow.value >= 0) {
+    workbook.updateApiDefField(assertRulesModalRow.value, 'AssertRules', rules.length > 0 ? rules : null)
+  }
+  assertRulesModalVisible.value = false
+}
+
+function formatRules(val: string[] | null): string {
+  if (!val || val.length === 0) return ''
+  return val.join('\n')
+}
+
+function getRowClassName(record: Record<string, unknown>) {
+  if ((record as any)._searchActive) return 'row-search-active'
+  if ((record as any)._searchMatch) return 'row-search-match'
+  return ''
+}
 </script>
 
 <template>
@@ -99,20 +137,21 @@ function getColumnLabel(col: string): string {
       </a-button>
     </div>
 
-    <div style="flex: 1; overflow: auto;">
+    <div style="flex: 1; min-height: 0;">
       <a-table
         :dataSource="workbook.apiDefinitions"
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 1200 }"
+        :scroll="{ x: 2200, y: scrollY }"
+        :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >
         <a-table-column
           v-for="col in API_DEF_COLUMNS"
           :key="col"
           :title="getColumnLabel(col)"
-          :width="isJsonColumn(col) ? 250 : col === 'URL' || col === 'Remark' ? 200 : col === 'TestID' || col === 'APIName' ? 150 : 100"
+          :width="isJsonColumn(col) ? 250 : col === 'AssertRules' ? 280 : col === 'URL' || col === 'Remark' ? 200 : col === 'TestID' || col === 'APIName' ? 150 : 100"
         >
           <template #default="{ record, index }">
             <!-- JSON columns: details link + editable textarea -->
@@ -163,6 +202,37 @@ function getColumnLabel(col: string): string {
               />
             </template>
 
+            <!-- AssertRules: edit details button + textarea -->
+            <template v-else-if="col === 'AssertRules'">
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 200px;">
+                <a-button
+                  size="small"
+                  type="link"
+                  style="padding: 0; text-align: left; height: auto; font-size: 12px;"
+                  @click="openAssertRulesEditor(index)"
+                >
+                  {{ t('assertRules.editDetails') }}
+                </a-button>
+                <a-textarea
+                  :value="formatRules(record[col] as string[] | null)"
+                  :autoSize="{ minRows: 3, maxRows: 8 }"
+                  size="small"
+                  style="font-family: monospace; font-size: 12px;"
+                  :placeholder="t('assertRules.empty')"
+                />
+              </div>
+            </template>
+
+            <!-- Remark: textarea -->
+            <template v-else-if="col === 'Remark'">
+              <a-textarea
+                :value="String(record[col] ?? '')"
+                :autoSize="{ minRows: 2, maxRows: 6 }"
+                size="small"
+                @change="(e: any) => onCellChange(index, col, e.target.value)"
+              />
+            </template>
+
             <!-- Default text input -->
             <template v-else>
               <a-input
@@ -198,5 +268,28 @@ function getColumnLabel(col: string): string {
       @confirm="onJsonConfirm"
       @cancel="jsonModalVisible = false"
     />
+
+    <!-- AssertRules Modal -->
+    <AssertRulesModal
+      :visible="assertRulesModalVisible"
+      :rules="assertRulesValue"
+      @confirm="onAssertRulesConfirm"
+      @cancel="assertRulesModalVisible = false"
+    />
   </div>
 </template>
+
+<style scoped>
+:deep(.ant-table-header) {
+  overflow-y: scroll !important;
+}
+:deep(.ant-table-header::-webkit-scrollbar) {
+  display: none;
+}
+:deep(.row-search-match td) {
+  background: #fff7cc !important;
+}
+:deep(.row-search-active td) {
+  background: #ffd54f !important;
+}
+</style>

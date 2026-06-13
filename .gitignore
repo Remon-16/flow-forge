@@ -29,6 +29,7 @@ target/
 /nbproject/private/
 /nbbuild/
 /dist/
+dist-electron/
 /nbdist/
 /.nb-gradle/
 build/
@@ -45,4 +46,4 @@ env-local.yml
 logs/
 report/
 node_modules/
-dist/
+.claude/

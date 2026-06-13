@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkbookStore } from '../../stores/workbook'
 import { useEditorStore } from '../../stores/editor'
-import { computed } from 'vue'
 
 const { t } = useI18n()
 const workbook = useWorkbookStore()
@@ -55,12 +55,12 @@ function onAddBizFlow() {
   workbook.addBizFlow(name)
 }
 
-// Convert index to menu key for selectedKeys
 const selectedKey = computed(() => {
   if (editor.activeSheetIndex === -1) return ['apiDef']
   if (editor.activeSheetIndex === 0) return ['singleCase']
   return [`biz_${editor.activeSheetIndex - 1}`]
 })
+
 </script>
 
 <template>
@@ -86,3 +86,6 @@ const selectedKey = computed(() => {
     </a-button>
   </div>
 </template>
+
+<style scoped>
+</style>

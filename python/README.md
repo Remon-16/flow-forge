@@ -2,7 +2,7 @@
 
 **中文** | [English](README.en.md)
 
-基于 Python 3 的 HTTP 接口自动化测试执行器，支持 Excel 驱动的用例管理、多线程并发执行、参数传递链路测试、自动登录态管理和自包含 HTML 报告输出。
+基于 Python 3 的 HTTP 接口自动化测试执行器，支持 YAML/Excel 驱动的用例管理、多线程并发执行、参数传递链路测试、自动登录态管理和自包含 HTML 报告输出。
 
 ## 系统架构
 
@@ -12,9 +12,12 @@ graph TD
     ENV[env.yml] --> CM
     ENV_APP["env-{name}.yml"] --> CM
     CM --> |合并后配置| EXEC[执行器工厂]
+    YAML[YAML 用例目录/文件] --> YP[YAML 解析器]
     EXCEL[Excel 用例文件] --> EP[Excel 解析器]
-    EP --> |单接口用例| API_EXEC[ApiTestExecutor]
-    EP --> |业务链路用例| BIZ_EXEC[BizFlowExecutor]
+    YP --> |单接口用例| API_EXEC[ApiTestExecutor]
+    YP --> |业务链路用例| BIZ_EXEC[BizFlowExecutor]
+    EP --> |单接口用例| API_EXEC
+    EP --> |业务链路用例| BIZ_EXEC
     API_EXEC --> LM[登录态管理器]
     BIZ_EXEC --> LM
     API_EXEC --> AE[断言引擎]
@@ -46,6 +49,10 @@ python/
 │   ├── __init__.py
 │   └── excel_parser.py          # 多 Sheet Excel 解析、校验
 │
+├── yaml_reader/
+│   ├── __init__.py
+│   └── yaml_parser.py           # YAML 用例文件/目录解析
+│
 ├── executor/
 │   ├── __init__.py
 │   ├── base.py                  # BaseExecutor 抽象基类（线程池 + 线程安全）
@@ -59,7 +66,8 @@ python/
 │
 ├── assertion/
 │   ├── __init__.py
-│   └── engine.py                # 字段级 JSON 路径断言引擎
+│   ├── engine.py                # 简单等值断言引擎（assert_dict）
+│   └── rules_engine.py          # 高级断言规则引擎（assert_rules）
 │
 └── reporter/
     ├── __init__.py
@@ -98,20 +106,40 @@ reportName: APIReport
 
 编辑 `env-{envName}.yml` 配置被测应用和登录信息（参见[配置说明](#配置说明)）。
 
-### 2. 准备 Excel 用例文件
+### 2. 准备用例文件
+
+**方式一：使用 YAML 用例**（推荐，智能体默认输出格式）
+
+智能体生成的 YAML 用例存放在 `output/` 目录下，结构如下：
+
+```
+output/
+├── single_cases/        # 单接口用例（每个用例一个 .yaml）
+└── biz_flows/           # 业务链路用例（每个链路一个 .yaml）
+```
+
+也可手动编写 YAML 用例，格式见 [YAML 用例格式](#yaml-用例格式)。
+
+**方式二：使用 Excel 用例**
 
 按照 [Excel 用例格式](#excel-用例格式) 编写测试用例。
 
 ### 3. 运行测试
 
 ```bash
-# 使用默认配置运行（仅执行单接口用例）
+# YAML 目录模式（推荐）：执行指定目录下所有 YAML 用例
+python main.py --yamlDir ../agent/output --envName local --apiMode all
+
+# YAML 文件模式：执行指定的多个 YAML 文件
+python main.py --yamlFiles ./case1.yaml,./case2.yaml --envName local
+
+# Excel 模式（兼容）：使用默认配置运行（仅执行单接口用例）
 python main.py
 
-# 指定环境和线程数，执行所有用例
+# Excel 模式：指定环境和线程数，执行所有用例
 python main.py --envName prod --maxThread 10 --apiMode all
 
-# 完整参数示例
+# Excel 模式：完整参数示例
 python main.py --config /path/to/env.yml --scriptType APITest --envName local \
                --caseFilePath ./test_cases.xlsx --maxThread 5 --reportName MyReport \
                --apiMode all
@@ -191,14 +219,97 @@ managerURL:
 | `--maxThread` | int | 最大线程数，覆盖 env.yml |
 | `--reportName` | str | 报告名称，覆盖 env.yml |
 | `--apiMode` | str | 执行模式（`single`/`biz`/`all`），覆盖 env.yml |
+| `--yamlDir` | str | YAML 用例目录路径，递归扫描目录下所有 `.yaml`/`.yml` 文件 |
+| `--yamlFiles` | str | 逗号分隔的 YAML 用例文件路径列表 |
 
 ### apiMode 说明
 
 | 值 | 行为 |
 |----|------|
-| `single` | 仅执行 Sheet 2（单接口用例） |
-| `biz` | 仅执行 Sheet 3+（业务链路用例） |
+| `single` | 仅执行单接口用例（YAML: `case_type=single`；Excel: Sheet 2） |
+| `biz` | 仅执行业务链路用例（YAML: `case_type=biz`；Excel: Sheet 3+） |
 | `all` | 同时执行单接口和业务链路用例 |
+
+## YAML 用例格式
+
+每个用例是一个独立的 `.yaml` 文件，通过 `case_type` 字段区分类型。YAML 用例是智能体的默认输出格式，也是执行器的推荐输入格式。
+
+### 单接口用例（case_type: single）
+
+```yaml
+case_type: single
+test_id: TC_LOGIN_001
+api_name: 用户登录
+app_name: someApp
+method: POST
+url: /api/user/login
+request_head:
+  Content-Type: application/json
+request_body:
+  username: admin
+  password: "123456"
+status_code: 200
+assert_dict:
+  $.code: 0
+  $.msg: success
+assert_rules:
+  - "$.data.token is_not_null"
+tag: P0
+remark: 正常登录验证
+```
+
+### 业务链路用例（case_type: biz）
+
+```yaml
+case_type: biz
+sheet_name: 用户注册并登录流程
+steps:
+  - step_id: Step01
+    api_name: 发送验证码
+    app_name: someApp
+    method: POST
+    url: /api/sms/send
+    request_body:
+      phone: "13800138000"
+    status_code: 200
+    assert_dict:
+      $.code: 0
+    trans: "smsCode=Step01.data.code"
+  - step_id: Step02
+    api_name: 用户注册
+    app_name: someApp
+    method: POST
+    url: /api/user/register
+    request_body:
+      phone: "13800138000"
+      code: "#{smsCode}"
+      password: "123456"
+    status_code: 200
+    assert_dict:
+      $.code: 0
+```
+
+### YAML 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `case_type` | str | 用例类型：`single`（单接口）或 `biz`（业务链路） |
+| `test_id` | str | 唯一测试用例标识（单接口用例必填） |
+| `api_name` | str | 接口名称/描述 |
+| `app_name` | str | 应用名，对应 `env-{envName}.yml` 中的 app key |
+| `method` | str | HTTP 方法：`GET`/`POST`/`PUT`/`DELETE`/`PATCH` |
+| `url` | str | 接口路径（相对于 app 的 `baseURL`），如 `/api/user/login` |
+| `status_code` | int | 预期 HTTP 状态码 |
+| `request_head` | dict | 请求头，key-value 对象 |
+| `request_body` | dict | 请求体，key-value 对象 |
+| `assert_dict` | dict | 简单断言字典，key 为响应 JSON 路径，value 为预期值 |
+| `assert_rules` | list[str] | 高级断言规则列表（可选），每条规则为字符串表达式 |
+| `tag` | str | 标签（如 P0/P1/P2） |
+| `remark` | str | 备注 |
+| `sheet_name` | str | 业务场景名（业务链路用例必填） |
+| `steps` | list | 业务链路步骤列表（业务链路用例必填） |
+| `step_id` | str | 步骤标识（同一业务链路内不可重复），如 `Step01` |
+| `trans` | str | 步骤间数据传递定义，语法同 [Trans 字段语法](#trans-字段语法) |
 
 ## Excel 用例格式
 
@@ -303,6 +414,14 @@ Excel 中的 JSON 字段支持以下格式：
 - 对业务链路执行 `Trans` 字段校验和 `StepID` 去重检查
 - 解析异常时返回 `parse_error`，不阻塞其他用例
 
+### YAML 解析器 (`yaml_reader/yaml_parser.py`)
+
+- 提供两个解析入口：`parse_directory()`（递归扫描目录）和 `parse_files()`（逗号分隔文件列表）
+- 通过 `case_type` 字段区分单接口用例和业务链路用例
+- 当 `case_type` 缺失时，自动推断：含 `steps` 字段 → 业务链路，含 `test_id` 字段 → 单接口
+- 按 `apiMode` 过滤返回（`single` 仅返回单接口，`biz` 仅返回业务链路，`all` 返回全部）
+- 返回与 `ExcelParser.parse()` 相同的数据结构，无缝接入执行流程
+
 ### 执行器
 
 #### BaseExecutor (`executor/base.py`)
@@ -351,13 +470,39 @@ Excel 中的 JSON 字段支持以下格式：
 - **失败黑名单**：MD5 哈希记录登录失败的用户，避免重复无效请求
 - **Token 缓存**：同一用户只需登录一次，后续复用
 
-### 断言引擎 (`assertion/engine.py`)
+### 断言引擎 (`assertion/engine.py` + `rules_engine.py`)
 
-- 对 HTTP 响应执行字段级断言
+**简单断言（`assert_dict`，`engine.py`）：**
+- 对 HTTP 响应执行字段级等值断言
 - `assert_dict` 的 key 为 JSON 路径（支持点号 + 括号：`data.items[0].name`，也支持 `$.` 前缀）
 - `status_code` 字段特殊处理，针对 `response.status_code` 断言
 - 路径不存在时返回 `<not found>`
-- 比较方式：`str(实际值) == str(预期值)`
+
+**高级断言（`assert_rules`，`rules_engine.py`）：**
+
+每条规则是一个字符串表达式，格式为 `<左表达式> <运算符> [<右表达式>]`。
+
+| 运算符 | 说明 | 示例 |
+|--------|------|------|
+| `==` / `!=` | 等于 / 不等于 | `$.data.id == 1001` |
+| `>` / `>=` / `<` / `<=` | 数值比较 | `$.data.total > 0` |
+| `=~` | 正则匹配 | `$.data.time =~ ^\\d{4}-\\d{2}-\\d{2}$` |
+| `in` | 值在列表中 | `$.data.status in ["PAID", "PENDING"]` |
+| `contains` | 集合包含元素 | `$.data.tags contains "vip"` |
+| `not_contains` | 集合不包含元素 | `$.data.tags not_contains "blocked"` |
+| `is_null` | 值为 null | `$.data.optional is_null` |
+| `is_not_null` | 值不为 null | `$.data.order_id is_not_null` |
+| `typeof` | 类型检查 | `$.data.count typeof int` |
+
+支持函数：
+
+| 函数 | 说明 | 示例 |
+|------|------|------|
+| `.length()` | 数组长度 | `$.data.list.length() == 3` |
+| `SUM(path)` | 数组元素求和 | `SUM($.data.list[*].price)` |
+| `SUM_PRODUCT(p1, p2)` | 两字段乘积求和 | `SUM_PRODUCT($.data.list[*].price, $.data.list[*].count)` |
+
+路径中 `[*]` 表示遍历数组的每个元素，用于 `SUM` 和 `SUM_PRODUCT` 函数。
 
 ### HTML 报告生成器 (`reporter/html_writer.py`)
 

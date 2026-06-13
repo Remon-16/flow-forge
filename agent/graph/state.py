@@ -18,6 +18,13 @@ class GraphState(TypedDict, total=False):
     output_path: str
     plan_only: bool
 
+    # === Output config ===
+    output_dir: str             # YAML output root directory
+    output_format: str          # "yaml" | "excel" | "both"
+    batch_size: int             # Max cases per batch
+    enable_validation: bool     # Whether to run case validation
+    max_validation_retries: int # Max validation retries
+
     # === Document parsing ===
     requirement_text: str
     interfaces: List[Dict[str, Any]]
@@ -46,6 +53,14 @@ class GraphState(TypedDict, total=False):
     # === Case generation ===
     single_cases: List[Dict[str, Any]]
     biz_flows: List[Dict[str, Any]]
+
+    # === Batch tracking ===
+    batch_state: Dict[str, Any]          # Batch generation progress
+    validation_failures: List[Dict]      # Cases that failed validation
+
+    # === Resume & incremental ===
+    resume: bool                         # Skip to batch generation from existing output_dir
+    reference_dir: str                   # Reference directory for incremental updates
 
     # === Shared messages (ReAct agents use add_messages reducer) ===
     messages: Annotated[List, add_messages]

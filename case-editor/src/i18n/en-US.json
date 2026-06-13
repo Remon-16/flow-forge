@@ -21,6 +21,7 @@
     "RequestBody": "Request Body",
     "StatusCode": "Status Code",
     "AssertDict": "Assert Dict",
+    "AssertRules": "Assert Rules",
     "Remark": "Remark",
     "RelevanceID": "Relevance ID",
     "Tag": "Tag",
@@ -58,6 +59,8 @@
       "Dict": "Dict"
     },
     "details": "Details",
+    "editDetails": "Edit Details",
+    "noData": "No data",
     "parseError": "JSON parse failed. Check the format."
   },
   "validator": {
@@ -89,7 +92,93 @@
     "col": "Col"
   },
   "header": {
-    "title": "Flow Forge — Test Case Editor"
+    "title": "Flow Forge — Test Case Editor",
+    "excelEditor": "Excel Editor",
+    "yamlEditor": "YAML Editor",
+    "backHome": "Back to Home"
   },
-  "loading": "Loading file..."
+  "loading": "Loading file...",
+  "home": {
+    "title": "Flow Forge Test Case Editor",
+    "subtitle": "Choose an editor mode to start editing test cases",
+    "excelTitle": "Excel Editor",
+    "excelDesc": "Edit test case files in .xlsx format. Ideal for small to medium projects, with tabular editing for API definitions, single-API cases, and business flow cases.",
+    "yamlTitle": "YAML Editor",
+    "yamlDesc": "Edit test case files in .yaml format. Form-based structured editing with a code-editor-style directory browser — one case per file.",
+    "open": "Open Editor"
+  },
+  "yaml": {
+    "comingSoon": "YAML Editor coming soon...",
+    "openDir": "Open Directory",
+    "openFile": "Open File",
+    "save": "Save",
+    "saveAs": "Save As",
+    "newFile": "New File",
+    "newFolder": "New Folder",
+    "delete": "Delete",
+    "rename": "Rename",
+    "noFileSelected": "Please select a YAML file",
+    "selectFileHint": "Select a file from the left file tree, or click 'Open File'",
+    "selectFileHintUpdated": "Select a file from the left tree, or use the 'Open' menu above",
+    "formView": "Form View",
+    "rawView": "YAML Text",
+    "splitView": "Split View",
+    "saved": "Saved",
+    "saveFailed": "Save failed",
+    "newFileCreated": "New file created. Please edit and save.",
+    "untitled": "Untitled",
+    "closeTab": "Close Tab",
+    "unsavedPrompt": "Unsaved changes. Close anyway?",
+    "unsavedGoHome": "You have unsaved changes. Leave anyway?",
+    "discardChanges": "Don't Save",
+    "saveAndClose": "Save & Close"
+  },
+  "search": {
+    "find": "Find",
+    "replace": "Replace",
+    "replaceAll": "Replace All",
+    "matchCase": "Match Case",
+    "wholeWord": "Whole Words",
+    "regex": "Regex",
+    "noResults": "No results found",
+    "matchCount": "{current} of {total} matches",
+    "findInFiles": "Find in Files",
+    "replaceInFiles": "Replace in Files",
+    "findInSheets": "Find in All Sheets",
+    "searchPlaceholder": "Enter search text",
+    "replacePlaceholder": "Enter replacement text",
+    "expandReplace": "Expand Replace",
+    "collapseReplace": "Collapse Replace",
+    "allSheets": "All Sheets",
+    "allFiles": "All Files",
+    "globalResults": "Search Results",
+    "replaceOne": "Replace",
+    "replaced": "Replaced",
+    "groupSheet": "Sheet: {name}",
+    "groupFile": "File: {name}"
+  },
+  "assertRules": {
+    "title": "Advanced Assertion Rules",
+    "addRule": "Add Rule",
+    "batchPaste": "Batch Paste",
+    "batchPasteHint": "One rule per line. Paste to auto-parse.",
+    "empty": "No assertion rules",
+    "rulePlaceholder": "e.g. $.data.code == 0",
+    "editDetails": "Edit Details",
+    "modal": {
+      "title": "Edit Assertion Rules",
+      "path": "Path",
+      "operator": "Operator",
+      "expected": "Expected",
+      "pathPlaceholder": "e.g. $.data.code",
+      "expectedPlaceholder": "Expected value"
+    },
+    "errors": {
+      "invalidFormat": "Invalid format: expected 'PATH OPERATOR [EXPECTED]'",
+      "unknownOperator": "Unsupported operator",
+      "pathSyntaxError": "Path syntax error",
+      "unknownFunction": "Unsupported function",
+      "missingExpected": "Missing expected value"
+    }
+  }
 }

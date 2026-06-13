@@ -23,8 +23,8 @@ html, body, #app {
 .app-main {
   display: flex;
   flex: 1;
-  overflow: hidden;
   position: relative;
+  overflow: hidden;
 }
 
 .loading-overlay {
@@ -129,4 +129,5 @@ html, body, #app {
   align-items: center;
   padding: 0 8px;
   gap: 4px;
+  position: relative;
 }

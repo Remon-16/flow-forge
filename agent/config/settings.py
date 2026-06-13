@@ -20,6 +20,12 @@ class Settings:
     llm_doc_max_chars: int = 30000
     max_steps: int = 10
     max_retries: int = 3
+    output_dir: str = "./output"
+    batch_size: int = 10
+    enable_validation: bool = True
+    max_validation_retries: int = 3
+    output_format: str = "both"
+    max_steps_no_progress: int = 5
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -34,6 +40,12 @@ class Settings:
             "llm_doc_max_chars": self.llm_doc_max_chars,
             "max_steps": self.max_steps,
             "max_retries": self.max_retries,
+            "output_dir": self.output_dir,
+            "batch_size": self.batch_size,
+            "enable_validation": self.enable_validation,
+            "max_validation_retries": self.max_validation_retries,
+            "output_format": self.output_format,
+            "max_steps_no_progress": self.max_steps_no_progress,
         }
 
 
@@ -49,6 +61,12 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
         "true", "1", "yes", "on"
     )
     llm_doc_max_chars = int(os.getenv("LLM_DOC_MAX_CHARS", "30000"))
+    enable_validation = os.getenv("ENABLE_VALIDATION", "true").strip().lower() in (
+        "true", "1", "yes", "on"
+    )
+    batch_size = int(os.getenv("BATCH_SIZE", "10"))
+    max_validation_retries = int(os.getenv("MAX_VALIDATION_RETRIES", "3"))
+    max_steps_no_progress = int(os.getenv("MAX_STEPS_NO_PROGRESS", "5"))
 
     return Settings(
         llm_provider=os.getenv("LLM_PROVIDER", "openai"),
@@ -62,4 +80,10 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
         llm_doc_max_chars=llm_doc_max_chars,
         max_steps=max_steps,
         max_retries=max_retries,
+        output_dir=os.getenv("OUTPUT_DIR", "./output"),
+        batch_size=batch_size,
+        enable_validation=enable_validation,
+        max_validation_retries=max_validation_retries,
+        output_format=os.getenv("OUTPUT_FORMAT", "both"),
+        max_steps_no_progress=max_steps_no_progress,
     )

@@ -5,10 +5,19 @@ import { useWorkbookStore } from '../../stores/workbook'
 import { SINGLE_CASE_COLUMNS, TAG_LEVELS, JSON_COLUMNS } from '../../types/excel'
 import type { SingleTestCase } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
+import AssertRulesModal from './AssertRulesModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
+
+const props = defineProps<{ searchBarVisible?: boolean }>()
 
 const { t } = useI18n()
 const workbook = useWorkbookStore()
+
+const scrollY = computed(() => {
+  const base = 200
+  const searchBar = props.searchBarVisible ? 85 : 0
+  return `calc(100vh - ${base + searchBar}px)`
+})
 
 const jsonModalVisible = ref(false)
 const jsonModalField = ref<string>('')
@@ -89,6 +98,36 @@ function getColumnLabel(col: string): string {
   return t(`table.${col}`)
 }
 
+// AssertRules modal state
+const assertRulesModalVisible = ref(false)
+const assertRulesModalRow = ref(-1)
+const assertRulesValue = ref<string[] | null>(null)
+
+function openAssertRulesEditor(rowIndex: number) {
+  assertRulesModalRow.value = rowIndex
+  assertRulesValue.value = workbook.singleCases[rowIndex].AssertRules as string[] | null
+  assertRulesModalVisible.value = true
+}
+
+function onAssertRulesConfirm(rules: string[]) {
+  if (assertRulesModalRow.value >= 0) {
+    workbook.updateSingleCaseField(assertRulesModalRow.value, 'AssertRules', rules.length > 0 ? rules : null)
+  }
+  assertRulesModalVisible.value = false
+}
+
+function formatRules(val: string[] | null): string {
+  if (!val || val.length === 0) return ''
+  return val.join('\n')
+}
+
+function getRowClassName(record: Record<string, unknown>) {
+  if ((record as any)._searchActive) return 'row-search-active'
+  if ((record as any)._searchMatch) return 'row-search-match'
+  if ((record as any)._relevanceValid === false) return 'row-error'
+  return ''
+}
+
 // Filtered relevance options based on input
 const relevanceOptions = computed(() => workbook.validTestIds)
 </script>
@@ -101,20 +140,21 @@ const relevanceOptions = computed(() => workbook.validTestIds)
       </a-button>
     </div>
 
-    <div style="flex: 1; overflow: auto;">
+    <div style="flex: 1; min-height: 0;">
       <a-table
         :dataSource="workbook.singleCases"
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 1400 }"
+        :scroll="{ x: 2200, y: scrollY }"
+        :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >
         <a-table-column
           v-for="col in SINGLE_CASE_COLUMNS"
           :key="col"
           :title="getColumnLabel(col)"
-          :width="isJsonColumn(col) ? 250 : col === 'URL' || col === 'Remark' ? 200 : col === 'TestID' ? 150 : 130"
+          :width="isJsonColumn(col) ? 250 : col === 'AssertRules' ? 280 : col === 'URL' || col === 'Remark' ? 200 : col === 'TestID' ? 150 : 130"
         >
           <template #default="{ record, index }">
             <!-- RelevanceID with validation -->
@@ -186,6 +226,37 @@ const relevanceOptions = computed(() => workbook.validTestIds)
               />
             </template>
 
+            <!-- AssertRules: edit details button + textarea -->
+            <template v-else-if="col === 'AssertRules'">
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 200px;">
+                <a-button
+                  size="small"
+                  type="link"
+                  style="padding: 0; text-align: left; height: auto; font-size: 12px;"
+                  @click="openAssertRulesEditor(index)"
+                >
+                  {{ t('assertRules.editDetails') }}
+                </a-button>
+                <a-textarea
+                  :value="formatRules(record[col] as string[] | null)"
+                  :autoSize="{ minRows: 3, maxRows: 8 }"
+                  size="small"
+                  style="font-family: monospace; font-size: 12px;"
+                  :placeholder="t('assertRules.empty')"
+                />
+              </div>
+            </template>
+
+            <!-- Remark: textarea -->
+            <template v-else-if="col === 'Remark'">
+              <a-textarea
+                :value="String(record[col] ?? '')"
+                :autoSize="{ minRows: 2, maxRows: 6 }"
+                size="small"
+                @change="(e: any) => onCellChange(index, col, e.target.value)"
+              />
+            </template>
+
             <!-- Default text input -->
             <template v-else>
               <a-input
@@ -219,5 +290,28 @@ const relevanceOptions = computed(() => workbook.validTestIds)
       @confirm="onJsonConfirm"
       @cancel="jsonModalVisible = false"
     />
+
+    <!-- AssertRules Modal -->
+    <AssertRulesModal
+      :visible="assertRulesModalVisible"
+      :rules="assertRulesValue"
+      @confirm="onAssertRulesConfirm"
+      @cancel="assertRulesModalVisible = false"
+    />
   </div>
 </template>
+
+<style scoped>
+:deep(.ant-table-header) {
+  overflow-y: scroll !important;
+}
+:deep(.ant-table-header::-webkit-scrollbar) {
+  display: none;
+}
+:deep(.row-search-match td) {
+  background: #fff7cc !important;
+}
+:deep(.row-search-active td) {
+  background: #ffd54f !important;
+}
+</style>

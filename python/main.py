@@ -15,6 +15,7 @@ import sys
 from config.config_manager import initialize, get_all, ConfigError
 from excel_reader.excel_parser import ExcelParser
 from executor.factory import ExecutorFactory
+from yaml_reader.yaml_parser import YamlParser
 from reporter.html_writer import HTMLReportWriter
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--reportName", type=str, default=None, help="Report name")
     parser.add_argument("--apiMode", type=str, default=None,
                         help="Test mode: single, biz, or all")
+    parser.add_argument("--yamlDir", type=str, default=None,
+                        help="Directory containing YAML test case files")
+    parser.add_argument("--yamlFiles", type=str, default=None,
+                        help="Comma-separated YAML file paths")
     return parser.parse_args()
 
 
@@ -70,15 +75,23 @@ def main() -> int:
     logger.info("Script type: %s, API mode: %s", config["scriptType"], api_mode)
     logger.info("Environment: %s", config["envName"])
 
-    try:
-        case_file = config["caseFilePath"]
-        if not os.path.isabs(case_file):
-            case_file = os.path.join(script_dir, case_file)
-        parser = ExcelParser(case_file)
-        parsed = parser.parse(api_mode)
-    except (FileNotFoundError, ValueError) as e:
-        logger.error(str(e))
-        return 2
+    yaml_dir = args.yamlDir
+    yaml_files = args.yamlFiles
+
+    if yaml_dir:
+        parsed = YamlParser.parse_directory(yaml_dir, api_mode)
+    elif yaml_files:
+        parsed = YamlParser.parse_files(yaml_files, api_mode)
+    else:
+        try:
+            case_file = config["caseFilePath"]
+            if not os.path.isabs(case_file):
+                case_file = os.path.join(script_dir, case_file)
+            parser = ExcelParser(case_file)
+            parsed = parser.parse(api_mode)
+        except (FileNotFoundError, ValueError) as e:
+            logger.error(str(e))
+            return 2
 
     single_cases = parsed.get("single_cases", [])
     biz_flows = parsed.get("biz_flows", [])

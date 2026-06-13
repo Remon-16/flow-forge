@@ -17,19 +17,19 @@ logger = logging.getLogger(__name__)
 # Column headers matching executor's ExcelParser expectations
 _API_COLUMNS = [
     "TestID", "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "Remark",
+    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Remark",
 ]
 
 _CASE_COLUMNS = [
     "TestID", "RelevanceID", "Tag",
     "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "Remark",
+    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Remark",
 ]
 
 _BIZ_COLUMNS = [
     "StepID", "RelevanceID", "Trans",
     "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "Tag", "Remark",
+    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Tag", "Remark",
 ]
 
 _HEADER_FONT = Font(name="微软雅黑", bold=True, size=11)
@@ -47,10 +47,24 @@ class ExcelWriter:
     """Write generated test cases to Excel format matching the executor."""
 
     @staticmethod
+    def yaml_to_excel(output_dir: str, output_path: str) -> str:
+        """Convert YAML files in output_dir to a single Excel workbook.
+
+        Reads interfaces/, single_cases/, biz_flows/ subdirectories.
+        """
+        from writers.yaml_writer import YamlWriter
+
+        interfaces = YamlWriter.read_interfaces(output_dir)
+        single_cases = YamlWriter.read_single_cases(output_dir)
+        biz_flows = YamlWriter.read_biz_flows(output_dir)
+
+        return ExcelWriter.write(interfaces, single_cases, biz_flows, output_path)
+
+    @staticmethod
     def write(
-        interfaces: List[InterfaceDef],
-        single_cases: List[SingleTestCase],
-        biz_flows: List[BizFlow],
+        interfaces: List[Any],
+        single_cases: List[Any],
+        biz_flows: List[Any],
         output_path: str,
     ) -> str:
         """Write all test cases to Excel file.
@@ -59,6 +73,7 @@ class ExcelWriter:
         Sheet 2: Single Test Cases
         Sheets 3+: One sheet per BizFlow
 
+        Accepts both dataclass instances and plain dicts.
         Returns the output path.
         """
         wb = openpyxl.Workbook()
@@ -69,16 +84,17 @@ class ExcelWriter:
         ExcelWriter._write_api_sheet(ws1, interfaces)
 
         # Sheet 2: Single Cases
+        ws2 = wb.create_sheet("Single Cases")
         if single_cases:
-            ws2 = wb.create_sheet("Single Cases")
             ExcelWriter._write_single_sheet(ws2, single_cases)
         else:
-            ws2 = wb.create_sheet("Single Cases")
             ExcelWriter._write_headers(ws2, _CASE_COLUMNS)
 
         # Sheets 3+: Biz Flows
         for flow in biz_flows:
-            safe_name = ExcelWriter._safe_sheet_name(flow.sheet_name)
+            safe_name = ExcelWriter._safe_sheet_name(
+                ExcelWriter._get_attr(flow, "sheet_name", "BizFlow")
+            )
             ws = wb.create_sheet(safe_name)
             ExcelWriter._write_biz_sheet(ws, flow)
 
@@ -94,59 +110,73 @@ class ExcelWriter:
         return str(out_path)
 
     @staticmethod
-    def _write_api_sheet(ws, interfaces: List[InterfaceDef]) -> None:
+    def _get_attr(obj: Any, name: str, default: Any = "") -> Any:
+        """Get attribute from dataclass or key from dict."""
+        if isinstance(obj, dict):
+            return obj.get(name, default)
+        return getattr(obj, name, default)
+
+    @staticmethod
+    def _write_api_sheet(ws, interfaces: List[Any]) -> None:
         ExcelWriter._write_headers(ws, _API_COLUMNS)
         for row_idx, iface in enumerate(interfaces, start=2):
+            g = lambda n, d="": ExcelWriter._get_attr(iface, n, d)
             ExcelWriter._write_row(ws, row_idx, [
-                iface.test_id,
-                iface.api_name,
-                iface.app_name,
-                iface.method,
-                iface.url,
-                json.dumps(iface.request_head, ensure_ascii=False) if iface.request_head else "",
-                json.dumps(iface.request_body, ensure_ascii=False) if iface.request_body else "",
-                iface.status_code,
-                json.dumps(iface.assert_dict, ensure_ascii=False) if iface.assert_dict else "",
-                iface.remark,
+                g("test_id"),
+                g("api_name"),
+                g("app_name"),
+                g("method"),
+                g("url"),
+                json.dumps(g("request_head"), ensure_ascii=False) if g("request_head") else "",
+                json.dumps(g("request_body"), ensure_ascii=False) if g("request_body") else "",
+                g("status_code", 200),
+                json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
+                json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
+                g("remark"),
             ])
 
     @staticmethod
-    def _write_single_sheet(ws, cases: List[SingleTestCase]) -> None:
+    def _write_single_sheet(ws, cases: List[Any]) -> None:
         ExcelWriter._write_headers(ws, _CASE_COLUMNS)
         for row_idx, case in enumerate(cases, start=2):
+            g = lambda n, d="": ExcelWriter._get_attr(case, n, d)
             ExcelWriter._write_row(ws, row_idx, [
-                case.test_id,
-                case.relevance_id,
-                case.tag,
-                case.api_name,
-                case.app_name,
-                case.method,
-                case.url,
-                json.dumps(case.request_head, ensure_ascii=False) if case.request_head else "",
-                json.dumps(case.request_body, ensure_ascii=False) if case.request_body else "",
-                case.status_code,
-                json.dumps(case.assert_dict, ensure_ascii=False) if case.assert_dict else "",
-                case.remark,
+                g("test_id"),
+                g("relevance_id"),
+                g("tag", "P1"),
+                g("api_name"),
+                g("app_name"),
+                g("method"),
+                g("url"),
+                json.dumps(g("request_head"), ensure_ascii=False) if g("request_head") else "",
+                json.dumps(g("request_body"), ensure_ascii=False) if g("request_body") else "",
+                g("status_code", 200),
+                json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
+                json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
+                g("remark"),
             ])
 
     @staticmethod
-    def _write_biz_sheet(ws, flow: BizFlow) -> None:
+    def _write_biz_sheet(ws, flow: Any) -> None:
         ExcelWriter._write_headers(ws, _BIZ_COLUMNS)
-        for row_idx, step in enumerate(flow.steps, start=2):
+        steps = ExcelWriter._get_attr(flow, "steps", [])
+        for row_idx, step in enumerate(steps, start=2):
+            g = lambda n, d="": ExcelWriter._get_attr(step, n, d)
             ExcelWriter._write_row(ws, row_idx, [
-                step.step_id,
-                step.relevance_id,
-                step.trans,
-                step.api_name,
-                step.app_name,
-                step.method,
-                step.url,
-                json.dumps(step.request_head, ensure_ascii=False) if step.request_head else "",
-                json.dumps(step.request_body, ensure_ascii=False) if step.request_body else "",
-                step.status_code,
-                json.dumps(step.assert_dict, ensure_ascii=False) if step.assert_dict else "",
-                step.tag,
-                step.remark,
+                g("step_id"),
+                g("relevance_id"),
+                g("trans"),
+                g("api_name"),
+                g("app_name"),
+                g("method"),
+                g("url"),
+                json.dumps(g("request_head"), ensure_ascii=False) if g("request_head") else "",
+                json.dumps(g("request_body"), ensure_ascii=False) if g("request_body") else "",
+                g("status_code", 200),
+                json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
+                json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
+                g("tag", "P1"),
+                g("remark"),
             ])
 
     @staticmethod

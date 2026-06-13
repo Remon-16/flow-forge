@@ -24,6 +24,7 @@ export interface ApiDefinition {
   RequestBody: Record<string, unknown> | null
   StatusCode: number | string
   AssertDict: Record<string, unknown> | null
+  AssertRules: string[] | null
   Remark: string
 }
 
@@ -41,6 +42,7 @@ export interface SingleTestCase {
   RequestBody: Record<string, unknown> | null
   StatusCode: number | string
   AssertDict: Record<string, unknown> | null
+  AssertRules: string[] | null
   Remark: string
   _relevanceValid?: boolean
 }
@@ -59,6 +61,7 @@ export interface BizStep {
   RequestBody: Record<string, unknown> | null
   StatusCode: number | string
   AssertDict: Record<string, unknown> | null
+  AssertRules: string[] | null
   Tag: string
   Remark: string
   _relevanceValid?: boolean
@@ -81,17 +84,17 @@ export interface WorkbookData {
 
 export const API_DEF_COLUMNS = [
   'TestID', 'APIName', 'AppName', 'Method', 'URL',
-  'RequestHead', 'RequestBody', 'StatusCode', 'AssertDict', 'Remark',
+  'RequestHead', 'RequestBody', 'StatusCode', 'AssertDict', 'AssertRules', 'Remark',
 ] as const
 
 export const SINGLE_CASE_COLUMNS = [
   'TestID', 'RelevanceID', 'Tag', 'APIName', 'AppName', 'Method', 'URL',
-  'RequestHead', 'RequestBody', 'StatusCode', 'AssertDict', 'Remark',
+  'RequestHead', 'RequestBody', 'StatusCode', 'AssertDict', 'AssertRules', 'Remark',
 ] as const
 
 export const BIZ_STEP_COLUMNS = [
   'StepID', 'RelevanceID', 'Trans', 'APIName', 'AppName', 'Method', 'URL',
-  'RequestHead', 'RequestBody', 'StatusCode', 'AssertDict', 'Tag', 'Remark',
+  'RequestHead', 'RequestBody', 'StatusCode', 'AssertDict', 'AssertRules', 'Tag', 'Remark',
 ] as const
 
 export const JSON_COLUMNS = ['RequestHead', 'RequestBody', 'AssertDict'] as const

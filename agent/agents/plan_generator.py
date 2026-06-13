@@ -37,6 +37,7 @@ class PlanGenerator(BaseAgent):
         interfaces: List[InterfaceDef],
         api_summary: List[Dict[str, Any]] | None = None,
         user_guidance: str = "",
+        reference_summary: str = "",
     ) -> str:
         """Generate a Markdown test plan.
 
@@ -45,6 +46,7 @@ class PlanGenerator(BaseAgent):
             interfaces: List of InterfaceDef objects or dicts.
             api_summary: Optional API analysis summary from ApiAnalyzer.
             user_guidance: Optional user guidance from --prompt CLI flag.
+            reference_summary: Optional summary of existing coverage from --reference-dir.
 
         Returns the full plan as a Markdown string.
         """
@@ -77,6 +79,7 @@ class PlanGenerator(BaseAgent):
             interface_defs=iface_json,
             api_summary=api_summary_json,
             user_guidance=user_guidance,
+            reference_summary=reference_summary or "(无)",
         )
 
         # Conditionally append knowledge context

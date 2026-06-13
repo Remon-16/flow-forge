@@ -2,7 +2,7 @@
 
 **English** | [中文](README.md)
 
-A multi-agent system based on LangGraph + ReAct pattern that transforms requirement documents and API documentation into Excel test cases compatible with the executor.
+A multi-agent system based on LangGraph + ReAct pattern that transforms requirement documents and API documentation into YAML test cases (with optional Excel export) compatible with the executor. Supports both simple assertions (`assert_dict`) and advanced multi-operator assertion rules (`assert_rules`), covering equality checks, numeric comparisons, regex matching, list aggregation, and more.
 
 ## System Architecture
 
@@ -19,8 +19,9 @@ graph TD
     CONFIRM -->|Approved| PARSE_PLAN[parse_plan<br/>Plan Parsing]
     CONFIRM -->|Rejected| REVISE[revise_plan<br/>Revise Based on Feedback]
     REVISE --> CONFIRM
-    PARSE_PLAN --> GEN_CASES[generate_cases<br/>Case Generation]
-    GEN_CASES --> WRITE[write_excel<br/>Excel Output]
+    PARSE_PLAN --> SAVE_IFACES[save_interfaces<br/>Save Interface YAMLs]
+    SAVE_IFACES --> BATCH[batch_controller<br/>Batch Case Generation]
+    BATCH --> WRITE[write_output<br/>YAML + Optional Excel]
     WRITE --> END((End))
 
     subgraph ReAct Subgraph
@@ -41,11 +42,12 @@ Core workflow:
 4. **Plan Generation**: Generate a Markdown test plan based on analysis results and interface definitions, automatically saved to the session directory
 5. **Manual Review** (Mandatory interrupt): Display the plan; user can approve or provide revision feedback
 6. **Feedback Loop**: When rejected, the system revises the plan based on feedback and resubmits for review, looping until approval
-7. **Plan Parsing**: Parse the approved plan into structured data
-8. **Case Generation**: Generate single-API and business flow test cases with concrete parameter values
-9. **Excel Output**: Write multi-sheet Excel file fully compatible with the executor format
+7. **Save Interfaces**: Write analyzed interface definitions to `output/interfaces/` directory, one YAML file per interface for version control
+8. **Batch Case Generation** (BatchController): Read interfaces from YAML, generate cases in configurable-size batches via CaseGenerator. Supports resumable generation (`--resume`) and incremental updates (`--reference-dir`). Built-in progress-based step counting — steadily-progressing models are never falsely terminated, while weak models that produce no progress are quickly caught
+9. **Validation** (Optional): CaseValidator checks each batch's format; errors trigger automatic retries (up to 3 times), with a final failure report
+10. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
 
-Each step provides detailed progress output in the CLI, including: current step [N/8], file path and size, LLM model name, and generation statistics. Users always know what the system is doing.
+Each step provides detailed progress output in the CLI, including: current step [N/9], file path and size, LLM model name, and generation statistics. Users always know what the system is doing.
 
 ## Technology Stack
 
@@ -289,7 +291,9 @@ Markdown table example:
 
 **Session Log**: Each run creates a timestamped directory under `logs/` containing `session.jsonl` (event stream), `state.json` (final state snapshot), and a copy of the output Excel. Use `--debug` to additionally generate `debug.log` (full LLM I/O).
 
-**Excel Case File**: Multi-sheet structure, fully compatible with executor format:
+**YAML Case Files** (default): Each interface/case is a separate `.yaml` file stored in `output/interfaces/`, `output/single_cases/`, `output/biz_flows/` directories. Enables Git version control, incremental generation, and resumable generation.
+
+**Excel Case File** (optional): Set `OUTPUT_FORMAT=excel` or `both` to convert from YAML. Multi-sheet structure, fully compatible with executor format:
 - Sheet 1 — API Definitions: interface definition table
 - Sheet 2 — Single Cases: single-API test cases
 - Sheet 3+ — Business Flow Cases (one sheet per business flow)
@@ -310,7 +314,26 @@ Markdown table example:
 | `KNOWLEDGE_DIR` | Knowledge base .md file directory | `./knowledge` |
 | `LLM_DOC_MAX_CHARS` | Max characters sent to LLM during API doc parsing | `30000` (set 2000 for 8K models, 100000+ for 1M models) |
 | `MAX_STEPS` | Max steps per agent | `10` |
+| `MAX_STEPS_NO_PROGRESS` | Max consecutive no-progress LLM calls (triggers ConvergenceError) | `5` |
 | `MAX_RETRIES` | Max LLM call retries | `3` |
+| `OUTPUT_DIR` | YAML output root directory | `./output` |
+| `BATCH_SIZE` | Max cases per generation batch | `10` |
+| `ENABLE_VALIDATION` | Enable case format validation | `true` |
+| `MAX_VALIDATION_RETRIES` | Max validation retries | `3` |
+| `OUTPUT_FORMAT` | Output format (`yaml` / `excel` / `both`) | `both` |
+
+### Output Directory Structure
+
+When using YAML mode, the output directory looks like:
+
+```
+output/
+├── interfaces/          # Interface definitions, one .yaml per interface
+├── single_cases/        # Single API test cases, one .yaml per case
+├── biz_flows/           # Business flow cases, one .yaml per flow
+├── failures.yaml        # Cases that failed validation (if any)
+└── test_cases.xlsx      # (Optional) Excel converted from YAML
+```
 
 ### config/prompts.yaml — Prompts & Termination Conditions
 
@@ -350,9 +373,15 @@ optional arguments:
                         Requirement document path(s) (.txt, .md, .pdf)
   --api API             API documentation path (OpenAPI .yaml/.json or Markdown .md)
   --output OUTPUT       Output Excel file path
-  --plan-only           Only generate test plan, do not generate Excel
+  --output-dir OUTPUT_DIR
+                        YAML output root directory (default: ./output)
+  --output-format {yaml,excel,both}
+                        Output format (default: both)
+  --batch-size BATCH_SIZE
+                        Max cases per batch (default: 10)
+  --plan-only           Only generate test plan, do not generate cases
   --from-plan FROM_PLAN
-                        Generate Excel from an approved plan
+                        Generate cases from an approved plan
   --prompt PROMPT, -p PROMPT
                         User guidance injected into plan and case generation
   --parse-mode {raw,rule,llm}, -m {raw,rule,llm}
@@ -361,10 +390,76 @@ optional arguments:
                           rule : Use rule-based parser (OpenAPI / Markdown)
                           llm  : Use LLM to pre-extract structured interface definitions
   --parser-path PATH    Path to custom parser .py file (only effective with -m rule)
+  --reference-dir REFERENCE_DIR
+                        Reference directory for incremental updates. The system scans
+                        existing plans/interfaces/cases and only plans for new or
+                        changed scenarios
+  --resume              Resume batch generation from existing output_dir. Skips
+                        document parsing and plan generation
   --env ENV             Path to .env file
   -v, --verbose         Verbose console logging
   --debug               Debug mode: write full LLM input/output to session directory
 ```
+
+## Progress-Based Step Counting
+
+### How It Works
+
+Traditional step counting increments on every LLM call and terminates when a hard limit is reached. This is problematic for weaker models that may repeatedly produce malformed JSON — each instance is rejected by the validator, retried, and wastes step quota. An estimated `_max_steps` cannot predict how many steps will be wasted, ultimately still triggering `ConvergenceError`.
+
+Progress-based mode changes the count logic from "total LLM calls" to "consecutive calls without progress":
+
+- Before each LLM call, the system computes a progress string (e.g., `single-[20:200]` meaning 20 out of 200 interfaces generated)
+- Progress string is the **same** as last time → `_step_count += 1` (no progress, accumulate)
+- Progress string is **different** → `_step_count = 1` (progress made, reset counter)
+- When `_step_count > MAX_STEPS_NO_PROGRESS` (default 5) → raises `ConvergenceError`
+
+### Benefits
+
+- **Steadily-progressing models are never falsely terminated**: The counter resets whenever new cases are produced
+- **Weak models are caught quickly**: Terminates after 5 consecutive LLM calls with zero progress
+- **Backward compatible**: Agents without progress tracking continue using traditional counting
+
+### Configuration
+
+Set via the `MAX_STEPS_NO_PROGRESS` environment variable in `.env` (default: 5).
+
+## Resumable Generation & Incremental Updates
+
+### Scenario A: Resumable Generation (`--resume`)
+
+When the pipeline crashes or the user interrupts it mid-run, use `--resume` to pick up where it left off. The system skips document parsing and plan generation, jumping directly to batch generation using the existing interfaces and cases in `output_dir`.
+
+```bash
+# Resume after pipeline interruption
+python main.py --resume --output-dir ./output --api docs/api.yaml
+```
+
+Prerequisite: The `output_dir/interfaces/` directory must already contain interface YAML files.
+
+### Scenario B: Incremental Updates (`--reference-dir`)
+
+When requirements or API documentation change (new scenarios, modified fields), re-run the full pipeline with `--reference-dir` pointing to the previous output directory. The system will:
+
+1. Scan the reference directory for `plan.md`, `interfaces/`, `single_cases/`, `biz_flows/`
+2. Build a summary of existing test assets and inject it into the plan generation LLM prompt
+3. The LLM only plans for new or changed interfaces/scenarios, marking unchanged parts as "already covered"
+4. Batch generation only processes new interfaces, automatically skipping existing cases
+5. Save `plan.md` to `output_dir`
+
+```bash
+# Incremental update to a different directory (recommended: keep old output, new output separate)
+python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
+    --reference-dir ./output_v1 --output-dir ./output_v2 --output testcase_v2.xlsx
+
+# In-place incremental update (same directory; files get _v2/_v3 suffixes on conflict)
+python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
+    --reference-dir ./output --output-dir ./output --output testcase.xlsx
+```
+
+### File Name Conflicts
+
+When `--reference-dir` and `--output-dir` are the same (in-place incremental update), existing YAML files are not overwritten. Newly generated case files get `_v2`, `_v3` suffixes automatically, letting you choose which version to keep.
 
 ## Custom Parsers
 

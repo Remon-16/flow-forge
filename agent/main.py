@@ -81,7 +81,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--output",
         default=f"testcase_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-        help="Output Excel file path",
+        help="Output Excel file path (used when output-format includes excel)",
+    )
+    p.add_argument(
+        "--output-dir",
+        default="",
+        help="YAML output root directory (default: ./output, or from .env)",
+    )
+    p.add_argument(
+        "--output-format",
+        choices=["yaml", "excel", "both"],
+        default="",
+        help="Output format: yaml, excel, or both (default: both, or from .env)",
+    )
+    p.add_argument(
+        "--batch-size",
+        type=int,
+        default=0,
+        help="Max cases per generation batch (default: 10, or from .env)",
     )
     p.add_argument(
         "--plan-only",
@@ -127,6 +144,19 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Path to custom parser .py file (only for --parse-mode rule). "
              "Must implement: parse(file_path: str) -> List[InterfaceDef]",
+    )
+    p.add_argument(
+        "--reference-dir",
+        default="",
+        help="Reference directory for incremental updates. The system scans "
+             "this directory for existing plans, interfaces, and cases, and "
+             "generates a plan that only covers new or changed scenarios.",
+    )
+    p.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume batch generation from existing output_dir. Skips "
+             "document parsing and plan generation. Use with --output-dir.",
     )
     return p
 
@@ -259,6 +289,11 @@ def main() -> int:
             "requirement_paths": [],
             "api_path": args.api,
             "output_path": args.output,
+            "output_dir": args.output_dir or settings.output_dir,
+            "output_format": args.output_format or settings.output_format,
+            "batch_size": args.batch_size or settings.batch_size,
+            "enable_validation": settings.enable_validation,
+            "max_validation_retries": settings.max_validation_retries,
             "plan_only": False,
             "requirement_text": "",
             "interfaces": [],
@@ -268,6 +303,7 @@ def main() -> int:
             "user_guidance": args.prompt or "",
             "parse_mode": args.parse_mode,
             "parser_path": args.parser_path or "",
+            "reference_dir": args.reference_dir or "",
         }
 
         result = graph.invoke(initial, config)
@@ -279,6 +315,66 @@ def main() -> int:
             return 2
 
         print(f"\nExcel written to: {args.output}")
+        print(f"  Single cases: {len(result.get('single_cases', []))}")
+        print(f"  Biz flows: {len(result.get('biz_flows', []))}")
+        session_logger.save_state(dict(result))
+        session_logger.log_session_end("completed")
+        return 0
+
+    # ------------------------------------------------------------------
+    # Resume mode: skip to batch generation from existing output_dir
+    # ------------------------------------------------------------------
+    if args.resume:
+        output_dir = args.output_dir or settings.output_dir
+        ifaces_dir = Path(output_dir) / "interfaces"
+        if not ifaces_dir.is_dir() or not list(ifaces_dir.glob("*.yaml")):
+            print(f"Error: 未在 {ifaces_dir} 中找到接口 YAML 文件")
+            print("  --resume 需要已有接口定义的 output 目录")
+            return 2
+
+        plan_md = ""
+        if args.from_plan:
+            plan_path = Path(args.from_plan)
+            if not plan_path.exists():
+                print(f"Error: plan file not found: {args.from_plan}")
+                return 2
+            plan_md = plan_path.read_text(encoding="utf-8")
+
+        graph = build_workflow(settings, session_logger=session_logger)
+        config = {"configurable": {"thread_id": f"resume_{datetime.now().strftime('%Y%m%d%H%M%S')}"}}
+
+        initial: GraphState = {
+            "requirement_paths": [],
+            "api_path": args.api or "",
+            "output_path": args.output or "",
+            "output_dir": output_dir,
+            "output_format": args.output_format or settings.output_format,
+            "batch_size": args.batch_size or settings.batch_size,
+            "enable_validation": settings.enable_validation,
+            "max_validation_retries": settings.max_validation_retries,
+            "plan_only": False,
+            "requirement_text": "",
+            "interfaces": [],
+            "plan_md": plan_md,
+            "plan_confirmed": True,
+            "api_summary_confirmed": True,
+            "user_guidance": args.prompt or "",
+            "parse_mode": args.parse_mode or "raw",
+            "parser_path": args.parser_path or "",
+            "reference_dir": args.reference_dir or "",
+            "resume": True,
+        }
+
+        result = graph.invoke(initial, config)
+
+        if result.get("errors"):
+            for err in result["errors"]:
+                print(f"  Error: {err}")
+            session_logger.save_state(dict(result))
+            session_logger.log_session_end("failed")
+            return 2
+
+        print(f"\nResume complete. Output in: {output_dir}")
         print(f"  Single cases: {len(result.get('single_cases', []))}")
         print(f"  Biz flows: {len(result.get('biz_flows', []))}")
         session_logger.save_state(dict(result))
@@ -301,11 +397,17 @@ def main() -> int:
             "requirement_paths": list(args.requirement),
             "api_path": args.api,
             "output_path": args.output,
+            "output_dir": args.output_dir or settings.output_dir,
+            "output_format": args.output_format or settings.output_format,
+            "batch_size": args.batch_size or settings.batch_size,
+            "enable_validation": settings.enable_validation,
+            "max_validation_retries": settings.max_validation_retries,
             "plan_only": True,
             "plan_confirmed": True,  # Skip review in plan-only mode
             "user_guidance": args.prompt or "",
             "parse_mode": args.parse_mode,
             "parser_path": args.parser_path or "",
+            "reference_dir": args.reference_dir or "",
         }
         config = {"configurable": {"thread_id": thread_id}}
 
@@ -318,8 +420,7 @@ def main() -> int:
 
         # Save to session dir
         plan_path = session_logger.save_plan(plan_md)
-        if args.debug:
-            session_logger.save_state(dict(result))
+        session_logger.save_state(dict(result))
 
         print(f"\nTest plan generated: {plan_path.resolve()}")
         print("\nReview the plan, then run:")
@@ -335,8 +436,14 @@ def main() -> int:
         "requirement_paths": list(args.requirement),
         "api_path": args.api,
         "output_path": args.output,
+        "output_dir": args.output_dir or settings.output_dir,
+        "output_format": args.output_format or settings.output_format,
+        "batch_size": args.batch_size or settings.batch_size,
+        "enable_validation": settings.enable_validation,
+        "max_validation_retries": settings.max_validation_retries,
         "plan_only": False,
         "user_guidance": args.prompt or "",
+        "reference_dir": args.reference_dir or "",
     }
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -345,6 +452,7 @@ def main() -> int:
     if result.get("errors"):
         for err in result["errors"]:
             print(f"  Error: {err}")
+        session_logger.save_state(dict(result))
         session_logger.log_session_end("failed")
         return 2
 
@@ -353,8 +461,7 @@ def main() -> int:
     if plan_md and session_logger:
         session_logger.save_plan(plan_md)
 
-    if session_logger.debug:
-        session_logger.save_state(dict(result))
+    session_logger.save_state(dict(result))
     session_logger.log_session_end("completed")
 
     print(f"\nAll done! Excel written to: {args.output}")

@@ -2,7 +2,7 @@
 
 **中文** | [English](README.en.md)
 
-基于 LangGraph + ReAct 模式的多智能体系统，将需求文档和接口文档转化为符合执行器格式的 Excel 测试用例。
+基于 LangGraph + ReAct 模式的多智能体系统，将需求文档和接口文档转化为符合执行器格式的 YAML 测试用例（可选导出 Excel）。支持简单断言（`assert_dict`）和高级多运算符断言规则（`assert_rules`），覆盖等值校验、数值比较、正则匹配、列表聚合等场景。
 
 ## 系统架构
 
@@ -19,8 +19,9 @@ graph TD
     CONFIRM -->|批准| PARSE_PLAN[parse_plan<br/>计划解析]
     CONFIRM -->|拒绝| REVISE[revise_plan<br/>根据反馈修改]
     REVISE --> CONFIRM
-    PARSE_PLAN --> GEN_CASES[generate_cases<br/>用例生成]
-    GEN_CASES --> WRITE[write_excel<br/>Excel 写入]
+    PARSE_PLAN --> SAVE_IFACES[save_interfaces<br/>保存接口 YAML]
+    SAVE_IFACES --> BATCH[batch_controller<br/>分批生成用例]
+    BATCH --> WRITE[write_output<br/>YAML + 可选 Excel]
     WRITE --> END((结束))
 
     subgraph ReAct 子图内部
@@ -41,11 +42,12 @@ graph TD
 4. **计划生成**：基于分析结果和接口定义生成 Markdown 测试计划，自动保存至 session 目录
 5. **人工审核**（强制中断点）：展示计划，用户可批准或提出修改意见
 6. **反馈循环**：用户拒绝时，系统根据反馈修改计划后重新提交审核，直至批准
-7. **计划解析**：将审核通过的计划解析为结构化数据
-8. **用例生成**：生成包含具体参数值的单接口用例和业务链路用例
-9. **Excel 输出**：写入多 Sheet Excel 文件，与执行器格式完全兼容
+7. **保存接口定义**：将分析后的接口定义写入 `output/interfaces/` 目录，每个接口一个 YAML 文件，便于版本管理
+8. **分批用例生成**（BatchController）：从 `interfaces/` 读取接口定义，分批调用 CaseGenerator 生成用例，每批大小可配置。支持断点续生成（`--resume`）和增量更新（`--reference-dir`）。内置进度感知步数计数——持续进步的模型不会被误杀，弱模型反复生成无效内容时快速终止
+9. **格式校验**（可选）：CaseValidator 校验每批生成的用例格式，错误自动重试（最多 3 次），最终报告失败用例
+10. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出
 
-每个步骤在 CLI 中均有详细进度输出，包括：当前步骤 [N/8]、文件路径与大小、LLM 调用模型名、生成结果统计。用户始终清楚系统正在做什么。
+每个步骤在 CLI 中均有详细进度输出，包括：当前步骤 [N/9]、文件路径与大小、LLM 调用模型名、生成结果统计。用户始终清楚系统正在做什么。
 
 ## 技术栈
 
@@ -289,7 +291,9 @@ Markdown 表格示例：
 
 **会话日志**：每次运行在 `logs/` 下创建按时间戳命名的目录，包含 `session.jsonl`（事件流）、`state.json`（最终状态快照）和输出 Excel 副本。使用 `--debug` 时额外生成 `debug.log`（完整 LLM I/O）。
 
-**Excel 用例文件**：多 Sheet 结构，与执行器格式完全兼容：
+**YAML 用例文件**（默认）：每个接口/用例独立一个 `.yaml` 文件，存放在 `output/interfaces/`、`output/single_cases/`、`output/biz_flows/` 目录下。便于 Git 版本管理、增量生成和断点续生成。
+
+**Excel 用例文件**（可选）：设置 `OUTPUT_FORMAT=excel` 或 `both` 时从 YAML 转换生成，多 Sheet 结构，与执行器格式完全兼容：
 - Sheet 1 — API Definitions：接口定义表
 - Sheet 2 — Single Cases：单接口测试用例
 - Sheet 3+ — 业务链路用例（每个业务流一个 Sheet）
@@ -310,7 +314,26 @@ Markdown 表格示例：
 | `KNOWLEDGE_DIR` | 知识库 .md 文件目录 | `./knowledge` |
 | `LLM_DOC_MAX_CHARS` | API 文档解析时发送给 LLM 的最大字符数 | `30000`（8K模型设2000，1M模型设100000+） |
 | `MAX_STEPS` | 单智能体最大步数 | `10` |
+| `MAX_STEPS_NO_PROGRESS` | 连续无进展 LLM 调用上限（触发 ConvergenceError） | `5` |
 | `MAX_RETRIES` | LLM 调用最大重试 | `3` |
+| `OUTPUT_DIR` | YAML 用例输出根目录 | `./output` |
+| `BATCH_SIZE` | 每批生成用例数上限 | `10` |
+| `ENABLE_VALIDATION` | 是否启用用例格式校验 | `true` |
+| `MAX_VALIDATION_RETRIES` | 校验失败最大重试次数 | `3` |
+| `OUTPUT_FORMAT` | 输出格式（`yaml` / `excel` / `both`） | `both` |
+
+### 输出目录结构
+
+YAML 模式下，输出目录结构如下：
+
+```
+output/
+├── interfaces/          # 接口定义，每个接口一个 .yaml
+├── single_cases/        # 单接口用例，每个用例一个 .yaml
+├── biz_flows/           # 业务链路用例，每个链路一个 .yaml
+├── failures.yaml        # 校验失败的用例（如有）
+└── test_cases.xlsx      # (可选) 从 YAML 转换的 Excel
+```
 
 ### config/prompts.yaml — 提示词与终止条件
 
@@ -349,10 +372,16 @@ optional arguments:
   --requirement REQUIREMENT [REQUIREMENT ...]
                         需求文档路径（支持 .txt, .md, .pdf）
   --api API             接口文档路径（OpenAPI .yaml/.json 或 Markdown .md）
-  --output OUTPUT       输出 Excel 文件路径
-  --plan-only           仅生成测试计划，不生成 Excel
+  --output OUTPUT       输出 Excel 文件路径（output-format 含 excel 时使用）
+  --output-dir OUTPUT_DIR
+                        YAML 用例输出根目录（默认 ./output）
+  --output-format {yaml,excel,both}
+                        输出格式（默认 both）
+  --batch-size BATCH_SIZE
+                        每批最大用例数（默认 10）
+  --plan-only           仅生成测试计划，不生成用例
   --from-plan FROM_PLAN
-                        从已审核通过的计划生成 Excel
+                        从已审核通过的计划生成用例
   --prompt PROMPT, -p PROMPT
                         用户补充指导，注入到计划生成和用例生成阶段
   --parse-mode {raw,rule,llm}, -m {raw,rule,llm}
@@ -361,10 +390,75 @@ optional arguments:
                           rule : 使用规则解析器（OpenAPI / Markdown）
                           llm  : 用 LLM 预提取结构化接口定义
   --parser-path PATH    自定义解析器 .py 文件路径（仅 -m rule 时生效）
+  --reference-dir REFERENCE_DIR
+                        参考目录（增量更新场景），系统扫描已有计划/接口/用例，
+                        仅对新增或变更部分进行规划
+  --resume              断点续生成，跳过文档解析和计划生成，直接从已有
+                        output-dir 继续批量生成
   --env ENV             .env 文件路径
   -v, --verbose         详细控制台日志输出
   --debug               调试模式，在 session 目录中写入完整 LLM 输入输出
 ```
+
+## 进度感知步数计数
+
+### 原理
+
+传统的步数计数方式是对所有 LLM 调用次数进行累加，达到上限即终止。这种方式在弱模型场景下存在问题：弱模型可能反复生成格式不正确的 JSON，每次都被校验器拒绝、触发重试，消耗步数配额。预估的 `_max_steps` 无法预知浪费多少步，最终仍会因 `ConvergenceError` 异常退出。
+
+进度感知模式将计数逻辑从"总调用次数"改为"连续无进展的调用次数"：
+
+- 每次 LLM 调用前，系统计算当前生成进度字符串（如 `single-[20:200]` 表示 200 个接口中已生成 20 个）
+- 进度字符串与上次**相同** → `_step_count += 1`（无进展，累计）
+- 进度字符串与上次**不同** → `_step_count = 1`（有进展，重置计数）
+- 当 `_step_count > MAX_STEPS_NO_PROGRESS`（默认 5）→ 抛出 `ConvergenceError`
+
+### 优势
+
+- **持续进步的模型永不误杀**：只要每步都在产出新用例，步数计数器会持续重置
+- **弱模型快速拦截**：连续 5 次 LLM 调用无任何进展时终止，避免无限重试
+- **向后兼容**：未启用进度追踪的智能体仍使用传统计数方式
+
+### 配置
+
+通过 `.env` 中的 `MAX_STEPS_NO_PROGRESS` 环境变量设置（默认 5）。
+
+## 断点续生成与增量更新
+
+### 场景 A：断点续生成（`--resume`）
+
+管道中途崩溃或用户主动中断后，使用 `--resume` 恢复生成。系统跳过文档解析和计划生成，直接从已有 `output_dir` 的接口和用例继续批量生成。
+
+```bash
+# 管道中断后继续生成
+python main.py --resume --output-dir ./output --api docs/api.yaml
+```
+
+前提：`output_dir/interfaces/` 目录中已存在接口 YAML 文件。
+
+### 场景 B：增量更新（`--reference-dir`）
+
+需求文档或接口文档发生变更（增加场景、修改字段）后，重新运行完整管道。通过 `--reference-dir` 指定旧产出目录，系统会：
+
+1. 扫描参考目录中的 `plan.md`、`interfaces/`、`single_cases/`、`biz_flows/`
+2. 将已有测试资产汇总，注入计划生成 LLM 提示中
+3. LLM 仅对新增或变更的接口/场景进行规划，未变更部分标注"已覆盖"
+4. 批量生成阶段仅处理新接口，已有用例自动跳过
+5. 计划 `plan.md` 自动保存到 `output_dir`
+
+```bash
+# 不同目录增量更新（推荐：保留旧产出，新产出独立存放）
+python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
+    --reference-dir ./output_v1 --output-dir ./output_v2 --output testcase_v2.xlsx
+
+# 同目录增量更新（原地扩展，文件重名时自动添加 _v2/_v3 后缀）
+python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
+    --reference-dir ./output --output-dir ./output --output testcase.xlsx
+```
+
+### 文件重名处理
+
+当 `--reference-dir` 与 `--output-dir` 相同时（同目录增量更新），已存在的 YAML 文件不会被覆盖。新生成的用例文件自动添加 `_v2`、`_v3` 等后缀，用户可自行挑选保留哪个版本。
 
 ## 自定义解析器
 
@@ -398,9 +492,12 @@ optional arguments:
 | `RequirementAnalyzer` | 需求分析 | 从需求文档提取业务流、角色、约束、异常场景（JSON 输出） |
 | `PlanGenerator` | 计划生成 | 基于需求分析和接口定义生成 Markdown 测试计划 |
 | `PlanParser` | 计划解析 | 将审核通过的 Markdown 计划解析为结构化 TestPlan |
-| `CaseGenerator` | 用例生成 | 生成包含具体参数值的单接口用例和业务链路用例 |
+| `CaseGenerator` | 用例生成 | 生成包含具体参数值的单接口用例和业务链路用例；支持分批生成 |
+| `BatchController` | 分批编排 | 读取接口定义，决定每批生成内容，调度生成→校验→保存循环 |
+| `CaseValidator` | 格式校验 | 校验用例结构完整性，错误自动重试（最多 3 次），汇总失败报告 |
 | `PlanReviser` | 计划修改 | 在审核反馈循环中，根据用户意见修改测试计划 |
 | `ExcelWriter` | Excel 写入 | 将用例写入多 Sheet Excel 文件（不需要 LLM） |
+| `YamlWriter` | YAML 读写 | 接口/用例的 YAML 文件读写（不需要 LLM） |
 
 ## LangGraph 编排
 
@@ -417,8 +514,9 @@ optional arguments:
 | `human_confirm` | **强制中断点**，暂停执行等待人工审核 |
 | `revise_plan` | 根据用户反馈修改计划，完成后回到 human_confirm |
 | `parse_plan` | 调用 PlanParser，解析计划为结构化数据 |
-| `generate_cases` | 调用 CaseGenerator，生成具体用例 |
-| `write_excel` | 调用 ExcelWriter，输出 Excel 文件 |
+| `save_interfaces` | 将接口定义保存为 YAML 文件到 output/interfaces/ |
+| `batch_controller` | 运行 BatchController，分批生成用例（支持断点续生成） |
+| `write_output` | 根据 output_format 输出 YAML + 可选 Excel |
 
 ### 中断点与反馈循环
 

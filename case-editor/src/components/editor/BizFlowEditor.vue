@@ -5,9 +5,10 @@ import { useWorkbookStore } from '../../stores/workbook'
 import { BIZ_STEP_COLUMNS, TAG_LEVELS, JSON_COLUMNS } from '../../types/excel'
 import type { BizStep } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
+import AssertRulesModal from './AssertRulesModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
-const props = defineProps<{ flowIndex: number }>()
+const props = defineProps<{ flowIndex: number; searchBarVisible?: boolean }>()
 
 const { t } = useI18n()
 const workbook = useWorkbookStore()
@@ -18,6 +19,12 @@ const jsonModalStepIdx = ref<number>(-1)
 const jsonValue = ref<Record<string, unknown>>({})
 
 const flow = computed(() => workbook.bizFlows[props.flowIndex])
+
+const scrollY = computed(() => {
+  const base = 200
+  const searchBar = props.searchBarVisible ? 85 : 0
+  return `calc(100vh - ${base + searchBar}px)`
+})
 
 // Re-run validation when flow changes
 watch(
@@ -102,9 +109,34 @@ function getColumnLabel(col: string): string {
   return t(`table.${col}`)
 }
 
+// AssertRules modal state
+const assertRulesModalVisible = ref(false)
+const assertRulesModalStepIdx = ref(-1)
+const assertRulesValue = ref<string[] | null>(null)
+
+function openAssertRulesEditor(stepIndex: number) {
+  assertRulesModalStepIdx.value = stepIndex
+  assertRulesValue.value = flow.value.steps[stepIndex].AssertRules as string[] | null
+  assertRulesModalVisible.value = true
+}
+
+function onAssertRulesConfirm(rules: string[]) {
+  if (assertRulesModalStepIdx.value >= 0) {
+    workbook.updateBizStepField(props.flowIndex, assertRulesModalStepIdx.value, 'AssertRules', rules.length > 0 ? rules : null)
+  }
+  assertRulesModalVisible.value = false
+}
+
+function formatRules(val: string[] | null): string {
+  if (!val || val.length === 0) return ''
+  return val.join('\n')
+}
+
 const relevanceOptions = computed(() => workbook.validTestIds)
 
 function getRowClassName(record: BizStep) {
+  if ((record as any)._searchActive) return 'row-search-active'
+  if ((record as any)._searchMatch) return 'row-search-match'
   if (record._stepIdDuplicate || record._relevanceValid === false || record._transError) {
     return 'row-error'
   }
@@ -132,14 +164,14 @@ function getRowClassName(record: BizStep) {
     </div>
 
     <!-- Steps table -->
-    <div style="flex: 1; overflow: auto;">
+    <div style="flex: 1; min-height: 0;">
       <a-table
         v-if="flow"
         :dataSource="flow.steps"
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 1600 }"
+        :scroll="{ x: 2400, y: scrollY }"
         :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >
@@ -147,7 +179,7 @@ function getRowClassName(record: BizStep) {
           v-for="col in BIZ_STEP_COLUMNS"
           :key="col"
           :title="getColumnLabel(col)"
-          :width="isJsonColumn(col) ? 250 : col === 'URL' || col === 'Remark' || col === 'Trans' ? 200 : col === 'StepID' ? 100 : 130"
+          :width="isJsonColumn(col) ? 250 : col === 'AssertRules' ? 280 : col === 'URL' || col === 'Remark' || col === 'Trans' ? 200 : col === 'StepID' ? 100 : 130"
         >
           <template #default="{ record, index: stepIdx }">
             <!-- StepID with duplicate check -->
@@ -247,6 +279,37 @@ function getRowClassName(record: BizStep) {
               />
             </template>
 
+            <!-- AssertRules: edit details button + textarea -->
+            <template v-else-if="col === 'AssertRules'">
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 200px;">
+                <a-button
+                  size="small"
+                  type="link"
+                  style="padding: 0; text-align: left; height: auto; font-size: 12px;"
+                  @click="openAssertRulesEditor(stepIdx)"
+                >
+                  {{ t('assertRules.editDetails') }}
+                </a-button>
+                <a-textarea
+                  :value="formatRules(record[col] as string[] | null)"
+                  :autoSize="{ minRows: 3, maxRows: 8 }"
+                  size="small"
+                  style="font-family: monospace; font-size: 12px;"
+                  :placeholder="t('assertRules.empty')"
+                />
+              </div>
+            </template>
+
+            <!-- Remark: textarea -->
+            <template v-else-if="col === 'Remark'">
+              <a-textarea
+                :value="String(record[col] ?? '')"
+                :autoSize="{ minRows: 2, maxRows: 6 }"
+                size="small"
+                @change="(e: any) => onCellChange(stepIdx, col, e.target.value)"
+              />
+            </template>
+
             <!-- Default -->
             <template v-else>
               <a-input
@@ -297,5 +360,28 @@ function getRowClassName(record: BizStep) {
       @confirm="onJsonConfirm"
       @cancel="jsonModalVisible = false"
     />
+
+    <!-- AssertRules Modal -->
+    <AssertRulesModal
+      :visible="assertRulesModalVisible"
+      :rules="assertRulesValue"
+      @confirm="onAssertRulesConfirm"
+      @cancel="assertRulesModalVisible = false"
+    />
   </div>
 </template>
+
+<style scoped>
+:deep(.ant-table-header) {
+  overflow-y: scroll !important;
+}
+:deep(.ant-table-header::-webkit-scrollbar) {
+  display: none;
+}
+:deep(.row-search-match td) {
+  background: #fff7cc !important;
+}
+:deep(.row-search-active td) {
+  background: #ffd54f !important;
+}
+</style>

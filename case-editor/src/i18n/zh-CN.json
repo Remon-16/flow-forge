@@ -21,6 +21,7 @@
     "RequestBody": "请求体",
     "StatusCode": "状态码",
     "AssertDict": "断言字典",
+    "AssertRules": "高级断言",
     "Remark": "备注",
     "RelevanceID": "关联ID",
     "Tag": "级别",
@@ -58,6 +59,8 @@
       "Dict": "字典"
     },
     "details": "详情",
+    "editDetails": "编辑详情",
+    "noData": "暂无数据",
     "parseError": "JSON 解析失败，请检查格式"
   },
   "validator": {
@@ -89,7 +92,93 @@
     "col": "列"
   },
   "header": {
-    "title": "Flow Forge — 测试用例编辑器"
+    "title": "Flow Forge — 测试用例编辑器",
+    "excelEditor": "Excel 编辑器",
+    "yamlEditor": "YAML 编辑器",
+    "backHome": "返回首页"
   },
-  "loading": "正在加载文件..."
+  "loading": "正在加载文件...",
+  "home": {
+    "title": "Flow Forge 测试用例编辑器",
+    "subtitle": "选择编辑器模式，开始编辑测试用例",
+    "excelTitle": "Excel 编辑器",
+    "excelDesc": "编辑 .xlsx 格式的测试用例文件。适合中小型项目，支持接口定义、单接口用例和业务链路用例的表格化编辑。",
+    "yamlTitle": "YAML 编辑器",
+    "yamlDesc": "编辑 .yaml 格式的测试用例文件。基于表单的结构化编辑，支持代码编辑器式的目录浏览，每个用例一个独立文件。",
+    "open": "打开编辑器"
+  },
+  "yaml": {
+    "comingSoon": "YAML 编辑器即将上线...",
+    "openDir": "打开目录",
+    "openFile": "打开文件",
+    "save": "保存",
+    "saveAs": "另存为",
+    "newFile": "新建文件",
+    "newFolder": "新建文件夹",
+    "delete": "删除",
+    "rename": "重命名",
+    "noFileSelected": "请选择一个 YAML 文件",
+    "selectFileHint": "从左侧文件树选择文件，或点击「打开文件」按钮",
+    "selectFileHintUpdated": "从左侧文件树选择文件，或点击上方「打开」菜单",
+    "formView": "表单编辑",
+    "rawView": "YAML 文本",
+    "splitView": "分屏视图",
+    "saved": "已保存",
+    "saveFailed": "保存失败",
+    "newFileCreated": "已创建新文件，请编辑后保存",
+    "untitled": "未命名",
+    "closeTab": "关闭标签页",
+    "unsavedPrompt": "有未保存的修改，是否关闭？",
+    "unsavedGoHome": "有未保存的修改，确定离开吗？",
+    "discardChanges": "不保存",
+    "saveAndClose": "保存并关闭"
+  },
+  "search": {
+    "find": "查找",
+    "replace": "替换",
+    "replaceAll": "全部替换",
+    "matchCase": "区分大小写",
+    "wholeWord": "全词匹配",
+    "regex": "正则表达式",
+    "noResults": "未找到结果",
+    "matchCount": "{current} / {total} 个匹配",
+    "findInFiles": "在文件中查找",
+    "replaceInFiles": "在文件中替换",
+    "findInSheets": "在所有Sheet中查找",
+    "searchPlaceholder": "输入搜索文本",
+    "replacePlaceholder": "输入替换文本",
+    "expandReplace": "展开替换",
+    "collapseReplace": "收起替换",
+    "allSheets": "所有 Sheet",
+    "allFiles": "所有文件",
+    "globalResults": "搜索结果",
+    "replaceOne": "替换",
+    "replaced": "已替换",
+    "groupSheet": "Sheet: {name}",
+    "groupFile": "文件: {name}"
+  },
+  "assertRules": {
+    "title": "高级断言规则",
+    "addRule": "添加规则",
+    "batchPaste": "批量粘贴",
+    "batchPasteHint": "每行一条规则，粘贴后自动解析",
+    "empty": "暂无断言规则",
+    "rulePlaceholder": "如: $.data.code == 0",
+    "editDetails": "编辑详情",
+    "modal": {
+      "title": "编辑断言规则",
+      "path": "路径",
+      "operator": "运算符",
+      "expected": "期望值",
+      "pathPlaceholder": "如: $.data.code",
+      "expectedPlaceholder": "期望值"
+    },
+    "errors": {
+      "invalidFormat": "格式错误：应为 'PATH OPERATOR [EXPECTED]'",
+      "unknownOperator": "不支持的运算符",
+      "pathSyntaxError": "路径语法错误",
+      "unknownFunction": "不支持的函数",
+      "missingExpected": "缺少期望值"
+    }
+  }
 }
