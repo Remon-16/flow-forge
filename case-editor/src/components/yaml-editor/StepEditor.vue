@@ -126,10 +126,10 @@ function onRulesEditBlur() {
       <a-col :span="12">
         <a-form-item :label="t('table.StepID')" class="compact-item">
           <a-input
-            :value="step.StepID"
+            :value="step.step_id"
             size="small"
             :status="step._stepIdDuplicate ? 'error' : ''"
-            @change="(e: any) => onFieldChange('StepID', e.target.value)"
+            @change="(e: any) => onFieldChange('step_id', e.target.value)"
           >
             <template v-if="step._stepIdDuplicate" #suffix>
               <a-tooltip :title="t('validator.stepIdDuplicate')">
@@ -142,9 +142,9 @@ function onRulesEditBlur() {
       <a-col :span="12">
         <a-form-item :label="t('table.RelevanceID')" class="compact-item">
           <a-input
-            :value="step.RelevanceID"
+            :value="step.relevance_id"
             size="small"
-            @change="(e: any) => onFieldChange('RelevanceID', e.target.value)"
+            @change="(e: any) => onFieldChange('relevance_id', e.target.value)"
           />
         </a-form-item>
       </a-col>
@@ -155,9 +155,9 @@ function onRulesEditBlur() {
       <a-col :span="12">
         <a-form-item :label="t('table.Tag')" class="compact-item">
           <a-select
-            :value="step.Tag"
+            :value="step.tag"
             size="small"
-            @change="(v: string) => onFieldChange('Tag', v)"
+            @change="(v: string) => onFieldChange('tag', v)"
           >
             <a-select-option v-for="tag in TAG_LEVELS" :key="tag" :value="tag">
               {{ tag }}
@@ -169,10 +169,10 @@ function onRulesEditBlur() {
         <a-form-item :label="t('table.Trans')" class="compact-item">
           <a-tooltip :title="step._transError || ''">
             <a-input
-              :value="step.Trans"
+              :value="step.trans"
               size="small"
               :status="step._transError ? 'error' : ''"
-              @change="(e: any) => onFieldChange('Trans', e.target.value)"
+              @change="(e: any) => onFieldChange('trans', e.target.value)"
             />
           </a-tooltip>
         </a-form-item>
@@ -184,18 +184,18 @@ function onRulesEditBlur() {
       <a-col :span="12">
         <a-form-item :label="t('table.APIName')" class="compact-item">
           <a-input
-            :value="step.APIName"
+            :value="step.api_name"
             size="small"
-            @change="(e: any) => onFieldChange('APIName', e.target.value)"
+            @change="(e: any) => onFieldChange('api_name', e.target.value)"
           />
         </a-form-item>
       </a-col>
       <a-col :span="12">
         <a-form-item :label="t('table.Method')" class="compact-item">
           <a-select
-            :value="step.Method"
+            :value="step.method"
             size="small"
-            @change="(v: string) => onFieldChange('Method', v)"
+            @change="(v: string) => onFieldChange('method', v)"
           >
             <a-select-option v-for="m in HTTP_METHODS" :key="m" :value="m">
               {{ m }}
@@ -210,18 +210,18 @@ function onRulesEditBlur() {
       <a-col :span="12">
         <a-form-item :label="t('table.AppName')" class="compact-item">
           <a-input
-            :value="step.AppName"
+            :value="step.app_name"
             size="small"
-            @change="(e: any) => onFieldChange('AppName', e.target.value)"
+            @change="(e: any) => onFieldChange('app_name', e.target.value)"
           />
         </a-form-item>
       </a-col>
       <a-col :span="12">
         <a-form-item :label="t('table.URL')" class="compact-item">
           <a-input
-            :value="step.URL"
+            :value="step.url"
             size="small"
-            @change="(e: any) => onFieldChange('URL', e.target.value)"
+            @change="(e: any) => onFieldChange('url', e.target.value)"
           />
         </a-form-item>
       </a-col>
@@ -232,18 +232,18 @@ function onRulesEditBlur() {
       <a-col :span="12">
         <a-form-item :label="t('table.StatusCode')" class="compact-item">
           <a-input
-            :value="String(step.StatusCode ?? '')"
+            :value="String(step.status_code ?? '')"
             size="small"
-            @change="(e: any) => onFieldChange('StatusCode', e.target.value)"
+            @change="(e: any) => onFieldChange('status_code', e.target.value)"
           />
         </a-form-item>
       </a-col>
       <a-col :span="12">
         <a-form-item :label="t('table.Remark')" class="compact-item">
           <a-input
-            :value="step.Remark"
+            :value="step.remark"
             size="small"
-            @change="(e: any) => onFieldChange('Remark', e.target.value)"
+            @change="(e: any) => onFieldChange('remark', e.target.value)"
           />
         </a-form-item>
       </a-col>
@@ -259,18 +259,18 @@ function onRulesEditBlur() {
               size="small"
               type="link"
               style="padding: 0 0 0 8px; font-size: 11px;"
-              @click="emit('openJson', index, 'RequestHead')"
+              @click="emit('openJson', index, 'request_head')"
             >
               {{ t('jsonEditor.editDetails') }}
             </a-button>
           </template>
           <a-textarea
-            :value="getJsonEditText('RequestHead', step.RequestHead)"
+            :value="getJsonEditText('request_head', step.request_head)"
             :auto-size="{ minRows: 2, maxRows: 8 }"
             size="small"
             :placeholder="t('jsonEditor.noData')"
-            @change="(e: any) => onJsonEditChange('RequestHead', e.target.value)"
-            @blur="() => onJsonEditBlur('RequestHead')"
+            @change="(e: any) => onJsonEditChange('request_head', e.target.value)"
+            @blur="() => onJsonEditBlur('request_head')"
           />
         </a-form-item>
       </a-col>
@@ -286,18 +286,18 @@ function onRulesEditBlur() {
               size="small"
               type="link"
               style="padding: 0 0 0 8px; font-size: 11px;"
-              @click="emit('openJson', index, 'RequestBody')"
+              @click="emit('openJson', index, 'request_body')"
             >
               {{ t('jsonEditor.editDetails') }}
             </a-button>
           </template>
           <a-textarea
-            :value="getJsonEditText('RequestBody', step.RequestBody)"
+            :value="getJsonEditText('request_body', step.request_body)"
             :auto-size="{ minRows: 2, maxRows: 8 }"
             size="small"
             :placeholder="t('jsonEditor.noData')"
-            @change="(e: any) => onJsonEditChange('RequestBody', e.target.value)"
-            @blur="() => onJsonEditBlur('RequestBody')"
+            @change="(e: any) => onJsonEditChange('request_body', e.target.value)"
+            @blur="() => onJsonEditBlur('request_body')"
           />
         </a-form-item>
       </a-col>
@@ -313,18 +313,18 @@ function onRulesEditBlur() {
               size="small"
               type="link"
               style="padding: 0 0 0 8px; font-size: 11px;"
-              @click="emit('openJson', index, 'AssertDict')"
+              @click="emit('openJson', index, 'assert_dict')"
             >
               {{ t('jsonEditor.editDetails') }}
             </a-button>
           </template>
           <a-textarea
-            :value="getJsonEditText('AssertDict', step.AssertDict)"
+            :value="getJsonEditText('assert_dict', step.assert_dict)"
             :auto-size="{ minRows: 2, maxRows: 8 }"
             size="small"
             :placeholder="t('jsonEditor.noData')"
-            @change="(e: any) => onJsonEditChange('AssertDict', e.target.value)"
-            @blur="() => onJsonEditBlur('AssertDict')"
+            @change="(e: any) => onJsonEditChange('assert_dict', e.target.value)"
+            @blur="() => onJsonEditBlur('assert_dict')"
           />
         </a-form-item>
       </a-col>
@@ -346,7 +346,7 @@ function onRulesEditBlur() {
             </a-button>
           </template>
           <a-textarea
-            :value="getRulesEditText(step.AssertRules)"
+            :value="getRulesEditText(step.assert_rules)"
             :auto-size="{ minRows: 2, maxRows: 8 }"
             size="small"
             :placeholder="t('assertRules.empty')"

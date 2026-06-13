@@ -11,6 +11,7 @@ export interface SearchResultItem {
   // For replace: which data array, index, and field
   _groupIndex: number
   _itemIndex: number
+  _filePath?: string
 }
 
 const { t } = useI18n()

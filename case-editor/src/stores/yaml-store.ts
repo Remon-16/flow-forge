@@ -289,6 +289,9 @@ export const useYamlStore = defineStore('yaml', () => {
     const idx = activeTabIndex.value
     if (idx >= 0 && idx < openTabs.value.length) {
       openTabs.value[idx].modified = true
+      if (currentCase.value) {
+        openTabs.value[idx].case = currentCase.value
+      }
     }
   }
 
@@ -358,29 +361,29 @@ export const useYamlStore = defineStore('yaml', () => {
     const dupes = findDuplicateStepIDs(bizCase.steps.map(toValidationStep))
 
     for (const step of bizCase.steps) {
-      ;(step as any)._stepIdDuplicate = dupes.has(step.StepID?.trim())
-      ;(step as any)._transError = validateTrans(step.Trans, step.StepID)
+      ;(step as any)._stepIdDuplicate = dupes.has(step.step_id?.trim())
+      ;(step as any)._transError = validateTrans(step.trans, step.step_id)
     }
   }
 
   function toValidationStep(s: YamlBizStep) {
     return {
-      StepID: s.StepID,
-      RelevanceID: s.RelevanceID,
-      Trans: s.Trans,
+      StepID: s.step_id,
+      RelevanceID: s.relevance_id,
+      Trans: s.trans,
       _uid: '',
-      TestID: s.StepID,
-      Tag: s.Tag,
-      APIName: s.APIName,
-      AppName: s.AppName,
-      Method: s.Method,
-      URL: s.URL,
-      RequestHead: s.RequestHead,
-      RequestBody: s.RequestBody,
-      StatusCode: s.StatusCode,
-      AssertDict: s.AssertDict,
-      AssertRules: s.AssertRules,
-      Remark: s.Remark,
+      TestID: s.step_id,
+      Tag: s.tag,
+      APIName: s.api_name,
+      AppName: s.app_name,
+      Method: s.method,
+      URL: s.url,
+      RequestHead: s.request_head,
+      RequestBody: s.request_body,
+      StatusCode: s.status_code,
+      AssertDict: s.assert_dict,
+      AssertRules: s.assert_rules,
+      Remark: s.remark,
     }
   }
 

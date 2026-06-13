@@ -78,20 +78,20 @@ function normalizeBizCase(raw: Record<string, unknown>): BizYamlCase {
 
 function normalizeBizStep(raw: Record<string, unknown>): any {
   return {
-    StepID: String(getField(raw, 'StepID', 'step_id') ?? ''),
-    RelevanceID: String(getField(raw, 'RelevanceID', 'relevance_id') ?? ''),
-    Trans: String(getField(raw, 'Trans', 'trans') ?? ''),
-    APIName: String(getField(raw, 'APIName', 'api_name') ?? ''),
-    AppName: String(getField(raw, 'AppName', 'app_name') ?? ''),
-    Method: String(getField(raw, 'Method', 'method') ?? 'GET'),
-    URL: String(getField(raw, 'URL', 'url') ?? ''),
-    RequestHead: asObject(getField(raw, 'RequestHead', 'request_head')),
-    RequestBody: asObject(getField(raw, 'RequestBody', 'request_body')),
-    StatusCode: getField(raw, 'StatusCode', 'status_code') ?? 200,
-    AssertDict: asObject(getField(raw, 'AssertDict', 'assert_dict')),
-    AssertRules: asStringArray(getField(raw, 'AssertRules', 'assert_rules')),
-    Tag: String(getField(raw, 'Tag', 'tag') ?? 'P0'),
-    Remark: String(getField(raw, 'Remark', 'remark') ?? ''),
+    step_id: String(getField(raw, 'StepID', 'step_id') ?? ''),
+    relevance_id: String(getField(raw, 'RelevanceID', 'relevance_id') ?? ''),
+    trans: String(getField(raw, 'Trans', 'trans') ?? ''),
+    api_name: String(getField(raw, 'APIName', 'api_name') ?? ''),
+    app_name: String(getField(raw, 'AppName', 'app_name') ?? ''),
+    method: String(getField(raw, 'Method', 'method') ?? 'GET'),
+    url: String(getField(raw, 'URL', 'url') ?? ''),
+    request_head: asObject(getField(raw, 'RequestHead', 'request_head')),
+    request_body: asObject(getField(raw, 'RequestBody', 'request_body')),
+    status_code: getField(raw, 'StatusCode', 'status_code') ?? 200,
+    assert_dict: asObject(getField(raw, 'AssertDict', 'assert_dict')),
+    assert_rules: asStringArray(getField(raw, 'AssertRules', 'assert_rules')),
+    tag: String(getField(raw, 'Tag', 'tag') ?? 'P0'),
+    remark: String(getField(raw, 'Remark', 'remark') ?? ''),
   }
 }
 

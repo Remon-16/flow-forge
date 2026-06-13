@@ -88,6 +88,13 @@ watch(() => props.visible, async (v) => {
 
 function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Enter') {
+    if (e.target instanceof HTMLTextAreaElement) {
+      if (e.ctrlKey) {
+        e.preventDefault()
+        emit('navigate', e.shiftKey ? 'prev' : 'next')
+      }
+      return
+    }
     e.preventDefault()
     if (e.shiftKey) {
       emit('navigate', 'prev')

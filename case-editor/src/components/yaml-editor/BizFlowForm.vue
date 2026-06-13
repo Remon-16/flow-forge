@@ -34,7 +34,7 @@ function onStepFieldChange(index: number, field: string, value: unknown) {
 }
 
 function onStepRulesUpdate(index: number, rules: string[] | null) {
-  yamlStore.updateBizStepField(index, 'AssertRules', rules)
+  yamlStore.updateBizStepField(index, 'assert_rules', rules)
 }
 
 // JSON editor
@@ -65,13 +65,13 @@ const assertRulesValue = ref<string[] | null>(null)
 
 function openAssertRulesEditor(stepIdx: number) {
   assertRulesModalStep.value = stepIdx
-  assertRulesValue.value = (currentCase.value!.steps[stepIdx] as unknown as Record<string, unknown>)['AssertRules'] as string[] | null
+  assertRulesValue.value = (currentCase.value!.steps[stepIdx] as unknown as Record<string, unknown>)['assert_rules'] as string[] | null
   assertRulesModalVisible.value = true
 }
 
 function onAssertRulesConfirm(rules: string[]) {
   if (assertRulesModalStep.value >= 0) {
-    yamlStore.updateBizStepField(assertRulesModalStep.value, 'AssertRules', rules.length > 0 ? rules : null)
+    yamlStore.updateBizStepField(assertRulesModalStep.value, 'assert_rules', rules.length > 0 ? rules : null)
   }
   assertRulesModalVisible.value = false
 }

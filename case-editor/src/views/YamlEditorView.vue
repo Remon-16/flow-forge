@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useYamlStore } from '../stores/yaml-store'
 import { useEditorStore } from '../stores/editor'
@@ -13,6 +13,8 @@ import SearchResultsPanel from '../components/search/SearchResultsPanel.vue'
 import type { SearchResultItem } from '../components/search/SearchResultsPanel.vue'
 import type { SearchOptions } from '../components/search/SearchBar.vue'
 import { stringifyYaml, parseYaml } from '../utils/yaml-parser'
+import { readFile, writeFile } from '../utils/desktop-bridge'
+import type { FileEntry } from '../utils/desktop-bridge'
 
 const { t } = useI18n()
 const yamlStore = useYamlStore()
@@ -76,6 +78,31 @@ const globalReplaceMode = ref(false)
 const globalResults = ref<SearchResultItem[]>([])
 const globalQuery = ref('')
 const globalOptions = ref<SearchOptions>({ matchCase: false, wholeWord: false, regex: false })
+const globalReplacementText = ref('')
+const globalCurrentResult = ref(0)
+
+function handleGlobalNavigate(direction: 'next' | 'prev') {
+  if (globalResults.value.length === 0) return
+  if (direction === 'next') {
+    globalCurrentResult.value = (globalCurrentResult.value + 1) % globalResults.value.length
+  } else {
+    globalCurrentResult.value = (globalCurrentResult.value - 1 + globalResults.value.length) % globalResults.value.length
+  }
+  const item = globalResults.value[globalCurrentResult.value]
+  handleYamlGlobalNavigate(item)
+}
+
+function collectYamlPaths(entries: FileEntry[]): string[] {
+  const paths: string[] = []
+  for (const entry of entries) {
+    if (!entry.isDirectory) {
+      paths.push(entry.path)
+    } else if (entry.children) {
+      paths.push(...collectYamlPaths(entry.children))
+    }
+  }
+  return paths
+}
 
 function buildSearchPattern(query: string, options: SearchOptions): RegExp | null {
   try {
@@ -88,7 +115,7 @@ function buildSearchPattern(query: string, options: SearchOptions): RegExp | nul
   }
 }
 
-function doYamlGlobalSearch(query: string, options: SearchOptions) {
+async function doYamlGlobalSearch(query: string, options: SearchOptions) {
   globalQuery.value = query
   globalOptions.value = options
 
@@ -99,28 +126,25 @@ function doYamlGlobalSearch(query: string, options: SearchOptions) {
   }
 
   const results: SearchResultItem[] = []
-  const tabs = yamlStore.openTabs
+  const searchedPaths = new Set<string>()
 
-  for (let tabIdx = 0; tabIdx < tabs.length; tabIdx++) {
-    const tab = tabs[tabIdx]
+  // Helper to search text from a file and add results
+  function searchText(filePath: string, fileName: string, text: string, fileIdx: number, pat: RegExp) {
     try {
-      const text = stringifyYaml(tab.case)
       const lines = text.split('\n')
-      // Pre-compute line starts for offset-to-line mapping
       const lineStarts: number[] = [0]
       for (let i = 0; i < lines.length; i++) {
         lineStarts.push(lineStarts[i] + lines[i].length + 1)
       }
 
-      pattern.lastIndex = 0
+      pat.lastIndex = 0
       let match: RegExpExecArray | null
-      while ((match = pattern.exec(text)) !== null) {
+      while ((match = pat.exec(text)) !== null) {
         const pos = match.index
         let lineNum = 1
         for (let l = 1; l < lineStarts.length; l++) {
           if (pos < lineStarts[l]) { lineNum = l; break }
         }
-        // Show context: 1 line before and after the match
         const startLine = Math.max(0, lineNum - 2)
         const endLine = Math.min(lines.length - 1, lineNum)
         const contextLines: string[] = []
@@ -132,106 +156,148 @@ function doYamlGlobalSearch(query: string, options: SearchOptions) {
           displayText = displayText.substring(0, 500) + '...'
         }
         results.push({
-          groupName: t('search.groupFile', { name: tab.title }),
-          rowIndex: tabIdx,
+          groupName: fileName,
+          rowIndex: fileIdx,
           line: lineNum,
           text: displayText,
-          _groupIndex: tabIdx,
+          _groupIndex: fileIdx,
           _itemIndex: match.index,
+          _filePath: filePath,
         })
-        if (match[0].length === 0) pattern.lastIndex++
+        if (match[0].length === 0) pat.lastIndex++
       }
-    } catch {
-      // Skip tabs that fail to serialize
+    } catch (err) {
+      console.error('YAML global search failed for file:', fileName, err)
     }
+  }
+
+  // 1. Search all open tabs first (uses in-memory state)
+  for (let tabIdx = 0; tabIdx < yamlStore.openTabs.length; tabIdx++) {
+    const tab = yamlStore.openTabs[tabIdx]
+    const filePath = tab.path
+    if (!filePath || searchedPaths.has(filePath)) continue
+    searchedPaths.add(filePath)
+    const fileName = filePath.split(/[/\\]/).pop() || filePath
+    const text = stringifyYaml(tab.case)
+    searchText(filePath, fileName, text, tabIdx, pattern!)
+  }
+
+  // 2. Search fileTree files not already covered by open tabs
+  const allPaths = collectYamlPaths(yamlStore.fileTree)
+
+  for (const filePath of allPaths) {
+    if (searchedPaths.has(filePath)) continue
+    searchedPaths.add(filePath)
+    const fileName = filePath.split(/[/\\]/).pop() || filePath
+
+    let text: string
+    try {
+      text = await readFile(filePath)
+      text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    } catch {
+      continue
+    }
+
+    searchText(filePath, fileName, text, results.length, pattern!)
   }
 
   globalResults.value = results
 }
 
-function handleYamlGlobalNavigate(item: SearchResultItem) {
-  // Switch to the correct tab
-  const tabIdx = item._groupIndex
-  if (tabIdx >= 0 && tabIdx < yamlStore.openTabs.length) {
-    if (yamlStore.activeTabIndex !== tabIdx) {
-      yamlStore.switchTab(tabIdx)
+async function handleYamlGlobalNavigate(item: SearchResultItem) {
+  const filePath = item._filePath
+  if (!filePath) return
+
+  const existingIdx = yamlStore.openTabs.findIndex(t => t.path === filePath)
+  if (existingIdx >= 0) {
+    if (yamlStore.activeTabIndex !== existingIdx) {
+      yamlStore.switchTab(existingIdx)
     }
-  }
-
-  // Open the raw view and navigate to the matching line
-  nextTick(() => {
-    rawViewRef.value?.triggerSearch(false)
-    // Re-search and navigate
-    if (item.line) {
-      nextTick(() => {
-        if (rawViewRef.value) {
-          // We'll navigate by searching
-          rawViewRef.value.triggerSearch(false)
-        }
-      })
-    }
-  })
-}
-
-function handleYamlGlobalReplaceOne(item: SearchResultItem) {
-  const tabIdx = item._groupIndex
-  if (tabIdx < 0 || tabIdx >= yamlStore.openTabs.length) return
-
-  const tab = yamlStore.openTabs[tabIdx]
-  try {
-    const text = stringifyYaml(tab.case)
-    const pattern = buildSearchPattern(globalQuery.value, globalOptions.value)
-    if (!pattern) return
-
-    // Replace the first occurrence matching the line position
-    const lines = text.split('\n')
-    const lineStarts: number[] = [0]
-    for (let i = 0; i < lines.length; i++) {
-      lineStarts.push(lineStarts[i] + lines[i].length + 1)
-    }
-
-    // Find the match at approximately the same position
-    let replaced = false
-    pattern.lastIndex = 0
-    let match: RegExpExecArray | null
-    while ((match = pattern.exec(text)) !== null) {
-      const pos = match.index
-      let lineNum = 1
-      for (let l = 1; l < lineStarts.length; l++) {
-        if (pos < lineStarts[l]) { lineNum = l; break }
-      }
-      if (lineNum === item.line) {
-        const newText = text.substring(0, match.index) + '' + text.substring(match.index + match[0].length)
-        try {
-          const parsed = parseYaml(newText)
-          if (parsed && parsed.case_type === tab.case.case_type) {
-            tab.case = parsed
-            tab.modified = true
-            replaced = true
-          }
-        } catch { /* skip */ }
-        break
-      }
-      if (match[0].length === 0) pattern.lastIndex++
-    }
-
-    if (replaced) {
-      yamlStore.markModified()
-      doYamlGlobalSearch(globalQuery.value, globalOptions.value)
-    }
-  } catch {
-    // Skip tabs that fail
+  } else {
+    await yamlStore.openFile(filePath)
   }
 }
 
-function handleYamlGlobalReplaceAll() {
+async function handleYamlGlobalReplaceOne(item: SearchResultItem) {
+  const filePath = item._filePath
+  if (!filePath) return
+
   const pattern = buildSearchPattern(globalQuery.value, globalOptions.value)
   if (!pattern) return
 
+  const existingTab = yamlStore.openTabs.find(t => t.path === filePath)
+
+  let text: string
+  if (existingTab) {
+    text = stringifyYaml(existingTab.case)
+  } else {
+    try {
+      text = await readFile(filePath)
+      text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    } catch {
+      return
+    }
+  }
+
+  const lines = text.split('\n')
+  const lineStarts: number[] = [0]
+  for (let i = 0; i < lines.length; i++) {
+    lineStarts.push(lineStarts[i] + lines[i].length + 1)
+  }
+
+  let replaced = false
+  pattern.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text)) !== null) {
+    const pos = match.index
+    let lineNum = 1
+    for (let l = 1; l < lineStarts.length; l++) {
+      if (pos < lineStarts[l]) { lineNum = l; break }
+    }
+    if (lineNum === item.line) {
+      const newText = text.substring(0, match.index) + globalReplacementText.value + text.substring(match.index + match[0].length)
+      if (existingTab) {
+        try {
+          const parsed = parseYaml(newText)
+          if (parsed && parsed.case_type === existingTab.case.case_type) {
+            existingTab.case = parsed
+            existingTab.modified = true
+            replaced = true
+          }
+        } catch { /* skip */ }
+      } else {
+        try {
+          await writeFile(filePath, newText)
+          replaced = true
+        } catch { /* skip */ }
+      }
+      break
+    }
+    if (match[0].length === 0) pattern.lastIndex++
+  }
+
+  if (replaced) {
+    if (existingTab) yamlStore.markModified()
+    await doYamlGlobalSearch(globalQuery.value, globalOptions.value)
+  }
+}
+
+async function handleYamlGlobalReplaceAll(replacement?: string) {
+  const pattern = buildSearchPattern(globalQuery.value, globalOptions.value)
+  if (!pattern) return
+  const repl = replacement ?? globalReplacementText.value
+
+  const processedPaths = new Set<string>()
+
+  // Process open tabs (in-memory state via stringifyYaml)
   for (const tab of yamlStore.openTabs) {
+    const filePath = tab.path
+    if (!filePath || processedPaths.has(filePath)) continue
+    processedPaths.add(filePath)
+
     try {
       const text = stringifyYaml(tab.case)
-      const newText = text.replace(pattern, '')
+      const newText = text.replace(pattern, repl)
       if (newText !== text) {
         try {
           const parsed = parseYaml(newText)
@@ -243,6 +309,31 @@ function handleYamlGlobalReplaceAll() {
       }
     } catch { /* skip */ }
   }
+
+  // Process fileTree files not already covered by open tabs
+  const allPaths = collectYamlPaths(yamlStore.fileTree)
+  for (const filePath of allPaths) {
+    if (processedPaths.has(filePath)) continue
+    processedPaths.add(filePath)
+
+    let text: string
+    try {
+      text = await readFile(filePath)
+      text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    } catch {
+      continue
+    }
+
+    try {
+      const newText = text.replace(pattern, repl)
+      if (newText !== text) {
+        try {
+          await writeFile(filePath, newText)
+        } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+  }
+
   yamlStore.markModified()
   globalSearchVisible.value = false
   globalResults.value = []
@@ -291,13 +382,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         :visible="true"
         :replaceMode="globalReplaceMode"
         :matchCount="globalResults.length"
-        :currentMatch="0"
+        :currentMatch="globalResults.length > 0 ? globalCurrentResult + 1 : 0"
         @close="closeYamlGlobalSearch"
         @update:replaceMode="globalReplaceMode = $event"
-        @search="(q: string, opts: SearchOptions) => doYamlGlobalSearch(q, opts)"
-        @navigate="() => {}"
-        @replace="() => {}"
-        @replaceAll="() => {}"
+        @search="(q: string, opts: SearchOptions) => { globalCurrentResult = 0; doYamlGlobalSearch(q, opts); }"
+        @navigate="(direction: 'next' | 'prev') => handleGlobalNavigate(direction)"
+        @replace="(replacement: string) => { globalReplacementText = replacement; handleYamlGlobalReplaceAll(replacement); }"
+        @replaceAll="(replacement: string) => { globalReplacementText = replacement; handleYamlGlobalReplaceAll(replacement); }"
       />
       <SearchResultsPanel
         :visible="globalResults.length > 0 || globalQuery.length > 0"

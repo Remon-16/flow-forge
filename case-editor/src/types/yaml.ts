@@ -18,20 +18,20 @@ export interface SingleYamlCase {
 }
 
 export interface YamlBizStep {
-  StepID: string
-  RelevanceID: string
-  Trans: string
-  APIName: string
-  AppName: string
-  Method: string
-  URL: string
-  RequestHead: Record<string, unknown> | null
-  RequestBody: Record<string, unknown> | null
-  StatusCode: number | string
-  AssertDict: Record<string, unknown> | null
-  AssertRules: string[] | null
-  Tag: string
-  Remark: string
+  step_id: string
+  relevance_id: string
+  trans: string
+  api_name: string
+  app_name: string
+  method: string
+  url: string
+  request_head: Record<string, unknown> | null
+  request_body: Record<string, unknown> | null
+  status_code: number | string
+  assert_dict: Record<string, unknown> | null
+  assert_rules: string[] | null
+  tag: string
+  remark: string
 }
 
 export interface BizYamlCase {
@@ -73,19 +73,19 @@ export function createDefaultBizCase(): BizYamlCase {
 
 export function createDefaultBizStep(): YamlBizStep {
   return {
-    StepID: '',
-    RelevanceID: '',
-    Trans: '',
-    APIName: '',
-    AppName: '',
-    Method: 'GET',
-    URL: '',
-    RequestHead: null,
-    RequestBody: null,
-    StatusCode: 200,
-    AssertDict: null,
-    AssertRules: null,
-    Tag: 'P0',
-    Remark: '',
+    step_id: '',
+    relevance_id: '',
+    trans: '',
+    api_name: '',
+    app_name: '',
+    method: 'GET',
+    url: '',
+    request_head: null,
+    request_body: null,
+    status_code: 200,
+    assert_dict: null,
+    assert_rules: null,
+    tag: 'P0',
+    remark: '',
   }
 }
