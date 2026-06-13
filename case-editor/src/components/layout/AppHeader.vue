@@ -172,9 +172,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
     </a-dropdown>
     <a-button v-else size="small" type="text" @click="handleOpen">{{ t('menu.open') }}</a-button>
 
-    <a-button size="small" type="text" @click="handleSave">{{ t('yaml.save') }}</a-button>
-    <a-button size="small" type="text" @click="handleSaveAs">{{ t('yaml.saveAs') }}</a-button>
-
     <a-dropdown>
       <a-button size="small" type="text">{{ t('menu.edit') }}</a-button>
       <template #overlay>
@@ -197,6 +194,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         </a-menu>
       </template>
     </a-dropdown>
+
+    <a-button size="small" type="text" @click="handleSave">{{ t('yaml.save') }}</a-button>
+    <a-button size="small" type="text" @click="handleSaveAs">{{ t('yaml.saveAs') }}</a-button>
 
     <a-divider type="vertical" />
 

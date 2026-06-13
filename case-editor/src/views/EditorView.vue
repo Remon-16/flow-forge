@@ -59,11 +59,7 @@ function doSearch(query: string, options: SearchOptions) {
     const row = toRaw(data[i]) as Record<string, unknown>
     for (const [key, val] of Object.entries(row)) {
       if (key.startsWith('_')) continue
-      const text = typeof val === 'string'
-        ? val
-        : val !== null && val !== undefined
-          ? JSON.stringify(val, null, 2)
-          : ''
+      const text = valueToSearchText(val)
       if (pattern.test(text)) {
         matches.push({ rowIndex: i, colKey: key })
         pattern.lastIndex = 0
@@ -118,6 +114,25 @@ function handleSearch(quer: string, options: SearchOptions) {
 
 function handleNavigate(direction: 'next' | 'prev') {
   navigateSearch(direction)
+}
+
+function valueToSearchText(val: unknown): string {
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && (trimmed.endsWith('}') || trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        return JSON.stringify(parsed, null, 2)
+      } catch {
+        // Not valid JSON, use as-is
+      }
+    }
+    return val
+  }
+  if (val !== null && val !== undefined) {
+    return JSON.stringify(val, null, 2)
+  }
+  return ''
 }
 
 function buildSearchPattern(query: string, options: SearchOptions): RegExp | null {
@@ -201,6 +216,7 @@ watch(() => editor.activeSheetIndex, () => {
 // --- Global search state ---
 const globalSearchVisible = ref(false)
 const globalReplaceMode = ref(false)
+const globalReplacementText = ref('')
 const globalResults = ref<SearchResultItem[]>([])
 const globalQuery = ref('')
 const globalOptions = ref<SearchOptions>({ matchCase: false, wholeWord: false, regex: false })
@@ -258,11 +274,7 @@ function doGlobalSearch(query: string, options: SearchOptions) {
       const row = toRaw(data[i]) as Record<string, unknown>
       for (const [key, val] of Object.entries(row)) {
         if (key.startsWith('_')) continue
-        const text = typeof val === 'string'
-          ? val
-          : val !== null && val !== undefined
-            ? JSON.stringify(val, null, 2)
-            : ''
+        const text = valueToSearchText(val)
         if (pattern.test(text)) {
           const displayText = text.length > 80 ? text.substring(0, 80) + '...' : text
           results.push({
@@ -327,11 +339,11 @@ function handleGlobalReplaceOne(item: SearchResultItem) {
   if (!pattern) return
 
   if (typeof oldVal === 'string') {
-    (row as any)[item.colKey] = oldVal.replace(pattern, '')
+    (row as any)[item.colKey] = oldVal.replace(pattern, globalReplacementText.value)
     workbook.markModified()
   } else if (oldVal !== null && oldVal !== undefined && typeof oldVal === 'object') {
     const jsonStr = JSON.stringify(oldVal, null, 2)
-    const newJsonStr = jsonStr.replace(pattern, '')
+    const newJsonStr = jsonStr.replace(pattern, globalReplacementText.value)
     try {
       (row as any)[item.colKey] = JSON.parse(newJsonStr)
       workbook.markModified()
@@ -342,9 +354,10 @@ function handleGlobalReplaceOne(item: SearchResultItem) {
   doGlobalSearch(globalQuery.value, globalOptions.value)
 }
 
-function handleGlobalReplaceAll() {
+function handleGlobalReplaceAll(replacement?: string) {
   const pattern = buildSearchPattern(globalQuery.value, globalOptions.value)
   if (!pattern) return
+  const repl = replacement ?? globalReplacementText.value
 
   const sheets = getAllSheets()
   for (const sheet of sheets) {
@@ -352,13 +365,13 @@ function handleGlobalReplaceAll() {
       for (const [key, val] of Object.entries(row as Record<string, unknown>)) {
         if (key.startsWith('_')) continue
         if (typeof val === 'string') {
-          const newVal = val.replace(pattern, '')
+          const newVal = val.replace(pattern, repl)
           if (newVal !== val) {
             ;(row as any)[key] = newVal
           }
         } else if (val !== null && val !== undefined && typeof val === 'object') {
           const jsonStr = JSON.stringify(val, null, 2)
-          const newJsonStr = jsonStr.replace(pattern, '')
+          const newJsonStr = jsonStr.replace(pattern, repl)
           if (newJsonStr !== jsonStr) {
             try {
               ;(row as any)[key] = JSON.parse(newJsonStr)
@@ -446,14 +459,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
     <div v-if="globalSearchVisible" style="display: flex; flex-direction: column; gap: 4px;">
       <SearchBar
         :visible="true"
-        :replaceMode="false"
+        :replaceMode="globalReplaceMode"
         :matchCount="globalResults.length"
         :currentMatch="0"
         @close="closeGlobalSearch"
+        @update:replaceMode="globalReplaceMode = $event"
         @search="(q, opts) => doGlobalSearch(q, opts)"
         @navigate="() => {}"
-        @replace="() => {}"
-        @replaceAll="() => {}"
+        @replace="(replacement: string) => { globalReplacementText = replacement; handleGlobalReplaceAll(replacement); }"
+        @replaceAll="(replacement: string) => { globalReplacementText = replacement; handleGlobalReplaceAll(replacement); }"
       />
       <SearchResultsPanel
         :visible="globalResults.length > 0 || globalQuery.length > 0"

@@ -78,7 +78,7 @@ const globalOptions = ref<SearchOptions>({ matchCase: false, wholeWord: false, r
 
 function buildSearchPattern(query: string, options: SearchOptions): RegExp | null {
   try {
-    const flags = (options.matchCase ? 'g' : 'gi') + 'm'
+    const flags = (options.matchCase ? 'g' : 'gi') + 'ms'
     const escaped = options.regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const source = options.wholeWord ? `\\b${escaped}\\b` : escaped
     return new RegExp(source, flags)
@@ -274,79 +274,80 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 <template>
   <div class="yaml-editor-view">
-    <!-- Global search overlay -->
+    <!-- Global search -->
     <div v-if="globalSearchVisible" class="yaml-global-search">
-      <div style="display: flex; flex-direction: column; gap: 4px;">
-        <SearchBar
-          :visible="true"
-          :replaceMode="false"
-          :matchCount="globalResults.length"
-          :currentMatch="0"
-          @close="closeYamlGlobalSearch"
-          @search="(q: string, opts: SearchOptions) => doYamlGlobalSearch(q, opts)"
-          @navigate="() => {}"
-          @replace="() => {}"
-          @replaceAll="() => {}"
-        />
-        <SearchResultsPanel
-          :visible="globalResults.length > 0 || globalQuery.length > 0"
-          :results="globalResults"
-          :replaceMode="globalReplaceMode"
-          :searchQuery="globalQuery"
-          @close="closeYamlGlobalSearch"
-          @navigate="handleYamlGlobalNavigate"
-          @replaceOne="handleYamlGlobalReplaceOne"
-          @replaceAll="handleYamlGlobalReplaceAll"
+      <SearchBar
+        :visible="true"
+        :replaceMode="globalReplaceMode"
+        :matchCount="globalResults.length"
+        :currentMatch="0"
+        @close="closeYamlGlobalSearch"
+        @update:replaceMode="globalReplaceMode = $event"
+        @search="(q: string, opts: SearchOptions) => doYamlGlobalSearch(q, opts)"
+        @navigate="() => {}"
+        @replace="() => {}"
+        @replaceAll="() => {}"
+      />
+      <SearchResultsPanel
+        :visible="globalResults.length > 0 || globalQuery.length > 0"
+        :results="globalResults"
+        :replaceMode="globalReplaceMode"
+        :searchQuery="globalQuery"
+        @close="closeYamlGlobalSearch"
+        @navigate="handleYamlGlobalNavigate"
+        @replaceOne="handleYamlGlobalReplaceOne"
+        @replaceAll="handleYamlGlobalReplaceAll"
+      />
+    </div>
+
+    <div class="yaml-body">
+      <!-- Left: File tree -->
+      <div class="yaml-left-panel">
+        <YamlFileTree
+          :files="yamlStore.fileTree"
+          @select-file="onSelectFile"
         />
       </div>
-    </div>
 
-    <!-- Left: File tree -->
-    <div class="yaml-left-panel">
-      <YamlFileTree
-        :files="yamlStore.fileTree"
-        @select-file="onSelectFile"
-      />
-    </div>
+      <!-- Center: Tab bar + Form editor -->
+      <div class="yaml-center-panel">
+        <!-- Tab bar -->
+        <YamlTabBar
+          :tabs="yamlStore.openTabs"
+          :active-index="yamlStore.activeTabIndex"
+          @switch="onTabSwitch"
+          @close="onTabClose"
+        />
 
-    <!-- Center: Tab bar + Form editor -->
-    <div class="yaml-center-panel">
-      <!-- Tab bar -->
-      <YamlTabBar
-        :tabs="yamlStore.openTabs"
-        :active-index="yamlStore.activeTabIndex"
-        @switch="onTabSwitch"
-        @close="onTabClose"
-      />
-
-      <div class="yaml-center-content">
-        <div v-if="yamlStore.loading" class="yaml-loading">
-          <a-spin size="large" :tip="t('loading')" />
-        </div>
-
-        <div v-else-if="!yamlStore.currentCase" class="yaml-empty">
-          <div class="empty-icon">
-            <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="#ccc" stroke-width="1">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-            </svg>
+        <div class="yaml-center-content">
+          <div v-if="yamlStore.loading" class="yaml-loading">
+            <a-spin size="large" :tip="t('loading')" />
           </div>
-          <p>{{ t('yaml.noFileSelected') }}</p>
-          <p class="sub-hint">{{ t('yaml.selectFileHint') }}</p>
+
+          <div v-else-if="!yamlStore.currentCase" class="yaml-empty">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="#ccc" stroke-width="1">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+            </div>
+            <p>{{ t('yaml.noFileSelected') }}</p>
+            <p class="sub-hint">{{ t('yaml.selectFileHint') }}</p>
+          </div>
+
+          <!-- Single case form -->
+          <SingleCaseForm v-else-if="yamlStore.isSingleCase" />
+
+          <!-- Biz flow form -->
+          <BizFlowForm v-else-if="yamlStore.isBizCase" />
         </div>
-
-        <!-- Single case form -->
-        <SingleCaseForm v-else-if="yamlStore.isSingleCase" />
-
-        <!-- Biz flow form -->
-        <BizFlowForm v-else-if="yamlStore.isBizCase" />
       </div>
-    </div>
 
-    <!-- Right: Raw YAML view -->
-    <YamlRawView ref="rawViewRef" />
+      <!-- Right: Raw YAML view -->
+      <YamlRawView ref="rawViewRef" />
+    </div>
 
     <!-- Close confirm modal -->
     <a-modal
@@ -367,6 +368,23 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 <style scoped>
 .yaml-editor-view {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.yaml-global-search {
+  background: #1e1e1e;
+  padding: 8px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.yaml-body {
+  flex: 1;
   display: flex;
   overflow: hidden;
 }
@@ -411,16 +429,5 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 .sub-hint {
   font-size: 13px;
   color: #bbb;
-}
-
-.yaml-global-search {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  background: #1e1e1e;
-  padding: 8px;
-  border-bottom: 1px solid #333;
 }
 </style>

@@ -132,7 +132,7 @@ function doYamlSearch(query: string, options: SearchOptions) {
 
   let pattern: RegExp
   try {
-    const flags = (options.matchCase ? 'g' : 'gi') + 'm'
+    const flags = (options.matchCase ? 'g' : 'gi') + 'ms'
     const escaped = options.regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const source = options.wholeWord ? `\\b${escaped}\\b` : escaped
     pattern = new RegExp(source, flags)
