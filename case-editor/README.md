@@ -41,12 +41,14 @@ npm run dev:desktop
 - Tauri 桌面应用，支持本地文件保存回原路径
 - 中英文双语界面，可随时切换
 - 保存（Ctrl+S）和另存为（Ctrl+Alt+S）快捷键
+- **查找与替换**（Ctrl+F / Ctrl+H）：在 Excel 中按表格单元格查找，在 YAML 中按原始文本查找，支持大小写、全词匹配和正则表达式
 
 ### Excel 编辑器
 - 打开/编辑/保存 Excel 测试用例文件（.xlsx 格式）
 - 接口定义页编辑（表格形式，支持新增/删除行）
 - 单接口测试用例编辑（RelevanceID 关联校验）
 - 业务链路用例编辑（StepID 重复校验、Trans 字段格式校验）
+- **查找与替换**：在当前 Sheet 页中按单元格内容查找/替换，匹配行高亮显示，支持批量替换
 - **JSON 可视化编辑器**：将 RequestHead、RequestBody、AssertDict 等 JSON 字段转化为交互友好的树形编辑器
   - 支持粘贴 JSON 字符串自动解析
   - 每个字段展示 key / type / value 三列，均可编辑
@@ -68,6 +70,7 @@ npm run dev:desktop
 - 业务链路表单：sheet_name + 步骤列表（可拖拽排序），每步含完整字段
 - 复用 Excel 编辑器的 JSON 编辑器和 AssertRules 编辑器
 - 字段校验镜像 Excel 编辑器（StepID 重复、Trans 格式）
+- **查找与替换**：在 YAML 原始文本中查找/替换，自动展开右侧 YAML 面板，匹配行号及内容一目了然
 
 ## 架构设计
 
@@ -316,6 +319,9 @@ AssertRules 列显示只读预览区（每行一条规则），点击「编辑�
 | Ctrl+S | 保存 |
 | Ctrl+Alt+S | 另存为 |
 | Ctrl+N | 新建空白工作簿 |
+| Ctrl+F | 查找 |
+| Ctrl+H | 替换 |
+| Esc | 关闭查找栏 |
 
 ## 开发说明
 

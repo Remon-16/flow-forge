@@ -41,12 +41,14 @@ npm run dev:desktop
 - Tauri desktop app with native local file save to original path
 - Bilingual Chinese/English interface with on-the-fly switching
 - Save (Ctrl+S) and Save As (Ctrl+Alt+S) keyboard shortcuts
+- **Find & Replace** (Ctrl+F / Ctrl+H): search cells in Excel sheets or raw text in YAML files, with match-case, whole-word, and regex options
 
 ### Excel Editor
 - Open / edit / save Excel test case files (.xlsx format)
 - API definition editing (table view with add/delete row support)
 - Single-API test case editing (with RelevanceID cross-reference validation)
 - Business flow test case editing (StepID uniqueness check, Trans field format validation)
+- **Find & Replace**: search and replace cell values within the current sheet — matching rows are highlighted; batch replace supported
 - **Visual JSON Editor**: turns JSON fields (RequestHead, RequestBody, AssertDict, etc.) into an interactive tree editor
   - Paste a JSON string to auto-parse into a tree structure
   - Each field displays key / type / value — all three columns are editable
@@ -68,6 +70,7 @@ npm run dev:desktop
 - Business flow form: sheet_name + step list (draggable sort), each step with full fields
 - Reuses Excel editor's JSON Editor and AssertRules Editor
 - Field validation mirrors Excel editor (StepID duplicate, Trans format)
+- **Find & Replace**: search and replace within the raw YAML text — auto-expands the right-side panel on activation; matching line numbers and content are clearly displayed
 
 ## Architecture
 
@@ -317,6 +320,9 @@ The right-side panel can be toggled between:
 | Ctrl+S | Save |
 | Ctrl+Alt+S | Save As |
 | Ctrl+N | New blank workbook |
+| Ctrl+F | Find |
+| Ctrl+H | Replace |
+| Esc | Close search bar |
 
 ## Development
 

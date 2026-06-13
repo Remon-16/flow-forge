@@ -133,6 +133,20 @@
     "discardChanges": "不保存",
     "saveAndClose": "保存并关闭"
   },
+  "search": {
+    "find": "查找",
+    "replace": "替换",
+    "replaceAll": "全部替换",
+    "matchCase": "区分大小写",
+    "wholeWord": "全词匹配",
+    "regex": "正则表达式",
+    "noResults": "未找到结果",
+    "matchCount": "{current} / {total} 个匹配",
+    "findInFiles": "在文件中查找",
+    "findInSheets": "在所有Sheet中查找",
+    "searchPlaceholder": "输入搜索文本",
+    "replacePlaceholder": "输入替换文本"
+  },
   "assertRules": {
     "title": "高级断言规则",
     "addRule": "添加规则",

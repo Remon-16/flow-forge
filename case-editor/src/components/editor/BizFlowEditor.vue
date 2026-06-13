@@ -129,6 +129,8 @@ function formatRules(val: string[] | null): string {
 const relevanceOptions = computed(() => workbook.validTestIds)
 
 function getRowClassName(record: BizStep) {
+  if ((record as any)._searchActive) return 'row-search-active'
+  if ((record as any)._searchMatch) return 'row-search-match'
   if (record._stepIdDuplicate || record._relevanceValid === false || record._transError) {
     return 'row-error'
   }
@@ -163,7 +165,7 @@ function getRowClassName(record: BizStep) {
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 2000, y: 'calc(100vh - 200px)' }"
+        :scroll="{ x: 2400, y: 'calc(100vh - 200px)' }"
         :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >
@@ -171,7 +173,7 @@ function getRowClassName(record: BizStep) {
           v-for="col in BIZ_STEP_COLUMNS"
           :key="col"
           :title="getColumnLabel(col)"
-          :width="isJsonColumn(col) ? 250 : col === 'URL' || col === 'Remark' || col === 'Trans' || col === 'AssertRules' ? 200 : col === 'StepID' ? 100 : 130"
+          :width="isJsonColumn(col) ? 250 : col === 'AssertRules' ? 280 : col === 'URL' || col === 'Remark' || col === 'Trans' ? 200 : col === 'StepID' ? 100 : 130"
         >
           <template #default="{ record, index: stepIdx }">
             <!-- StepID with duplicate check -->
@@ -292,6 +294,16 @@ function getRowClassName(record: BizStep) {
               </div>
             </template>
 
+            <!-- Remark: textarea -->
+            <template v-else-if="col === 'Remark'">
+              <a-textarea
+                :value="String(record[col] ?? '')"
+                :autoSize="{ minRows: 2, maxRows: 6 }"
+                size="small"
+                @change="(e: any) => onCellChange(stepIdx, col, e.target.value)"
+              />
+            </template>
+
             <!-- Default -->
             <template v-else>
               <a-input
@@ -352,3 +364,18 @@ function getRowClassName(record: BizStep) {
     />
   </div>
 </template>
+
+<style scoped>
+:deep(.ant-table-header) {
+  overflow-y: scroll !important;
+}
+:deep(.ant-table-header::-webkit-scrollbar) {
+  display: none;
+}
+:deep(.row-search-match td) {
+  background: #fff7cc !important;
+}
+:deep(.row-search-active td) {
+  background: #ffd54f !important;
+}
+</style>

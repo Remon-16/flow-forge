@@ -133,6 +133,20 @@
     "discardChanges": "Don't Save",
     "saveAndClose": "Save & Close"
   },
+  "search": {
+    "find": "Find",
+    "replace": "Replace",
+    "replaceAll": "Replace All",
+    "matchCase": "Match Case",
+    "wholeWord": "Whole Words",
+    "regex": "Regex",
+    "noResults": "No results found",
+    "matchCount": "{current} of {total} matches",
+    "findInFiles": "Find in Files",
+    "findInSheets": "Find in All Sheets",
+    "searchPlaceholder": "Enter search text",
+    "replacePlaceholder": "Enter replacement text"
+  },
   "assertRules": {
     "title": "Advanced Assertion Rules",
     "addRule": "Add Rule",

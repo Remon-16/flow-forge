@@ -113,6 +113,12 @@ function formatRules(val: string[] | null): string {
   if (!val || val.length === 0) return ''
   return val.join('\n')
 }
+
+function getRowClassName(record: Record<string, unknown>) {
+  if ((record as any)._searchActive) return 'row-search-active'
+  if ((record as any)._searchMatch) return 'row-search-match'
+  return ''
+}
 </script>
 
 <template>
@@ -129,14 +135,15 @@ function formatRules(val: string[] | null): string {
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 1900, y: 'calc(100vh - 200px)' }"
+        :scroll="{ x: 2200, y: 'calc(100vh - 200px)' }"
+        :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >
         <a-table-column
           v-for="col in API_DEF_COLUMNS"
           :key="col"
           :title="getColumnLabel(col)"
-          :width="isJsonColumn(col) ? 250 : col === 'URL' || col === 'Remark' || col === 'AssertRules' ? 200 : col === 'TestID' || col === 'APIName' ? 150 : 100"
+          :width="isJsonColumn(col) ? 250 : col === 'AssertRules' ? 280 : col === 'URL' || col === 'Remark' ? 200 : col === 'TestID' || col === 'APIName' ? 150 : 100"
         >
           <template #default="{ record, index }">
             <!-- JSON columns: details link + editable textarea -->
@@ -208,6 +215,16 @@ function formatRules(val: string[] | null): string {
               </div>
             </template>
 
+            <!-- Remark: textarea -->
+            <template v-else-if="col === 'Remark'">
+              <a-textarea
+                :value="String(record[col] ?? '')"
+                :autoSize="{ minRows: 2, maxRows: 6 }"
+                size="small"
+                @change="(e: any) => onCellChange(index, col, e.target.value)"
+              />
+            </template>
+
             <!-- Default text input -->
             <template v-else>
               <a-input
@@ -253,3 +270,18 @@ function formatRules(val: string[] | null): string {
     />
   </div>
 </template>
+
+<style scoped>
+:deep(.ant-table-header) {
+  overflow-y: scroll !important;
+}
+:deep(.ant-table-header::-webkit-scrollbar) {
+  display: none;
+}
+:deep(.row-search-match td) {
+  background: #fff7cc !important;
+}
+:deep(.row-search-active td) {
+  background: #ffd54f !important;
+}
+</style>

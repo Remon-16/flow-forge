@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useYamlStore } from '../stores/yaml-store'
 import YamlFileTree from '../components/yaml-editor/YamlFileTree.vue'
@@ -10,6 +10,7 @@ import YamlRawView from '../components/yaml-editor/YamlRawView.vue'
 
 const { t } = useI18n()
 const yamlStore = useYamlStore()
+const rawViewRef = ref<InstanceType<typeof YamlRawView> | null>(null)
 
 function onSelectFile(filePath: string) {
   yamlStore.openFile(filePath)
@@ -48,6 +49,22 @@ function handleDiscardAndClose() {
 function handleCancelClose() {
   closeConfirmVisible.value = false
 }
+
+// Search keyboard shortcuts
+function onKeyDown(e: KeyboardEvent) {
+  if (e.ctrlKey && e.key === 'f') {
+    e.preventDefault()
+    rawViewRef.value?.triggerSearch(false)
+  } else if (e.ctrlKey && e.key === 'h') {
+    e.preventDefault()
+    rawViewRef.value?.triggerSearch(true)
+  } else if (e.key === 'Escape' && rawViewRef.value?.isOpen) {
+    // Let the search bar handle its own Escape first
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeyDown))
+onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 </script>
 
 <template>
@@ -97,7 +114,7 @@ function handleCancelClose() {
     </div>
 
     <!-- Right: Raw YAML view -->
-    <YamlRawView />
+    <YamlRawView ref="rawViewRef" />
 
     <!-- Close confirm modal -->
     <a-modal

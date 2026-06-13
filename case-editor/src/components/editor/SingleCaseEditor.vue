@@ -113,6 +113,13 @@ function formatRules(val: string[] | null): string {
   return val.join('\n')
 }
 
+function getRowClassName(record: Record<string, unknown>) {
+  if ((record as any)._searchActive) return 'row-search-active'
+  if ((record as any)._searchMatch) return 'row-search-match'
+  if ((record as any)._relevanceValid === false) return 'row-error'
+  return ''
+}
+
 // Filtered relevance options based on input
 const relevanceOptions = computed(() => workbook.validTestIds)
 </script>
@@ -131,14 +138,15 @@ const relevanceOptions = computed(() => workbook.validTestIds)
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 1900, y: 'calc(100vh - 200px)' }"
+        :scroll="{ x: 2200, y: 'calc(100vh - 200px)' }"
+        :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >
         <a-table-column
           v-for="col in SINGLE_CASE_COLUMNS"
           :key="col"
           :title="getColumnLabel(col)"
-          :width="isJsonColumn(col) ? 250 : col === 'URL' || col === 'Remark' || col === 'AssertRules' ? 200 : col === 'TestID' ? 150 : 130"
+          :width="isJsonColumn(col) ? 250 : col === 'AssertRules' ? 280 : col === 'URL' || col === 'Remark' ? 200 : col === 'TestID' ? 150 : 130"
         >
           <template #default="{ record, index }">
             <!-- RelevanceID with validation -->
@@ -231,6 +239,16 @@ const relevanceOptions = computed(() => workbook.validTestIds)
               </div>
             </template>
 
+            <!-- Remark: textarea -->
+            <template v-else-if="col === 'Remark'">
+              <a-textarea
+                :value="String(record[col] ?? '')"
+                :autoSize="{ minRows: 2, maxRows: 6 }"
+                size="small"
+                @change="(e: any) => onCellChange(index, col, e.target.value)"
+              />
+            </template>
+
             <!-- Default text input -->
             <template v-else>
               <a-input
@@ -274,3 +292,18 @@ const relevanceOptions = computed(() => workbook.validTestIds)
     />
   </div>
 </template>
+
+<style scoped>
+:deep(.ant-table-header) {
+  overflow-y: scroll !important;
+}
+:deep(.ant-table-header::-webkit-scrollbar) {
+  display: none;
+}
+:deep(.row-search-match td) {
+  background: #fff7cc !important;
+}
+:deep(.row-search-active td) {
+  background: #ffd54f !important;
+}
+</style>

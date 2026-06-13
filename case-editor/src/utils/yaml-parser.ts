@@ -26,7 +26,9 @@ export function parseYaml(content: string): YamlCase {
  */
 export function stringifyYaml(data: YamlCase): string {
   try {
-    const clean = cleanNulls(structuredClone(toRaw(data)) as unknown as Record<string, unknown>)
+    const raw = toRaw(data)
+    const cloned = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>
+    const clean = cleanNulls(cloned)
     return yaml.dump(clean, {
       indent: 2,
       lineWidth: -1,
@@ -35,7 +37,7 @@ export function stringifyYaml(data: YamlCase): string {
       flowLevel: -1,
     })
   } catch (err) {
-    console.error('stringifyYaml failed:', err)
+    console.error('stringifyYaml failed:', err instanceof Error ? err.message : err)
     return '# Error serializing YAML'
   }
 }
@@ -109,10 +111,13 @@ function cleanNulls(obj: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {}
   for (const [key, val] of Object.entries(obj)) {
     if (val === null || val === undefined) continue
+    if (key.startsWith('_')) continue
     if (Array.isArray(val)) {
       result[key] = val.map(item =>
         typeof item === 'object' && item !== null ? cleanNulls(item as Record<string, unknown>) : item
       )
+    } else if (typeof val === 'object' && !Array.isArray(val)) {
+      result[key] = cleanNulls(val as Record<string, unknown>)
     } else {
       result[key] = val
     }
