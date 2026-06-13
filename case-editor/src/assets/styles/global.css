@@ -24,6 +24,7 @@ html, body, #app {
   display: flex;
   flex: 1;
   position: relative;
+  overflow: hidden;
 }
 
 .loading-overlay {

@@ -81,6 +81,7 @@ function onContextMenu(e: MouseEvent) {
   height: 100%;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   background: #fafafa;
   border-right: 1px solid #e8e8e8;
 }

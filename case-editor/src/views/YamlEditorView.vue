@@ -472,7 +472,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .yaml-global-search {
@@ -488,27 +488,29 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 .yaml-body {
   flex: 1;
   display: flex;
-  overflow: hidden;
+  min-height: 0;
 }
 
 .yaml-left-panel {
   width: 250px;
   min-width: 180px;
   flex-shrink: 0;
-  overflow: hidden;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .yaml-center-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  min-height: 0;
   min-width: 0;
 }
 
 .yaml-center-content {
   flex: 1;
   overflow: auto;
+  min-height: 0;
 }
 
 .yaml-loading {

@@ -310,6 +310,8 @@ defineExpose({ triggerSearch, isOpen })
   height: 100%;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  min-height: 0;
   background: #1e1e1e;
   color: #d4d4d4;
   border-left: 1px solid #333;

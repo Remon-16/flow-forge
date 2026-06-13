@@ -354,8 +354,5 @@ function onAssertRulesConfirm(rules: string[]) {
 <style scoped>
 .single-case-form {
   padding: 16px;
-  overflow: auto;
-  height: 100%;
-  box-sizing: border-box;
 }
 </style>

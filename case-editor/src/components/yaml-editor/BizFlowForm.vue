@@ -132,9 +132,6 @@ function onAssertRulesConfirm(rules: string[]) {
 <style scoped>
 .biz-flow-form {
   padding: 16px;
-  overflow: auto;
-  height: 100%;
-  box-sizing: border-box;
 }
 
 .biz-flow-header {
