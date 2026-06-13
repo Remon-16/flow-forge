@@ -131,7 +131,7 @@ function handleConfirm() {
   <a-modal
     :open="visible"
     :title="t('assertRules.modal.title')"
-    width="700px"
+    width="850px"
     @ok="handleConfirm"
     @cancel="emit('cancel')"
   >
@@ -249,7 +249,6 @@ function handleConfirm() {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .rule-form-item {
@@ -287,7 +286,6 @@ function handleConfirm() {
   font-size: 11px;
   font-weight: bold;
   flex-shrink: 0;
-  margin-top: 6px;
   cursor: help;
 }
 </style>

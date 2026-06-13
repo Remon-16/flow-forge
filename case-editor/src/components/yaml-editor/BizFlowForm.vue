@@ -134,6 +134,7 @@ function onAssertRulesConfirm(rules: string[]) {
   padding: 16px;
   overflow: auto;
   height: 100%;
+  box-sizing: border-box;
 }
 
 .biz-flow-header {

@@ -495,6 +495,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   width: 250px;
   min-width: 180px;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .yaml-center-panel {
