@@ -43,8 +43,7 @@ python main.py --config /path/to/env.yml --scriptType APITest --envName local \
 ## 后续计划
 
 1. 继续验证其他方面的内容。
-2. 提升通用性，比如实现一个转换器，将Excel用例转为postman。
-3. 强化断言引擎，支持更多场景的断言。
+2. 提升通用性，比如实现一个转换器，将测试用例转为postman。
 
 ## 系统架构
 

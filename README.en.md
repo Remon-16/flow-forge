@@ -43,8 +43,7 @@ A Tauri desktop test case editor has been implemented. It supports visual editin
 ## Roadmap
 
 1. Broader validation across additional scenarios and document formats.
-2. Improve interoperability, such as a converter that exports Excel test cases to Postman collections.
-3. Strengthen the assertion engine to support a broader range of assertion scenarios.
+2. Improve interoperability, such as a converter that exports test cases to Postman collections.
 
 ## System Architecture
 
