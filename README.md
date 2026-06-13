@@ -17,6 +17,10 @@ AI智能体可以实现快速的用例输出，但由于AI可能产生幻觉，�
 智能体使用示例，详情见 [agent/README.md](./agent/README.md)。
 
 ```bash
+# 方式一：输出 YAML 用例
+python agent/main.py --requirement docs/req.md --api docs/api.yaml --output-dir someDir
+
+# 方式二：输出 Excel 用例
 python agent/main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
 ```
 

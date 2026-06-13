@@ -17,6 +17,10 @@ The minimum viable pipeline has been validated end-to-end. Given a set of requir
 **Agent example** — see [agent/README.md](./agent/README.md) for details:
 
 ```bash
+# Option 1: Output YAML cases
+python agent/main.py --requirement docs/req.md --api docs/api.yaml --output-dir someDir
+
+# Option 2: Output Excel cases
 python agent/main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
 ```
 
