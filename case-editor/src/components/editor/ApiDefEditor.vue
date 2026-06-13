@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkbookStore } from '../../stores/workbook'
 import { API_DEF_COLUMNS, HTTP_METHODS, JSON_COLUMNS } from '../../types/excel'
@@ -8,8 +8,16 @@ import JsonEditor from '../json-editor/JsonEditor.vue'
 import AssertRulesModal from './AssertRulesModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
+const props = defineProps<{ searchBarVisible?: boolean }>()
+
 const { t } = useI18n()
 const workbook = useWorkbookStore()
+
+const scrollY = computed(() => {
+  const base = 200
+  const searchBar = props.searchBarVisible ? 85 : 0
+  return `calc(100vh - ${base + searchBar}px)`
+})
 
 // JSON editor modal state
 const jsonModalVisible = ref(false)
@@ -135,7 +143,7 @@ function getRowClassName(record: Record<string, unknown>) {
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 2200, y: 'calc(100vh - 200px)' }"
+        :scroll="{ x: 2200, y: scrollY }"
         :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >

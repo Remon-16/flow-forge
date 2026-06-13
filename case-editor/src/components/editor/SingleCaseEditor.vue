@@ -8,8 +8,16 @@ import JsonEditor from '../json-editor/JsonEditor.vue'
 import AssertRulesModal from './AssertRulesModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
+const props = defineProps<{ searchBarVisible?: boolean }>()
+
 const { t } = useI18n()
 const workbook = useWorkbookStore()
+
+const scrollY = computed(() => {
+  const base = 200
+  const searchBar = props.searchBarVisible ? 85 : 0
+  return `calc(100vh - ${base + searchBar}px)`
+})
 
 const jsonModalVisible = ref(false)
 const jsonModalField = ref<string>('')
@@ -138,7 +146,7 @@ const relevanceOptions = computed(() => workbook.validTestIds)
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 2200, y: 'calc(100vh - 200px)' }"
+        :scroll="{ x: 2200, y: scrollY }"
         :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >

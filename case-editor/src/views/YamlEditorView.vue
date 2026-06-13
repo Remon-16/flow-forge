@@ -8,6 +8,7 @@ import YamlTabBar from '../components/yaml-editor/YamlTabBar.vue'
 import SingleCaseForm from '../components/yaml-editor/SingleCaseForm.vue'
 import BizFlowForm from '../components/yaml-editor/BizFlowForm.vue'
 import YamlRawView from '../components/yaml-editor/YamlRawView.vue'
+import SearchBar from '../components/search/SearchBar.vue'
 import SearchResultsPanel from '../components/search/SearchResultsPanel.vue'
 import type { SearchResultItem } from '../components/search/SearchResultsPanel.vue'
 import type { SearchOptions } from '../components/search/SearchBar.vue'
@@ -119,12 +120,22 @@ function doYamlGlobalSearch(query: string, options: SearchOptions) {
         for (let l = 1; l < lineStarts.length; l++) {
           if (pos < lineStarts[l]) { lineNum = l; break }
         }
-        const lineText = lines[lineNum - 1].trim()
+        // Show context: 1 line before and after the match
+        const startLine = Math.max(0, lineNum - 2)
+        const endLine = Math.min(lines.length - 1, lineNum)
+        const contextLines: string[] = []
+        for (let cl = startLine; cl <= endLine; cl++) {
+          contextLines.push(lines[cl])
+        }
+        let displayText = contextLines.join('\n')
+        if (displayText.length > 500) {
+          displayText = displayText.substring(0, 500) + '...'
+        }
         results.push({
           groupName: t('search.groupFile', { name: tab.title }),
           rowIndex: tabIdx,
           line: lineNum,
-          text: lineText.length > 80 ? lineText.substring(0, 80) + '...' : lineText,
+          text: displayText,
           _groupIndex: tabIdx,
           _itemIndex: match.index,
         })

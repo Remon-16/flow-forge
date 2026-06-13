@@ -256,7 +256,7 @@ function getLocationLabel(item: SearchResultItem): string {
 
 .result-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 3px 8px 3px 24px;
   cursor: pointer;
@@ -280,11 +280,12 @@ function getLocationLabel(item: SearchResultItem): string {
 
 .result-text {
   flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow-y: auto;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 11px;
+  line-height: 1.5;
 }
 
 .replace-one-btn {

@@ -8,7 +8,7 @@ import JsonEditor from '../json-editor/JsonEditor.vue'
 import AssertRulesModal from './AssertRulesModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
-const props = defineProps<{ flowIndex: number }>()
+const props = defineProps<{ flowIndex: number; searchBarVisible?: boolean }>()
 
 const { t } = useI18n()
 const workbook = useWorkbookStore()
@@ -19,6 +19,12 @@ const jsonModalStepIdx = ref<number>(-1)
 const jsonValue = ref<Record<string, unknown>>({})
 
 const flow = computed(() => workbook.bizFlows[props.flowIndex])
+
+const scrollY = computed(() => {
+  const base = 200
+  const searchBar = props.searchBarVisible ? 85 : 0
+  return `calc(100vh - ${base + searchBar}px)`
+})
 
 // Re-run validation when flow changes
 watch(
@@ -165,7 +171,7 @@ function getRowClassName(record: BizStep) {
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 2400, y: 'calc(100vh - 200px)' }"
+        :scroll="{ x: 2400, y: scrollY }"
         :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >

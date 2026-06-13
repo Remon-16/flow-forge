@@ -276,7 +276,7 @@ function doGlobalSearch(query: string, options: SearchOptions) {
         if (key.startsWith('_')) continue
         const text = valueToSearchText(val)
         if (pattern.test(text)) {
-          const displayText = text.length > 80 ? text.substring(0, 80) + '...' : text
+          const displayText = text.length > 500 ? text.substring(0, 500) + '...' : text
           results.push({
             groupName: sheet.name,
             rowIndex: i,
@@ -481,24 +481,27 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
       />
     </div>
 
-    <!-- API Definitions -->
-    <ApiDefEditor v-if="editor.activeSheetIndex === -1" />
+    <div style="flex: 1; min-height: 0;">
+      <!-- API Definitions -->
+      <ApiDefEditor v-if="editor.activeSheetIndex === -1" :search-bar-visible="searchVisible || globalSearchVisible" />
 
-    <!-- Single Cases -->
-    <SingleCaseEditor v-else-if="editor.activeSheetIndex === 0" />
+      <!-- Single Cases -->
+      <SingleCaseEditor v-else-if="editor.activeSheetIndex === 0" :search-bar-visible="searchVisible || globalSearchVisible" />
 
-    <!-- Biz Flow -->
-    <BizFlowEditor
-      v-else
-      :flow-index="editor.activeSheetIndex - 1"
-    />
+      <!-- Biz Flow -->
+      <BizFlowEditor
+        v-else
+        :flow-index="editor.activeSheetIndex - 1"
+        :search-bar-visible="searchVisible || globalSearchVisible"
+      />
 
-    <!-- Empty state -->
-    <div
-      v-if="workbook.apiDefinitions.length === 0 && editor.activeSheetIndex === -1"
-      style="display: flex; align-items: center; justify-content: center; height: 100%; color: #999;"
-    >
-      {{ t('table.noData') }}
+      <!-- Empty state -->
+      <div
+        v-if="workbook.apiDefinitions.length === 0 && editor.activeSheetIndex === -1"
+        style="display: flex; align-items: center; justify-content: center; height: 100%; color: #999;"
+      >
+        {{ t('table.noData') }}
+      </div>
     </div>
   </div>
 </template>

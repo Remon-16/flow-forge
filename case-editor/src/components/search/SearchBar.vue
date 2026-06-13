@@ -147,11 +147,11 @@ function onReplaceAll() {
 
     <!-- Replace row -->
     <div v-if="replaceMode" class="search-row">
-      <input
+      <textarea
         v-model="replacement"
-        class="search-input"
+        class="replace-textarea"
         :placeholder="t('search.replacePlaceholder')"
-        type="text"
+        rows="1"
       />
       <button class="action-btn" @click="onReplace">{{ t('search.replace') }}</button>
       <button class="action-btn" @click="onReplaceAll">{{ t('search.replaceAll') }}</button>
@@ -213,6 +213,25 @@ function onReplaceAll() {
 }
 
 .search-input:focus {
+  border-color: #4d90fe;
+}
+
+.replace-textarea {
+  flex: 1;
+  min-width: 120px;
+  background: #3c3c3c;
+  border: 1px solid #555;
+  border-radius: 3px;
+  color: #d4d4d4;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  outline: none;
+  resize: vertical;
+  min-height: 24px;
+}
+
+.replace-textarea:focus {
   border-color: #4d90fe;
 }
 
