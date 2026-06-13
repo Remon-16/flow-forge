@@ -119,6 +119,16 @@ function onReplaceAll() {
   <div v-if="visible" class="search-bar" @keydown="onKeyDown">
     <!-- Search row -->
     <div class="search-row">
+      <button
+        class="toggle-replace-btn"
+        :title="replaceMode ? t('search.collapseReplace') : t('search.expandReplace')"
+        @click="emit('update:replaceMode', !replaceMode)"
+      >
+        <svg viewBox="0 0 16 16" width="12" height="12">
+          <path v-if="replaceMode" d="M8 11L3 6h10z" fill="currentColor"/>
+          <path v-else d="M6 3l5 5H1z" fill="currentColor"/>
+        </svg>
+      </button>
       <input
         ref="searchInput"
         v-model="query"
@@ -261,5 +271,25 @@ function onReplaceAll() {
 .close-btn {
   min-width: 24px;
   padding: 2px;
+}
+
+.toggle-replace-btn {
+  background: transparent;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 24px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.toggle-replace-btn:hover {
+  background: #4a4a4a;
+  color: #d4d4d4;
 }
 </style>

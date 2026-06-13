@@ -42,6 +42,8 @@ npm run dev:desktop
 - Bilingual Chinese/English interface with on-the-fly switching
 - Save (Ctrl+S) and Save As (Ctrl+Alt+S) keyboard shortcuts
 - **Find & Replace** (Ctrl+F / Ctrl+H): search cells in Excel sheets or raw text in YAML files, with match-case, whole-word, and regex options
+- **Edit Menu**: new "Edit" dropdown in the toolbar with Find, Replace, Find in Files, and Replace in Files entries
+- **Global Search**: Find in Files searches across all sheets (Excel) or all open files (YAML), with results grouped by source; Replace in Files supports both per-match review/replace and replace-all
 
 ### Excel Editor
 - Open / edit / save Excel test case files (.xlsx format)

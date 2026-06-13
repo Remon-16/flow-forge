@@ -143,9 +143,19 @@
     "noResults": "No results found",
     "matchCount": "{current} of {total} matches",
     "findInFiles": "Find in Files",
+    "replaceInFiles": "Replace in Files",
     "findInSheets": "Find in All Sheets",
     "searchPlaceholder": "Enter search text",
-    "replacePlaceholder": "Enter replacement text"
+    "replacePlaceholder": "Enter replacement text",
+    "expandReplace": "Expand Replace",
+    "collapseReplace": "Collapse Replace",
+    "allSheets": "All Sheets",
+    "allFiles": "All Files",
+    "globalResults": "Search Results",
+    "replaceOne": "Replace",
+    "replaced": "Replaced",
+    "groupSheet": "Sheet: {name}",
+    "groupFile": "File: {name}"
   },
   "assertRules": {
     "title": "Advanced Assertion Rules",

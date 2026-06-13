@@ -143,9 +143,19 @@
     "noResults": "未找到结果",
     "matchCount": "{current} / {total} 个匹配",
     "findInFiles": "在文件中查找",
+    "replaceInFiles": "在文件中替换",
     "findInSheets": "在所有Sheet中查找",
     "searchPlaceholder": "输入搜索文本",
-    "replacePlaceholder": "输入替换文本"
+    "replacePlaceholder": "输入替换文本",
+    "expandReplace": "展开替换",
+    "collapseReplace": "收起替换",
+    "allSheets": "所有 Sheet",
+    "allFiles": "所有文件",
+    "globalResults": "搜索结果",
+    "replaceOne": "替换",
+    "replaced": "已替换",
+    "groupSheet": "Sheet: {name}",
+    "groupFile": "文件: {name}"
   },
   "assertRules": {
     "title": "高级断言规则",

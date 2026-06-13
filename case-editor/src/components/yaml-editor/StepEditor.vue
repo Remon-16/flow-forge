@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useYamlStore } from '../../stores/yaml-store'
 import { TAG_LEVELS, HTTP_METHODS } from '../../types/excel'
 import type { YamlBizStep } from '../../types/yaml'
 
 const { t } = useI18n()
+const yamlStore = useYamlStore()
+
+// Clear inline cache when currentCase changes externally (e.g. from YAML raw view replace)
+watch(() => yamlStore.currentCase, () => {
+  jsonEditCache.value = {}
+  rulesEditText.value = ''
+})
 
 const props = defineProps<{
   step: YamlBizStep & { _stepIdDuplicate?: boolean; _transError?: string | null }
@@ -54,6 +62,7 @@ function onJsonEditChange(field: string, text: string) {
 
 function onJsonEditBlur(field: string) {
   const key = `${props.index}_${field}`
+  if (!(key in jsonEditCache.value)) return
   const text = (jsonEditCache.value[key] || '').trim()
   if (!text) {
     emit('update', props.index, field, null)
@@ -82,6 +91,7 @@ function onRulesEditChange(text: string) {
 }
 
 function onRulesEditBlur() {
+  if (!rulesEditText.value) return
   const text = rulesEditText.value.trim()
   if (!text) {
     emit('updateRules', props.index, null)

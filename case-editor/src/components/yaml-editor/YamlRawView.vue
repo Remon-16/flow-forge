@@ -58,6 +58,22 @@ watch(editText, (newText) => {
   }, 500)
 })
 
+function syncEditToStore() {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+  try {
+    const parsed = parseYaml(editText.value)
+    if (parsed && parsed.case_type === yamlStore.currentCase?.case_type) {
+      yamlStore.currentCase = parsed
+      yamlStore.markModified()
+    }
+  } catch {
+    // Ignore parse errors
+  }
+}
+
 function togglePanel() {
   isOpen.value = !isOpen.value
   if (isOpen.value) {
@@ -99,6 +115,7 @@ const searchMatchCount = ref(0)
 const searchCurrentMatch = ref(1)
 const searchMatchResults = ref<Array<{ line: number; text: string; start: number; end: number }>>([])
 const searchQuery = ref('')
+const lastSearchOptions = ref<SearchOptions>({ matchCase: false, wholeWord: false, regex: false })
 
 function getTextArea(): HTMLTextAreaElement | null {
   if (!textareaRef.value) return null
@@ -108,13 +125,14 @@ function getTextArea(): HTMLTextAreaElement | null {
 
 function doYamlSearch(query: string, options: SearchOptions) {
   searchQuery.value = query
+  lastSearchOptions.value = { ...options }
   const text = editMode.value ? editText.value : yamlText.value
   const lines = text.split('\n')
   const results: Array<{ line: number; text: string; start: number; end: number }> = []
 
   let pattern: RegExp
   try {
-    const flags = options.matchCase ? 'g' : 'gi'
+    const flags = (options.matchCase ? 'g' : 'gi') + 'm'
     const escaped = options.regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const source = options.wholeWord ? `\\b${escaped}\\b` : escaped
     pattern = new RegExp(source, flags)
@@ -125,21 +143,32 @@ function doYamlSearch(query: string, options: SearchOptions) {
     return
   }
 
-  let globalOffset = 0
+  // Pre-compute line start positions for offset-to-line mapping
+  const lineStarts: number[] = [0]
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    pattern.lastIndex = 0
-    let match: RegExpExecArray | null
-    while ((match = pattern.exec(line)) !== null) {
-      results.push({
-        line: i + 1,
-        text: line.trim(),
-        start: globalOffset + match.index,
-        end: globalOffset + match.index + match[0].length,
-      })
-      if (match[0].length === 0) pattern.lastIndex++
+    lineStarts.push(lineStarts[i] + lines[i].length + 1)
+  }
+
+  // Search the full text with multiline support
+  pattern.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text)) !== null) {
+    const pos = match.index
+    // Find which line this position belongs to
+    let lineNum = 1
+    for (let l = 1; l < lineStarts.length; l++) {
+      if (pos < lineStarts[l]) {
+        lineNum = l
+        break
+      }
     }
-    globalOffset += line.length + 1
+    results.push({
+      line: lineNum,
+      text: lines[lineNum - 1].trim(),
+      start: pos,
+      end: pos + match[0].length,
+    })
+    if (match[0].length === 0) pattern.lastIndex++
   }
 
   searchMatchResults.value = results
@@ -177,9 +206,12 @@ function handleYamlReplace(replacement: string) {
   const after = editText.value.substring(match.end)
   editText.value = before + replacement + after
 
-  // Re-search
+  // Immediately sync to store (bypass debounce)
+  syncEditToStore()
+
+  // Re-search with saved options
   if (searchQuery.value) {
-    doYamlSearch(searchQuery.value, { matchCase: false, wholeWord: false, regex: false })
+    doYamlSearch(searchQuery.value, lastSearchOptions.value)
   }
 }
 
@@ -191,6 +223,10 @@ function handleYamlReplaceAll(replacement: string) {
     text = text.substring(0, match.start) + replacement + text.substring(match.end)
   }
   editText.value = text
+
+  // Immediately sync to store (bypass debounce)
+  syncEditToStore()
+
   searchVisible.value = false
   searchMatchResults.value = []
   searchMatchCount.value = 0

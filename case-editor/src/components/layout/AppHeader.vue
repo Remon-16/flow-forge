@@ -6,6 +6,7 @@ import { message, Modal } from 'ant-design-vue'
 import { useWorkbookStore } from '../../stores/workbook'
 import { useYamlStore } from '../../stores/yaml-store'
 import { useSettingsStore } from '../../stores/settings'
+import { useEditorStore } from '../../stores/editor'
 import { isDesktop, openFileDialog } from '../../utils/desktop-bridge'
 
 const route = useRoute()
@@ -14,6 +15,7 @@ const { t } = useI18n()
 const workbook = useWorkbookStore()
 const yamlStore = useYamlStore()
 const settings = useSettingsStore()
+const editorStore = useEditorStore()
 
 const isExcelMode = computed(() => route.name === 'excel-editor')
 const isYamlMode = computed(() => route.name === 'yaml-editor')
@@ -116,6 +118,10 @@ async function handleSaveAs() {
   }
 }
 
+function handleEditMenuClick({ key }: { key: string }) {
+  editorStore.triggerSearch(key as 'find' | 'replace' | 'findInFiles' | 'replaceInFiles')
+}
+
 function handleLanguageChange(lang: string) {
   settings.setLanguage(lang as 'zh-CN' | 'en-US')
 }
@@ -169,6 +175,29 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
     <a-button size="small" type="text" @click="handleSave">{{ t('yaml.save') }}</a-button>
     <a-button size="small" type="text" @click="handleSaveAs">{{ t('yaml.saveAs') }}</a-button>
 
+    <a-dropdown>
+      <a-button size="small" type="text">{{ t('menu.edit') }}</a-button>
+      <template #overlay>
+        <a-menu @click="handleEditMenuClick">
+          <a-menu-item key="find">
+            <span>{{ t('search.find') }}</span>
+            <span class="menu-shortcut">Ctrl+F</span>
+          </a-menu-item>
+          <a-menu-item key="replace">
+            <span>{{ t('search.replace') }}</span>
+            <span class="menu-shortcut">Ctrl+H</span>
+          </a-menu-item>
+          <a-menu-divider />
+          <a-menu-item key="findInFiles">
+            <span>{{ t('search.findInFiles') }}</span>
+          </a-menu-item>
+          <a-menu-item key="replaceInFiles">
+            <span>{{ t('search.replaceInFiles') }}</span>
+          </a-menu-item>
+        </a-menu>
+      </template>
+    </a-dropdown>
+
     <a-divider type="vertical" />
 
     <a-select
@@ -187,3 +216,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
     </a-button>
   </header>
 </template>
+
+<style scoped>
+.menu-shortcut {
+  float: right;
+  color: #999;
+  font-size: 11px;
+  margin-left: 24px;
+}
+</style>

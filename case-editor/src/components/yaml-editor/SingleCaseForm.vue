@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useYamlStore } from '../../stores/yaml-store'
 import { TAG_LEVELS, HTTP_METHODS } from '../../types/excel'
@@ -12,6 +12,12 @@ const { t } = useI18n()
 const yamlStore = useYamlStore()
 
 const currentCase = computed(() => yamlStore.currentCase as SingleYamlCase | null)
+
+// Clear inline cache when currentCase changes externally (e.g. from YAML raw view replace)
+watch(() => yamlStore.currentCase, () => {
+  jsonEditCache.value = {}
+  rulesEditText.value = ''
+})
 
 function updateField(field: string, value: unknown) {
   yamlStore.updateSingleField(field as keyof SingleYamlCase, value)
@@ -44,6 +50,7 @@ function onJsonEditChange(field: string, text: string) {
 }
 
 function onJsonEditBlur(field: string) {
+  if (!(field in jsonEditCache.value)) return
   const text = (jsonEditCache.value[field] || '').trim()
   if (!text) {
     updateField(field, null)
@@ -72,6 +79,7 @@ function onRulesEditChange(text: string) {
 }
 
 function onRulesEditBlur() {
+  if (!rulesEditText.value) return
   const text = rulesEditText.value.trim()
   if (!text) {
     updateField('assert_rules', null)

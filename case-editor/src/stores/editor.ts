@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { ActiveSheet, SheetType } from '../types/editor'
 
+export type SearchActionType = 'find' | 'replace' | 'findInFiles' | 'replaceInFiles'
+
 export const useEditorStore = defineStore('editor', () => {
   const activeSheetIndex = ref(-1) // -1=apiDef, 0=singleCase, 1+=bizFlow
 
@@ -26,5 +28,16 @@ export const useEditorStore = defineStore('editor', () => {
     activeSheetIndex.value = index
   }
 
-  return { activeSheetIndex, activeSheetType, activeSheet, setActiveSheet }
+  // Search action trigger (cross-component communication)
+  const searchAction = ref<{ type: SearchActionType } | null>(null)
+
+  function triggerSearch(type: SearchActionType) {
+    searchAction.value = { type }
+  }
+
+  function clearSearchAction() {
+    searchAction.value = null
+  }
+
+  return { activeSheetIndex, activeSheetType, activeSheet, setActiveSheet, searchAction, triggerSearch, clearSearchAction }
 })
