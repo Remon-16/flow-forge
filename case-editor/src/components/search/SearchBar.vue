@@ -129,12 +129,12 @@ function onReplaceAll() {
           <path v-else d="M6 3l5 5H1z" fill="currentColor"/>
         </svg>
       </button>
-      <input
+      <textarea
         ref="searchInput"
         v-model="query"
         class="search-input"
         :placeholder="t('search.searchPlaceholder')"
-        type="text"
+        rows="2"
       />
       <span class="match-label">{{ matchLabel }}</span>
       <button class="nav-btn" title="Shift+Enter" @click="emit('navigate', 'prev')">
@@ -151,7 +151,7 @@ function onReplaceAll() {
         v-model="replacement"
         class="replace-textarea"
         :placeholder="t('search.replacePlaceholder')"
-        rows="1"
+        rows="2"
       />
       <button class="action-btn" @click="onReplace">{{ t('search.replace') }}</button>
       <button class="action-btn" @click="onReplaceAll">{{ t('search.replaceAll') }}</button>
@@ -208,8 +208,11 @@ function onReplaceAll() {
   color: #d4d4d4;
   padding: 3px 6px;
   font-size: 12px;
-  font-family: inherit;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   outline: none;
+  resize: vertical;
+  min-height: 36px;
+  max-height: 144px;
 }
 
 .search-input:focus {
@@ -228,7 +231,8 @@ function onReplaceAll() {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   outline: none;
   resize: vertical;
-  min-height: 24px;
+  min-height: 36px;
+  max-height: 144px;
 }
 
 .replace-textarea:focus {
