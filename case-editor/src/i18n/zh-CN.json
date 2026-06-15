@@ -70,7 +70,8 @@
     "transBracket": "括号不匹配",
     "transChinese": "包含中文字符",
     "unsavedTitle": "未保存的修改",
-    "unsavedContent": "当前文件有未保存的修改，是否保存？"
+    "unsavedContent": "当前文件有未保存的修改，是否保存？",
+    "urlWarning": "URL 在接口文档中未找到，可能存在 AI 幻觉"
   },
   "dialog": {
     "yes": "是",

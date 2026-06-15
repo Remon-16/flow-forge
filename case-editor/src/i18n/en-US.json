@@ -70,7 +70,8 @@
     "transBracket": "Mismatched brackets",
     "transChinese": "Contains Chinese characters",
     "unsavedTitle": "Unsaved Changes",
-    "unsavedContent": "You have unsaved changes. Save before continuing?"
+    "unsavedContent": "You have unsaved changes. Save before continuing?",
+    "urlWarning": "URL not found in API documentation - possible AI hallucination"
   },
   "dialog": {
     "yes": "Yes",

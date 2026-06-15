@@ -155,6 +155,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
       AssertDict: null,
       AssertRules: null,
       Remark: '',
+      _urlWarning: false,
     })
     markModified()
   }
@@ -184,6 +185,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
       AssertRules: null,
       Remark: '',
       _relevanceValid: true,
+      _urlWarning: false,
     })
     markModified()
   }
@@ -263,6 +265,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
     for (const tc of singleCases.value) {
       const err = validateRelevanceID(tc.RelevanceID, ids)
       tc._relevanceValid = err === null
+      ;(tc as any)._urlWarning = String(tc.URL ?? '').includes('<URL not exist>')
     }
   }
 
@@ -282,6 +285,9 @@ export const useWorkbookStore = defineStore('workbook', () => {
       // Trans
       const transErr = validateTrans(step.Trans, step.StepID)
       step._transError = transErr
+
+      // URL warning
+      ;(step as any)._urlWarning = String(step.URL ?? '').includes('<URL not exist>')
     }
   }
 

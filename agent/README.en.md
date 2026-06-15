@@ -43,7 +43,7 @@ Core workflow:
 5. **Manual Review** (Mandatory interrupt): Display the plan; user can approve or provide revision feedback
 6. **Feedback Loop**: When rejected, the system revises the plan based on feedback and resubmits for review, looping until approval
 7. **Save Interfaces**: Write analyzed interface definitions to `output/interfaces/` directory, one YAML file per interface for version control
-8. **Batch Case Generation** (BatchController): Read interfaces from YAML, generate cases in configurable-size batches via CaseGenerator. Supports resumable generation (`--resume`) and incremental updates (`--reference-dir`). Built-in progress-based step counting — steadily-progressing models are never falsely terminated, while weak models that produce no progress are quickly caught
+8. **Batch Case Generation** (BatchController): Read interfaces from YAML, generate cases in configurable-size batches via CaseGenerator. After generation, each case URL is searched for in the original API documentation text. Any URL not found in the raw documentation is prefixed with `<URL not exist>`, enabling the downstream editor to show a warning and the executor to fail fast. Supports resumable generation (`--resume`) and incremental updates (`--reference-dir`). Built-in progress-based step counting — steadily-progressing models are never falsely terminated, while weak models that produce no progress are quickly caught
 9. **Validation** (Optional): CaseValidator checks each batch's format; errors trigger automatic retries (up to 3 times), with a final failure report
 10. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
 

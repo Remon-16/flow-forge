@@ -125,6 +125,7 @@ function formatRules(val: string[] | null): string {
 function getRowClassName(record: Record<string, unknown>) {
   if ((record as any)._searchActive) return 'row-search-active'
   if ((record as any)._searchMatch) return 'row-search-match'
+  if (String(record.URL ?? '').includes('<URL not exist>')) return 'cell-error'
   return ''
 }
 </script>
@@ -231,6 +232,22 @@ function getRowClassName(record: Record<string, unknown>) {
                 size="small"
                 @change="(e: any) => onCellChange(index, col, e.target.value)"
               />
+            </template>
+
+            <!-- URL with warning -->
+            <template v-else-if="col === 'URL'">
+              <a-input
+                :value="String(record[col] ?? '')"
+                size="small"
+                :status="String(record[col] ?? '').includes('<URL not exist>') ? 'error' : ''"
+                @change="(e: any) => onCellChange(index, col, e.target.value)"
+              >
+                <template v-if="String(record[col] ?? '').includes('<URL not exist>')" #suffix>
+                  <a-tooltip :title="t('validator.urlWarning')">
+                    <span style="color: #ff4d4f; font-weight: bold;">&#10007;</span>
+                  </a-tooltip>
+                </template>
+              </a-input>
             </template>
 
             <!-- Default text input -->

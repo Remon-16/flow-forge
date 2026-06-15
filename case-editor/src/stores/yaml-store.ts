@@ -363,6 +363,7 @@ export const useYamlStore = defineStore('yaml', () => {
     for (const step of bizCase.steps) {
       ;(step as any)._stepIdDuplicate = dupes.has(step.step_id?.trim())
       ;(step as any)._transError = validateTrans(step.trans, step.step_id)
+      ;(step as any)._urlWarning = (step.url || '').includes('<URL not exist>')
     }
   }
 

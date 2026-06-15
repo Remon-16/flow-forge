@@ -13,6 +13,10 @@ const yamlStore = useYamlStore()
 
 const currentCase = computed(() => yamlStore.currentCase as SingleYamlCase | null)
 
+const isUrlWarning = computed(() =>
+  (currentCase.value?.url || '').includes('<URL not exist>')
+)
+
 // Clear inline cache when currentCase changes externally (e.g. from YAML raw view replace)
 watch(() => yamlStore.currentCase, () => {
   jsonEditCache.value = {}
@@ -200,8 +204,15 @@ function onAssertRulesConfirm(rules: string[]) {
           <a-form-item :label="t('table.URL')">
             <a-input
               :value="currentCase.url"
+              :status="isUrlWarning ? 'error' : ''"
               @change="(e: any) => updateField('url', e.target.value)"
-            />
+            >
+              <template v-if="isUrlWarning" #suffix>
+                <a-tooltip :title="t('validator.urlWarning')">
+                  <span style="color: #ff4d4f; font-weight: bold;">&#10007;</span>
+                </a-tooltip>
+              </template>
+            </a-input>
           </a-form-item>
         </a-col>
         <a-col :span="12">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useYamlStore } from '../../stores/yaml-store'
 import { TAG_LEVELS, HTTP_METHODS } from '../../types/excel'
@@ -18,6 +18,10 @@ const props = defineProps<{
   step: YamlBizStep & { _stepIdDuplicate?: boolean; _transError?: string | null }
   index: number
 }>()
+
+const isUrlWarning = computed(() =>
+  ((props.step as any).url || '').includes('<URL not exist>')
+)
 
 const emit = defineEmits<{
   (e: 'update', index: number, field: string, value: unknown): void
@@ -221,8 +225,15 @@ function onRulesEditBlur() {
           <a-input
             :value="step.url"
             size="small"
+            :status="isUrlWarning ? 'error' : ''"
             @change="(e: any) => onFieldChange('url', e.target.value)"
-          />
+          >
+            <template v-if="isUrlWarning" #suffix>
+              <a-tooltip :title="t('validator.urlWarning')">
+                <span style="color: #ff4d4f; font-weight: bold; font-size: 12px;">&#10007;</span>
+              </a-tooltip>
+            </template>
+          </a-input>
         </a-form-item>
       </a-col>
     </a-row>

@@ -275,6 +275,7 @@ AssertRules 列显示只读预览区（每行一条规则），点击「编辑�
 | Trans 括号 | 业务链路 | `[` 与 `]` 数量一致，`(` 与 `)` 数量一致 | 单元格标红 + Tooltip |
 | Trans 中文 | 业务链路 | 不允许包含中文字符 | 单元格标红 + Tooltip |
 | AssertRules 格式 | 全部 | 运算符合法性、路径语法、函数名、期望值 | 行尾 ✗ 图标 + Tooltip |
+| URL 存在性 | 全部 | URL 包含 `<URL not exist>` 标记（由 Agent 注入） | 输入框红色边框 + 警告图标 + Tooltip |
 | JSON 格式 | JSON 字段 | 合法 JSON 字符串 | 文本区下方红色提示 |
 
 ### YAML 编辑器
@@ -283,6 +284,7 @@ AssertRules 列显示只读预览区（每行一条规则），点击「编辑�
 |--------|---------|------|---------|
 | StepID | 业务链路 | 同一文件内不得重复 | 输入框标红 |
 | Trans 格式 | 业务链路 | `key=value, key=value` 格式，括号匹配，无中文 | 输入框标红 + Tooltip |
+| URL 存在性 | 全部 | URL 包含 `<URL not exist>` 标记 | 输入框标红 |
 | AssertRules 格式 | 全部 | 同 Excel 编辑器 | 行尾 ✗ 图标 + Tooltip |
 
 ## AssertRules 运算符与函数参考

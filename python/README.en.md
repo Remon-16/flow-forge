@@ -434,6 +434,7 @@ Abstract base class providing:
 #### ApiTestExecutor (`executor/api_test.py`)
 
 Single API test executor:
+0. **URL validation**: Checks whether the URL contains the `<URL not exist>` marker (injected by the Agent during generation). If present, the case fails immediately with an error message.
 1. Extracts `app_name`, `method`, `url`, `headers`, `body` from the case
 2. Looks up the app's `baseURL` by `AppName`, constructs full URL
 3. Calls `LoginManager` to resolve `#{userParamName}` placeholders to actual tokens
@@ -446,6 +447,7 @@ Single API test executor:
 Business flow test executor:
 - Each business flow (one sheet) runs in its own thread
 - Steps within a flow execute **sequentially**; any step failure aborts subsequent steps
+- Before each step executes, the URL is checked for the `<URL not exist>` marker. If present, the step fails immediately.
 - Uses `threading.local()` to store per-thread step response data
 - `_parse_trans()` parses `key=StepID.path` mappings
 - `_resolve_vars()` substitutes `#{key}` with actual response values from previous steps

@@ -276,6 +276,7 @@ The right-side panel can be toggled between:
 | Trans brackets | Business flows | `[` and `]` counts must match; `(` and `)` counts must match | Red cell + tooltip |
 | Trans Chinese chars | Business flows | Chinese characters are not allowed | Red cell + tooltip |
 | AssertRules format | All | Operator validity, path syntax, function names, expected values | Red ✗ icon + tooltip |
+| URL existence | All | URL contains `<URL not exist>` marker (injected by Agent) | Red border + warning icon + Tooltip |
 | JSON format | JSON fields | Must be valid JSON string | Red hint below text area |
 
 ### YAML Editor
@@ -284,6 +285,7 @@ The right-side panel can be toggled between:
 |------|-----------|-------------|--------------|
 | StepID | Business flows | Must be unique within the same file | Red input highlight |
 | Trans format | Business flows | `key=value, key=value` format, bracket matching, no Chinese chars | Red input + tooltip |
+| URL existence | All | URL contains `<URL not exist>` marker | Red border on input |
 | AssertRules format | All | Same as Excel editor | Red ✗ icon + tooltip |
 
 ## AssertRules Operators & Functions Reference

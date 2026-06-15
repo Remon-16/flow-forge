@@ -836,6 +836,16 @@ def batch_controller_node(state: GraphState) -> GraphState:
 
     interfaces = _dicts_to_interfaces(interfaces_raw)
 
+    # Get original API doc text for URL existence validation
+    api_path = state.get("api_path", "")
+    api_doc_text = state.get("api_raw_text", "")
+    if not api_doc_text and api_path:
+        from doc_parser.text_extractor import extract_text
+        try:
+            api_doc_text = extract_text(api_path)
+        except Exception:
+            api_doc_text = ""
+
     try:
         result = controller.run(
             plan=plan,
@@ -845,6 +855,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
             validator=validator,
             user_guidance=user_guidance,
             reference_dir=reference_dir,
+            api_doc_text=api_doc_text,
         )
     except Exception as e:
         msg = f"BatchController failed: {e}"

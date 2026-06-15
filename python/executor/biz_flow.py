@@ -92,6 +92,14 @@ class BizFlowExecutor(BaseExecutor):
         app_name = step.get("app_name") or ""
         method = (step.get("method") or "GET").upper()
         path = step.get("url", "")
+
+        if "<URL not exist>" in path:
+            return self._build_step_result(
+                step, step_id, "", path, {}, {},
+                passed=False,
+                error=f"URL not found in API documentation: {path}",
+            )
+
         headers = dict(step.get("request_head") or {})
         body = dict(step.get("request_body") or {})
         expected_status = step.get("status_code")

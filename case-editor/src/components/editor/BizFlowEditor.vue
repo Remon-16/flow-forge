@@ -137,7 +137,8 @@ const relevanceOptions = computed(() => workbook.validTestIds)
 function getRowClassName(record: BizStep) {
   if ((record as any)._searchActive) return 'row-search-active'
   if ((record as any)._searchMatch) return 'row-search-match'
-  if (record._stepIdDuplicate || record._relevanceValid === false || record._transError) {
+  if (record._stepIdDuplicate || record._relevanceValid === false
+      || record._transError || (record as any)._urlWarning) {
     return 'row-error'
   }
   return ''
@@ -308,6 +309,22 @@ function getRowClassName(record: BizStep) {
                 size="small"
                 @change="(e: any) => onCellChange(stepIdx, col, e.target.value)"
               />
+            </template>
+
+            <!-- URL with warning -->
+            <template v-else-if="col === 'URL'">
+              <a-input
+                :value="String(record[col] ?? '')"
+                size="small"
+                :status="String(record[col] ?? '').includes('<URL not exist>') ? 'error' : ''"
+                @change="(e: any) => onCellChange(stepIdx, col, e.target.value)"
+              >
+                <template v-if="String(record[col] ?? '').includes('<URL not exist>')" #suffix>
+                  <a-tooltip :title="t('validator.urlWarning')">
+                    <span style="color: #ff4d4f; font-weight: bold;">&#10007;</span>
+                  </a-tooltip>
+                </template>
+              </a-input>
             </template>
 
             <!-- Default -->

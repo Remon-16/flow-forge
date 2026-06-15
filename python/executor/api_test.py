@@ -22,6 +22,26 @@ class ApiTestExecutor(BaseExecutor):
         app_name = case.get("app_name") or ""
         method = (case.get("method") or "GET").upper()
         path = case.get("url", "")
+
+        if "<URL not exist>" in path:
+            return {
+                "test_id": test_id,
+                "api_name": case.get("api_name", ""),
+                "app_name": app_name,
+                "base_url": "",
+                "method": method,
+                "url": path,
+                "tag": case.get("tag", ""),
+                "remark": case.get("remark", ""),
+                "request_headers": {},
+                "request_body": {},
+                "response_status": None,
+                "response_body": None,
+                "assertions": [],
+                "passed": False,
+                "error": f"URL not found in API documentation: {path}",
+            }
+
         headers = dict(case.get("request_head") or {})
         body = dict(case.get("request_body") or {})
         expected_status = case.get("status_code")

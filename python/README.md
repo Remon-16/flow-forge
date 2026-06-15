@@ -435,6 +435,7 @@ Excel 中的 JSON 字段支持以下格式：
 #### ApiTestExecutor (`executor/api_test.py`)
 
 单接口测试执行器：
+0. **URL 校验**：检查 URL 是否包含 `<URL not exist>` 标记（Agent 生成阶段注入），若是则立即失败并返回错误信息
 1. 从用例中提取 `app_name`, `method`, `url`, `headers`, `body`
 2. 通过 `AppName` 查找对应 app 的 `baseURL`，拼接完整 URL
 3. 调用 `LoginManager` 解析 `#{userParamName}` 占位符为实际 Token
@@ -447,6 +448,7 @@ Excel 中的 JSON 字段支持以下格式：
 业务链路测试执行器：
 - 每个业务流（一个 Sheet）在独立线程中执行
 - 流内步骤**串行执行**，任一步骤失败则中止后续步骤
+- 每个步骤执行前先校验 URL 是否包含 `<URL not exist>` 标记，存在时立即失败
 - 使用 `threading.local()` 存储每线程的步骤响应数据
 - `_parse_trans()` 解析 `key=StepID.path` 映射
 - `_resolve_vars()` 将 `#{key}` 替换为前序步骤的实际响应值

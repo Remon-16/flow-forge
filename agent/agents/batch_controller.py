@@ -17,6 +17,7 @@ from agents.base import BaseAgent, ConvergenceError
 from config.settings import Settings
 from models.schema import TestPlan
 from writers.yaml_writer import YamlWriter
+from validators.url_checker import check_url_existence
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,7 @@ class BatchController(BaseAgent):
         validator: Any = None,
         user_guidance: str = "",
         reference_dir: str = "",
+        api_doc_text: str = "",
     ) -> Dict[str, Any]:
         """Run batch generation for both single cases and biz flows.
 
@@ -114,6 +116,7 @@ class BatchController(BaseAgent):
             case_generator=case_generator,
             validator=validator,
             user_guidance=user_guidance,
+            api_doc_text=api_doc_text,
         )
         all_single = single_result["cases"]
         all_failures.extend(single_result["failures"])
@@ -131,6 +134,7 @@ class BatchController(BaseAgent):
                 case_generator=case_generator,
                 validator=validator,
                 user_guidance=user_guidance,
+                api_doc_text=api_doc_text,
             )
             all_biz = biz_result["cases"]
             all_failures.extend(biz_result["failures"])
@@ -159,6 +163,7 @@ class BatchController(BaseAgent):
         case_generator: Any,
         validator: Any,
         user_guidance: str = "",
+        api_doc_text: str = "",
     ) -> Dict[str, Any]:
         """Run batch loop for one phase (single or biz)."""
         all_cases: List[Dict] = []
@@ -285,6 +290,10 @@ class BatchController(BaseAgent):
             cases = generated if isinstance(generated, list) else (
                 generated.get("single_cases") or generated.get("biz_flows") or []
             )
+
+            # Check URLs against original API documentation text
+            if api_doc_text:
+                check_url_existence(cases, api_doc_text)
 
             # Validate
             if validator and self._enable_validation:
