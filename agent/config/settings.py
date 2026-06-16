@@ -26,6 +26,7 @@ class Settings:
     max_validation_retries: int = 3
     output_format: str = "both"
     max_steps_no_progress: int = 5
+    url_correction_max_retries: int = 3
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -46,6 +47,7 @@ class Settings:
             "max_validation_retries": self.max_validation_retries,
             "output_format": self.output_format,
             "max_steps_no_progress": self.max_steps_no_progress,
+            "url_correction_max_retries": self.url_correction_max_retries,
         }
 
 
@@ -67,6 +69,7 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
     batch_size = int(os.getenv("BATCH_SIZE", "10"))
     max_validation_retries = int(os.getenv("MAX_VALIDATION_RETRIES", "3"))
     max_steps_no_progress = int(os.getenv("MAX_STEPS_NO_PROGRESS", "5"))
+    url_correction_max_retries = int(os.getenv("URL_CORRECTION_MAX_RETRIES", "3"))
 
     return Settings(
         llm_provider=os.getenv("LLM_PROVIDER", "openai"),
@@ -86,4 +89,5 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
         max_validation_retries=max_validation_retries,
         output_format=os.getenv("OUTPUT_FORMAT", "both"),
         max_steps_no_progress=max_steps_no_progress,
+        url_correction_max_retries=url_correction_max_retries,
     )

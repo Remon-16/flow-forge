@@ -20,7 +20,7 @@ graph TD
     CONFIRM -->|拒绝| REVISE[revise_plan<br/>根据反馈修改]
     REVISE --> CONFIRM
     PARSE_PLAN --> SAVE_IFACES[save_interfaces<br/>保存接口 YAML]
-    SAVE_IFACES --> BATCH[batch_controller<br/>分批生成用例]
+    SAVE_IFACES --> BATCH[batch_controller<br/>三步用例生成]
     BATCH --> WRITE[write_output<br/>YAML + 可选 Excel]
     WRITE --> END((结束))
 
@@ -43,9 +43,12 @@ graph TD
 5. **人工审核**（强制中断点）：展示计划，用户可批准或提出修改意见
 6. **反馈循环**：用户拒绝时，系统根据反馈修改计划后重新提交审核，直至批准
 7. **保存接口定义**：将分析后的接口定义写入 `output/interfaces/` 目录，每个接口一个 YAML 文件，便于版本管理
-8. **分批用例生成**（BatchController）：从 `interfaces/` 读取接口定义，分批调用 CaseGenerator 生成用例，每批大小可配置。生成后自动将用例 URL 在用户提供的原始接口文档中进行全文搜索，未找到的 URL 将添加 `<URL not exist>` 标记，供下游编辑器警告和执行器快速失败。支持断点续生成（`--resume`）和增量更新（`--reference-dir`）。内置进度感知步数计数——持续进步的模型不会被误杀，弱模型反复生成无效内容时快速终止
-9. **格式校验**（可选）：CaseValidator 校验每批生成的用例格式，错误自动重试（最多 3 次），最终报告失败用例
-10. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出
+8. **用例骨架生成**：SingleSkeletonGenerator 一次性生成全部单接口用例骨架；BizSkeletonGenerator 一次性生成全部业务链路骨架。包含 test_id/StepID（有含义）、relevance_id、api_name、method、url、remark、sheet_name。URL/relevance_id 严格来自接口定义
+9. **URL 校验与纠错**：检查骨架中所有 URL 是否在接口文档原文中存在。不存在的 URL 提交给骨架生成器纠错重试（默认最多 3 次，通过 `URL_CORRECTION_MAX_RETRIES` 配置）。重试耗尽后添加 `<URL not exist>` 标记，跳过后续步骤直接写入 YAML，打印失败清单告知用户
+10. **测试数据填充**：SingleDataFiller / BizDataFiller 按 `batch_size` 分批（纯代码切分，不再由 LLM 决定批次）。根据接口定义填充 request_head、request_body、status_code、tag；业务链路额外填充 Trans 和 `#{varName}` 引用。请求体使用接口定义中的数据类型，不自由发挥。设 `BATCH_SIZE=-1` 不分批
+11. **断言生成**：SingleAssertionGenerator / BizAssertionGenerator 按 `batch_size` 分批。根据接口响应结构和测试场景生成 assert_dict（简单等值断言）和 assert_rules（高级断言规则）。业务链路额外处理跨步骤数据依赖的非空断言
+12. **格式校验**（可选）：CaseValidator 校验每批生成的用例格式，错误自动重试（最多 3 次），最终报告失败用例
+13. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出
 
 每个步骤在 CLI 中均有详细进度输出，包括：当前步骤 [N/9]、文件路径与大小、LLM 调用模型名、生成结果统计。用户始终清楚系统正在做什么。
 
@@ -118,7 +121,10 @@ agent/
 │   ├── api_analyzer.py          # 接口分析
 │   ├── plan_generator.py        # 计划生成
 │   ├── plan_parser.py           # 计划解析
-│   ├── case_generator.py        # 用例生成
+│   ├── case_generator.py        # 用例生成（旧，保留兼容）
+│   ├── skeleton_generator.py    # 用例骨架生成（单接口 + 业务链路）
+│   ├── data_filler.py           # 测试数据填充（单接口 + 业务链路）
+│   ├── assertion_generator.py   # 断言生成（单接口 + 业务链路）
 │   └── excel_writer.py          # Excel 写入
 │
 ├── graph/
@@ -317,7 +323,8 @@ Markdown 表格示例：
 | `MAX_STEPS_NO_PROGRESS` | 连续无进展 LLM 调用上限（触发 ConvergenceError） | `5` |
 | `MAX_RETRIES` | LLM 调用最大重试 | `3` |
 | `OUTPUT_DIR` | YAML 用例输出根目录 | `./output` |
-| `BATCH_SIZE` | 每批生成用例数上限 | `10` |
+| `BATCH_SIZE` | 每批生成用例数上限（`-1` 表示不分批） | `10` |
+| `URL_CORRECTION_MAX_RETRIES` | URL 校验失败后最大纠错重试次数 | `3` |
 | `ENABLE_VALIDATION` | 是否启用用例格式校验 | `true` |
 | `MAX_VALIDATION_RETRIES` | 校验失败最大重试次数 | `3` |
 | `OUTPUT_FORMAT` | 输出格式（`yaml` / `excel` / `both`） | `both` |
@@ -492,8 +499,9 @@ python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
 | `RequirementAnalyzer` | 需求分析 | 从需求文档提取业务流、角色、约束、异常场景（JSON 输出） |
 | `PlanGenerator` | 计划生成 | 基于需求分析和接口定义生成 Markdown 测试计划 |
 | `PlanParser` | 计划解析 | 将审核通过的 Markdown 计划解析为结构化 TestPlan |
-| `CaseGenerator` | 用例生成 | 生成包含具体参数值的单接口用例和业务链路用例；支持分批生成 |
-| `BatchController` | 分批编排 | 读取接口定义，决定每批生成内容，调度生成→校验→保存循环 |
+| `SkeletonGenerator` | 骨架生成 | 包含 SingleSkeletonGenerator（单接口）和 BizSkeletonGenerator（业务链路），一次性生成全部用例骨架，ID 有含义，URL 严格来自接口定义 |
+| `DataFiller` | 数据填充 | 包含 SingleDataFiller（单接口）和 BizDataFiller（业务链路+Trans），根据接口定义分批填充请求数据，不自由发挥 |
+| `AssertionGenerator` | 断言生成 | 包含 SingleAssertionGenerator（单接口）和 BizAssertionGenerator（业务链路+跨步骤依赖），根据响应结构生成 assert_dict 和 assert_rules |
 | `CaseValidator` | 格式校验 | 校验用例结构完整性，错误自动重试（最多 3 次），汇总失败报告 |
 | `PlanReviser` | 计划修改 | 在审核反馈循环中，根据用户意见修改测试计划 |
 | `ExcelWriter` | Excel 写入 | 将用例写入多 Sheet Excel 文件（不需要 LLM） |
@@ -515,7 +523,7 @@ python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
 | `revise_plan` | 根据用户反馈修改计划，完成后回到 human_confirm |
 | `parse_plan` | 调用 PlanParser，解析计划为结构化数据 |
 | `save_interfaces` | 将接口定义保存为 YAML 文件到 output/interfaces/ |
-| `batch_controller` | 运行 BatchController，分批生成用例（支持断点续生成） |
+| `batch_controller` | 运行三步生成流程：骨架生成（一次性）→ 数据填充（分批）→ 断言生成（分批）。支持断点续生成 |
 | `write_output` | 根据 output_format 输出 YAML + 可选 Excel |
 
 ### 中断点与反馈循环

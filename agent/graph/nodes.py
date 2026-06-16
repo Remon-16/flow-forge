@@ -767,16 +767,19 @@ def save_interfaces_node(state: GraphState) -> GraphState:
 # Node: batch_controller
 # =========================================================================
 def batch_controller_node(state: GraphState) -> GraphState:
-    """Run batch controller to generate test cases in batches.
+    """Run three-step test case generation pipeline.
 
-    Reads interfaces from YAML, generates cases in batches,
-    validates (if enabled), and saves to YAML files.
+    Step 1: Skeleton generation (one-shot, no batching)
+    Step 2: Data filling (code-based batching)
+    Step 3: Assertion generation (code-based batching)
 
     In resume mode (state["resume"] is True), builds a minimal TestPlan
     from existing interface YAMLs when no structured plan is available.
     """
     from agents.batch_controller import BatchController
-    from agents.case_generator import CaseGenerator
+    from agents.skeleton_generator import SingleSkeletonGenerator, BizSkeletonGenerator
+    from agents.data_filler import SingleDataFiller, BizDataFiller
+    from agents.assertion_generator import SingleAssertionGenerator, BizAssertionGenerator
     from validators.case_validator import CaseValidator
 
     state.setdefault("errors", [])
@@ -789,6 +792,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
     enable_validation = state.get("enable_validation", _settings.enable_validation)
     max_retries = state.get("max_validation_retries", _settings.max_validation_retries)
     reference_dir = state.get("reference_dir", "")
+    api_summary = state.get("api_summary", [])
 
     # Resume mode: build minimal TestPlan from existing interface YAMLs
     if state.get("resume") and (plan is None or not interfaces_raw):
@@ -821,12 +825,19 @@ def batch_controller_node(state: GraphState) -> GraphState:
         state["plan_parsed"] = plan
         state["interfaces"] = interfaces_raw
 
-    print(f"\n[8/9] 分批生成测试用例...")
-    print(f"  → BatchController 启动 (batch_size={batch_size}, validation={enable_validation})")
+    print(f"\n[8/10] 三步测试用例生成...")
+    print(f"  → 步骤1: 骨架生成 | 步骤2: 数据填充 | 步骤3: 断言生成")
+    print(f"  → batch_size={batch_size}, validation={enable_validation}")
     if _sl():
-        _sl().log_node_start("batch_controller", "8/9")
+        _sl().log_node_start("batch_controller", "8/10")
 
-    case_generator = CaseGenerator(_settings, _knowledge)
+    # Create 6 specialized agents (single vs biz for each step)
+    single_skel_gen = SingleSkeletonGenerator(_settings, _knowledge)
+    biz_skel_gen = BizSkeletonGenerator(_settings, _knowledge)
+    single_data_filler = SingleDataFiller(_settings, _knowledge)
+    biz_data_filler = BizDataFiller(_settings, _knowledge)
+    single_assert_gen = SingleAssertionGenerator(_settings, _knowledge)
+    biz_assert_gen = BizAssertionGenerator(_settings, _knowledge)
     validator = CaseValidator(_settings) if enable_validation else None
 
     controller = BatchController(_settings)
@@ -851,11 +862,17 @@ def batch_controller_node(state: GraphState) -> GraphState:
             plan=plan,
             interfaces=interfaces_raw,
             output_dir=output_dir,
-            case_generator=case_generator,
+            single_skel_gen=single_skel_gen,
+            biz_skel_gen=biz_skel_gen,
+            single_data_filler=single_data_filler,
+            biz_data_filler=biz_data_filler,
+            single_assert_gen=single_assert_gen,
+            biz_assert_gen=biz_assert_gen,
             validator=validator,
             user_guidance=user_guidance,
             reference_dir=reference_dir,
             api_doc_text=api_doc_text,
+            api_summary=api_summary,
         )
     except Exception as e:
         msg = f"BatchController failed: {e}"
@@ -877,7 +894,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
 
     print(f"  → 生成 {len(single_cases)} 条单接口用例, {len(biz_flows)} 条业务链路")
     if failures:
-        print(f"  → {len(failures)} 个用例校验失败 (详见 {output_dir}/failures.yaml)")
+        print(f"  → {len(failures)} 个用例生成失败 (详见 {output_dir}/failures.yaml)")
 
     if _sl():
         _sl().log_node_end("batch_controller")

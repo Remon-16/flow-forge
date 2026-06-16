@@ -20,7 +20,7 @@ graph TD
     CONFIRM -->|Rejected| REVISE[revise_plan<br/>Revise Based on Feedback]
     REVISE --> CONFIRM
     PARSE_PLAN --> SAVE_IFACES[save_interfaces<br/>Save Interface YAMLs]
-    SAVE_IFACES --> BATCH[batch_controller<br/>Batch Case Generation]
+    SAVE_IFACES --> BATCH[batch_controller<br/>3-Step Case Generation]
     BATCH --> WRITE[write_output<br/>YAML + Optional Excel]
     WRITE --> END((End))
 
@@ -43,9 +43,12 @@ Core workflow:
 5. **Manual Review** (Mandatory interrupt): Display the plan; user can approve or provide revision feedback
 6. **Feedback Loop**: When rejected, the system revises the plan based on feedback and resubmits for review, looping until approval
 7. **Save Interfaces**: Write analyzed interface definitions to `output/interfaces/` directory, one YAML file per interface for version control
-8. **Batch Case Generation** (BatchController): Read interfaces from YAML, generate cases in configurable-size batches via CaseGenerator. After generation, each case URL is searched for in the original API documentation text. Any URL not found in the raw documentation is prefixed with `<URL not exist>`, enabling the downstream editor to show a warning and the executor to fail fast. Supports resumable generation (`--resume`) and incremental updates (`--reference-dir`). Built-in progress-based step counting — steadily-progressing models are never falsely terminated, while weak models that produce no progress are quickly caught
-9. **Validation** (Optional): CaseValidator checks each batch's format; errors trigger automatic retries (up to 3 times), with a final failure report
-10. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
+8. **Case Skeleton Generation**: SingleSkeletonGenerator produces all single-API case skeletons in one shot; BizSkeletonGenerator produces all business flow skeletons in one shot. Includes meaningful test_id/StepID, relevance_id, api_name, method, url, remark, sheet_name. URLs and relevance_ids are strictly sourced from interface definitions
+9. **URL Validation & Correction**: Every skeleton URL is checked against the raw API documentation text. URLs not found are submitted back to the skeleton generator for correction (up to 3 retries by default, configurable via `URL_CORRECTION_MAX_RETRIES`). Exhausted cases receive the `<URL not exist>` marker, skip subsequent steps, and are written directly to YAML with a failure summary printed to the console
+10. **Test Data Filling**: SingleDataFiller / BizDataFiller process cases in code-based batches (no LLM batch decisions). Fills request_head, request_body, status_code, and tag based on interface definitions. Business flows additionally fill Trans and `#{varName}` references. Request bodies use interface-defined data types — no free-form invention. Set `BATCH_SIZE=-1` to disable batching
+11. **Assertion Generation**: SingleAssertionGenerator / BizAssertionGenerator process cases in code-based batches. Generates assert_dict (simple equality assertions) and assert_rules (advanced operator-based rules) from interface response structures and test scenarios. Business flows additionally handle cross-step data dependency assertions (e.g., is_not_null on fields consumed by later steps)
+12. **Validation** (Optional): CaseValidator checks each batch's format; errors trigger automatic retries (up to 3 times), with a final failure report
+13. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
 
 Each step provides detailed progress output in the CLI, including: current step [N/9], file path and size, LLM model name, and generation statistics. Users always know what the system is doing.
 
@@ -118,7 +121,10 @@ agent/
 │   ├── api_analyzer.py          # API analysis
 │   ├── plan_generator.py        # Plan generation
 │   ├── plan_parser.py           # Plan parsing
-│   ├── case_generator.py        # Case generation
+│   ├── case_generator.py        # Case generation (legacy, kept for compatibility)
+│   ├── skeleton_generator.py    # Case skeleton generation (single + biz)
+│   ├── data_filler.py           # Test data filling (single + biz)
+│   ├── assertion_generator.py   # Assertion generation (single + biz)
 │   └── excel_writer.py          # Excel output
 │
 ├── graph/
@@ -317,7 +323,8 @@ Markdown table example:
 | `MAX_STEPS_NO_PROGRESS` | Max consecutive no-progress LLM calls (triggers ConvergenceError) | `5` |
 | `MAX_RETRIES` | Max LLM call retries | `3` |
 | `OUTPUT_DIR` | YAML output root directory | `./output` |
-| `BATCH_SIZE` | Max cases per generation batch | `10` |
+| `BATCH_SIZE` | Max cases per generation batch (`-1` for no batching) | `10` |
+| `URL_CORRECTION_MAX_RETRIES` | Max URL correction retries after validation failure | `3` |
 | `ENABLE_VALIDATION` | Enable case format validation | `true` |
 | `MAX_VALIDATION_RETRIES` | Max validation retries | `3` |
 | `OUTPUT_FORMAT` | Output format (`yaml` / `excel` / `both`) | `both` |
@@ -514,9 +521,10 @@ The system includes 5 LLM-driven agents and 1 pure-logic component, each inherit
 | `RequirementAnalyzer` | Requirements analysis | Extracts business flows, roles, constraints, exception scenarios from requirement docs (JSON output) |
 | `PlanGenerator` | Plan generation | Generates Markdown test plan based on requirements analysis and interface definitions |
 | `PlanParser` | Plan parsing | Parses approved Markdown plan into structured TestPlan |
-| `CaseGenerator` | Case generation | Generates single-API and business flow test cases with concrete parameter values |
-| `PlanReviser` | Plan revision | Revises the test plan based on user feedback during the review loop |
-| `ExcelWriter` | Excel output | Writes cases to multi-sheet Excel file (no LLM required) |
+| `SkeletonGenerator` | Skeleton generation | Includes SingleSkeletonGenerator (single API) and BizSkeletonGenerator (business flows). Generates all case skeletons in one shot with meaningful IDs; URLs strictly from interface definitions |
+| `DataFiller` | Data filling | Includes SingleDataFiller (single API) and BizDataFiller (business flows + Trans). Fills request data in code-based batches using interface-defined data types |
+| `AssertionGenerator` | Assertion generation | Includes SingleAssertionGenerator (single API) and BizAssertionGenerator (business flows + cross-step dependencies). Generates assert_dict and assert_rules from response structures |
+| `CaseValidator` | Format validation | Validates case structure completeness; errors trigger automatic retries (up to 3 times), with a failure summary |
 
 ## LangGraph Orchestration
 
