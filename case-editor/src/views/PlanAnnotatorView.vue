@@ -10,9 +10,11 @@ import type { AnnotationData } from '../components/annotator/MarkdownPreview.vue
 import type { HistoryGroup } from '../components/annotator/AnnotationSidebar.vue'
 import HistoryAnnotationViewer from '../components/annotator/HistoryAnnotationViewer.vue'
 import { openDirectoryDialog, readFile, listDirectoryAll, exists, writeFile, isDesktop } from '../utils/desktop-bridge'
+import { useSettingsStore } from '../stores/settings'
 
 const router = useRouter()
 const { t } = useI18n()
+const settings = useSettingsStore()
 
 // State
 const directoryPath = ref('')
@@ -201,6 +203,10 @@ function handleViewHistory(group: HistoryGroup) {
   historyViewerVisible.value = true
 }
 
+function handleLanguageChange(lang: string) {
+  settings.setLanguage(lang as 'zh-CN' | 'en-US')
+}
+
 function goBack() {
   router.push('/')
 }
@@ -225,6 +231,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         ← {{ t('header.backHome') }}
       </a-button>
       <span class="toolbar-title">{{ t('annotator.title') }}</span>
+      <a-select
+        :value="settings.language"
+        size="small"
+        style="width: 90px"
+        @change="handleLanguageChange"
+      >
+        <a-select-option value="zh-CN">中文</a-select-option>
+        <a-select-option value="en-US">English</a-select-option>
+      </a-select>
       <a-button type="primary" size="small" @click="openDirectory">
         {{ t('annotator.openDir') }}
       </a-button>

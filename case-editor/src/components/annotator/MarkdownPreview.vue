@@ -2,6 +2,7 @@
 import { computed, ref, onMounted, onUpdated, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownIt from 'markdown-it'
+import mermaid from 'mermaid'
 
 export interface AnnotationData {
   line_number: number
@@ -28,34 +29,158 @@ const selectedLineNumber = ref(0)
 
 const md = new MarkdownIt({ html: true, breaks: true })
 
-function findLineNumber(text: string): number {
-  const content = props.planContent
-  const idx = content.indexOf(text)
-  if (idx === -1) return 0
-  const before = content.substring(0, idx)
-  return before.split('\n').length
+// --- Mermaid initialization ---
+mermaid.initialize({ startOnLoad: false, theme: 'default' })
+
+// Custom fence renderer for mermaid blocks
+const defaultFence = md.renderer.rules.fence!
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  const lang = token.info.trim()
+  if (lang === 'mermaid') {
+    return `<pre class="mermaid">${token.content}</pre>`
+  }
+  return defaultFence(tokens, idx, options, env, self)
 }
 
-function getHighlightedHtml(): string {
-  let html = md.render(props.planContent)
+// --- Block-level rendering with data-source-line ---
+interface MarkdownBlock {
+  startLine: number
+  content: string
+}
 
-  // Sort annotations by selected_text length desc to avoid partial replacements
-  const sorted = [...props.annotations].sort((a, b) => b.selected_text.length - a.selected_text.length)
+function splitIntoBlocks(markdown: string): MarkdownBlock[] {
+  const lines = markdown.split('\n')
+  const blocks: MarkdownBlock[] = []
+  let currentBlock: string[] = []
+  let currentStart = 1
+  let insideFence = false
 
-  sorted.forEach((ann, idx) => {
-    // Escape special regex chars in selected_text
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = i + 1
+    const trimmed = lines[i].trim()
+
+    // Detect fence open/close: a line starting with ``` or ~~~
+    const isFenceMarker = /^(`{3,}|~{3,})/.test(trimmed)
+
+    if (isFenceMarker) {
+      if (!insideFence) {
+        // Opening fence: flush any preceding block, start fenced block
+        if (currentBlock.length > 0) {
+          blocks.push({ startLine: currentStart, content: currentBlock.join('\n') })
+          currentBlock = []
+        }
+        currentStart = lineNum
+        insideFence = true
+      } else {
+        // Closing fence: add this line and flush
+        currentBlock.push(lines[i])
+        blocks.push({ startLine: currentStart, content: currentBlock.join('\n') })
+        currentBlock = []
+        currentStart = lineNum + 1
+        insideFence = false
+        continue
+      }
+    }
+
+    if (insideFence) {
+      if (currentBlock.length === 0) currentStart = lineNum
+      currentBlock.push(lines[i])
+    } else if (trimmed === '') {
+      if (currentBlock.length > 0) {
+        blocks.push({ startLine: currentStart, content: currentBlock.join('\n') })
+        currentBlock = []
+      }
+      currentStart = lineNum + 1
+    } else {
+      if (currentBlock.length === 0) currentStart = lineNum
+      currentBlock.push(lines[i])
+    }
+  }
+  if (currentBlock.length > 0) {
+    blocks.push({ startLine: currentStart, content: currentBlock.join('\n') })
+  }
+  return blocks
+}
+
+function applyAnnotationHighlights(html: string, annotations: AnnotationData[]): string {
+  if (annotations.length === 0) return html
+
+  // Map original index → preserve it through sort
+  const sorted = [...annotations]
+    .map((ann, i) => ({ ann, originalIdx: i }))
+    .sort((a, b) => b.ann.selected_text.length - a.ann.selected_text.length)
+
+  let result = html
+  sorted.forEach(({ ann, originalIdx }) => {
     const escaped = ann.selected_text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const regex = new RegExp(`(${escaped})`, 'g')
-    html = html.replace(regex, (match) => {
-      return `<mark class="annotated" data-annotation-id="${idx}">${match}<sup class="annotation-badge">${idx + 1}</sup></mark>`
+    result = result.replace(regex, (match) => {
+      return `<mark class="annotated" data-annotation-id="${originalIdx}">${match}<sup class="annotation-badge">${originalIdx + 1}</sup></mark>`
     })
   })
 
-  return html
+  return result
 }
 
-const renderedHtml = computed(() => getHighlightedHtml())
+const renderedHtml = computed(() => {
+  const blocks = splitIntoBlocks(props.planContent)
 
+  let html = blocks.map(block => {
+    if (!block.content) return ''
+    const rendered = md.render(block.content)
+    return `<div data-source-line="${block.startLine}" class="md-block">${rendered}</div>`
+  }).join('\n')
+
+  html = applyAnnotationHighlights(html, props.annotations)
+  return html
+})
+
+// Mermaid rendering
+async function renderMermaid() {
+  await nextTick()
+  const el = previewRef.value
+  if (!el) return
+  const els = el.querySelectorAll<HTMLElement>('.mermaid')
+  if (els.length === 0) return
+
+  for (const mel of els) {
+    if (mel.getAttribute('data-processed') === 'true') continue
+    try {
+      mel.removeAttribute('data-processed')
+      if (!mel.textContent) continue
+      mel.innerHTML = mel.textContent
+    } catch { /* ignore */ }
+  }
+  try {
+    await mermaid.run({ nodes: Array.from(els) })
+  } catch { /* mermaid rendering errors are non-fatal */ }
+}
+
+watch(() => props.planContent, () => {
+  nextTick(() => renderMermaid())
+})
+
+onMounted(() => renderMermaid())
+onUpdated(() => renderMermaid())
+
+// --- DOM-based line number detection ---
+function findLineNumber(): number {
+  const selection = window.getSelection()
+  if (!selection || !selection.anchorNode) return 0
+
+  let node: Node | null = selection.anchorNode
+  while (node && node !== previewRef.value) {
+    if (node instanceof HTMLElement) {
+      const line = node.dataset.sourceLine
+      if (line) return parseInt(line, 10)
+    }
+    node = node.parentNode
+  }
+  return 0
+}
+
+// --- Context menu ---
 function onContextMenu(e: MouseEvent) {
   const selection = window.getSelection()
   if (!selection || selection.isCollapsed) {
@@ -71,7 +196,7 @@ function onContextMenu(e: MouseEvent) {
 
   e.preventDefault()
   selectedText.value = text
-  selectedLineNumber.value = findLineNumber(text)
+  selectedLineNumber.value = findLineNumber()
   contextMenuX.value = e.clientX
   contextMenuY.value = e.clientY
   contextMenuVisible.value = true
@@ -133,6 +258,11 @@ defineExpose({ scrollToAnnotation })
   margin: 0 auto;
   user-select: text;
   cursor: text;
+}
+
+.md-block {
+  /* display: contents would break data-source-line traversal for some children */
+  margin-bottom: 4px;
 }
 
 /* Markdown rendered content styles */

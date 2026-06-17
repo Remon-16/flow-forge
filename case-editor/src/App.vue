@@ -16,6 +16,7 @@ const workbook = useWorkbookStore()
 const yamlStore = useYamlStore()
 
 const isHome = computed(() => route.name === 'home')
+const isAnnotator = computed(() => route.name === 'plan-annotator')
 const isYamlMode = computed(() => route.name === 'yaml-editor')
 
 watch(
@@ -40,6 +41,11 @@ onUnmounted(() => window.removeEventListener('beforeunload', onBeforeUnload))
 <template>
   <!-- Home page: no chrome -->
   <div v-if="isHome" class="app-layout home-layout">
+    <router-view />
+  </div>
+
+  <!-- Annotator page: no chrome, standalone -->
+  <div v-else-if="isAnnotator" class="app-layout annotator-layout">
     <router-view />
   </div>
 
