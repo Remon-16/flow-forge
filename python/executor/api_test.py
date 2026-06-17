@@ -50,6 +50,8 @@ class ApiTestExecutor(BaseExecutor):
         base_url = app_config.get("baseURL", "") if app_config else ""
         url = self._build_url(base_url, path)
 
+        url, body = self._resolve_url_placeholders(url, body)
+
         logger.info("[%s] %s %s (app=%s)", test_id, method, url, app_name)
 
         result = {

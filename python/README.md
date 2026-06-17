@@ -43,7 +43,8 @@ python/
 ├── core/
 │   ├── __init__.py
 │   ├── path_resolver.py         # 点号/括号 JSON 路径解析器
-│   └── script_type.py           # 脚本类型枚举与执行器注册表
+│   ├── script_type.py           # 脚本类型枚举与执行器注册表
+│   └── var_resolver.py          # #{varName} 占位符通用解析工具
 │
 ├── excel_reader/
 │   ├── __init__.py
@@ -371,15 +372,16 @@ Sheet 1（API Definitions）中定义的接口信息作为 Agent 的参考文档
 username=Step01.data.username, orderId=Step02.data.orderId
 ```
 
-在 `RequestHead` 或 `RequestBody` 中使用 `#{变量名}` 引用传递的值：
+在 `RequestHead`、`RequestBody` 或 `URL` 路径中使用 `#{变量名}` 引用传递的值：
 
 ```json
 {
-  // 与当前用例的AppName共同决定使用登录态管理器中的哪个token
-  "Authorization": "#{<userParamName>}", 
+  "Authorization": "Bearer #{<userParamName>}",
   "orderId": "#{orderId}"
 }
 ```
+
+URL 路径参数示例：`/api/users/#{userId}/orders/#{orderId}`，其中的 `#{userId}` 和 `#{orderId}` 会从当前步骤的 `RequestBody` 中取值并替换。
 
 转义：使用 `\#{...}` 表示字面量 `#{...}`，不会被替换。
 
@@ -438,10 +440,11 @@ Excel 中的 JSON 字段支持以下格式：
 0. **URL 校验**：检查 URL 是否包含 `<URL not exist>` 标记（Agent 生成阶段注入），若是则立即失败并返回错误信息
 1. 从用例中提取 `app_name`, `method`, `url`, `headers`, `body`
 2. 通过 `AppName` 查找对应 app 的 `baseURL`，拼接完整 URL
-3. 调用 `LoginManager` 解析 `#{userParamName}` 占位符为实际 Token
-4. 发送 HTTP 请求（GET/DELETE 参数放 query string，POST/PUT/PATCH 放 JSON body，超时 30 秒）
-5. 运行断言引擎检查响应
-6. 自动补充 `status_code` 断言
+3. **路径参数解析**：解析 URL 中的 `#{varName}` 占位符，从 `request_body` 取值替换（如 `/api/users/#{userId}` → `/api/users/1118822`）
+4. 调用 `LoginManager` 解析 `#{userParamName}` 占位符为实际 Token（支持嵌入式占位符，如 `"Bearer #{user}"`）
+5. 发送 HTTP 请求（GET/DELETE 参数放 query string，POST/PUT/PATCH 放 JSON body，超时 30 秒）
+6. 运行断言引擎检查响应
+7. 自动补充 `status_code` 断言
 
 #### BizFlowExecutor (`executor/biz_flow.py`)
 
@@ -449,9 +452,10 @@ Excel 中的 JSON 字段支持以下格式：
 - 每个业务流（一个 Sheet）在独立线程中执行
 - 流内步骤**串行执行**，任一步骤失败则中止后续步骤
 - 每个步骤执行前先校验 URL 是否包含 `<URL not exist>` 标记，存在时立即失败
+- 先解析 URL 路径中的 `#{}`（从 `request_body` 取值），再通过 `_resolve_vars()` 解析 Trans 依赖的 `#{}`（URL、headers、body 均会解析）
 - 使用 `threading.local()` 存储每线程的步骤响应数据
 - `_parse_trans()` 解析 `key=StepID.path` 映射
-- `_resolve_vars()` 将 `#{key}` 替换为前序步骤的实际响应值
+- `_resolve_vars()` 将 `#{key}` 替换为前序步骤的实际响应值（支持 URL、请求头、请求体中的占位符）
 - 最终生成"执行链路"字符串（成功用 `→`，失败用 `×` 标记）
 
 ### 登录态管理器 (`auth/login_manager.py`)
@@ -466,6 +470,8 @@ Excel 中的 JSON 字段支持以下格式：
                                                        → 成功：缓存 Token，返回
                                                        → 失败：加黑名单，返回错误
 ```
+
+支持嵌入式占位符：`"#{normalUser}"` 和 `"Bearer #{normalUser}"` 均可正确解析。使用通用 `#{}` 解析器（`core/var_resolver.py`）逐占位符替换，一个 header 值中可包含多个占位符。
 
 关键设计：
 - **细粒度锁**：按 `appName:userParamName` 粒度锁定，不同用户可并发登录

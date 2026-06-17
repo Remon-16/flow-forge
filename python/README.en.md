@@ -43,7 +43,8 @@ python/
 ├── core/
 │   ├── __init__.py
 │   ├── path_resolver.py         # Dot/bracket JSON path resolver
-│   └── script_type.py           # Script type enum & executor registry
+│   ├── script_type.py           # Script type enum & executor registry
+│   └── var_resolver.py          # #{varName} placeholder resolution utility
 │
 ├── excel_reader/
 │   ├── __init__.py
@@ -371,14 +372,16 @@ Example:
 username=Step01.data.username, orderId=Step02.data.orderId
 ```
 
-Reference passed values in `RequestHead` or `RequestBody` using `#{variableName}`:
+Reference passed values in `RequestHead`, `RequestBody`, or `URL` path using `#{variableName}`:
 
 ```json
 {
-  "Authorization": "#{<userParamName>}",
+  "Authorization": "Bearer #{<userParamName>}",
   "orderId": "#{orderId}"
 }
 ```
+
+URL path parameter example: `/api/users/#{userId}/orders/#{orderId}` — `#{userId}` and `#{orderId}` are resolved from the current step's `RequestBody` and replaced in-place.
 
 Escape: use `\#{...}` for a literal `#{...}` — it will not be substituted.
 
@@ -437,10 +440,11 @@ Single API test executor:
 0. **URL validation**: Checks whether the URL contains the `<URL not exist>` marker (injected by the Agent during generation). If present, the case fails immediately with an error message.
 1. Extracts `app_name`, `method`, `url`, `headers`, `body` from the case
 2. Looks up the app's `baseURL` by `AppName`, constructs full URL
-3. Calls `LoginManager` to resolve `#{userParamName}` placeholders to actual tokens
-4. Sends HTTP request (GET/DELETE params in query string, POST/PUT/PATCH as JSON body, 30-second timeout)
-5. Runs the assertion engine to verify the response
-6. Auto-appends `status_code` assertion
+3. **Path parameter resolution**: Resolves `#{varName}` placeholders in the URL from `request_body` (e.g., `/api/users/#{userId}` → `/api/users/1118822`)
+4. Calls `LoginManager` to resolve `#{userParamName}` placeholders to actual tokens (supports embedded placeholders, e.g., `"Bearer #{user}"`)
+5. Sends HTTP request (GET/DELETE params in query string, POST/PUT/PATCH as JSON body, 30-second timeout)
+6. Runs the assertion engine to verify the response
+7. Auto-appends `status_code` assertion
 
 #### BizFlowExecutor (`executor/biz_flow.py`)
 
@@ -448,9 +452,10 @@ Business flow test executor:
 - Each business flow (one sheet) runs in its own thread
 - Steps within a flow execute **sequentially**; any step failure aborts subsequent steps
 - Before each step executes, the URL is checked for the `<URL not exist>` marker. If present, the step fails immediately.
+- Resolves `#{}` in the URL path from `request_body` first, then via `_resolve_vars()` for Trans dependencies (URL, headers, and body are all resolved)
 - Uses `threading.local()` to store per-thread step response data
 - `_parse_trans()` parses `key=StepID.path` mappings
-- `_resolve_vars()` substitutes `#{key}` with actual response values from previous steps
+- `_resolve_vars()` substitutes `#{key}` with actual response values from previous steps (supports placeholders in URL, request headers, and request body)
 - Generates an "execution chain" string (success with `→`, failure marked with `×`)
 
 ### Login State Manager (`auth/login_manager.py`)
@@ -465,6 +470,8 @@ Detect #{userParamName} → Check cache → Cache hit: return token
                                                                                  → Success: cache token, return
                                                                                  → Failure: add to blacklist, return error
 ```
+
+Supports embedded placeholders: both `"#{normalUser}"` and `"Bearer #{normalUser}"` are resolved correctly. Uses the generic `#{}` resolver (`core/var_resolver.py`) for per-placeholder substitution; multiple placeholders in a single header value are supported.
 
 Key design choices:
 - **Fine-grained locks**: locking at `appName:userParamName` granularity; different users can log in concurrently

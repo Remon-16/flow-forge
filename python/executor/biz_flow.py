@@ -109,11 +109,14 @@ class BizFlowExecutor(BaseExecutor):
         base_url = app_config.get("baseURL", "") if app_config else {}
         url = self._build_url(base_url, path)
 
+        url, body = self._resolve_url_placeholders(url, body)
+
         if trans:
             try:
                 trans_mapping = self._parse_trans(trans)
                 body = self._resolve_vars(body, trans_mapping)
                 headers = self._resolve_vars(headers, trans_mapping)
+                url = self._resolve_vars(url, trans_mapping)
             except Exception as e:
                 return self._build_step_result(step, step_id, base_url, path,
                                                headers, body, passed=False,

@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List
 
+from core.var_resolver import resolve_placeholders, has_placeholders
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,6 +49,28 @@ class BaseExecutor(ABC):
     @abstractmethod
     def execute_single(self, case: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a single test case. Must return a standardized result dict."""
+
+    @staticmethod
+    def _resolve_url_placeholders(url: str, body: Dict[str, Any]):
+        """Resolve #{varName} placeholders in the URL path from request body.
+
+        Values found in the body are consumed (removed) so they are not also
+        sent as query parameters or JSON fields.
+
+        Returns ``(resolved_url, remaining_body)``.
+        """
+        if not has_placeholders(url):
+            return url, body
+
+        body = dict(body)
+
+        def body_resolver(var_name: str) -> Optional[str]:
+            if var_name in body:
+                return str(body.pop(var_name))
+            return None
+
+        resolved_url = resolve_placeholders(url, body_resolver)
+        return resolved_url, body
 
     @staticmethod
     def _build_error_result(case: Dict[str, Any], error: str) -> Dict[str, Any]:
