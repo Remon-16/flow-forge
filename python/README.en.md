@@ -383,6 +383,52 @@ Reference passed values in `RequestHead`, `RequestBody`, or `URL` path using `#{
 
 URL path parameter example: `/api/users/#{userId}/orders/#{orderId}` — `#{userId}` and `#{orderId}` are resolved from the current step's `RequestBody` and replaced in-place.
 
+**Complete example — passing a login token via Trans:**
+
+```yaml
+case_type: biz
+sheet_name: User Registration, Login & Order Flow
+steps:
+  - step_id: Step_Register
+    api_name: User Registration
+    app_name: someApp
+    method: POST
+    url: /api/user/register
+    request_body:
+      phone: "13800138000"
+      password: "123456"
+    status_code: 200
+    # No trans — the response is stored automatically for later steps
+
+  - step_id: Step_Login
+    api_name: User Login
+    app_name: someApp
+    method: POST
+    url: /api/user/login
+    request_body:
+      phone: "13800138000"
+      password: "123456"
+    status_code: 200
+    trans: "authToken=Step_Login.data.token, userId=Step_Login.data.id"
+    # Pass the login token and user id to subsequent steps via Trans
+
+  - step_id: Step_CreateOrder
+    api_name: Create Order
+    app_name: someApp
+    method: POST
+    url: /api/order/create
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{authToken}"   # Resolved from Trans — skips LoginManager
+    request_body:
+      userId: "#{userId}"                     # Resolved from Trans
+      productId: "PROD_001"
+      quantity: 1
+    status_code: 200
+```
+
+In this example, `Authorization: "Bearer #{authToken}"` in Step_CreateOrder is resolved from Step_Login's response rather than from LoginManager's pre-configured credentials. Since `authToken` is declared in Trans, the executor recognizes it as Trans-provided and skips LoginManager.
+
 Escape: use `\#{...}` for a literal `#{...}` — it will not be substituted.
 
 **Trans Validation Rules:**
@@ -453,6 +499,7 @@ Business flow test executor:
 - Steps within a flow execute **sequentially**; any step failure aborts subsequent steps
 - Before each step executes, the URL is checked for the `<URL not exist>` marker. If present, the step fails immediately.
 - Resolves `#{}` in the URL path from `request_body` first, then via `_resolve_vars()` for Trans dependencies (URL, headers, and body are all resolved)
+- Headers containing `#{}` follow a **Trans-first, LoginManager fallback** strategy: if a variable is declared in Trans, its value is taken from a prior step's response and LoginManager is skipped; LoginManager is only invoked for variables not covered by Trans
 - Uses `threading.local()` to store per-thread step response data
 - `_parse_trans()` parses `key=StepID.path` mappings
 - `_resolve_vars()` substitutes `#{key}` with actual response values from previous steps (supports placeholders in URL, request headers, and request body)

@@ -10,6 +10,7 @@ from assertion.engine import AssertionEngine
 from auth.login_manager import LoginManager
 from config.config_manager import get_app
 from core.path_resolver import resolve_path, _Missing
+from core.var_resolver import has_placeholders
 from executor.base import BaseExecutor
 
 logger = logging.getLogger(__name__)
@@ -122,11 +123,15 @@ class BizFlowExecutor(BaseExecutor):
                                                headers, body, passed=False,
                                                error=f"Trans resolution error: {e}")
 
-        resolved_headers, token_error = LoginManager.resolve_token(app_config, headers)
-        if token_error:
-            return self._build_step_result(step, step_id, base_url, path,
-                                           headers, body, passed=False, error=token_error)
-        headers = resolved_headers
+        # 仅当 headTokenName header 中仍有未解析的 #{} 时，才调用 LoginManager
+        # Trans 已处理的 #{} 不会被 LoginManager 覆写
+        head_token_name = app_config.get("headTokenName") if app_config else None
+        if head_token_name and head_token_name in headers and has_placeholders(headers[head_token_name]):
+            resolved_headers, token_error = LoginManager.resolve_token(app_config, headers)
+            if token_error:
+                return self._build_step_result(step, step_id, base_url, path,
+                                               headers, body, passed=False, error=token_error)
+            headers = resolved_headers
 
         result = self._build_step_result(step, step_id, base_url, path, headers, body)
 

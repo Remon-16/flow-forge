@@ -383,6 +383,52 @@ username=Step01.data.username, orderId=Step02.data.orderId
 
 URL 路径参数示例：`/api/users/#{userId}/orders/#{orderId}`，其中的 `#{userId}` 和 `#{orderId}` 会从当前步骤的 `RequestBody` 中取值并替换。
 
+**通过 Trans 传递登录 Token 的完整示例：**
+
+```yaml
+case_type: biz
+sheet_name: 用户注册登录并下单流程
+steps:
+  - step_id: Step_Register
+    api_name: 用户注册
+    app_name: someApp
+    method: POST
+    url: /api/user/register
+    request_body:
+      phone: "13800138000"
+      password: "123456"
+    status_code: 200
+    # 此步骤没有 trans —— 响应自动存储，供后续步骤引用
+
+  - step_id: Step_Login
+    api_name: 用户登录
+    app_name: someApp
+    method: POST
+    url: /api/user/login
+    request_body:
+      phone: "13800138000"
+      password: "123456"
+    status_code: 200
+    trans: "authToken=Step_Login.data.token, userId=Step_Login.data.id"
+    # 将登录响应的 token 和 id 通过 Trans 传递给后续步骤
+
+  - step_id: Step_CreateOrder
+    api_name: 创建订单
+    app_name: someApp
+    method: POST
+    url: /api/order/create
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{authToken}"   # 从 Trans 获取，不走 LoginManager
+    request_body:
+      userId: "#{userId}"                     # 从 Trans 获取
+      productId: "PROD_001"
+      quantity: 1
+    status_code: 200
+```
+
+在此示例中，Step_CreateOrder 的请求头 `Authorization: "Bearer #{authToken}"` 会从 Step_Login 的响应中取 token，而非从 LoginManager 的预配置凭据中获取。这是因为 Trans 中声明了 `authToken`，执行器识别为 Trans 已提供，跳过 LoginManager。
+
 转义：使用 `\#{...}` 表示字面量 `#{...}`，不会被替换。
 
 **Trans 校验规则：**
@@ -453,6 +499,7 @@ Excel 中的 JSON 字段支持以下格式：
 - 流内步骤**串行执行**，任一步骤失败则中止后续步骤
 - 每个步骤执行前先校验 URL 是否包含 `<URL not exist>` 标记，存在时立即失败
 - 先解析 URL 路径中的 `#{}`（从 `request_body` 取值），再通过 `_resolve_vars()` 解析 Trans 依赖的 `#{}`（URL、headers、body 均会解析）
+- 请求头中的 `#{}` 采用 **Trans 优先、LoginManager 回退** 策略：若 Trans 中已声明该变量，则从前往步骤响应中取值，跳过 LoginManager；仅当 Trans 未声明时，才调用 LoginManager 进行登录态注入
 - 使用 `threading.local()` 存储每线程的步骤响应数据
 - `_parse_trans()` 解析 `key=StepID.path` 映射
 - `_resolve_vars()` 将 `#{key}` 替换为前序步骤的实际响应值（支持 URL、请求头、请求体中的占位符）
