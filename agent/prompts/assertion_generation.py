@@ -4,9 +4,8 @@ _ASSERTION_ENGINE_CAPABILITIES = """
 ## 断言引擎能力参考
 
 ### assert_dict（简单等值断言）
-- 格式：{"字段路径": 期望值}
-- 特殊键 "status_code" 用于校验 HTTP 状态码
-- 示例：{"status_code": 200, "$.code": 0, "$.msg": "success"}
+- 格式：{"字段名称": 期望值}
+- 示例：{"code": 0, "msg": "success"}
 - 所有比较均通过字符串等值进行
 
 ### assert_rules（高级断言规则）
@@ -35,7 +34,7 @@ SINGLE_ASSERTION_SYSTEM = f"""你是一个单接口测试断言设计专家。�
 {_ASSERTION_ENGINE_CAPABILITIES}
 
 设计原则：
-1. assert_dict 填写简单等值断言（status_code、后端约定的 code/message 等）
+1. assert_dict 填写简单等值断言（后端约定的 code/message 等）
 2. assert_rules 填写复杂断言，根据接口响应结构和测试场景综合判定
 3. 正向用例关注：数据完整性、关键字段非空、类型正确、数值合理
 4. 负向用例关注：错误码、错误信息内容
@@ -56,7 +55,7 @@ SINGLE_ASSERTION_SYSTEM = f"""你是一个单接口测试断言设计专家。�
       "request_head": {{"Content-Type": "application/json"}},
       "request_body": {{"username": "testuser", "password": "Test@123"}},
       "status_code": 200,
-      "assert_dict": {{"status_code": 200, "$.code": 0, "$.msg": "success"}},
+      "assert_dict": {{"code": 0, "message": "success"}},
       "assert_rules": ["$.data.token is_not_null"],
       "tag": "P0",
       "remark": "正向用例-验证正常登录"
@@ -92,12 +91,12 @@ BIZ_ASSERTION_SYSTEM = f"""你是一个业务链路测试断言设计专家。�
 {_ASSERTION_ENGINE_CAPABILITIES}
 
 业务链路断言的特殊规则：
-1. 如果某步骤的 Trans 字段声明了产出变量（如 authToken=Step1.response.data.token），且该变量被后续步骤通过 #{{authToken}} 引用，则该步骤必须对产出的字段生成 is_not_null 断言
+1. 如果后续某步骤的 Trans 字段声明了前序步骤产出变量（如 authToken=Step1.response.data.token），且该变量被后续步骤通过 #{{authToken}} 引用，则对应前序步骤必须对产出的字段生成 is_not_null 断言
 2. 如果后续步骤使用了前序步骤的返回值，前序步骤的相关字段断言应该更严格
 3. 最后一个步骤通常不需要声明 Trans（没有后续消费者），但仍需正常的业务断言
 
 设计原则：
-1. assert_dict 填写简单等值断言（status_code、后端约定的 code/message 等）
+1. assert_dict 填写简单等值断言（后端约定的 code/message 等）
 2. assert_rules 填写复杂断言，结合步骤间的数据依赖关系
 3. 正向步骤关注：数据完整性、关键字段非空、类型正确
 4. 负向步骤关注：错误码、错误信息内容
@@ -121,7 +120,7 @@ BIZ_ASSERTION_SYSTEM = f"""你是一个业务链路测试断言设计专家。�
           "request_head": {{"Content-Type": "application/json"}},
           "request_body": {{"username": "testuser", "password": "Test@123"}},
           "status_code": 200,
-          "assert_dict": {{"status_code": 200, "$.code": 0}},
+          "assert_dict": {{"code": 0}},
           "assert_rules": ["$.data.token is_not_null"],
           "tag": "P0",
           "remark": "步骤1-正向-登录获取token，供后续步骤使用"
