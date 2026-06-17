@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkbookStore } from '../../stores/workbook'
+import { useSettingsStore } from '../../stores/settings'
 import { BIZ_STEP_COLUMNS, TAG_LEVELS, JSON_COLUMNS } from '../../types/excel'
 import type { BizStep } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
@@ -12,6 +13,7 @@ const props = defineProps<{ flowIndex: number; searchBarVisible?: boolean }>()
 
 const { t } = useI18n()
 const workbook = useWorkbookStore()
+const settings = useSettingsStore()
 
 const jsonModalVisible = ref(false)
 const jsonModalField = ref<string>('')
@@ -25,6 +27,8 @@ const scrollY = computed(() => {
   const searchBar = props.searchBarVisible ? 85 : 0
   return `calc(100vh - ${base + searchBar}px)`
 })
+
+const scrollX = computed(() => Math.ceil(2400 / settings.zoom))
 
 // Re-run validation when flow changes
 watch(
@@ -172,7 +176,7 @@ function getRowClassName(record: BizStep) {
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 2400, y: scrollY }"
+        :scroll="{ x: scrollX, y: scrollY }"
         :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >

@@ -118,21 +118,51 @@ function splitIntoBlocks(markdown: string): MarkdownBlock[] {
 function applyAnnotationHighlights(html: string, annotations: AnnotationData[]): string {
   if (annotations.length === 0) return html
 
-  // Map original index → preserve it through sort
-  const sorted = [...annotations]
-    .map((ann, i) => ({ ann, originalIdx: i }))
+  // Sort by text length descending: longer matches first to avoid substring conflicts
+  const sorted = annotations
+    .map((ann, i) => ({ ann, idx: i }))
     .sort((a, b) => b.ann.selected_text.length - a.ann.selected_text.length)
 
-  let result = html
-  sorted.forEach(({ ann, originalIdx }) => {
-    const escaped = ann.selected_text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp(`(${escaped})`, 'g')
-    result = result.replace(regex, (match) => {
-      return `<mark class="annotated" data-annotation-id="${originalIdx}">${match}<sup class="annotation-badge">${originalIdx + 1}</sup></mark>`
-    })
-  })
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
 
-  return result
+  for (const { ann, idx } of sorted) {
+    const searchText = ann.selected_text
+    if (!searchText) continue
+
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT)
+    let found = false
+
+    while (walker.nextNode() && !found) {
+      const node = walker.currentNode as Text
+      if (node.parentElement?.closest('mark.annotated')) continue
+
+      const text = node.textContent || ''
+      const pos = text.indexOf(searchText)
+      if (pos === -1) continue
+
+      // Split: [before] [match] [after]
+      const afterNode = node.splitText(pos + searchText.length)
+      const matchNode = node.splitText(pos)
+
+      const mark = doc.createElement('mark')
+      mark.className = 'annotated'
+      mark.setAttribute('data-annotation-id', String(idx))
+
+      const badge = doc.createElement('sup')
+      badge.className = 'annotation-badge'
+      badge.textContent = String(idx + 1)
+
+      const parent = node.parentElement!
+      parent.insertBefore(mark, afterNode)
+      mark.appendChild(matchNode)
+      mark.appendChild(badge)
+
+      found = true
+    }
+  }
+
+  return doc.body.innerHTML
 }
 
 const renderedHtml = computed(() => {
@@ -419,12 +449,17 @@ defineExpose({ scrollToAnnotation })
   position: absolute;
   bottom: -6px;
   right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  min-width: 16px;
   font-size: 10px;
+  line-height: 1;
   color: #fff;
-  background: #e53935;
+  background: #007ACC;
   border-radius: 8px;
   padding: 0 4px;
-  line-height: 1.4;
   cursor: pointer;
   z-index: 1;
 }

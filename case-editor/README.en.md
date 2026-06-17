@@ -78,7 +78,7 @@ npm run dev:desktop
 ### Markdown Plan Annotator
 - Select text directly on the rendered Markdown preview to add annotations
 - Right-click context menu for quick annotation
-- Annotation text highlighted with a yellow background and a red numbered badge at the bottom-right corner
+- Annotation text highlighted with a yellow background and a light blue numbered badge at the bottom-right corner
 - **Click on annotation highlights to view details**: a popover shows the comment text, line number, and provides in-place edit and delete buttons
 - Left-side annotation list with edit, delete, and scroll-to-location support
 - Auto-save to plan_comments.json — no manual save required
@@ -301,7 +301,7 @@ Click the "Markdown Plan Annotator" card on the home page to enter. Use the "Ope
 2. Right-click and choose "Add Annotation"
 3. Enter your review comment in the popup input box
 4. Annotation format: line number, selected text, review comment
-5. Annotated text is displayed with a yellow highlight and a red numbered badge at the bottom-right corner
+5. Annotated text is displayed with a yellow highlight and a light blue numbered badge at the bottom-right corner
 
 #### Managing Annotations
 

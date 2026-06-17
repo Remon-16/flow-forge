@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkbookStore } from '../../stores/workbook'
+import { useSettingsStore } from '../../stores/settings'
 import { SINGLE_CASE_COLUMNS, TAG_LEVELS, JSON_COLUMNS } from '../../types/excel'
 import type { SingleTestCase } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
@@ -12,7 +13,9 @@ const props = defineProps<{ searchBarVisible?: boolean }>()
 
 const { t } = useI18n()
 const workbook = useWorkbookStore()
+const settings = useSettingsStore()
 
+const scrollX = computed(() => Math.ceil(2200 / settings.zoom))
 const scrollY = computed(() => {
   const base = 200
   const searchBar = props.searchBarVisible ? 85 : 0
@@ -147,7 +150,7 @@ const relevanceOptions = computed(() => workbook.validTestIds)
         :pagination="false"
         size="small"
         bordered
-        :scroll="{ x: 2200, y: scrollY }"
+        :scroll="{ x: scrollX, y: scrollY }"
         :rowClassName="getRowClassName"
         :rowKey="(r: any) => r._uid"
       >
