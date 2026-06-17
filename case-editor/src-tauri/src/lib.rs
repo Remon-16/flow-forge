@@ -77,6 +77,43 @@ fn read_dir_recursive(dir_path: String) -> Result<Vec<FileEntry>, String> {
     walk(Path::new(&dir_path))
 }
 
+#[tauri::command]
+fn list_dir_all(dir_path: String) -> Result<Vec<FileEntry>, String> {
+    fn walk(dir: &Path) -> Result<Vec<FileEntry>, String> {
+        let mut entries = Vec::new();
+        let read_dir = fs::read_dir(dir).map_err(|e| e.to_string())?;
+
+        for entry in read_dir {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let file_name = entry.file_name().to_string_lossy().to_string();
+
+            if file_name.starts_with('.') || file_name == "node_modules" {
+                continue;
+            }
+
+            let path = entry.path();
+            let is_dir = path.is_dir();
+
+            let children = if is_dir {
+                Some(walk(&path)?)
+            } else {
+                None
+            };
+
+            entries.push(FileEntry {
+                name: file_name,
+                path: path.to_string_lossy().to_string(),
+                is_directory: is_dir,
+                children,
+            });
+        }
+
+        Ok(entries)
+    }
+
+    walk(Path::new(&dir_path))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -98,6 +135,7 @@ pub fn run() {
             read_file_bytes,
             write_file_bytes,
             read_dir_recursive,
+            list_dir_all,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

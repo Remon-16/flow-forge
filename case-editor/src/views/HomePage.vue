@@ -15,6 +15,10 @@ function goYaml() {
   router.push('/yaml')
 }
 
+function goPlanAnnotator() {
+  router.push('/plan-annotator')
+}
+
 function handleLanguageChange(lang: string) {
   settings.setLanguage(lang as 'zh-CN' | 'en-US')
 }
@@ -37,6 +41,20 @@ function handleLanguageChange(lang: string) {
     <div class="home-header">
       <h1 class="home-title">{{ t('home.title') }}</h1>
       <p class="home-subtitle">{{ t('home.subtitle') }}</p>
+    </div>
+
+    <div class="home-annotator-section">
+      <a-card hoverable class="home-card annotator-card" @click="goPlanAnnotator">
+        <div class="card-icon annotator-icon">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+          </svg>
+        </div>
+        <h3>{{ t('home.annotatorTitle') }}</h3>
+        <p>{{ t('home.annotatorDesc') }}</p>
+        <a-button type="primary" size="large">{{ t('home.open') }}</a-button>
+      </a-card>
     </div>
 
     <div class="home-cards">
@@ -94,6 +112,20 @@ function handleLanguageChange(lang: string) {
   font-size: 16px;
   color: #666;
   margin: 0;
+}
+
+.home-annotator-section {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 32px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid #e8e8e8;
+  width: 100%;
+  max-width: 800px;
+}
+
+.annotator-card {
+  max-width: 400px;
 }
 
 .home-cards {

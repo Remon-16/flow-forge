@@ -107,4 +107,9 @@ export function getPlatform(): string {
   return 'browser'
 }
 
+export async function listDirectoryAll(dirPath: string): Promise<FileEntry[]> {
+  if (isDesktop) return invoke<FileEntry[]>('list_dir_all', { dirPath })
+  throw new Error('Directory listing is not supported in browser mode.')
+}
+
 export { isDesktop }

@@ -40,7 +40,7 @@ graph TD
 2. **接口分析**：分析接口文档完整性——认证方式、参数模式、缺失信息；智能体自评通过则自动继续，仅关键不确定性时询问用户
 3. **需求分析**：LLM 从需求中提取业务流程、用户角色、约束条件、异常场景
 4. **计划生成**：基于分析结果和接口定义生成 Markdown 测试计划，自动保存至 session 目录
-5. **人工审核**（强制中断点）：展示计划，用户可批准或提出修改意见
+5. **人工审核**（强制中断点）：展示计划，用户可批准、提出文字修改意见或按批注文件修改
 6. **反馈循环**：用户拒绝时，系统根据反馈修改计划后重新提交审核，直至批准
 7. **保存接口定义**：将分析后的接口定义写入 `output/interfaces/` 目录，每个接口一个 YAML 文件，便于版本管理
 8. **用例骨架生成**：SingleSkeletonGenerator 一次性生成全部单接口用例骨架；BizSkeletonGenerator 一次性生成全部业务链路骨架。包含 test_id/StepID（有含义）、relevance_id、api_name、method、url、remark、sheet_name。URL/relevance_id 严格来自接口定义
@@ -239,7 +239,8 @@ python main.py --requirement docs/req.md --api docs/api.yaml --debug
 系统生成计划后暂停，等待用户审核：
 
 - 输入 `y` —— 批准计划，继续执行用例生成
-- 输入 `n` —— 输入修改意见，系统根据反馈修改计划后重新提交审核
+- 输入 `n` —— 输入文字修改意见，系统根据反馈修改计划后重新提交审核
+- 输入 `r` —— 按批注文件修改。需先在 case-editor 中对 plan.md 添加批注，系统会读取 plan_comments.json 进行修订
 - 审核循环进行，直到用户批准为止
 
 ### 3. 使用多个需求文档
@@ -504,6 +505,7 @@ python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
 | `AssertionGenerator` | 断言生成 | 包含 SingleAssertionGenerator（单接口）和 BizAssertionGenerator（业务链路+跨步骤依赖），根据响应结构生成 assert_dict 和 assert_rules |
 | `CaseValidator` | 格式校验 | 校验用例结构完整性，错误自动重试（最多 3 次），汇总失败报告 |
 | `PlanReviser` | 计划修改 | 在审核反馈循环中，根据用户意见修改测试计划 |
+| `PlanAnnotationReviser` | 批注修订 | 在审核反馈循环中，根据 plan_comments.json 中的行级批注逐条修改测试计划 |
 | `ExcelWriter` | Excel 写入 | 将用例写入多 Sheet Excel 文件（不需要 LLM） |
 | `YamlWriter` | YAML 读写 | 接口/用例的 YAML 文件读写（不需要 LLM） |
 
@@ -533,19 +535,46 @@ python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
 | 中断点 | 类型 | 触发条件 | 用户操作 |
 |--------|------|----------|----------|
 | `analyze_api` | **可选** | 智能体发现关键不确定性（认证方式无法推断、接口用途完全不明） | 提供反馈 / 输入 `skip` 跳过 |
-| `human_confirm` | **强制** | 测试计划生成后始终触发 | `y` 批准 / `n` 提出修改意见 |
+| `human_confirm` | **强制** | 测试计划生成后始终触发 | `y` 批准 / `n` 提出文字修改意见 / `r` 按批注文件修改 |
 
 `human_confirm` 节点使用 LangGraph 的 `interrupt()` 机制暂停执行。CLI 在检测到中断后：
 
 1. 展示计划摘要
-2. 询问用户：`y`（批准）或 `n`（拒绝并输入修改意见）
+2. 询问用户：`y`（批准）、`n`（拒绝并输入文字修改意见）或 `r`（按批注文件修改）
 3. 批准 → 以 `Command(resume="approved")` 继续，路由到 `parse_plan`
 4. 拒绝 → 以 `Command(resume="反馈内容")` 继续，路由到 `revise_plan` → 修改完成后回到 `human_confirm`
-5. 循环直到用户批准
+5. 批注修订 → 系统读取 `plan_comments.json`，调用 `plan_annotation_reviser` 智能体按批注逐条修订计划，完成后回到 `human_confirm`，并将批注文件归档到 `history-comments/` 目录
+6. 循环直到用户批准
 
 `analyze_api` 采用智能体自评机制：生成摘要后自动检查是否存在关键不确定性（`auth_type` 不确定、`need_token` 无法判断、接口用途完全不明）。如果摘要质量良好则自动通过不打断用户；仅当存在关键缺失时才询问用户。用户可输入修改意见或输入 `skip` 带着未确定性继续。
 
 用户可通过 `Ctrl+C` 随时终止进程。
+
+### plan_comments.json 格式
+
+当用户在 case-editor 中对 `plan.md` 添加行级批注后，case-editor 会生成 `plan_comments.json` 文件。选择 `r` 修订模式时，系统读取该文件并交由 `plan_annotation_reviser` 智能体按批注逐条修订计划。文件格式如下：
+
+```json
+[
+  {
+    "line_number": 12,
+    "selected_text": "请求方法: GET",
+    "review_comment": "这里应该是POST请求"
+  },
+  {
+    "line_number": 25,
+    "selected_text": "断言: 状态码 200",
+    "review_comment": "不仅要断言200，还要断言返回体里有token字段"
+  }
+]
+```
+
+字段说明：
+- `line_number`：批注所在的行号
+- `selected_text`：被批注选中的文本内容
+- `review_comment`：审阅者的修改意见
+
+修订完成后，`plan_comments.json` 会被自动归档到 `history-comments/` 目录下，便于追溯历史批注记录。
 
 ### 检查点
 

@@ -40,7 +40,7 @@ Core workflow:
 2. **API Analysis**: Analyze API documentation completeness — authentication methods, parameter patterns, missing information. Agent self-evaluates; auto-passes when quality is good, only asks user for critical uncertainties
 3. **Requirements Analysis**: LLM extracts business flows, user roles, constraints, and exception scenarios from requirements
 4. **Plan Generation**: Generate a Markdown test plan based on analysis results and interface definitions, automatically saved to the session directory
-5. **Manual Review** (Mandatory interrupt): Display the plan; user can approve or provide revision feedback
+5. **Manual Review** (Mandatory interrupt): Display the plan; user can approve, provide text revision feedback, or use annotation-based revision
 6. **Feedback Loop**: When rejected, the system revises the plan based on feedback and resubmits for review, looping until approval
 7. **Save Interfaces**: Write analyzed interface definitions to `output/interfaces/` directory, one YAML file per interface for version control
 8. **Case Skeleton Generation**: SingleSkeletonGenerator produces all single-API case skeletons in one shot; BizSkeletonGenerator produces all business flow skeletons in one shot. Includes meaningful test_id/StepID, relevance_id, api_name, method, url, remark, sheet_name. URLs and relevance_ids are strictly sourced from interface definitions
@@ -239,7 +239,8 @@ python main.py --requirement docs/req.md --api docs/api.yaml --debug
 The system pauses after generating the plan, waiting for user review:
 
 - Type `y` — approve the plan, continue to case generation
-- Type `n` — enter revision feedback; the system revises the plan based on your feedback and resubmits for review
+- Type `n` — enter text revision feedback; the system revises the plan based on your feedback and resubmits for review
+- Type `r` — annotation-based revision. First add annotations to plan.md in case-editor, then the system reads plan_comments.json to apply revisions
 - The review loop continues until the user approves
 
 ### 3. Using Multiple Requirement Documents
@@ -525,6 +526,7 @@ The system includes 5 LLM-driven agents and 1 pure-logic component, each inherit
 | `DataFiller` | Data filling | Includes SingleDataFiller (single API) and BizDataFiller (business flows + Trans). Fills request data in code-based batches using interface-defined data types |
 | `AssertionGenerator` | Assertion generation | Includes SingleAssertionGenerator (single API) and BizAssertionGenerator (business flows + cross-step dependencies). Generates assert_dict and assert_rules from response structures |
 | `CaseValidator` | Format validation | Validates case structure completeness; errors trigger automatic retries (up to 3 times), with a failure summary |
+| `PlanAnnotationReviser` | Annotation-based revision | In the review feedback loop, revises the test plan line-by-line based on annotations in plan_comments.json |
 
 ## LangGraph Orchestration
 
@@ -551,19 +553,46 @@ The system includes two types of interrupts:
 | Interrupt | Type | Trigger Condition | User Action |
 |-----------|------|-------------------|-------------|
 | `analyze_api` | **Optional** | Agent detects critical uncertainties (unable to infer auth method, API purpose completely unknown) | Provide feedback / type `skip` to bypass |
-| `human_confirm` | **Mandatory** | Always triggered after test plan generation | `y` to approve / `n` to provide revision feedback |
+| `human_confirm` | **Mandatory** | Always triggered after test plan generation | `y` to approve / `n` for text feedback / `r` for annotation-based revision |
 
 The `human_confirm` node uses LangGraph's `interrupt()` mechanism to pause execution. When the CLI detects an interrupt:
 
 1. Display a plan summary
-2. Ask the user: `y` (approve) or `n` (reject and enter revision feedback)
+2. Ask the user: `y` (approve), `n` (reject and enter text revision feedback), or `r` (annotation-based revision)
 3. Approve → continue with `Command(resume="approved")`, route to `parse_plan`
 4. Reject → continue with `Command(resume="feedback text")`, route to `revise_plan` → return to `human_confirm` after revision
-5. Loop until user approval
+5. Annotation revision → system reads `plan_comments.json`, invokes the `plan_annotation_reviser` agent to revise the plan line-by-line per annotations, returns to `human_confirm` after revision, and archives the comments file to `history-comments/`
+6. Loop until user approval
 
 The `analyze_api` node uses an agent self-evaluation mechanism: after generating the summary, it automatically checks for critical uncertainties (`auth_type` uncertain, `need_token` undetermined, API purpose completely unknown). If summary quality is good, it auto-passes without interrupting the user; only critical gaps trigger a user query. Users can provide feedback or type `skip` to continue with the uncertainties.
 
 Press `Ctrl+C` at any time to abort.
+
+### plan_comments.json Format
+
+When the user adds line-level annotations to `plan.md` in case-editor, case-editor generates a `plan_comments.json` file. When the `r` revision mode is selected, the system reads this file and hands it to the `plan_annotation_reviser` agent to revise the plan line-by-line per annotations. The file format is as follows:
+
+```json
+[
+  {
+    "line_number": 12,
+    "selected_text": "Method: GET",
+    "review_comment": "This should be a POST request"
+  },
+  {
+    "line_number": 25,
+    "selected_text": "Assertion: status code 200",
+    "review_comment": "Not only assert 200, but also assert that the response body contains a token field"
+  }
+]
+```
+
+Field descriptions:
+- `line_number`: The line number where the annotation was placed
+- `selected_text`: The text content selected by the annotation
+- `review_comment`: The reviewer's revision comment
+
+After revision is complete, `plan_comments.json` is automatically archived to the `history-comments/` directory for historical traceability.
 
 ### Checkpoints
 

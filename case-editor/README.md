@@ -74,6 +74,14 @@ npm run dev:desktop
 - 字段校验镜像 Excel 编辑器（StepID 重复、Trans 格式）
 - **查找与替换**：在 YAML 原始文本中查找/替换，自动展开右侧 YAML 面板，匹配行号及内容一目了然
 
+### Markdown 计划批注器
+- 在渲染后的 Markdown 预览上直接选中文本添加批注
+- 右键菜单快速添加批注
+- 批注气泡可视化标注
+- 左侧批注列表支持编辑和删除
+- 自动保存到 plan_comments.json
+- 历史批注查看（只读）
+
 ## 架构设计
 
 ### 组件树
@@ -97,6 +105,12 @@ graph TD
     YAML --> BizForm[BizFlowForm 业务链路表单]
     YAML --> RawView[YamlRawView 原始 YAML 视图]
     YAML --> StepEditor[StepEditor 步骤子表单]
+
+    Layout --> Annotator[Plan Annotator 计划批注器 /annotator]
+
+    Annotator --> AnnotatorViewer[PlanAnnotatorViewer Markdown 预览]
+    Annotator --> CommentList[CommentList 批注列表]
+    Annotator --> CommentBubble[CommentBubble 批注气泡]
 ```
 
 ### 数据流
@@ -146,7 +160,7 @@ case-editor/
     ├── main.ts                        # 渲染进程入口
     ├── App.vue                        # 根组件，条件布局
     ├── env.d.ts                       # 类型声明
-    ├── router/index.ts                # 三路由：/、/excel、/yaml
+    ├── router/index.ts                # 四路由：/、/excel、/yaml、/annotator
     ├── stores/
     │   ├── workbook.ts                # Excel 工作簿数据（核心 store）
     │   ├── yaml-store.ts             # YAML 编辑器数据 store
@@ -187,10 +201,14 @@ case-editor/
     │   │   ├── BizFlowForm.vue          # 业务链路表单
     │   │   ├── StepEditor.vue           # 步骤子表单
     │   │   └── YamlRawView.vue          # 原始 YAML 文本视图
-    │   └── json-editor/
+    │   ├── json-editor/
     │       ├── JsonEditor.vue         # JSON 编辑器弹窗
     │       ├── JsonNode.vue           # 递归节点组件
     │       └── ValueInput.vue         # 值输入组件
+    │   └── annotator/
+    │       ├── PlanAnnotatorViewer.vue   # Markdown 计划批注器主视图
+    │       ├── CommentList.vue           # 左侧批注列表面板
+    │       └── CommentBubble.vue         # 批注气泡组件
     ├── views/
     │   ├── HomePage.vue              # 首页（选择编辑器）
     │   ├── EditorView.vue            # Excel 编辑器视图
@@ -203,9 +221,10 @@ case-editor/
 
 ### 首页
 
-启动应用后进入首页，展示两张选择卡片：
+启动应用后进入首页，展示三张选择卡片：
 - **Excel 编辑器**：点击进入 Excel 表格化编辑模式
 - **YAML 编辑器**：点击进入 YAML 表单化编辑模式
+- **Markdown 计划批注器**：点击进入 Markdown 测试计划批注模式
 
 ### Excel 编辑器
 
@@ -262,6 +281,38 @@ AssertRules 列显示只读预览区（每行一条规则），点击「编辑�
 
 - **保存**（Ctrl+S）：直接写回原文件
 - **另存为**（Ctrl+Alt+S）：弹出保存对话框选择新路径
+
+### Markdown 计划批注器
+
+#### 打开测试计划目录
+
+点击首页的「Markdown 计划批注器」卡片进入。通过顶部「打开目录」按钮选择包含 Markdown 测试计划文件的目录，左侧文件树浏览并选择文件。
+
+#### 添加批注
+
+1. 在渲染后的 Markdown 预览中选中需要添加批注的文本
+2. 右键点击，选择「添加批注」
+3. 在弹出的输入框中输入评审意见
+4. 批注记录格式为：行号、选中的文本内容、评审意见
+5. 批注气泡会显示在选中文本的对应位置
+
+#### 管理批注
+
+- 左侧批注列表显示当前文件所有批注，支持编辑和删除
+- 编辑批注：点击批注项，修改评审意见内容
+- 删除批注：点击删除按钮移除批注
+
+#### 自动保存
+
+所有批注自动保存到测试计划目录下的 `plan_comments.json` 文件中，无需手动保存。
+
+#### 查看历史批注
+
+通过切换「历史批注」模式，可以查看之前保存的所有批注记录（只读），便于回溯评审历史。
+
+#### 与 AI 智能体的集成
+
+批注数据供 AI 测试用例生成智能体使用。在 CLI 工具中选择 `r` 选项时，智能体会读取 `plan_comments.json` 中的批注信息，作为生成测试用例的上下文参考。
 
 ## 校验规则
 

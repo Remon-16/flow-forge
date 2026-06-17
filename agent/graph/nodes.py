@@ -1,5 +1,6 @@
 """Workflow nodes — one function per stage in the main StateGraph."""
 
+import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -598,18 +599,27 @@ def human_confirm_node(state: GraphState) -> GraphState:
 # Node: revise_plan
 # =========================================================================
 def revise_plan_node(state: GraphState) -> GraphState:
-    """Revise the plan based on user feedback, then return to human_confirm."""
+    """Revise the plan based on user feedback (text or annotations)."""
     from agents.base import BaseAgent
     from prompts.render import render_prompt
 
-    feedback = state.get("plan_feedback", "")
+    feedback_type = state.get("plan_feedback_type", "text")
     plan_md = state.get("plan_md", "")
     analysis = state.get("requirement_analysis", {})
     api_summary = state.get("api_summary", [])
 
-    if not feedback.strip():
-        logger.warning("revise_plan called without feedback, skipping")
-        return state
+    if feedback_type == "annotations":
+        annotations = state.get("plan_annotations", [])
+        if not annotations:
+            logger.warning("revise_plan called with annotations type but no annotations data")
+            return state
+        agent_key = "plan_annotation_reviser"
+    else:
+        feedback = state.get("plan_feedback", "")
+        if not feedback.strip():
+            logger.warning("revise_plan called without feedback, skipping")
+            return state
+        agent_key = "plan_reviser"
 
     agent = BaseAgent(
         api_key=_settings.llm_api_key,
@@ -619,38 +629,62 @@ def revise_plan_node(state: GraphState) -> GraphState:
         base_url=_settings.llm_base_url,
     )
 
-    # Build system prompt from registry if plan_reviser exists
-    system = _prompt_registry.get_system("plan_reviser")
-    if not system:
-        system = (
-            "你是一个专业的测试计划修改专家。请根据用户的反馈修改测试计划，"
-            "同时保持原始计划中用户未提及部分不变。"
-            "修改后的计划应保持完整的结构：业务理解、单接口测试点、业务链路测试、Mermaid 流程图。"
-            "使用中文编写。"
+    system = _prompt_registry.get_system(agent_key)
+    user_msg = _prompt_registry.get_user_template(agent_key)
+
+    if feedback_type == "annotations":
+        if not system:
+            system = (
+                "你是一个专业的测试计划修改专家。用户通过批注的方式对测试计划提出了修改意见。"
+                "请根据每个批注逐一修改计划中对应的内容。对于批注未涉及的部分，保持原样不变。"
+                "修改后的计划应保持完整的结构。使用中文编写。"
+            )
+        if not user_msg:
+            user_msg = (
+                "## 原始测试计划\n{{original_plan}}\n\n"
+                "## 用户批注\n```json\n{{annotations}}\n```\n\n"
+                "## 需求分析结果（参考）\n```json\n{{requirement_analysis}}\n```\n\n"
+                "## 接口分析摘要\n```json\n{{api_summary}}\n```\n\n"
+                "请根据每个批注逐一修改计划，生成修改后的完整测试计划。"
+            )
+        prompt = render_prompt(
+            user_msg,
+            original_plan=plan_md,
+            annotations=json.dumps(annotations, ensure_ascii=False, indent=2),
+            requirement_analysis=str(analysis),
+            api_summary=str(api_summary),
         )
-
-    user_msg = _prompt_registry.get_user_template("plan_reviser")
-    if not user_msg:
-        user_msg = (
-            "## 原始测试计划\n{{original_plan}}\n\n"
-            "## 用户修改意见\n{{feedback}}\n\n"
-            "## 需求分析结果（参考）\n```json\n{{requirement_analysis}}\n```\n\n"
-            "## 接口分析摘要\n```json\n{{api_summary}}\n```\n\n"
-            "请生成修改后的完整测试计划。"
+        print(f"\n  → PlanAnnotationReviser 正在根据 {len(annotations)} 条批注修改计划...")
+    else:
+        if not system:
+            system = (
+                "你是一个专业的测试计划修改专家。请根据用户的反馈修改测试计划，"
+                "同时保持原始计划中用户未提及部分不变。"
+                "修改后的计划应保持完整的结构：业务理解、单接口测试点、业务链路测试、Mermaid 流程图。"
+                "使用中文编写。"
+            )
+        if not user_msg:
+            user_msg = (
+                "## 原始测试计划\n{{original_plan}}\n\n"
+                "## 用户修改意见\n{{feedback}}\n\n"
+                "## 需求分析结果（参考）\n```json\n{{requirement_analysis}}\n```\n\n"
+                "## 接口分析摘要\n```json\n{{api_summary}}\n```\n\n"
+                "请生成修改后的完整测试计划。"
+            )
+        prompt = render_prompt(
+            user_msg,
+            original_plan=plan_md,
+            feedback=state.get("plan_feedback", ""),
+            requirement_analysis=str(analysis),
+            api_summary=str(api_summary),
         )
+        print(f"\n  → PlanReviser 正在调用 LLM ({_settings.llm_model})...")
 
-    prompt = render_prompt(
-        user_msg,
-        original_plan=plan_md,
-        feedback=feedback,
-        requirement_analysis=str(analysis),
-        api_summary=str(api_summary),
-    )
-
-    print(f"\n  → PlanReviser 正在调用 LLM ({_settings.llm_model})...")
     revised = agent.call_llm(prompt, system)
     state["plan_md"] = revised
-    state["plan_feedback"] = ""  # Clear for next round
+    state["plan_feedback"] = ""
+    state["plan_feedback_type"] = "text"
+    state["plan_annotations"] = []
 
     # Overwrite plan.md in session directory
     if _sl():

@@ -62,6 +62,8 @@ graph TD
     EXEC --> |Exit Code| JENKINS
 ```
 
+The manual review step supports two modes: (1) typing `y`/`n` with text feedback directly in the CLI; (2) typing `r` to use the [case-editor's Markdown Plan Annotator](./case-editor/README.en.md) to add structured annotations on the rendered test plan — the agent then revises the plan based on the annotation file.
+
 The framework consists of two core components:
 
 - **[agent/](./agent/)** — AI Case Generation Agent: reads requirement documents + API documentation, passes through a two-phase pipeline of "Plan Generation → Manual Review → Case Orchestration", and outputs test case YAML files (with optional Excel export).
@@ -76,7 +78,7 @@ flow-forge/
 ├── README.en.md                  # Project overview (this file)
 ├── agent/                        # AI Case Generation Agent
 ├── python/                       # API Test Executor
-└── case-editor/                  # Tauri Desktop Test Case Editor (Excel + YAML)
+└── case-editor/                  # Tauri Desktop Test Case Editor (Excel + YAML), includes a Markdown Plan Annotator for adding structured annotations on rendered test plans
 ```
 
 ## Workflow

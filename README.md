@@ -62,6 +62,8 @@ graph TD
     EXEC --> |退出码| JENKINS
 ```
 
+人工审核环节支持两种方式：(1) 直接在 CLI 中输入 `y`/`n` 及文字反馈；(2) 输入 `r` 通过 [case-editor 的 Markdown 计划批注器](./case-editor/README.md) 在渲染后的测试计划上添加结构化批注，智能体将根据批注文件修改计划。
+
 整个框架由两个核心组件构成：
 
 - **[agent/](./agent/)** — AI 用例生成智能体：读取需求文档 + 接口文档，经过"计划生成 → 人工审核 → 用例编排"两阶段流水线，输出测试用例 YAML 文件（可选导出 Excel）。
@@ -76,7 +78,7 @@ flow-forge/
 ├── README.md                     # 项目总览（本文件）
 ├── agent/                        # AI 用例生成智能体
 ├── python/                       # 接口测试执行器
-└── case-editor/                  # Tauri 桌面测试用例编辑器（Excel + YAML）
+└── case-editor/                  # Tauri 桌面测试用例编辑器（Excel + YAML），包含 Markdown 计划批注器，支持在渲染后的测试计划上添加结构化批注
 ```
 
 ## 工作流程

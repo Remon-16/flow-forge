@@ -106,6 +106,8 @@
     "excelDesc": "编辑 .xlsx 格式的测试用例文件。适合中小型项目，支持接口定义、单接口用例和业务链路用例的表格化编辑。",
     "yamlTitle": "YAML 编辑器",
     "yamlDesc": "编辑 .yaml 格式的测试用例文件。基于表单的结构化编辑，支持代码编辑器式的目录浏览，每个用例一个独立文件。",
+    "annotatorTitle": "Markdown 计划批注器",
+    "annotatorDesc": "打开测试计划目录，在渲染后的计划上直接添加批注，批注可被 AI 智能体识别并用于计划修改。",
     "open": "打开编辑器"
   },
   "yaml": {
@@ -133,6 +135,30 @@
     "unsavedGoHome": "有未保存的修改，确定离开吗？",
     "discardChanges": "不保存",
     "saveAndClose": "保存并关闭"
+  },
+  "annotator": {
+    "title": "计划批注器",
+    "openDir": "打开目录",
+    "noPlan": "未找到 plan.md，请选择包含测试计划的目录",
+    "currentAnnotations": "当前批注",
+    "historyAnnotations": "历史批注",
+    "addAnnotation": "添加批注",
+    "editAnnotation": "编辑批注",
+    "deleteAnnotation": "删除批注",
+    "noAnnotations": "暂无批注",
+    "selectedText": "选中文本",
+    "lineNumber": "行号",
+    "comment": "批注内容",
+    "commentPlaceholder": "请输入修改意见...",
+    "save": "保存",
+    "cancel": "取消",
+    "confirmDelete": "确认删除",
+    "confirmDeleteMsg": "确定要删除这条批注吗？",
+    "viewOnly": "查看历史批注（只读）",
+    "autoSaved": "已自动保存",
+    "fileName": "文件名",
+    "annotationCount": "{count} 条批注",
+    "selectTextFirst": "请先选中文本再添加批注"
   },
   "search": {
     "find": "查找",

@@ -21,6 +21,11 @@ const router = createRouter({
       name: 'yaml-editor',
       component: YamlEditorView,
     },
+    {
+      path: '/plan-annotator',
+      name: 'plan-annotator',
+      component: () => import('../views/PlanAnnotatorView.vue'),
+    },
   ],
 })
 

@@ -49,6 +49,8 @@ class GraphState(TypedDict, total=False):
     # === Human review ===
     plan_confirmed: bool
     plan_feedback: str
+    plan_feedback_type: str          # "text" | "annotations"
+    plan_annotations: List[Dict[str, Any]]  # parsed plan_comments.json
 
     # === Case generation ===
     single_cases: List[Dict[str, Any]]

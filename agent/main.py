@@ -216,7 +216,11 @@ def _run_interactive(
         elif pending == "human_confirm":
             # Mandatory interrupt for plan review
             choice = input(
-                "\n是否批准此测试计划？(y=批准 / n=提出修改意见): "
+                "\n是否批准此测试计划？\n"
+                "  y = 批准，继续执行用例生成\n"
+                "  n = 提出文字修改意见\n"
+                "  r = 按批注文件修改（需先在 case-editor 中对 plan.md 添加批注）\n"
+                "请输入 (y/n/r): "
             ).strip().lower()
             if choice == "y":
                 print("\n计划已批准，继续执行用例生成...")
@@ -234,14 +238,60 @@ def _run_interactive(
                 snapshot = graph.get_state(config)
                 state = dict(snapshot.values)
                 state["plan_feedback"] = feedback
+                state["plan_feedback_type"] = "text"
                 state["plan_confirmed"] = False
                 revised_state = revise_plan_node(state)
                 graph.update_state(config, revised_state, as_node="revise_plan")
 
                 print("\n[审核] 计划已修改，请再次审核...")
                 # 继续 while 循环，下一轮显示 human_confirm 待处理
+            elif choice == "r":
+                import json as _json
+                snapshot = graph.get_state(config)
+                state = dict(snapshot.values)
+                output_dir = state.get("output_dir", "./output")
+                comments_path = Path(output_dir) / "plan_comments.json"
+
+                if not comments_path.exists():
+                    print(f"\n错误: 未找到批注文件: {comments_path.resolve()}")
+                    print("请先在 case-editor 中对测试计划添加批注。")
+                    continue
+
+                try:
+                    annotations = _json.loads(comments_path.read_text("utf-8"))
+                except Exception as e:
+                    print(f"\n错误: 批注文件解析失败: {e}")
+                    continue
+
+                if not annotations:
+                    print("\n错误: 批注文件为空，请添加批注后重试。")
+                    continue
+
+                print(f"\n已读取 {len(annotations)} 条批注:")
+                for i, ann in enumerate(annotations[:5], 1):
+                    print(f"  {i}. [行{ann.get('line_number', '?')}] {ann.get('review_comment', '')[:60]}")
+                if len(annotations) > 5:
+                    print(f"  ... 共 {len(annotations)} 条")
+
+                print("\n正在根据批注修改计划...\n")
+
+                state["plan_feedback_type"] = "annotations"
+                state["plan_annotations"] = annotations
+                state["plan_confirmed"] = False
+                revised_state = revise_plan_node(state)
+                graph.update_state(config, revised_state, as_node="revise_plan")
+
+                # 归档批注文件
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                history_dir = Path(output_dir) / "history-comments"
+                history_dir.mkdir(parents=True, exist_ok=True)
+                archive_name = f"plan_comments_{ts}.json"
+                comments_path.rename(history_dir / archive_name)
+                print(f"批注文件已归档: history-comments/{archive_name}")
+
+                print("\n[审核] 计划已修改，请再次审核...")
             else:
-                print("无效输入，请输入 y 或 n。")
+                print("无效输入，请输入 y、n 或 r。")
         else:
             break
 

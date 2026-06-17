@@ -74,6 +74,14 @@ npm run dev:desktop
 - Field validation mirrors Excel editor (StepID duplicate, Trans format)
 - **Find & Replace**: search and replace within the raw YAML text — auto-expands the right-side panel on activation; matching line numbers and content are clearly displayed
 
+### Markdown Plan Annotator
+- Select text directly on the rendered Markdown preview to add annotations
+- Right-click context menu for quick annotation
+- Visual annotation bubbles on the preview
+- Left-side annotation list with edit and delete support
+- Auto-save to plan_comments.json
+- Historical annotation viewing (read-only)
+
 ## Architecture
 
 ### Component Tree
@@ -97,6 +105,12 @@ graph TD
     YAML --> BizForm[BizFlowForm - Business Flow Form]
     YAML --> RawView[YamlRawView - Raw YAML View]
     YAML --> StepEditor[StepEditor - Step Sub-form]
+
+    Layout --> Annotator[Plan Annotator /annotator]
+
+    Annotator --> AnnotatorViewer[PlanAnnotatorViewer - Markdown Preview]
+    Annotator --> CommentList[CommentList - Annotation Sidebar]
+    Annotator --> CommentBubble[CommentBubble - Annotation Bubble]
 ```
 
 ### Data Flow
@@ -146,7 +160,7 @@ case-editor/
     ├── main.ts                        # Renderer process entry
     ├── App.vue                        # Root component, conditional layout
     ├── env.d.ts                       # Type declarations
-    ├── router/index.ts                # Three routes: /, /excel, /yaml
+    ├── router/index.ts                # Four routes: /, /excel, /yaml, /annotator
     ├── stores/
     │   ├── workbook.ts                # Excel workbook data (core store)
     │   ├── yaml-store.ts             # YAML editor data store
@@ -187,10 +201,14 @@ case-editor/
     │   │   ├── BizFlowForm.vue          # Business flow form
     │   │   ├── StepEditor.vue           # Step sub-form
     │   │   └── YamlRawView.vue          # Raw YAML text view
-    │   └── json-editor/
+    │   ├── json-editor/
     │       ├── JsonEditor.vue         # JSON editor modal
     │       ├── JsonNode.vue           # Recursive node component
     │       └── ValueInput.vue         # Value input component
+    │   └── annotator/
+    │       ├── PlanAnnotatorViewer.vue   # Markdown plan annotator main view
+    │       ├── CommentList.vue           # Left annotation list panel
+    │       └── CommentBubble.vue         # Annotation bubble component
     ├── views/
     │   ├── HomePage.vue              # Home page (editor selection)
     │   ├── EditorView.vue            # Excel editor view
@@ -203,9 +221,10 @@ case-editor/
 
 ### Home Page
 
-The app opens to a home page with two selection cards:
+The app opens to a home page with three selection cards:
 - **Excel Editor**: click to enter Excel spreadsheet editing mode
 - **YAML Editor**: click to enter YAML form-based editing mode
+- **Markdown Plan Annotator**: click to enter Markdown test plan annotation mode
 
 ### Excel Editor
 
@@ -263,6 +282,38 @@ The right-side panel can be toggled between:
 
 - **Save** (Ctrl+S): writes directly back to the original file
 - **Save As** (Ctrl+Alt+S): opens a save dialog to choose a new path
+
+### Markdown Plan Annotator
+
+#### Opening a Test Plan Directory
+
+Click the "Markdown Plan Annotator" card on the home page to enter. Use the "Open Directory" button in the top toolbar to select a directory containing Markdown test plan files. Browse and select files from the file tree on the left.
+
+#### Adding Annotations
+
+1. Select text on the rendered Markdown preview that you want to annotate
+2. Right-click and choose "Add Annotation"
+3. Enter your review comment in the popup input box
+4. Annotation format: line number, selected text, review comment
+5. An annotation bubble appears at the corresponding position of the selected text
+
+#### Managing Annotations
+
+- The left-side annotation list shows all annotations for the current file, with edit and delete support
+- Edit an annotation: click the annotation item and modify the review comment
+- Delete an annotation: click the delete button to remove it
+
+#### Auto-Save
+
+All annotations are automatically saved to the `plan_comments.json` file in the test plan directory. No manual save required.
+
+#### Viewing Historical Annotations
+
+Toggle to "Historical Annotations" mode to view all previously saved annotations (read-only), making it easy to review annotation history.
+
+#### Integration with AI Agent
+
+Annotation data is used by the AI test case generation agent. When the `r` option is selected in the CLI tool, the agent reads annotation information from `plan_comments.json` as contextual reference for generating test cases.
 
 ## Validation Rules
 
