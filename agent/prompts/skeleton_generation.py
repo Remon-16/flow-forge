@@ -5,7 +5,7 @@ SINGLE_SKELETON_SYSTEM = """你是一个单接口测试用例骨架设计专家�
 关键要求：
 1. test_id 必须生成有含义的标识符（如 TC_LOGIN_POS_001），体现测试内容（API 名称缩写）和正负向（POS/NEG），不能只是序号
 2. relevance_id 必须严格使用接口定义中的 test_id，不得修改或编造
-3. api_name、url、method 必须严格按照接口定义填写，禁止自由发挥
+3. api_name、url、method 必须严格按照接口定义填写，GET请求也不要添加查询参数，禁止自由发挥
 4. remark 必须标明是"正向用例"还是"负向用例"，并写清具体测试点
 5. 不要填写 request_head、request_body、status_code、tag、assert_dict、assert_rules —— 这些由后续步骤完成
 6. 严格按照测试计划中的测试点生成骨架，测试计划已明确每个接口需要哪些测试点（正向/负向/边界等）

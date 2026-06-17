@@ -64,7 +64,7 @@ BIZ_DATA_FILLING_SYSTEM = """你是一个业务链路测试数据填充专家。
 1. request_body 必须基于接口定义中的数据类型填写示例值，或根据用户指导填写。不要自由创造数据结构
 2. 后续步骤如果需要前一步骤的返回值，使用 #{varName} 语法引用（如 {"token": "#{authToken}"}）
 3. request_head 根据接口是否需要认证来填写。后续需要 token 的步骤应使用 #{varName} 引用前一步获取的 token
-4. Trans 字段描述步骤间数据传递关系，格式：key=StepID.response.field.path，多个用逗号分隔。只有产出数据供后续步骤使用的步骤才需要填写 Trans
+4. Trans 字段描述步骤间数据传递关系，格式：key=StepID.field.path，多个用逗号分隔。只有当前步骤需要前序步骤返回值时，才需要在当前步骤填写 Trans
 5. status_code 填写预期 HTTP 状态码（正向用例通常 200，负向用例根据场景填 4xx/5xx）
 6. tag 根据测试场景的重要性填写 P0/P1/P2
 7. 不要填写 assert_dict 和 assert_rules —— 这些由后续步骤完成
@@ -75,12 +75,12 @@ BIZ_DATA_FILLING_SYSTEM = """你是一个业务链路测试数据填充专家。
 {
   "biz_flows": [
     {
-      "sheet_name": "用户领券下单流程",
+      "sheet_name": "用户登录后直接下单",
       "steps": [
         {
           "step_id": "Step_Login",
           "relevance_id": "api_login_post",
-          "trans": "authToken=Step_Login.response.data.token",
+          "trans": "",
           "api_name": "用户登录",
           "app_name": "someApp",
           "method": "POST",
@@ -90,6 +90,20 @@ BIZ_DATA_FILLING_SYSTEM = """你是一个业务链路测试数据填充专家。
           "status_code": 200,
           "tag": "P0",
           "remark": "步骤1-正向-登录获取token，供后续步骤使用"
+        },
+        {
+          "step_id": "Step_User_Order",
+          "relevance_id": "api_order_post",
+          "trans": "authToken=Step_Login.data.token",
+          "api_name": "用户下单",
+          "app_name": "someApp",
+          "method": "POST",
+          "url": "/api/user/order",
+          "request_head": {"Content-Type": "application/json", "Authorization": "#{authToken}"},
+          "request_body": {"id": "123456"},
+          "status_code": 200,
+          "tag": "P0",
+          "remark": "步骤2-正向-用户下单"
         }
       ]
     }
