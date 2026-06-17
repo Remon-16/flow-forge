@@ -1,14 +1,29 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import type { Language } from '../types/editor'
+
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 2.0
+const ZOOM_STEP = 0.1
 
 export const useSettingsStore = defineStore('settings', () => {
   const language = ref<Language>((localStorage.getItem('case-editor-lang') as Language) || 'zh-CN')
+  const zoom = ref<number>(parseFloat(localStorage.getItem('case-editor-zoom') || '1.0'))
 
   function setLanguage(lang: Language) {
     language.value = lang
     localStorage.setItem('case-editor-lang', lang)
   }
 
-  return { language, setLanguage }
+  function setZoom(value: number) {
+    zoom.value = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 10) / 10))
+    localStorage.setItem('case-editor-zoom', String(zoom.value))
+  }
+  function zoomIn() { setZoom(zoom.value + ZOOM_STEP) }
+  function zoomOut() { setZoom(zoom.value - ZOOM_STEP) }
+  function zoomReset() { setZoom(1.0) }
+
+  const zoomPercent = computed(() => Math.round(zoom.value * 100) + '%')
+
+  return { language, zoom, zoomPercent, setLanguage, setZoom, zoomIn, zoomOut, zoomReset }
 })

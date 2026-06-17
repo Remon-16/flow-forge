@@ -38,7 +38,7 @@ python main.py --config /path/to/env.yml --scriptType APITest --envName local \
                --apiMode all
 ```
 
-已实现 Tauri 桌面测试用例编辑器。支持 Excel (.xlsx) 和 YAML (.yaml) 两种用例格式的可视化编辑，提供表单化 YAML 编辑、高级断言规则编辑器、JSON 树形编辑器等功能。详情见 [case-editor/README.md](./case-editor/README.md)。
+已实现 Tauri 桌面测试用例编辑器。支持 Excel (.xlsx) 和 YAML (.yaml) 两种用例格式的可视化编辑，提供表单化 YAML 编辑、高级断言规则编辑器、JSON 树形编辑器、字体缩放（Ctrl+滚轮）、计划批注器交互式批注弹窗等功能。详情见 [case-editor/README.md](./case-editor/README.md)。
 
 ## 后续计划
 
@@ -62,7 +62,7 @@ graph TD
     EXEC --> |退出码| JENKINS
 ```
 
-人工审核环节支持两种方式：(1) 直接在 CLI 中输入 `y`/`n` 及文字反馈；(2) 输入 `r` 通过 [case-editor 的 Markdown 计划批注器](./case-editor/README.md) 在渲染后的测试计划上添加结构化批注，智能体将根据批注文件修改计划。
+人工审核环节支持两种方式：(1) 直接在 CLI 中输入 `y`/`n` 及文字反馈；(2) 输入 `r` 通过 [case-editor 的 Markdown 计划批注器](./case-editor/README.md) 在渲染后的测试计划上添加结构化批注，支持点击批注高亮查看详情、直接编辑和删除批注，智能体将根据批注文件修改计划。
 
 整个框架由两个核心组件构成：
 

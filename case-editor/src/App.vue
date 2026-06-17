@@ -27,6 +27,14 @@ watch(
   { immediate: true }
 )
 
+function onContentWheel(e: WheelEvent) {
+  if (e.ctrlKey) {
+    e.preventDefault()
+    if (e.deltaY < 0) settings.zoomIn()
+    else if (e.deltaY > 0) settings.zoomOut()
+  }
+}
+
 function onBeforeUnload(e: BeforeUnloadEvent) {
   if (yamlStore.hasUnsavedTabs || workbook.modified) {
     e.preventDefault()
@@ -57,7 +65,7 @@ onUnmounted(() => window.removeEventListener('beforeunload', onBeforeUnload))
         <a-spin size="large" :tip="t('loading')" />
       </div>
       <AppSidebar v-if="!isYamlMode" class="app-sidebar" />
-      <div class="app-content">
+      <div class="app-content" :style="{ zoom: settings.zoom }" @wheel="onContentWheel">
         <router-view />
       </div>
     </div>

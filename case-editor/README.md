@@ -42,7 +42,8 @@ npm run dev:desktop
 - 中英文双语界面，可随时切换
 - 保存（Ctrl+S）和另存为（Ctrl+Alt+S）快捷键
 - **查找与替换**（Ctrl+F / Ctrl+H）：在 Excel 中按表格单元格查找，在 YAML 中按原始文本查找，支持大小写、全词匹配和正则表达式
-- **「编辑」菜单**：工具栏新增「编辑」下拉菜单，提供「查找」「替换」「在文件中查找」「在文件中替换」四种操作入口
+- **「编辑」菜单**：工具栏新增「编辑」下拉菜单，提供「查找」「替换」「在文件中查找」「在文件中替换」四种操作入口，以及「放大」「缩小」「重置缩放」三种缩放控制
+- **字体缩放**：支持 Ctrl+= 放大、Ctrl+- 缩小、Ctrl+0 重置，以及 Ctrl+鼠标滚轮缩放，缩放比例持久化保存
 - **全局搜索**：「在文件中查找」跨所有 Sheet（Excel）或项目目录中所有 YAML 文件搜索，结果按来源分组显示；「在文件中替换」支持逐条审查替换和全部替换
 
 ### Excel 编辑器
@@ -77,10 +78,12 @@ npm run dev:desktop
 ### Markdown 计划批注器
 - 在渲染后的 Markdown 预览上直接选中文本添加批注
 - 右键菜单快速添加批注
-- 批注气泡可视化标注
-- 左侧批注列表支持编辑和删除
-- 自动保存到 plan_comments.json
-- 历史批注查看（只读）
+- 批注文字高亮可视化展示（黄色底色 + 右下角红色编号标签）
+- **点击批注高亮查看详情**：弹出气泡显示批注内容、行号，支持直接编辑或删除批注
+- 左侧批注列表支持编辑、删除和滚动定位
+- 自动保存到 plan_comments.json，无需手动保存
+- 历史批注查看（只读），便于回溯评审历史
+- 工具栏字体缩放（按钮 + Ctrl+鼠标滚轮）
 
 ## 架构设计
 
@@ -108,9 +111,10 @@ graph TD
 
     Layout --> Annotator[Plan Annotator 计划批注器 /annotator]
 
-    Annotator --> AnnotatorViewer[PlanAnnotatorViewer Markdown 预览]
-    Annotator --> CommentList[CommentList 批注列表]
-    Annotator --> CommentBubble[CommentBubble 批注气泡]
+    Annotator --> AnnotatorViewer[MarkdownPreview Markdown 预览]
+    Annotator --> CommentList[AnnotationSidebar 批注侧边栏]
+    Annotator --> CommentBubble[AnnotationDialog 批注编辑弹窗]
+    Annotator --> HistoryViewer[HistoryAnnotationViewer 历史批注查看器]
 ```
 
 ### 数据流
@@ -206,13 +210,15 @@ case-editor/
     │       ├── JsonNode.vue           # 递归节点组件
     │       └── ValueInput.vue         # 值输入组件
     │   └── annotator/
-    │       ├── PlanAnnotatorViewer.vue   # Markdown 计划批注器主视图
-    │       ├── CommentList.vue           # 左侧批注列表面板
-    │       └── CommentBubble.vue         # 批注气泡组件
+    │       ├── MarkdownPreview.vue      # Markdown 计划批注器预览视图
+    │       ├── AnnotationSidebar.vue    # 左侧批注列表面板
+    │       ├── AnnotationDialog.vue     # 批注编辑弹窗
+    │       └── HistoryAnnotationViewer.vue  # 历史批注查看器
     ├── views/
     │   ├── HomePage.vue              # 首页（选择编辑器）
     │   ├── EditorView.vue            # Excel 编辑器视图
-    │   └── YamlEditorView.vue        # YAML 编辑器视图
+    │   ├── YamlEditorView.vue        # YAML 编辑器视图
+    │   └── PlanAnnotatorView.vue     # 计划批注器视图
     └── assets/styles/
         └── global.css                 # 全局样式
 ```
@@ -294,13 +300,14 @@ AssertRules 列显示只读预览区（每行一条规则），点击「编辑�
 2. 右键点击，选择「添加批注」
 3. 在弹出的输入框中输入评审意见
 4. 批注记录格式为：行号、选中的文本内容、评审意见
-5. 批注气泡会显示在选中文本的对应位置
+5. 被批注的文字以黄色高亮显示，右下角带有红色编号标签
 
 #### 管理批注
 
-- 左侧批注列表显示当前文件所有批注，支持编辑和删除
-- 编辑批注：点击批注项，修改评审意见内容
-- 删除批注：点击删除按钮移除批注
+- **点击批注高亮**：在预览区点击黄色高亮的批注文本，弹出详情气泡，显示批注内容、行号，可直接编辑或删除
+- 左侧批注列表显示当前文件所有批注，支持编辑、删除和滚动定位
+- 编辑批注：通过气泡中的「编辑批注」按钮或列表中的编辑按钮，打开编辑对话框修改评审意见
+- 删除批注：通过气泡中的「删除」按钮或列表中的删除按钮移除批注，高亮和标签同步取消
 
 #### 自动保存
 
@@ -376,6 +383,10 @@ AssertRules 列显示只读预览区（每行一条规则），点击「编辑�
 | Ctrl+N | 新建空白工作簿 |
 | Ctrl+F | 查找 |
 | Ctrl+H | 替换 |
+| Ctrl+= | 放大字体 |
+| Ctrl+- | 缩小字体 |
+| Ctrl+0 | 重置缩放 |
+| Ctrl+鼠标滚轮 | 缩放字体 |
 | Esc | 关闭查找栏 |
 
 ## 开发说明

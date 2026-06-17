@@ -17,6 +17,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'add-annotation': [selectedText: string, lineNumber: number]
+  'edit-annotation': [index: number]
+  'delete-annotation': [index: number]
 }>()
 
 const { t } = useI18n()
@@ -26,6 +28,16 @@ const contextMenuX = ref(0)
 const contextMenuY = ref(0)
 const selectedText = ref('')
 const selectedLineNumber = ref(0)
+
+// Annotation popover state
+const annotationPopoverVisible = ref(false)
+const activeAnnotationIdx = ref(-1)
+const popoverAnchorStyle = ref<Record<string, string>>({})
+
+const activeAnnotation = computed(() => {
+  if (activeAnnotationIdx.value < 0 || activeAnnotationIdx.value >= props.annotations.length) return null
+  return props.annotations[activeAnnotationIdx.value]
+})
 
 const md = new MarkdownIt({ html: true, breaks: true })
 
@@ -207,6 +219,56 @@ function handleAddAnnotation() {
   emit('add-annotation', selectedText.value, selectedLineNumber.value)
 }
 
+function onMarkdownClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  const mark = target.closest('mark.annotated') as HTMLElement | null
+  if (mark) {
+    const idxStr = mark.dataset.annotationId
+    if (idxStr !== undefined) {
+      const idx = parseInt(idxStr, 10)
+      if (!isNaN(idx) && props.annotations[idx]) {
+        e.stopPropagation()
+        openAnnotationPopover(idx, mark)
+        return
+      }
+    }
+  }
+  annotationPopoverVisible.value = false
+  contextMenuVisible.value = false
+}
+
+function openAnnotationPopover(idx: number, markEl: HTMLElement) {
+  const container = markEl.closest('.markdown-preview-container')
+  if (!container) return
+  const markRect = markEl.getBoundingClientRect()
+  const containerRect = container.getBoundingClientRect()
+
+  popoverAnchorStyle.value = {
+    position: 'absolute',
+    left: `${markRect.left - containerRect.left}px`,
+    top: `${markRect.top - containerRect.top}px`,
+    width: `${markRect.width}px`,
+    height: `${markRect.height}px`,
+    pointerEvents: 'none',
+  }
+  activeAnnotationIdx.value = idx
+  annotationPopoverVisible.value = true
+}
+
+function handlePopoverEdit() {
+  if (activeAnnotationIdx.value >= 0) {
+    emit('edit-annotation', activeAnnotationIdx.value)
+  }
+  annotationPopoverVisible.value = false
+}
+
+function handlePopoverDelete() {
+  if (activeAnnotationIdx.value >= 0) {
+    emit('delete-annotation', activeAnnotationIdx.value)
+  }
+  annotationPopoverVisible.value = false
+}
+
 function closeContextMenu() {
   contextMenuVisible.value = false
 }
@@ -225,13 +287,38 @@ defineExpose({ scrollToAnnotation })
 </script>
 
 <template>
-  <div
-    ref="previewRef"
-    class="markdown-preview"
-    v-html="renderedHtml"
-    @contextmenu="onContextMenu"
-    @click="closeContextMenu"
-  />
+  <div class="markdown-preview-container">
+    <div
+      ref="previewRef"
+      class="markdown-preview"
+      v-html="renderedHtml"
+      @contextmenu="onContextMenu"
+      @click="onMarkdownClick"
+    />
+
+    <!-- Annotation click popover -->
+    <a-popover
+      v-model:open="annotationPopoverVisible"
+      placement="top"
+      :destroyTooltipOnHide="true"
+    >
+      <template #content>
+        <div class="annotation-popover-body" v-if="activeAnnotation">
+          <div class="popover-comment">{{ activeAnnotation.review_comment }}</div>
+          <div class="popover-meta">L{{ activeAnnotation.line_number }}</div>
+          <a-space style="margin-top: 10px;">
+            <a-button size="small" type="primary" @click="handlePopoverEdit">
+              {{ t('annotator.editAnnotation') }}
+            </a-button>
+            <a-button size="small" danger @click="handlePopoverDelete">
+              {{ t('annotator.deleteAnnotation') }}
+            </a-button>
+          </a-space>
+        </div>
+      </template>
+      <span class="annotation-popover-anchor" :style="popoverAnchorStyle" />
+    </a-popover>
+  </div>
 
   <!-- Right-click context menu -->
   <Teleport to="body">
@@ -315,7 +402,7 @@ defineExpose({ scrollToAnnotation })
 /* Annotation highlights */
 .markdown-preview :deep(mark.annotated) {
   background: #fff3b0;
-  padding: 1px 2px;
+  padding: 1px 3px;
   border-radius: 2px;
   cursor: pointer;
   position: relative;
@@ -329,19 +416,52 @@ defineExpose({ scrollToAnnotation })
   animation: flash 2s ease-out;
 }
 .markdown-preview :deep(sup.annotation-badge) {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
   font-size: 10px;
   color: #fff;
   background: #e53935;
   border-radius: 8px;
   padding: 0 4px;
-  margin-left: 2px;
-  vertical-align: super;
-  line-height: 1;
+  line-height: 1.4;
   cursor: pointer;
+  z-index: 1;
 }
 @keyframes flash {
   0% { background: #ff9800; }
   100% { background: #fff3b0; }
+}
+
+/* Container for relative positioning context */
+.markdown-preview-container {
+  position: relative;
+}
+
+/* Invisible anchor for annotation popover */
+.annotation-popover-anchor {
+  display: block;
+  pointer-events: none;
+}
+
+/* Popover body styles */
+.annotation-popover-body {
+  min-width: 200px;
+  max-width: 340px;
+}
+
+.popover-comment {
+  font-size: 13px;
+  color: #333;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.popover-meta {
+  font-size: 11px;
+  color: #aaa;
+  margin-top: 8px;
 }
 </style>
 

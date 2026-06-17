@@ -42,7 +42,8 @@ npm run dev:desktop
 - Bilingual Chinese/English interface with on-the-fly switching
 - Save (Ctrl+S) and Save As (Ctrl+Alt+S) keyboard shortcuts
 - **Find & Replace** (Ctrl+F / Ctrl+H): search cells in Excel sheets or raw text in YAML files, with match-case, whole-word, and regex options
-- **Edit Menu**: new "Edit" dropdown in the toolbar with Find, Replace, Find in Files, and Replace in Files entries
+- **Edit Menu**: new "Edit" dropdown in the toolbar with Find, Replace, Find in Files, Replace in Files entries, plus Zoom In, Zoom Out, and Reset Zoom controls
+- **Font Zoom**: Ctrl+= to zoom in, Ctrl+- to zoom out, Ctrl+0 to reset, and Ctrl+MouseWheel zoom — zoom level is persisted across sessions
 - **Global Search**: Find in Files searches across all sheets (Excel) or all YAML files in the project directory, with results grouped by source; Replace in Files supports both per-match review/replace and replace-all
 
 ### Excel Editor
@@ -77,10 +78,12 @@ npm run dev:desktop
 ### Markdown Plan Annotator
 - Select text directly on the rendered Markdown preview to add annotations
 - Right-click context menu for quick annotation
-- Visual annotation bubbles on the preview
-- Left-side annotation list with edit and delete support
-- Auto-save to plan_comments.json
-- Historical annotation viewing (read-only)
+- Annotation text highlighted with a yellow background and a red numbered badge at the bottom-right corner
+- **Click on annotation highlights to view details**: a popover shows the comment text, line number, and provides in-place edit and delete buttons
+- Left-side annotation list with edit, delete, and scroll-to-location support
+- Auto-save to plan_comments.json — no manual save required
+- Historical annotation viewing (read-only) for traceability
+- Toolbar font zoom (buttons + Ctrl+MouseWheel)
 
 ## Architecture
 
@@ -108,9 +111,10 @@ graph TD
 
     Layout --> Annotator[Plan Annotator /annotator]
 
-    Annotator --> AnnotatorViewer[PlanAnnotatorViewer - Markdown Preview]
-    Annotator --> CommentList[CommentList - Annotation Sidebar]
-    Annotator --> CommentBubble[CommentBubble - Annotation Bubble]
+    Annotator --> AnnotatorViewer[MarkdownPreview - Markdown Preview]
+    Annotator --> CommentList[AnnotationSidebar - Annotation Sidebar]
+    Annotator --> CommentBubble[AnnotationDialog - Annotation Dialog]
+    Annotator --> HistoryViewer[HistoryAnnotationViewer - History Viewer]
 ```
 
 ### Data Flow
@@ -206,13 +210,15 @@ case-editor/
     │       ├── JsonNode.vue           # Recursive node component
     │       └── ValueInput.vue         # Value input component
     │   └── annotator/
-    │       ├── PlanAnnotatorViewer.vue   # Markdown plan annotator main view
-    │       ├── CommentList.vue           # Left annotation list panel
-    │       └── CommentBubble.vue         # Annotation bubble component
+    │       ├── MarkdownPreview.vue      # Markdown plan annotator preview view
+    │       ├── AnnotationSidebar.vue    # Left annotation list panel
+    │       ├── AnnotationDialog.vue     # Annotation edit dialog
+    │       └── HistoryAnnotationViewer.vue  # Historical annotation viewer
     ├── views/
     │   ├── HomePage.vue              # Home page (editor selection)
     │   ├── EditorView.vue            # Excel editor view
-    │   └── YamlEditorView.vue        # YAML editor view
+    │   ├── YamlEditorView.vue        # YAML editor view
+    │   └── PlanAnnotatorView.vue     # Plan annotator view
     └── assets/styles/
         └── global.css                 # Global styles
 ```
@@ -295,13 +301,14 @@ Click the "Markdown Plan Annotator" card on the home page to enter. Use the "Ope
 2. Right-click and choose "Add Annotation"
 3. Enter your review comment in the popup input box
 4. Annotation format: line number, selected text, review comment
-5. An annotation bubble appears at the corresponding position of the selected text
+5. Annotated text is displayed with a yellow highlight and a red numbered badge at the bottom-right corner
 
 #### Managing Annotations
 
-- The left-side annotation list shows all annotations for the current file, with edit and delete support
-- Edit an annotation: click the annotation item and modify the review comment
-- Delete an annotation: click the delete button to remove it
+- **Click on annotation highlights**: click a yellow-highlighted annotation in the preview to open a popover showing the comment text and line number, with buttons to edit or delete the annotation directly
+- The left-side annotation list shows all annotations for the current file, with edit, delete, and scroll-to-location support
+- Edit an annotation: use the "Edit" button in the popover or the list to open the edit dialog and modify the review comment
+- Delete an annotation: use the "Delete" button in the popover or the list to remove it — the highlight and badge are removed simultaneously
 
 #### Auto-Save
 
@@ -378,6 +385,10 @@ Annotation data is used by the AI test case generation agent. When the `r` optio
 | Ctrl+F | Find |
 | Ctrl+H | Replace |
 | Esc | Close search bar |
+| Ctrl+= | Zoom in |
+| Ctrl+- | Zoom out |
+| Ctrl+0 | Reset zoom |
+| Ctrl+MouseWheel | Zoom in/out |
 
 ## Development
 

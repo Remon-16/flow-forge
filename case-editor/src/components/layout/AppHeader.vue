@@ -119,6 +119,9 @@ async function handleSaveAs() {
 }
 
 function handleEditMenuClick({ key }: { key: string }) {
+  if (key === 'zoomIn') { settings.zoomIn(); return }
+  if (key === 'zoomOut') { settings.zoomOut(); return }
+  if (key === 'zoomReset') { settings.zoomReset(); return }
   editorStore.triggerSearch(key as 'find' | 'replace' | 'findInFiles' | 'replaceInFiles')
 }
 
@@ -140,6 +143,15 @@ function onKeyDown(e: KeyboardEvent) {
   } else if (e.ctrlKey && e.key === 'n') {
     e.preventDefault()
     handleNew()
+  } else if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+    e.preventDefault()
+    settings.zoomIn()
+  } else if (e.ctrlKey && e.key === '-') {
+    e.preventDefault()
+    settings.zoomOut()
+  } else if (e.ctrlKey && e.key === '0') {
+    e.preventDefault()
+    settings.zoomReset()
   }
 }
 
@@ -190,6 +202,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
           </a-menu-item>
           <a-menu-item key="replaceInFiles">
             <span>{{ t('search.replaceInFiles') }}</span>
+          </a-menu-item>
+          <a-menu-divider />
+          <a-menu-item key="zoomIn">
+            <span>{{ t('menu.zoomIn') }}</span>
+            <span class="menu-shortcut">Ctrl+=</span>
+          </a-menu-item>
+          <a-menu-item key="zoomOut">
+            <span>{{ t('menu.zoomOut') }}</span>
+            <span class="menu-shortcut">Ctrl+-</span>
+          </a-menu-item>
+          <a-menu-item key="zoomReset">
+            <span>{{ t('menu.zoomReset') }}</span>
+            <span class="menu-shortcut">Ctrl+0</span>
           </a-menu-item>
         </a-menu>
       </template>

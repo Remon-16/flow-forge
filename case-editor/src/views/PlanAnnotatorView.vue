@@ -39,6 +39,8 @@ const historyViewerAnnotations = ref<AnnotationData[]>([])
 // MarkdownPreview ref for scrolling
 const previewRef = ref<InstanceType<typeof MarkdownPreview> | null>(null)
 
+const zoomPercent = computed(() => Math.round(settings.zoom * 100) + '%')
+
 // Debounce timer for auto-save
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -207,6 +209,17 @@ function handleLanguageChange(lang: string) {
   settings.setLanguage(lang as 'zh-CN' | 'en-US')
 }
 
+function zoomIn() { settings.zoomIn() }
+function zoomOut() { settings.zoomOut() }
+function zoomReset() { settings.zoomReset() }
+function onPreviewWheel(e: WheelEvent) {
+  if (e.ctrlKey) {
+    e.preventDefault()
+    if (e.deltaY < 0) settings.zoomIn()
+    else if (e.deltaY > 0) settings.zoomOut()
+  }
+}
+
 function goBack() {
   router.push('/')
 }
@@ -216,6 +229,15 @@ function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     dialogVisible.value = false
     historyViewerVisible.value = false
+  } else if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+    e.preventDefault()
+    settings.zoomIn()
+  } else if (e.ctrlKey && e.key === '-') {
+    e.preventDefault()
+    settings.zoomOut()
+  } else if (e.ctrlKey && e.key === '0') {
+    e.preventDefault()
+    settings.zoomReset()
   }
 }
 
@@ -231,6 +253,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         ← {{ t('header.backHome') }}
       </a-button>
       <span class="toolbar-title">{{ t('annotator.title') }}</span>
+
+      <a-button size="small" @click="zoomOut" :disabled="settings.zoom <= 0.5" title="Ctrl+-">−</a-button>
+      <span class="zoom-label">{{ zoomPercent }}</span>
+      <a-button size="small" @click="zoomIn" :disabled="settings.zoom >= 2.0" title="Ctrl+=">+</a-button>
+      <a-button size="small" @click="zoomReset" :disabled="settings.zoom === 1" title="Ctrl+0">⟲</a-button>
+
       <a-select
         :value="settings.language"
         size="small"
@@ -271,12 +299,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
           @scroll-to="handleScrollTo"
           @view-history="handleViewHistory"
         />
-        <div class="annotator-preview-wrapper">
+        <div class="annotator-preview-wrapper" :style="{ zoom: settings.zoom }" @wheel="onPreviewWheel">
           <MarkdownPreview
             ref="previewRef"
             :plan-content="planContent"
             :annotations="annotations"
             @add-annotation="handleAddAnnotation"
+            @edit-annotation="handleEditAnnotation"
+            @delete-annotation="handleDeleteAnnotation"
           />
           <div v-if="autoSaveStatus" class="autosave-indicator">
             {{ autoSaveStatus }}
@@ -331,6 +361,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   font-size: 14px;
   font-weight: 600;
   color: #333;
+}
+
+.zoom-label {
+  font-size: 12px;
+  min-width: 40px;
+  text-align: center;
+  color: #666;
+  user-select: none;
 }
 
 .annotator-main {
