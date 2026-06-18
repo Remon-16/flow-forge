@@ -247,6 +247,7 @@ Click **API Definitions** in the left sidebar to switch to the API definition sh
 - StatusCode column: text input
 - RequestHead / RequestBody / AssertDict columns: click the button to open the JSON Editor
 - AssertRules column: read-only preview area + "Edit Details" button, opens the structured assertion rules editing modal
+- PreProcessors / PostProcessors columns: JSON array columns containing processor names and configurations, formatted as `[{"name": "...", "config": {...}}]`. Supports inline editing, JSON tree editor, and list editor modes
 
 #### Editing AssertRules
 
@@ -275,7 +276,7 @@ The form type automatically switches based on the `case_type` field in the YAML 
 - `single`: single-API case form (test_id, relevance_id, api_name, method, url, etc.)
 - `biz`: business flow form (sheet_name + step list)
 
-Simple fields are arranged in a two-column grid layout, while JSON fields (RequestHead, RequestBody, AssertDict), AssertRules, and Remark each occupy a full row. JSON and AssertRules fields can be edited directly in the text area (auto-saves on blur), or the "Edit Details" button opens a structured editor for visual editing. JSON text areas auto-size to fit content.
+Simple fields are arranged in a two-column grid layout, while JSON fields (RequestHead, RequestBody, AssertDict), AssertRules, PreProcessors, PostProcessors, and Remark each occupy a full row. JSON and AssertRules fields can be edited directly in the text area (auto-saves on blur), or the "Edit Details" button opens a structured editor for visual editing. PreProcessors / PostProcessors are JSON arrays (`[{"name": "...", "config": {...}}]`), supporting inline editing, JSON tree editor, and a name + key=value configuration list editor. JSON text areas auto-size to fit content.
 
 #### YAML Preview Panel
 
@@ -321,6 +322,21 @@ Toggle to "Historical Annotations" mode to view all previously saved annotations
 #### Integration with AI Agent
 
 Annotation data is used by the AI test case generation agent. When the `r` option is selected in the CLI tool, the agent reads annotation information from `plan_comments.json` as contextual reference for generating test cases.
+
+### Editing Processors
+
+The PreProcessors / PostProcessors columns support the following editing modes:
+
+- **Inline Editing** — edit the JSON text directly in the cell
+- **JSON Tree Editor** — click the "Details" button to open a tree-structured editor
+- **List Editor** — a simple name + key=value configuration list editor with add, remove, reorder, and JSON paste support
+
+#### Validation Rules
+
+- Empty values are allowed
+- Must be a valid JSON array
+- Each item must have a `name` field (non-empty string)
+- `config` field is optional; if present it must be an object
 
 ## Validation Rules
 

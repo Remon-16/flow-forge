@@ -44,6 +44,8 @@ class BatchController(BaseAgent):
         self._url_correction_max_retries = getattr(
             settings, "url_correction_max_retries", 3
         )
+        self._enable_plugins = getattr(settings, "enable_plugins", False)
+        self._plugin_modules = getattr(settings, "plugin_modules", "")
         self._reference_dir = ""
 
     # ------------------------------------------------------------------
@@ -162,6 +164,37 @@ class BatchController(BaseAgent):
             biz_filled, interfaces, api_summary, user_guidance, "biz",
             biz_assert_gen, validator
         )
+
+        # ================================================================
+        # Step 4: Custom plugin execution (optional)
+        # ================================================================
+        if self._enable_plugins and self._plugin_modules:
+            logger.info("=" * 60)
+            logger.info("Step 4: Custom plugin execution")
+            logger.info("=" * 60)
+
+            plugin_paths = [
+                p.strip() for p in self._plugin_modules.split(",") if p.strip()
+            ]
+            from plugins.loader import load_plugins
+            plugins = load_plugins(plugin_paths)
+
+            for plugin in plugins:
+                decl = plugin.declaration
+                logger.info(
+                    "Running plugin: %s (single=%s, biz=%s)",
+                    decl.plugin_name,
+                    decl.applies_to_single,
+                    decl.applies_to_biz,
+                )
+                if decl.applies_to_single:
+                    single_complete = self._apply_plugin(
+                        plugin, single_complete, interfaces, api_summary, api_doc_text
+                    )
+                if decl.applies_to_biz:
+                    biz_complete = self._apply_plugin(
+                        plugin, biz_complete, interfaces, api_summary, api_doc_text
+                    )
 
         # ================================================================
         # Final URL safety-net check before writing
@@ -467,6 +500,54 @@ class BatchController(BaseAgent):
 
         logger.info("Assertion generation [%s]: %d cases completed", batch_type, len(all_complete))
         return all_complete
+
+    # ------------------------------------------------------------------
+    # Plugin execution
+    # ------------------------------------------------------------------
+
+    def _apply_plugin(
+        self,
+        plugin,
+        cases: List[Dict],
+        interfaces: List[Dict],
+        api_summary: List[Dict],
+        api_doc_text: str,
+    ) -> List[Dict]:
+        """Run a plugin across all cases, with batching and retry support."""
+        decl = plugin.declaration
+        batches = self._split_batches(cases)
+        results: List[Dict] = []
+
+        for batch in batches:
+            for attempt in range(decl.max_retries):
+                try:
+                    updated = plugin.generate(
+                        batch, interfaces, api_summary, api_doc_text
+                    )
+                    results.extend(updated)
+                    break
+                except Exception:
+                    if attempt + 1 >= decl.max_retries:
+                        if decl.error_strategy == "fail":
+                            raise
+                        elif decl.error_strategy == "warn":
+                            logger.warning(
+                                "Plugin '%s' failed on a batch after %d retries — keeping original cases",
+                                decl.plugin_name, decl.max_retries,
+                            )
+                            results.extend(batch)
+                        else:  # skip
+                            results.extend(batch)
+                    else:
+                        logger.info(
+                            "Plugin '%s' retry %d/%d",
+                            decl.plugin_name, attempt + 1, decl.max_retries,
+                        )
+
+        logger.info(
+            "Plugin '%s': processed %d cases", decl.plugin_name, len(results)
+        )
+        return results
 
     # ------------------------------------------------------------------
     # Code-based batch splitting

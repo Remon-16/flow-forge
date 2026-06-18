@@ -139,6 +139,7 @@ class HTMLReportWriter:
             parts.append("</div></div>")
             return
 
+        self._write_processor_results(parts, result)
         self._write_json_block(parts, "Request Headers", result.get("request_headers"))
         self._write_json_block(parts, "Request Body", result.get("request_body"))
         self._write_json_block(parts, "Response Body", result.get("response_body"))
@@ -221,6 +222,7 @@ class HTMLReportWriter:
                 parts.append("</div></div>")
                 continue
 
+            self._write_processor_results(parts, step)
             self._write_json_block(parts, "Request Headers", step.get("request_headers"))
             self._write_json_block(parts, "Request Body", step.get("request_body"))
             self._write_json_block(parts, "Response Body", step.get("response_body"))
@@ -229,6 +231,21 @@ class HTMLReportWriter:
             parts.append("</div></div>")
 
         parts.append("</div></div>")
+
+    @staticmethod
+    def _write_processor_results(parts: List[str], result: Dict[str, Any]) -> None:
+        """Render preprocessor / postprocessor execution results."""
+        for label, key in [("PreProcessor", "preprocessor_results"),
+                           ("PostProcessor", "postprocessor_results")]:
+            for pr in result.get(key) or []:
+                status = pr.get("status", "")
+                name = pr.get("name", "unknown")
+                error = pr.get("error", "")
+                if error or status != "ok":
+                    parts.append(
+                        f"<p class=\"error-msg\"><strong>{label} [{name}]:</strong> "
+                        f"{HTMLReportWriter._h(error or status)}</p>"
+                    )
 
     def _write_json_block(self, parts: List[str], title: str, data: Any) -> None:
         parts.append(f"<p><strong>{title}:</strong></p>")

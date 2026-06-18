@@ -27,6 +27,8 @@ class Settings:
     output_format: str = "both"
     max_steps_no_progress: int = 5
     url_correction_max_retries: int = 3
+    enable_plugins: bool = False
+    plugin_modules: str = ""  # comma-separated module paths, executed in order
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -48,6 +50,8 @@ class Settings:
             "output_format": self.output_format,
             "max_steps_no_progress": self.max_steps_no_progress,
             "url_correction_max_retries": self.url_correction_max_retries,
+            "enable_plugins": self.enable_plugins,
+            "plugin_modules": self.plugin_modules,
         }
 
 
@@ -70,6 +74,10 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
     max_validation_retries = int(os.getenv("MAX_VALIDATION_RETRIES", "3"))
     max_steps_no_progress = int(os.getenv("MAX_STEPS_NO_PROGRESS", "5"))
     url_correction_max_retries = int(os.getenv("URL_CORRECTION_MAX_RETRIES", "3"))
+    enable_plugins = os.getenv("ENABLE_PLUGINS", "false").strip().lower() in (
+        "true", "1", "yes", "on"
+    )
+    plugin_modules = os.getenv("PLUGIN_MODULES", "")
 
     return Settings(
         llm_provider=os.getenv("LLM_PROVIDER", "openai"),
@@ -90,4 +98,6 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
         output_format=os.getenv("OUTPUT_FORMAT", "both"),
         max_steps_no_progress=max_steps_no_progress,
         url_correction_max_retries=url_correction_max_retries,
+        enable_plugins=enable_plugins,
+        plugin_modules=plugin_modules,
     )

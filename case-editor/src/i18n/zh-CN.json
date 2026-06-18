@@ -39,7 +39,25 @@
     "addBizFlow": "新增业务链路",
     "addStep": "新增步骤",
     "editJson": "编辑 JSON",
+    "PreProcessors": "前置处理器",
+    "PostProcessors": "后置处理器",
     "noData": "暂无数据，请先打开 Excel 文件"
+  },
+  "processor": {
+    "title": "处理器编辑器",
+    "addItem": "添加处理器",
+    "removeItem": "删除",
+    "moveUp": "上移",
+    "moveDown": "下移",
+    "name": "名称",
+    "config": "配置",
+    "addConfig": "添加配置",
+    "configKey": "键",
+    "configValue": "值",
+    "pasteJson": "粘贴 JSON",
+    "editJson": "JSON 编辑",
+    "noItems": "暂无处理器",
+    "parseError": "JSON 解析失败，请检查格式"
   },
   "jsonEditor": {
     "title": "JSON 编辑器",
@@ -74,7 +92,10 @@
     "transChinese": "包含中文字符",
     "unsavedTitle": "未保存的修改",
     "unsavedContent": "当前文件有未保存的修改，是否保存？",
-    "urlWarning": "URL 在接口文档中未找到，可能存在 AI 幻觉"
+    "urlWarning": "URL 在接口文档中未找到，可能存在 AI 幻觉",
+    "processorNameRequired": "处理器名称不能为空",
+    "processorInvalidFormat": "处理器格式无效，应为数组，每项包含 name 字段",
+    "processorConfigInvalid": "处理器配置格式无效"
   },
   "dialog": {
     "yes": "是",

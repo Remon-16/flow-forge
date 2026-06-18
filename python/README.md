@@ -70,6 +70,12 @@ python/
 │   ├── engine.py                # 简单等值断言引擎（assert_dict）
 │   └── rules_engine.py          # 高级断言规则引擎（assert_rules）
 │
+├── processors/
+│   ├── base.py                  # PreProcessor / PostProcessor 基类
+│   ├── loader.py                # 处理器自动发现与加载器
+│   ├── runner.py                # 处理器运行器
+│   └── builtin/                 # 内置处理器
+│
 └── reporter/
     ├── __init__.py
     ├── html_writer.py           # 自包含 HTML 报告生成器
@@ -558,6 +564,73 @@ Excel 中的 JSON 字段支持以下格式：
 | `SUM_PRODUCT(p1, p2)` | 两字段乘积求和 | `SUM_PRODUCT($.data.list[*].price, $.data.list[*].count)` |
 
 路径中 `[*]` 表示遍历数组的每个元素，用于 `SUM` 和 `SUM_PRODUCT` 函数。
+
+## 前置处理器 / 后置处理器
+
+### 概念
+
+在执行器发送 HTTP 请求前后，预留了两个扩展点：
+
+- **PreProcessor（前置处理器）** — 在请求发送前执行。可以修改请求头、请求体，适用于 HMAC 签名、参数加密、动态 Token 注入等场景。
+- **PostProcessor（后置处理器）** — 在断言执行后执行。可以检查响应数据、执行外部清理操作（SQL、Redis）等。
+
+处理器在测试用例中通过 `preprocessors` 和 `postprocessors` 字段声明，按列表顺序依次执行。
+
+```yaml
+preprocessors:
+  - name: hmac-sign
+    config:
+      algorithm: sha256
+      secret_env: SIGN_SECRET
+```
+
+```json
+// Excel 中对应的列值为 JSON 数组字符串
+[{"name": "hmac-sign", "config": {"algorithm": "sha256", "secret_env": "SIGN_SECRET"}}]
+```
+
+### 敏感数据配置
+
+数据库连接、密钥等敏感信息不应写在测试用例中。可以在 `env.yml` 的 `processor_configs` 段中配置，执行时自动传递到处理器的 `global_config` 参数中，无需手工处理。
+
+```yaml
+# env.yml
+processor_configs:
+  hmac-sign:
+    secret_env: SIGN_SECRET
+    algorithm: sha256
+```
+
+### 内置处理器
+
+- **hmac-sign** — HMAC-SHA256 签名处理器（示例），向请求头添加 `X-Signature`
+
+### 自定义处理器
+
+1. 继承 `PreProcessor` 或 `PostProcessor` 基类（`processors/base.py`）
+2. 设置类属性 `name`（对应测试用例中引用的名称）
+3. 实现 `process()` 方法
+4. 将 `.py` 文件放入 `processors/` 目录
+
+```python
+from processors.base import PreProcessor
+
+class MyPreProcessor(PreProcessor):
+    name = "my-processor"
+
+    def process(self, headers, body, case_config, global_config):
+        # 修改 headers / body
+        return headers, body
+```
+
+### 执行流程
+
+```
+请求前: Token 解析 → PreProcessors（按顺序） → 发送请求
+请求后: 断言执行 → PostProcessors（按顺序） → 报告生成
+```
+
+处理器抛出的 `ProcessorError` 异常会终止用例执行，错误信息同步显示在测试报告中。
 
 ### HTML 报告生成器 (`reporter/html_writer.py`)
 

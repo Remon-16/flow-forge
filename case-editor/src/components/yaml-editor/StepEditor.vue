@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useYamlStore } from '../../stores/yaml-store'
 import { TAG_LEVELS, HTTP_METHODS } from '../../types/excel'
 import type { YamlBizStep } from '../../types/yaml'
+import ProcessorListEditor from '../editor/ProcessorListEditor.vue'
 
 const { t } = useI18n()
 const yamlStore = useYamlStore()
@@ -363,6 +364,32 @@ function onRulesEditBlur() {
             :placeholder="t('assertRules.empty')"
             @change="(e: any) => onRulesEditChange(e.target.value)"
             @blur="onRulesEditBlur"
+          />
+        </a-form-item>
+      </a-col>
+    </a-row>
+
+    <!-- PreProcessors (full width) -->
+    <a-row :gutter="12">
+      <a-col :span="24">
+        <a-form-item :label="t('table.PreProcessors')" class="compact-item">
+          <ProcessorListEditor
+            :modelValue="step.preprocessors"
+            :title="t('table.PreProcessors')"
+            @update:modelValue="(v: any) => onFieldChange('preprocessors', v)"
+          />
+        </a-form-item>
+      </a-col>
+    </a-row>
+
+    <!-- PostProcessors (full width) -->
+    <a-row :gutter="12">
+      <a-col :span="24">
+        <a-form-item :label="t('table.PostProcessors')" class="compact-item">
+          <ProcessorListEditor
+            :modelValue="step.postprocessors"
+            :title="t('table.PostProcessors')"
+            @update:modelValue="(v: any) => onFieldChange('postprocessors', v)"
           />
         </a-form-item>
       </a-col>

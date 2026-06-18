@@ -878,6 +878,8 @@ def batch_controller_node(state: GraphState) -> GraphState:
     controller._batch_size = batch_size
     controller._enable_validation = enable_validation
     controller._max_validation_retries = max_retries
+    controller._enable_plugins = _settings.enable_plugins
+    controller._plugin_modules = _settings.plugin_modules
 
     interfaces = _dicts_to_interfaces(interfaces_raw)
 

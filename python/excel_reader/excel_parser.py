@@ -232,6 +232,17 @@ class ExcelParser:
         result["tag"] = str(tc.get("Tag", "")) if tc.get("Tag") is not None else ""
         result["remark"] = str(tc.get("Remark", "")) if tc.get("Remark") is not None else ""
 
+        # PreProcessors / PostProcessors
+        for col, key in [("PreProcessors", "preprocessors"), ("PostProcessors", "postprocessors")]:
+            raw = tc.get(col)
+            if raw not in (None, ""):
+                parsed = self._safe_parse_json(
+                    raw, col, tc.get("TestID") or tc.get("StepID")
+                )
+                result[key] = parsed if isinstance(parsed, list) else []
+            else:
+                result[key] = []
+
         return result
 
     @staticmethod

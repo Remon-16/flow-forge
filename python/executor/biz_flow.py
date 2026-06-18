@@ -8,10 +8,11 @@ import requests
 
 from assertion.engine import AssertionEngine
 from auth.login_manager import LoginManager
-from config.config_manager import get_app
+from config.config_manager import get_app, get_all
 from core.path_resolver import resolve_path, _Missing
 from core.var_resolver import has_placeholders
 from executor.base import BaseExecutor
+from processors.base import ProcessorError
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,32 @@ class BizFlowExecutor(BaseExecutor):
                                                headers, body, passed=False, error=token_error)
             headers = resolved_headers
 
-        result = self._build_step_result(step, step_id, base_url, path, headers, body)
+        # ---- PreProcessors ----
+        preprocessors = step.get("preprocessors") or []
+        postprocessors = step.get("postprocessors") or []
+        global_config = None
+
+        if preprocessors or postprocessors:
+            from processors.loader import discover_processors
+            discover_processors()
+            global_config = get_all()
+
+        if preprocessors:
+            from processors.runner import run_preprocessors
+            try:
+                headers, body, preprocessor_results = run_preprocessors(
+                    {"request_head": headers, "request_body": body, "preprocessors": preprocessors},
+                    global_config,
+                )
+                result = self._build_step_result(step, step_id, base_url, path, headers, body)
+                result["preprocessor_results"] = preprocessor_results
+            except ProcessorError as e:
+                return self._build_step_result(
+                    step, step_id, base_url, path, headers, body,
+                    passed=False, error=f"[{e.processor_name}] {e}",
+                )
+        else:
+            result = self._build_step_result(step, step_id, base_url, path, headers, body)
 
         try:
             response = self._send_request(method, url, headers, body)
@@ -160,7 +186,22 @@ class BizFlowExecutor(BaseExecutor):
                     )
 
             result["assertions"] = assertions
-            result["passed"] = all(a["passed"] for a in assertions)
+
+            # ---- PostProcessors ----
+            if postprocessors and global_config is not None:
+                from processors.runner import run_postprocessors
+                try:
+                    postprocessor_results = run_postprocessors(
+                        {"request_head": headers, "request_body": body, "postprocessors": postprocessors},
+                        response,
+                        global_config,
+                    )
+                    result["postprocessor_results"] = postprocessor_results
+                except ProcessorError as e:
+                    result["error"] = f"[{e.processor_name}] {e}"
+                    result["passed"] = False
+
+            result["passed"] = all(a["passed"] for a in assertions) if not result.get("error") else False
 
             if result["passed"]:
                 logger.info("[%s] PASS", step_id)
@@ -263,6 +304,8 @@ class BizFlowExecutor(BaseExecutor):
             "response_status": None,
             "response_body": None,
             "assertions": [],
+            "preprocessor_results": [],
+            "postprocessor_results": [],
             "passed": passed,
             "error": error,
         }

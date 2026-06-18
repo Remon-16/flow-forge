@@ -13,7 +13,7 @@ _initialized: bool = False
 _REQUIRED_KEYS = ("envName", "caseFilePath")
 _TOP_LEVEL_KEYS = {
     "scriptType", "envName", "caseFilePath", "maxThread",
-    "reportName", "apiMode",
+    "reportName", "apiMode", "processor_configs",
 }
 _DEFAULTS = {
     "scriptType": "APITest",
@@ -107,6 +107,14 @@ def get_apps() -> Dict[str, Dict[str, Any]]:
     if not _initialized:
         raise RuntimeError("ConfigManager has not been initialized")
     return dict(_apps)
+
+
+def get_processor_config(name: str) -> Dict[str, Any]:
+    """Get a named processor config from ``processor_configs``."""
+    processor_configs = _config.get("processor_configs", {})
+    if isinstance(processor_configs, dict):
+        return dict(processor_configs.get(name, {}))
+    return {}
 
 
 def is_initialized() -> bool:

@@ -77,8 +77,10 @@ The two components are decoupled via **YAML files** as the primary contract (Exc
 flow-forge/
 ├── README.en.md                  # Project overview (this file)
 ├── agent/                        # AI Case Generation Agent
+│   └── plugins/                  # Custom case-attribute generator plugins (optional)
 ├── python/                       # API Test Executor
-└── case-editor/                  # Tauri Desktop Test Case Editor (Excel + YAML), includes a Markdown Plan Annotator for adding structured annotations on rendered test plans
+│   └── processors/               # Pre/Post processor plugins (optional)
+└── case-editor/                  # Tauri Desktop Test Case Editor (Excel + YAML), includes a Markdown Plan Annotator
 ```
 
 ## Workflow
@@ -139,3 +141,21 @@ The executor is a pure CLI tool that communicates results via exit codes, allowi
 - **Human-in-the-Loop**: AI-generated test plans require manual approval before final case generation, ensuring quality control.
 - **CLI-Driven**: The executor is a pure CLI tool with no GUI dependencies, suitable for CI/CD environments.
 - **Self-Contained Reports**: HTML reports embed all styles and scripts inline — open them directly in a browser without a web server.
+- **Extensible Processors**: Pre/post processor extension points allow custom logic such as HMAC signing, SQL cleanup, etc.
+
+## Plugin & Processor System
+
+The project provides a three-layer extension mechanism for custom requirements:
+
+| Module | Extension Point | Description |
+|--------|----------------|-------------|
+| `python/processors/` | PreProcessor / PostProcessor | Request/response processing — modify requests, inspect responses, manage external resources |
+| `agent/plugins/` | CaseAttributeGenerator | AI agent plugins — automatically fill custom attributes after case generation |
+| `case-editor` | PreProcessors / PostProcessors fields | Edit and validate processor configs in the UI |
+
+**Typical scenarios**:
+- Add HMAC signature before requests (PreProcessor)
+- Clean up test data in a database after requests (PostProcessor)
+- AI agent automatically recommends processor configs for generated cases (agent plugin)
+
+See each subdirectory's README for details: `python/README.md`, `agent/README.md`, `case-editor/README.md`.

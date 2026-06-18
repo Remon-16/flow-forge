@@ -52,6 +52,68 @@ graph TD
 
 每个步骤在 CLI 中均有详细进度输出，包括：当前步骤 [N/9]、文件路径与大小、LLM 调用模型名、生成结果统计。用户始终清楚系统正在做什么。
 
+## 自定义用例属性生成器插件
+
+### 概念
+
+在断言生成完成后，用户可以通过自定义插件为测试用例补充任意属性（如 `preprocessors`、`postprocessors` 等）。插件以智能体的形式运行，利用 LLM 分析用例内容，自动生成相应的配置。
+
+常见的 4 种插件类型：
+
+- 单接口前置处理器智能体
+- 单接口后置处理器智能体
+- 业务链路前置处理器智能体
+- 业务链路后置处理器智能体
+
+### 配置
+
+在 `.env` 文件中启用插件并指定模块路径：
+
+```
+ENABLE_PLUGINS=true
+# 逗号分隔多个模块路径，按顺序执行
+PLUGIN_MODULES=my_plugins.single_pre_processor.SinglePreProcessor,my_plugins.biz_post_processor.BizPostProcessor
+```
+
+### 编写插件
+
+1. 继承 `CaseAttributeGenerator` 基类（`plugins/base.py`）
+2. 声明 `PluginDeclaration`（插件名称、作用的属性、适用范围等）
+3. 实现 `generate()` 方法（接收一批已完成的用例，返回补充属性后的用例列表）
+
+```python
+from plugins.base import CaseAttributeGenerator, PluginDeclaration
+
+class SinglePreProcessor(CaseAttributeGenerator):
+    @property
+    def declaration(self):
+        return PluginDeclaration(
+            plugin_name="single-pre-processor",
+            attributes=["preprocessors"],
+            applies_to_single=True,
+            applies_to_biz=False,
+            max_retries=1,
+            error_strategy="skip",
+        )
+
+    def generate(self, cases, interfaces, api_summary, api_doc_text):
+        # 用 LLM 分析每个用例，生成 preprocessors 列表
+        for case in cases:
+            case["preprocessors"] = [...]  # 由 LLM 生成
+        return cases
+```
+
+### PluginDeclaration 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `plugin_name` | str | 插件名称 |
+| `attributes` | List[str] | 要添加的属性名列表，如 `["preprocessors"]` |
+| `applies_to_single` | bool | 是否作用于单接口用例 |
+| `applies_to_biz` | bool | 是否作用于业务链路用例 |
+| `max_retries` | int | 每批失败重试次数 |
+| `error_strategy` | str | 彻底失败策略: `"skip"` 跳过 / `"warn"` 警告 / `"fail"` 终止 |
+
 ## 技术栈
 
 | 依赖 | 用途 |
@@ -113,6 +175,12 @@ agent/
 │   │   └── boundary_test.yaml   # 边界值测试技能
 │   └── custom/                  # 用户自定义 Skill 目录
 │       └── .gitkeep
+│
+├── plugins/
+│   ├── __init__.py
+│   ├── base.py                  # CaseAttributeGenerator 基类 + PluginDeclaration
+│   ├── loader.py                # 插件发现与加载器
+│   └── builtin/                 # 内置插件目录
 │
 ├── agents/
 │   ├── __init__.py

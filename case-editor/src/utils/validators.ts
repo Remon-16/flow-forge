@@ -90,3 +90,45 @@ export function validateTrans(transStr: string, stepId?: string): string | null 
 
   return null
 }
+
+// ---------------------------------------------------------------------------
+// Processor validation
+// ---------------------------------------------------------------------------
+
+export interface ProcessorValidationResult {
+  valid: boolean
+  error: string | null
+}
+
+export function validateProcessorItem(
+  item: Record<string, unknown>
+): ProcessorValidationResult {
+  if (!item || typeof item !== 'object') {
+    return { valid: false, error: '处理器项必须为对象' }
+  }
+  if (!item.name || typeof item.name !== 'string' || !item.name.trim()) {
+    return { valid: false, error: '处理器项必须包含非空的 name 字段' }
+  }
+  if (item.config !== undefined && item.config !== null && typeof item.config !== 'object') {
+    return { valid: false, error: '处理器 config 必须为对象或 null' }
+  }
+  return { valid: true, error: null }
+}
+
+export function validateProcessorsList(
+  value: unknown
+): ProcessorValidationResult {
+  if (value === null || value === undefined) {
+    return { valid: true, error: null }
+  }
+  if (!Array.isArray(value)) {
+    return { valid: false, error: '处理器必须是 JSON 数组格式' }
+  }
+  for (let i = 0; i < value.length; i++) {
+    const result = validateProcessorItem(value[i] as Record<string, unknown>)
+    if (!result.valid) {
+      return { valid: false, error: `第 ${i + 1} 项: ${result.error}` }
+    }
+  }
+  return { valid: true, error: null }
+}

@@ -70,6 +70,12 @@ python/
 │   ├── engine.py                # Simple equality assertion engine (assert_dict)
 │   └── rules_engine.py          # Advanced assertion rules engine (assert_rules)
 │
+├── processors/
+│   ├── base.py                  # PreProcessor / PostProcessor base classes
+│   ├── loader.py                # Processor auto-discovery and loader
+│   ├── runner.py                # Processor runner
+│   └── builtin/                 # Built-in processors
+│
 └── reporter/
     ├── __init__.py
     ├── html_writer.py           # Self-contained HTML report generator
@@ -558,6 +564,73 @@ Supported functions:
 | `SUM_PRODUCT(p1, p2)` | Sum of products of two fields | `SUM_PRODUCT($.data.list[*].price, $.data.list[*].count)` |
 
 The `[*]` wildcard in paths iterates over each element of an array, used with `SUM` and `SUM_PRODUCT` functions.
+
+## Pre-Processors / Post-Processors
+
+### Concept
+
+Two extension points are provided before and after the executor sends an HTTP request:
+
+- **PreProcessor** — Executed before the request is sent. Can modify request headers and body. Suitable for HMAC signing, parameter encryption, dynamic token injection, and similar scenarios.
+- **PostProcessor** — Executed after assertions complete. Can inspect response data, perform external cleanup (SQL, Redis), etc.
+
+Processors are declared in test cases via the `preprocessors` and `postprocessors` fields and execute sequentially in list order.
+
+```yaml
+preprocessors:
+  - name: hmac-sign
+    config:
+      algorithm: sha256
+      secret_env: SIGN_SECRET
+```
+
+```json
+// The corresponding Excel column value is a JSON array string
+[{"name": "hmac-sign", "config": {"algorithm": "sha256", "secret_env": "SIGN_SECRET"}}]
+```
+
+### Sensitive Data Configuration
+
+Sensitive information such as database connections and secrets should not be written in test cases. They can be configured in the `processor_configs` section of `env.yml` and are automatically passed to the processor's `global_config` parameter at runtime — no manual handling required.
+
+```yaml
+# env.yml
+processor_configs:
+  hmac-sign:
+    secret_env: SIGN_SECRET
+    algorithm: sha256
+```
+
+### Built-in Processors
+
+- **hmac-sign** — HMAC-SHA256 signing processor (example); adds the `X-Signature` header to requests
+
+### Custom Processors
+
+1. Inherit from the `PreProcessor` or `PostProcessor` base class (`processors/base.py`)
+2. Set the class attribute `name` (corresponding to the name referenced in test cases)
+3. Implement the `process()` method
+4. Place the `.py` file in the `processors/` directory
+
+```python
+from processors.base import PreProcessor
+
+class MyPreProcessor(PreProcessor):
+    name = "my-processor"
+
+    def process(self, headers, body, case_config, global_config):
+        # Modify headers / body
+        return headers, body
+```
+
+### Execution Flow
+
+```
+Before request: Token resolution → PreProcessors (in order) → Send request
+After request:  Assertion execution → PostProcessors (in order) → Report generation
+```
+
+A `ProcessorError` raised by a processor terminates the case execution, and the error message is displayed in the test report.
 
 ### HTML Report Generator (`reporter/html_writer.py`)
 

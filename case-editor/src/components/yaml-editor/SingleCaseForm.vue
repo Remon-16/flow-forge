@@ -6,6 +6,7 @@ import { TAG_LEVELS, HTTP_METHODS } from '../../types/excel'
 import type { SingleYamlCase } from '../../types/yaml'
 import JsonEditor from '../json-editor/JsonEditor.vue'
 import AssertRulesModal from '../editor/AssertRulesModal.vue'
+import ProcessorListEditor from '../editor/ProcessorListEditor.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
 const { t } = useI18n()
@@ -324,6 +325,32 @@ function onAssertRulesConfirm(rules: string[]) {
               :placeholder="t('assertRules.empty')"
               @change="(e: any) => onRulesEditChange(e.target.value)"
               @blur="onRulesEditBlur"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <!-- PreProcessors (full width) -->
+      <a-row :gutter="16">
+        <a-col :span="24">
+          <a-form-item :label="t('table.PreProcessors')">
+            <ProcessorListEditor
+              :modelValue="currentCase.preprocessors"
+              :title="t('table.PreProcessors')"
+              @update:modelValue="(v: any) => updateField('preprocessors', v)"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <!-- PostProcessors (full width) -->
+      <a-row :gutter="16">
+        <a-col :span="24">
+          <a-form-item :label="t('table.PostProcessors')">
+            <ProcessorListEditor
+              :modelValue="currentCase.postprocessors"
+              :title="t('table.PostProcessors')"
+              @update:modelValue="(v: any) => updateField('postprocessors', v)"
             />
           </a-form-item>
         </a-col>

@@ -6,8 +6,9 @@ import requests
 
 from assertion.engine import AssertionEngine
 from auth.login_manager import LoginManager
-from config.config_manager import get_app
+from config.config_manager import get_app, get_all
 from executor.base import BaseExecutor
+from processors.base import ProcessorError
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,8 @@ class ApiTestExecutor(BaseExecutor):
                 "response_status": None,
                 "response_body": None,
                 "assertions": [],
+                "preprocessor_results": [],
+                "postprocessor_results": [],
                 "passed": False,
                 "error": f"URL not found in API documentation: {path}",
             }
@@ -68,6 +71,8 @@ class ApiTestExecutor(BaseExecutor):
             "response_status": None,
             "response_body": None,
             "assertions": [],
+            "preprocessor_results": [],
+            "postprocessor_results": [],
             "passed": False,
             "error": None,
         }
@@ -80,6 +85,31 @@ class ApiTestExecutor(BaseExecutor):
 
         headers = resolved_headers
         result["request_headers"] = dict(headers)
+
+        # ---- PreProcessors ----
+        preprocessors = case.get("preprocessors") or []
+        postprocessors = case.get("postprocessors") or []
+        global_config = None
+
+        if preprocessors or postprocessors:
+            from processors.loader import discover_processors
+            discover_processors()
+            global_config = get_all()
+
+        if preprocessors:
+            from processors.runner import run_preprocessors
+            try:
+                headers, body, preprocessor_results = run_preprocessors(
+                    {"request_head": headers, "request_body": body, "preprocessors": preprocessors},
+                    global_config,
+                )
+                result["request_headers"] = dict(headers)
+                result["request_body"] = dict(body)
+                result["preprocessor_results"] = preprocessor_results
+            except ProcessorError as e:
+                result["error"] = f"[{e.processor_name}] {e}"
+                result["passed"] = False
+                return result
 
         try:
             response = self._send_request(method, url, headers, body)
@@ -106,7 +136,22 @@ class ApiTestExecutor(BaseExecutor):
                     )
 
             result["assertions"] = assertions
-            result["passed"] = all(a["passed"] for a in assertions)
+
+            # ---- PostProcessors ----
+            if postprocessors and global_config is not None:
+                from processors.runner import run_postprocessors
+                try:
+                    postprocessor_results = run_postprocessors(
+                        {"request_head": headers, "request_body": body, "postprocessors": postprocessors},
+                        response,
+                        global_config,
+                    )
+                    result["postprocessor_results"] = postprocessor_results
+                except ProcessorError as e:
+                    result["error"] = f"[{e.processor_name}] {e}"
+                    result["passed"] = False
+
+            result["passed"] = all(a["passed"] for a in assertions) if not result.get("error") else False
 
             if result["passed"]:
                 logger.info("[%s] PASS", test_id)

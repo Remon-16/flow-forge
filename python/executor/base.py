@@ -90,4 +90,6 @@ class BaseExecutor(ABC):
             "response_status": None,
             "response_body": None,
             "assertions": [],
+            "preprocessor_results": [],
+            "postprocessor_results": [],
         }

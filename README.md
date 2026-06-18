@@ -77,8 +77,10 @@ graph TD
 flow-forge/
 ├── README.md                     # 项目总览（本文件）
 ├── agent/                        # AI 用例生成智能体
+│   └── plugins/                  # 自定义用例属性生成器插件（可选）
 ├── python/                       # 接口测试执行器
-└── case-editor/                  # Tauri 桌面测试用例编辑器（Excel + YAML），包含 Markdown 计划批注器，支持在渲染后的测试计划上添加结构化批注
+│   └── processors/               # 前置/后置处理器插件（可选）
+└── case-editor/                  # Tauri 桌面测试用例编辑器（Excel + YAML），包含 Markdown 计划批注器
 ```
 
 ## 工作流程
@@ -139,3 +141,21 @@ flow-forge/
 - **人工审核节点**：AI 生成的测试计划需要人工确认后才生成最终用例，确保质量可控
 - **命令行驱动**：执行器纯 CLI 设计，无 GUI 依赖，适配 CI/CD 环境
 - **自包含报告**：HTML 报告内嵌所有样式和脚本，可直接在浏览器打开，无需 Web 服务器
+- **可扩展处理器**：预留前置/后置处理器扩展点，用户可自定义 HMAC 签名、SQL 清理等定制逻辑
+
+## 插件与处理器系统
+
+项目提供三层扩展机制，满足定制化需求：
+
+| 模块 | 扩展点 | 说明 |
+|------|--------|------|
+| `python/processors/` | PreProcessor / PostProcessor | 请求前后的处理逻辑，修改请求/响应，处理外部资源 |
+| `agent/plugins/` | CaseAttributeGenerator | AI 智能体插件，在用例生成后自动补充自定义属性 |
+| `case-editor` | PreProcessors / PostProcessors 字段 | 在编辑器中编辑、校验处理器配置 |
+
+**典型场景**：
+- 在请求前添加 HMAC 签名（PreProcessor）
+- 在请求后清理数据库测试数据（PostProcessor）
+- 通过 AI 智能体自动为生成的用例推荐处理器配置（agent plugin）
+
+详见各子目录的 README：`python/README.md`、`agent/README.md`、`case-editor/README.md`。

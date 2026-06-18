@@ -246,6 +246,7 @@ case-editor/
 - StatusCode 列：文本输入
 - RequestHead / RequestBody / AssertDict 列：点击按钮弹出 JSON 编辑器
 - AssertRules 列：只读预览区 + 「编辑详情」按钮，点击打开结构化断言规则编辑弹窗
+- PreProcessors / PostProcessors 列：JSON 数组列，包含处理器名称和配置，格式为 `[{"name": "...", "config": {...}}]`。支持内联编辑、JSON 树编辑器和列表编辑器三种编辑方式
 
 #### 编辑高级断言（AssertRules）
 
@@ -274,7 +275,7 @@ AssertRules 列显示只读预览区（每行一条规则），点击「编辑�
 - `single`：单接口用例表单（test_id、relevance_id、api_name、method、url 等字段）
 - `biz`：业务链路表单（sheet_name + 步骤列表）
 
-简单字段以两列网格布局呈现，JSON 字段（RequestHead、RequestBody、AssertDict）、AssertRules 和备注字段独占一行。JSON 和 AssertRules 字段可直接在文本框中编辑原始内容（失焦自动保存），也可点击「编辑详情」按钮打开结构化编辑器进行可视化编辑。JSON 文本区域高度自适应内容。
+简单字段以两列网格布局呈现，JSON 字段（RequestHead、RequestBody、AssertDict）、AssertRules、PreProcessors、PostProcessors 和备注字段独占一行。JSON 和 AssertRules 字段可直接在文本框中编辑原始内容（失焦自动保存），也可点击「编辑详情」按钮打开结构化编辑器进行可视化编辑。PreProcessors / PostProcessors 为 JSON 数组格式（`[{"name": "...", "config": {...}}]`），支持内联编辑、JSON 树编辑器以及名称+key=value 配置列表编辑器。JSON 文本区域高度自适应内容。
 
 #### YAML 预览面板
 
@@ -320,6 +321,21 @@ AssertRules 列显示只读预览区（每行一条规则），点击「编辑�
 #### 与 AI 智能体的集成
 
 批注数据供 AI 测试用例生成智能体使用。在 CLI 工具中选择 `r` 选项时，智能体会读取 `plan_comments.json` 中的批注信息，作为生成测试用例的上下文参考。
+
+### 编辑处理器
+
+PreProcessors / PostProcessors 列支持以下编辑方式：
+
+- **内联编辑** — 直接在单元格中编辑 JSON 文本
+- **JSON 树编辑器** — 点击"详情"按钮打开树形编辑器
+- **列表编辑器** — 提供简单的名称 + key=value 配置列表编辑界面，支持增删改、排序和 JSON 粘贴
+
+#### 校验规则
+
+- 允许为空
+- 必须为有效的 JSON 数组格式
+- 每项必须有 `name` 字段（非空字符串）
+- `config` 字段可选，若存在必须为对象
 
 ## 校验规则
 

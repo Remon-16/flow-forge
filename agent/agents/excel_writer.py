@@ -17,19 +17,22 @@ logger = logging.getLogger(__name__)
 # Column headers matching executor's ExcelParser expectations
 _API_COLUMNS = [
     "TestID", "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Remark",
+    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
+    "PreProcessors", "PostProcessors", "Remark",
 ]
 
 _CASE_COLUMNS = [
     "TestID", "RelevanceID", "Tag",
     "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Remark",
+    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
+    "PreProcessors", "PostProcessors", "Remark",
 ]
 
 _BIZ_COLUMNS = [
     "StepID", "RelevanceID", "Trans",
     "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Tag", "Remark",
+    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
+    "PreProcessors", "PostProcessors", "Tag", "Remark",
 ]
 
 _HEADER_FONT = Font(name="微软雅黑", bold=True, size=11)
@@ -132,6 +135,8 @@ class ExcelWriter:
                 g("status_code", 200),
                 json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
                 json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
+                json.dumps(g("preprocessors"), ensure_ascii=False) if g("preprocessors") else "",
+                json.dumps(g("postprocessors"), ensure_ascii=False) if g("postprocessors") else "",
                 g("remark"),
             ])
 
@@ -153,6 +158,8 @@ class ExcelWriter:
                 g("status_code", 200),
                 json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
                 json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
+                json.dumps(g("preprocessors"), ensure_ascii=False) if g("preprocessors") else "",
+                json.dumps(g("postprocessors"), ensure_ascii=False) if g("postprocessors") else "",
                 g("remark"),
             ])
 
@@ -175,6 +182,8 @@ class ExcelWriter:
                 g("status_code", 200),
                 json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
                 json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
+                json.dumps(g("preprocessors"), ensure_ascii=False) if g("preprocessors") else "",
+                json.dumps(g("postprocessors"), ensure_ascii=False) if g("postprocessors") else "",
                 g("tag", "P1"),
                 g("remark"),
             ])

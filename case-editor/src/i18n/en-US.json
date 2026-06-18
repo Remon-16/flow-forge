@@ -39,7 +39,25 @@
     "addBizFlow": "Add Biz Flow",
     "addStep": "Add Step",
     "editJson": "Edit JSON",
+    "PreProcessors": "PreProcessors",
+    "PostProcessors": "PostProcessors",
     "noData": "No data. Open an Excel file to begin."
+  },
+  "processor": {
+    "title": "Processor Editor",
+    "addItem": "Add Processor",
+    "removeItem": "Remove",
+    "moveUp": "Move Up",
+    "moveDown": "Move Down",
+    "name": "Name",
+    "config": "Config",
+    "addConfig": "Add Config",
+    "configKey": "Key",
+    "configValue": "Value",
+    "pasteJson": "Paste JSON",
+    "editJson": "JSON Edit",
+    "noItems": "No processors",
+    "parseError": "JSON parse failed. Check the format."
   },
   "jsonEditor": {
     "title": "JSON Editor",
@@ -72,6 +90,9 @@
     "transFormat": "Trans format error",
     "transBracket": "Mismatched brackets",
     "transChinese": "Contains Chinese characters",
+    "processorNameRequired": "Processor name cannot be empty",
+    "processorInvalidFormat": "Invalid processor format, must be an array with name field",
+    "processorConfigInvalid": "Invalid processor config format",
     "unsavedTitle": "Unsaved Changes",
     "unsavedContent": "You have unsaved changes. Save before continuing?",
     "urlWarning": "URL not found in API documentation - possible AI hallucination"

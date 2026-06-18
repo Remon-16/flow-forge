@@ -1,5 +1,7 @@
 // YAML case data types — mirrors the executor YAML format
 
+import type { PreProcessorItem, PostProcessorItem } from './excel'
+
 export interface SingleYamlCase {
   case_type: 'single'
   test_id: string
@@ -14,6 +16,8 @@ export interface SingleYamlCase {
   status_code: number | string
   assert_dict: Record<string, unknown> | null
   assert_rules: string[] | null
+  preprocessors: PreProcessorItem[] | null
+  postprocessors: PostProcessorItem[] | null
   remark: string
 }
 
@@ -30,6 +34,8 @@ export interface YamlBizStep {
   status_code: number | string
   assert_dict: Record<string, unknown> | null
   assert_rules: string[] | null
+  preprocessors: PreProcessorItem[] | null
+  postprocessors: PostProcessorItem[] | null
   tag: string
   remark: string
 }
@@ -59,6 +65,8 @@ export function createDefaultSingleCase(): SingleYamlCase {
     status_code: 200,
     assert_dict: null,
     assert_rules: null,
+    preprocessors: null,
+    postprocessors: null,
     remark: '',
   }
 }
@@ -85,6 +93,8 @@ export function createDefaultBizStep(): YamlBizStep {
     status_code: 200,
     assert_dict: null,
     assert_rules: null,
+    preprocessors: null,
+    postprocessors: null,
     tag: 'P0',
     remark: '',
   }
