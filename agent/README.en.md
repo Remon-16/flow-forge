@@ -181,21 +181,7 @@ cp .env.example .env
 
 ## Quick Start
 
-### 1. Generate Test Plan (Two-Phase Mode)
-
-```bash
-# Phase 1: Generate test plan
-python main.py --requirement docs/req.md --api docs/api.yaml --plan-only
-```
-
-The system generates a test plan and saves it to `logs/YYYY-MM-DD_HH-MM-SS/plan.md`. After manual review:
-
-```bash
-# Phase 2: Generate Excel from the approved plan
-python main.py --from-plan plan_20260601_120000.md --api docs/api.yaml --output testcase.xlsx
-```
-
-### 2. Full Pipeline (with Interactive Review)
+### 1. Full Pipeline (with Interactive Review)
 
 ```bash
 python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
@@ -371,8 +357,7 @@ Agents without configured `termination` use global defaults.
 
 ```
 usage: main.py [-h] [--requirement REQUIREMENT [REQUIREMENT ...]]
-               [--api API] [--output OUTPUT] [--plan-only]
-               [--from-plan FROM_PLAN] [--env ENV] [-v]
+               [--api API] [--output OUTPUT] [--env ENV] [-v]
 
 Flow Forge — API Test Case Generation Agent
 
@@ -387,9 +372,6 @@ optional arguments:
                         Output format (default: both)
   --batch-size BATCH_SIZE
                         Max cases per batch (default: 10)
-  --plan-only           Only generate test plan, do not generate cases
-  --from-plan FROM_PLAN
-                        Generate cases from an approved plan
   --prompt PROMPT, -p PROMPT
                         User guidance injected into plan and case generation
   --parse-mode {raw,rule,llm}, -m {raw,rule,llm}

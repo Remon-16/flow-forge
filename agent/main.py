@@ -2,11 +2,12 @@
 """Flow Forge — API Test Case Generation Agent CLI (LangGraph + ReAct).
 
 Usage:
-    # Generate test plan only (for human review)
-    python main.py --requirement docs/req.md --api docs/api.yaml --plan-only
-
-    # Generate Excel from a confirmed plan
-    python main.py --from-plan plan_20260601_120000.md --api docs/api.yaml --output testcase.xlsx
+    # TODO: Re-enable when conversation memory is implemented
+    # # Generate test plan only (for human review)
+    # python main.py --requirement docs/req.md --api docs/api.yaml --plan-only
+    #
+    # # Generate Excel from a confirmed plan
+    # python main.py --from-plan plan_20260601_120000.md --api docs/api.yaml --output testcase.xlsx
 
     # Full pipeline with interactive review loop
     python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
@@ -100,16 +101,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help="Max cases per generation batch (default: 10, or from .env)",
     )
-    p.add_argument(
-        "--plan-only",
-        action="store_true",
-        help="Only generate the test plan (Phase 1), do not generate Excel",
-    )
-    p.add_argument(
-        "--from-plan",
-        dest="from_plan",
-        help="Generate Excel from a confirmed plan.md (Phase 2 only)",
-    )
+    # TODO: Re-enable when conversation memory is implemented
+    # p.add_argument(
+    #     "--plan-only",
+    #     action="store_true",
+    #     help="Only generate the test plan (Phase 1), do not generate Excel",
+    # )
+    # p.add_argument(
+    #     "--from-plan",
+    #     dest="from_plan",
+    #     help="Generate Excel from a confirmed plan.md (Phase 2 only)",
+    # )
     p.add_argument(
         "--prompt", "-p",
         default="",
@@ -321,55 +323,56 @@ def main() -> int:
     # ------------------------------------------------------------------
     # Phase 2 only: from confirmed plan
     # ------------------------------------------------------------------
-    if args.from_plan:
-        if not args.api:
-            print("Error: --api is required when using --from-plan")
-            return 2
-
-        plan_path = Path(args.from_plan)
-        if not plan_path.exists():
-            print(f"Error: plan file not found: {args.from_plan}")
-            return 2
-        plan_md = plan_path.read_text(encoding="utf-8")
-
-        graph = build_workflow(settings, session_logger=session_logger)
-        config = {"configurable": {"thread_id": "phase2"}}
-
-        initial: GraphState = {
-            "requirement_paths": [],
-            "api_path": args.api,
-            "output_path": args.output,
-            "output_dir": args.output_dir or settings.output_dir,
-            "output_format": args.output_format or settings.output_format,
-            "batch_size": args.batch_size or settings.batch_size,
-            "enable_validation": settings.enable_validation,
-            "max_validation_retries": settings.max_validation_retries,
-            "plan_only": False,
-            "requirement_text": "",
-            "interfaces": [],
-            "plan_md": plan_md,
-            "plan_confirmed": True,
-            "api_summary_confirmed": True,
-            "user_guidance": args.prompt or "",
-            "parse_mode": args.parse_mode,
-            "parser_path": args.parser_path or "",
-            "reference_dir": args.reference_dir or "",
-        }
-
-        result = graph.invoke(initial, config)
-
-        if result.get("errors"):
-            for err in result["errors"]:
-                print(f"  Error: {err}")
-            session_logger.log_session_end("failed")
-            return 2
-
-        print(f"\nExcel written to: {args.output}")
-        print(f"  Single cases: {len(result.get('single_cases', []))}")
-        print(f"  Biz flows: {len(result.get('biz_flows', []))}")
-        session_logger.save_state(dict(result))
-        session_logger.log_session_end("completed")
-        return 0
+    # TODO: Re-enable when conversation memory is implemented
+    # if args.from_plan:
+    #     if not args.api:
+    #         print("Error: --api is required when using --from-plan")
+    #         return 2
+    #
+    #     plan_path = Path(args.from_plan)
+    #     if not plan_path.exists():
+    #         print(f"Error: plan file not found: {args.from_plan}")
+    #         return 2
+    #     plan_md = plan_path.read_text(encoding="utf-8")
+    #
+    #     graph = build_workflow(settings, session_logger=session_logger)
+    #     config = {"configurable": {"thread_id": "phase2"}}
+    #
+    #     initial: GraphState = {
+    #         "requirement_paths": [],
+    #         "api_path": args.api,
+    #         "output_path": args.output,
+    #         "output_dir": args.output_dir or settings.output_dir,
+    #         "output_format": args.output_format or settings.output_format,
+    #         "batch_size": args.batch_size or settings.batch_size,
+    #         "enable_validation": settings.enable_validation,
+    #         "max_validation_retries": settings.max_validation_retries,
+    #         "plan_only": False,
+    #         "requirement_text": "",
+    #         "interfaces": [],
+    #         "plan_md": plan_md,
+    #         "plan_confirmed": True,
+    #         "api_summary_confirmed": True,
+    #         "user_guidance": args.prompt or "",
+    #         "parse_mode": args.parse_mode,
+    #         "parser_path": args.parser_path or "",
+    #         "reference_dir": args.reference_dir or "",
+    #     }
+    #
+    #     result = graph.invoke(initial, config)
+    #
+    #     if result.get("errors"):
+    #         for err in result["errors"]:
+    #             print(f"  Error: {err}")
+    #         session_logger.log_session_end("failed")
+    #         return 2
+    #
+    #     print(f"\nExcel written to: {args.output}")
+    #     print(f"  Single cases: {len(result.get('single_cases', []))}")
+    #     print(f"  Biz flows: {len(result.get('biz_flows', []))}")
+    #     session_logger.save_state(dict(result))
+    #     session_logger.log_session_end("completed")
+    #     return 0
 
     # ------------------------------------------------------------------
     # Resume mode: skip to batch generation from existing output_dir
@@ -383,12 +386,13 @@ def main() -> int:
             return 2
 
         plan_md = ""
-        if args.from_plan:
-            plan_path = Path(args.from_plan)
-            if not plan_path.exists():
-                print(f"Error: plan file not found: {args.from_plan}")
-                return 2
-            plan_md = plan_path.read_text(encoding="utf-8")
+        # TODO: Re-enable when conversation memory is implemented
+        # if args.from_plan:
+        #     plan_path = Path(args.from_plan)
+        #     if not plan_path.exists():
+        #         print(f"Error: plan file not found: {args.from_plan}")
+        #         return 2
+        #     plan_md = plan_path.read_text(encoding="utf-8")
 
         graph = build_workflow(settings, session_logger=session_logger)
         config = {"configurable": {"thread_id": f"resume_{datetime.now().strftime('%Y%m%d%H%M%S')}"}}
@@ -441,42 +445,43 @@ def main() -> int:
     graph = build_workflow(settings, session_logger=session_logger)
     thread_id = f"flow_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-    if args.plan_only:
-        # Run to generate_plan, then stop (save plan without review loop)
-        initial: GraphState = {
-            "requirement_paths": list(args.requirement),
-            "api_path": args.api,
-            "output_path": args.output,
-            "output_dir": args.output_dir or settings.output_dir,
-            "output_format": args.output_format or settings.output_format,
-            "batch_size": args.batch_size or settings.batch_size,
-            "enable_validation": settings.enable_validation,
-            "max_validation_retries": settings.max_validation_retries,
-            "plan_only": True,
-            "plan_confirmed": True,  # Skip review in plan-only mode
-            "user_guidance": args.prompt or "",
-            "parse_mode": args.parse_mode,
-            "parser_path": args.parser_path or "",
-            "reference_dir": args.reference_dir or "",
-        }
-        config = {"configurable": {"thread_id": thread_id}}
-
-        result = graph.invoke(initial, config)
-        plan_md = result.get("plan_md", "")
-        if not plan_md:
-            print("Error: plan generation produced no output")
-            session_logger.log_session_end("failed")
-            return 2
-
-        # Save to session dir
-        plan_path = session_logger.save_plan(plan_md)
-        session_logger.save_state(dict(result))
-
-        print(f"\nTest plan generated: {plan_path.resolve()}")
-        print("\nReview the plan, then run:")
-        print(f"  python main.py --from-plan {plan_path.resolve()} --api {args.api} --output testcase.xlsx")
-        session_logger.log_session_end("completed")
-        return 0
+    # TODO: Re-enable when conversation memory is implemented
+    # if args.plan_only:
+    #     # Run to generate_plan, then stop (save plan without review loop)
+    #     initial: GraphState = {
+    #         "requirement_paths": list(args.requirement),
+    #         "api_path": args.api,
+    #         "output_path": args.output,
+    #         "output_dir": args.output_dir or settings.output_dir,
+    #         "output_format": args.output_format or settings.output_format,
+    #         "batch_size": args.batch_size or settings.batch_size,
+    #         "enable_validation": settings.enable_validation,
+    #         "max_validation_retries": settings.max_validation_retries,
+    #         "plan_only": True,
+    #         "plan_confirmed": True,  # Skip review in plan-only mode
+    #         "user_guidance": args.prompt or "",
+    #         "parse_mode": args.parse_mode,
+    #         "parser_path": args.parser_path or "",
+    #         "reference_dir": args.reference_dir or "",
+    #     }
+    #     config = {"configurable": {"thread_id": thread_id}}
+    #
+    #     result = graph.invoke(initial, config)
+    #     plan_md = result.get("plan_md", "")
+    #     if not plan_md:
+    #         print("Error: plan generation produced no output")
+    #         session_logger.log_session_end("failed")
+    #         return 2
+    #
+    #     # Save to session dir
+    #     plan_path = session_logger.save_plan(plan_md)
+    #     session_logger.save_state(dict(result))
+    #
+    #     print(f"\nTest plan generated: {plan_path.resolve()}")
+    #     print("\nReview the plan, then run:")
+    #     print(f"  python main.py --from-plan {plan_path.resolve()} --api {args.api} --output testcase.xlsx")
+    #     session_logger.log_session_end("completed")
+    #     return 0
 
     # Full pipeline with interactive review loop
     if args.prompt:

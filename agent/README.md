@@ -181,21 +181,7 @@ cp .env.example .env
 
 ## 快速开始
 
-### 1. 生成测试计划（两阶段模式）
-
-```bash
-# Phase 1: 生成测试计划
-python main.py --requirement docs/req.md --api docs/api.yaml --plan-only
-```
-
-系统生成测试计划并保存至 `logs/YYYY-MM-DD_HH-MM-SS/plan.md`，人工审核后：
-
-```bash
-# Phase 2: 基于审核通过的计划生成 Excel
-python main.py --from-plan plan_20260601_120000.md --api docs/api.yaml --output testcase.xlsx
-```
-
-### 2. 全流程（含交互式审核）
+### 1. 全流程（含交互式审核）
 
 ```bash
 python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
@@ -371,8 +357,7 @@ case_generator:
 
 ```
 usage: main.py [-h] [--requirement REQUIREMENT [REQUIREMENT ...]]
-               [--api API] [--output OUTPUT] [--plan-only]
-               [--from-plan FROM_PLAN] [--env ENV] [-v]
+               [--api API] [--output OUTPUT] [--env ENV] [-v]
 
 Flow Forge — API Test Case Generation Agent
 
@@ -387,9 +372,6 @@ optional arguments:
                         输出格式（默认 both）
   --batch-size BATCH_SIZE
                         每批最大用例数（默认 10）
-  --plan-only           仅生成测试计划，不生成用例
-  --from-plan FROM_PLAN
-                        从已审核通过的计划生成用例
   --prompt PROMPT, -p PROMPT
                         用户补充指导，注入到计划生成和用例生成阶段
   --parse-mode {raw,rule,llm}, -m {raw,rule,llm}
