@@ -42,7 +42,7 @@ graph TD
 4. **计划生成**：基于分析结果和接口定义生成 Markdown 测试计划，自动保存至 session 目录
 5. **人工审核**（强制中断点）：展示计划，用户可批准、提出文字修改意见或按批注文件修改
 6. **反馈循环**：用户拒绝时，系统根据反馈修改计划后重新提交审核，直至批准
-7. **保存接口定义**：将分析后的接口定义写入 `output/interfaces/` 目录，每个接口一个 YAML 文件，便于版本管理
+7. **保存接口定义**：将分析后的接口定义写入 `{output}/cases/interfaces/` 目录，每个接口一个 YAML 文件，便于版本管理
 8. **用例骨架生成**：SingleSkeletonGenerator 一次性生成全部单接口用例骨架；BizSkeletonGenerator 一次性生成全部业务链路骨架。包含 test_id/StepID（有含义）、relevance_id、api_name、method、url、remark、sheet_name。URL/relevance_id 严格来自接口定义
 9. **URL 校验与纠错**：检查骨架中所有 URL 是否在接口文档原文中存在。不存在的 URL 提交给骨架生成器纠错重试（默认最多 3 次，通过 `URL_CORRECTION_MAX_RETRIES` 配置）。重试耗尽后添加 `<URL not exist>` 标记，跳过后续步骤直接写入 YAML，打印失败清单告知用户
 10. **测试数据填充**：SingleDataFiller / BizDataFiller 按 `batch_size` 分批（纯代码切分，不再由 LLM 决定批次）。根据接口定义填充 request_head、request_body、status_code、tag；业务链路额外填充 Trans 和 `#{varName}` 引用。请求体使用接口定义中的数据类型，不自由发挥。设 `BATCH_SIZE=-1` 不分批
@@ -233,6 +233,24 @@ agent/
 │       ├── state.json           # 最终 GraphState 快照
 │       └── excel_result.xlsx    # 输出 Excel 副本
 │
+├── <output>/                    # 输出目录（例: ./output_20260619_143052）
+│   ├── cases/                   # 测试用例产物
+│   │   ├── interfaces/          # 接口定义 YAML
+│   │   ├── single_cases/        # 单接口测试用例 YAML
+│   │   ├── biz_flows/           # 业务链路用例 YAML
+│   │   ├── failures.yaml        # 校验失败的用例
+│   │   └── test_cases.xlsx      # Excel 输出（可选）
+│   └── memory/                  # 智能体输出文件（对话记忆）
+│       ├── plan.md              # 生成的测试计划
+│       ├── plan_comments.json   # 批注数据（审核期间）
+│       ├── history-comments/    # 历史批注归档
+│       └── snapshots/           # 各步骤中间状态快照
+│           ├── api_summary.json          # [始终保存] 接口分析摘要
+│           ├── requirement_analysis.json # [始终保存] 需求分析结果
+│           ├── plan_parsed.json          # [始终保存] 结构化测试计划
+│           ├── interfaces.json           # [--debug-snapshots]
+│           └── extracted_texts.json      # [--debug-snapshots]
+│
 └── docs/
     ├── req.md                   # 示例需求文档
     └── api.yaml                 # 示例 OpenAPI 文档
@@ -252,7 +270,7 @@ cp .env.example .env
 ### 1. 全流程（含交互式审核）
 
 ```bash
-python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
+python main.py --requirement docs/req.md --api docs/api.yaml
 ```
 
 **解析模式说明：**
@@ -266,7 +284,7 @@ python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.x
 使用 `--prompt` 注入用户补充指导：
 
 ```bash
-python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx \\
+python main.py --requirement docs/req.md --api docs/api.yaml \\
     --prompt "关注 VIP 用户的折扣逻辑和节假日特殊定价"
 ```
 
@@ -274,7 +292,7 @@ python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.x
 
 ```bash
 python main.py --requirement docs/req.md --api docs/handwritten_api.md \\
-    -m llm --output testcase.xlsx
+    -m llm
 ```
 
 使用自定义解析器：
@@ -300,7 +318,7 @@ python main.py --requirement docs/req.md --api docs/api.yaml --debug
 ### 3. 使用多个需求文档
 
 ```bash
-python main.py --requirement docs/req1.md docs/req2.txt docs/api_spec.pdf --api docs/api.yaml --output testcase.xlsx
+python main.py --requirement docs/req1.md docs/req2.txt docs/api_spec.pdf --api docs/api.yaml
 ```
 
 ## 输入/输出格式
@@ -352,7 +370,7 @@ Markdown 表格示例：
 
 **会话日志**：每次运行在 `logs/` 下创建按时间戳命名的目录，包含 `session.jsonl`（事件流）、`state.json`（最终状态快照）和输出 Excel 副本。使用 `--debug` 时额外生成 `debug.log`（完整 LLM I/O）。
 
-**YAML 用例文件**（默认）：每个接口/用例独立一个 `.yaml` 文件，存放在 `output/interfaces/`、`output/single_cases/`、`output/biz_flows/` 目录下。便于 Git 版本管理、增量生成和断点续生成。
+**YAML 用例文件**（默认）：每个接口/用例独立一个 `.yaml` 文件，存放在 `{output}/cases/interfaces/`、`{output}/cases/single_cases/`、`{output}/cases/biz_flows/` 目录下。便于 Git 版本管理、增量生成和断点续生成。
 
 **Excel 用例文件**（可选）：设置 `OUTPUT_FORMAT=excel` 或 `both` 时从 YAML 转换生成，多 Sheet 结构，与执行器格式完全兼容：
 - Sheet 1 — API Definitions：接口定义表
@@ -377,7 +395,7 @@ Markdown 表格示例：
 | `MAX_STEPS` | 单智能体最大步数 | `10` |
 | `MAX_STEPS_NO_PROGRESS` | 连续无进展 LLM 调用上限（触发 ConvergenceError） | `5` |
 | `MAX_RETRIES` | LLM 调用最大重试 | `3` |
-| `OUTPUT_DIR` | YAML 用例输出根目录 | `./output` |
+| `OUTPUT_DIR` | 输出根目录（测试用例产物与智能体对话记忆） | `./output` |
 | `BATCH_SIZE` | 每批生成用例数上限（`-1` 表示不分批） | `10` |
 | `URL_CORRECTION_MAX_RETRIES` | URL 校验失败后最大纠错重试次数 | `3` |
 | `ENABLE_VALIDATION` | 是否启用用例格式校验 | `true` |
@@ -386,16 +404,33 @@ Markdown 表格示例：
 
 ### 输出目录结构
 
-YAML 模式下，输出目录结构如下：
+`--output` 指定输出根目录后，目录结构如下：
 
 ```
-output/
-├── interfaces/          # 接口定义，每个接口一个 .yaml
-├── single_cases/        # 单接口用例，每个用例一个 .yaml
-├── biz_flows/           # 业务链路用例，每个链路一个 .yaml
-├── failures.yaml        # 校验失败的用例（如有）
-└── test_cases.xlsx      # (可选) 从 YAML 转换的 Excel
+{output_dir}/
+├── cases/                         # 测试用例产物
+│   ├── interfaces/                # 接口定义 YAML（yaml/both 模式）
+│   │   └── <test_id>.yaml
+│   ├── single_cases/              # 单接口用例 YAML（yaml/both 模式）
+│   │   └── <test_id>.yaml
+│   ├── biz_flows/                 # 业务链路用例 YAML（yaml/both 模式）
+│   │   └── <sheet_name>.yaml
+│   ├── failures.yaml              # 校验失败的用例（如有）
+│   └── test_cases.xlsx            # Excel 输出（excel/both 模式）
+│
+└── memory/                        # 智能体输出文件（对话记忆）
+    ├── plan.md                    # 生成的 / 审核通过的测试计划
+    ├── plan_comments.json         # 批注数据（审核期临时文件）
+    ├── history-comments/          # 历史批注归档
+    └── snapshots/                 # 各步骤中间状态快照
+        ├── api_summary.json           # [始终保存] 接口分析摘要
+        ├── requirement_analysis.json  # [始终保存] 需求分析结果
+        ├── plan_parsed.json           # [始终保存] 结构化测试计划
+        ├── interfaces.json            # [--debug-snapshots] 接口定义快照
+        └── extracted_texts.json       # [--debug-snapshots] 文档提取原文
 ```
+
+基础快照（3 个，始终保存）用于排查 LLM 生成质量和断点续写。调试快照（2 个）通过 `--debug-snapshots` 参数启用，仅在排查问题时需要。
 
 ### config/prompts.yaml — 提示词与终止条件
 
@@ -433,9 +468,7 @@ optional arguments:
   --requirement REQUIREMENT [REQUIREMENT ...]
                         需求文档路径（支持 .txt, .md, .pdf）
   --api API             接口文档路径（OpenAPI .yaml/.json 或 Markdown .md）
-  --output OUTPUT       输出 Excel 文件路径（output-format 含 excel 时使用）
-  --output-dir OUTPUT_DIR
-                        YAML 用例输出根目录（默认 ./output）
+  --output OUTPUT       输出根目录（默认 ./output_&lt;timestamp&gt;）
   --output-format {yaml,excel,both}
                         输出格式（默认 both）
   --batch-size BATCH_SIZE
@@ -452,10 +485,11 @@ optional arguments:
                         参考目录（增量更新场景），系统扫描已有计划/接口/用例，
                         仅对新增或变更部分进行规划
   --resume              断点续生成，跳过文档解析和计划生成，直接从已有
-                        output-dir 继续批量生成
+                        output 目录继续批量生成
   --env ENV             .env 文件路径
   -v, --verbose         详细控制台日志输出
   --debug               调试模式，在 session 目录中写入完整 LLM 输入输出
+  --debug-snapshots     额外保存调试快照（interfaces.json + extracted_texts.json）
 ```
 
 ## 进度感知步数计数
@@ -489,10 +523,10 @@ optional arguments:
 
 ```bash
 # 管道中断后继续生成
-python main.py --resume --output-dir ./output --api docs/api.yaml
+python main.py --resume --output ./output --api docs/api.yaml
 ```
 
-前提：`output_dir/interfaces/` 目录中已存在接口 YAML 文件。
+前提：`{output}/cases/interfaces/` 目录中已存在接口 YAML 文件。
 
 ### 场景 B：增量更新（`--reference-dir`）
 
@@ -507,16 +541,16 @@ python main.py --resume --output-dir ./output --api docs/api.yaml
 ```bash
 # 不同目录增量更新（推荐：保留旧产出，新产出独立存放）
 python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
-    --reference-dir ./output_v1 --output-dir ./output_v2 --output testcase_v2.xlsx
+    --reference-dir ./output_v1 --output ./output_v2
 
 # 同目录增量更新（原地扩展，文件重名时自动添加 _v2/_v3 后缀）
 python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
-    --reference-dir ./output --output-dir ./output --output testcase.xlsx
+    --reference-dir ./output --output ./output
 ```
 
 ### 文件重名处理
 
-当 `--reference-dir` 与 `--output-dir` 相同时（同目录增量更新），已存在的 YAML 文件不会被覆盖。新生成的用例文件自动添加 `_v2`、`_v3` 等后缀，用户可自行挑选保留哪个版本。
+当 `--reference-dir` 与 `--output` 指定的目录相同时（同目录增量更新），已存在的 YAML 文件不会被覆盖。新生成的用例文件自动添加 `_v2`、`_v3` 等后缀，用户可自行挑选保留哪个版本。
 
 ## 自定义解析器
 
@@ -574,7 +608,7 @@ python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
 | `human_confirm` | **强制中断点**，暂停执行等待人工审核 |
 | `revise_plan` | 根据用户反馈修改计划，完成后回到 human_confirm |
 | `parse_plan` | 调用 PlanParser，解析计划为结构化数据 |
-| `save_interfaces` | 将接口定义保存为 YAML 文件到 output/interfaces/ |
+| `save_interfaces` | 将接口定义保存为 YAML 文件到 {output}/cases/interfaces/ |
 | `batch_controller` | 运行三步生成流程：骨架生成（一次性）→ 数据填充（分批）→ 断言生成（分批）。支持断点续生成 |
 | `write_output` | 根据 output_format 输出 YAML + 可选 Excel |
 

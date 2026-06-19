@@ -49,6 +49,25 @@ def _sl():
     return _session_logger
 
 
+def _save_snapshot(memory_dir: str, filename: str, data: Any) -> None:
+    """Save intermediate pipeline state as a JSON snapshot.
+
+    Serialization failure falls back to str() to avoid crashing the pipeline.
+    """
+    if not memory_dir:
+        return
+    try:
+        snapshots_dir = Path(memory_dir) / "snapshots"
+        snapshots_dir.mkdir(parents=True, exist_ok=True)
+        path = snapshots_dir / filename
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        logger.warning("Failed to save snapshot %s: %s", filename, e)
+
+
 def _fmt_size(path: str) -> str:
     """Format file size for display."""
     try:
@@ -72,8 +91,14 @@ def _summarize_reference_dir(reference_dir: str) -> str:
     ref_path = Path(reference_dir)
     parts = []
 
+    # Determine directory structure: new ({ref}/cases, {ref}/memory) or old (flat)
+    ref_cases = ref_path / "cases" if (ref_path / "cases").is_dir() else ref_path
+    ref_memory = ref_path / "memory" if (ref_path / "memory").is_dir() else ref_path
+
     # 1. Existing plan
-    plan_path = ref_path / "plan.md"
+    plan_path = ref_memory / "plan.md"
+    if not plan_path.exists():
+        plan_path = ref_path / "plan.md"  # fallback to old structure
     if plan_path.exists():
         try:
             plan_text = plan_path.read_text(encoding="utf-8")
@@ -83,7 +108,7 @@ def _summarize_reference_dir(reference_dir: str) -> str:
 
     # 2. Existing interfaces
     try:
-        ifaces = YamlWriter.read_interfaces(reference_dir)
+        ifaces = YamlWriter.read_interfaces(ref_cases)
         if ifaces:
             lines = [
                 f"- {i.get('test_id', '?')}: {i.get('method', 'GET')} {i.get('url', '')}"
@@ -95,7 +120,7 @@ def _summarize_reference_dir(reference_dir: str) -> str:
 
     # 3. Existing single cases
     try:
-        cases = YamlWriter.read_single_cases(reference_dir)
+        cases = YamlWriter.read_single_cases(ref_cases)
         if cases:
             ids = [str(c.get("test_id", "?")) for c in cases]
             parts.append(
@@ -107,7 +132,7 @@ def _summarize_reference_dir(reference_dir: str) -> str:
 
     # 4. Existing biz flows
     try:
-        flows = YamlWriter.read_biz_flows(reference_dir)
+        flows = YamlWriter.read_biz_flows(ref_cases)
         if flows:
             names = [str(f.get("sheet_name", "?")) for f in flows]
             parts.append(
@@ -259,6 +284,15 @@ def parse_docs_node(state: GraphState) -> GraphState:
     if _sl():
         _sl().log_file_read(api_path, Path(api_path).stat().st_size)
 
+    # Debug snapshot: extracted_texts.json
+    if state.get("debug_snapshots") and state.get("memory_dir"):
+        _save_snapshot(state["memory_dir"], "extracted_texts.json", {
+            "requirement_text": state.get("requirement_text", ""),
+            "api_raw_text": state.get("api_raw_text", ""),
+            "requirement_files": state.get("requirement_paths", []),
+            "api_file": state.get("api_path", ""),
+        })
+
     return state
 
 
@@ -320,6 +354,11 @@ def analyze_api_node(state: GraphState) -> GraphState:
 
     state["api_summary"] = summary
     state["api_summary_feedback"] = ""
+
+    # Save basic snapshot: api_summary.json
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        _save_snapshot(memory_dir, "api_summary.json", summary)
 
     # In raw mode, reconstruct interfaces from the summary so downstream
     # nodes (generate_cases, write_excel) have interface definitions.
@@ -474,6 +513,11 @@ def analyze_requirement_node(state: GraphState) -> GraphState:
     result = agent.analyze(text)
     state["requirement_analysis"] = result
 
+    # Save basic snapshot: requirement_analysis.json
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        _save_snapshot(memory_dir, "requirement_analysis.json", result)
+
     flows = len(result.get("business_flows", []))
     roles = len(result.get("roles", []))
     print(f"  → 提取 {flows} 个业务流程, {roles} 个角色")
@@ -528,14 +572,24 @@ def generate_plan_node(state: GraphState) -> GraphState:
 
     plan_len = len(plan_md)
 
-    # Save plan.md to output_dir (in addition to session dir)
-    output_dir = state.get("output_dir", "./output")
-    try:
-        plan_path = Path(output_dir) / "plan.md"
-        plan_path.parent.mkdir(parents=True, exist_ok=True)
-        plan_path.write_text(plan_md, encoding="utf-8")
-    except Exception as e:
-        logger.warning("Failed to save plan.md to output_dir: %s", e)
+    # Save plan.md to memory_dir (in addition to session dir)
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        try:
+            plan_path = Path(memory_dir) / "plan.md"
+            plan_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text(plan_md, encoding="utf-8")
+        except Exception as e:
+            logger.warning("Failed to save plan.md to memory_dir: %s", e)
+    else:
+        # Fallback to output_dir for backward compatibility
+        output_dir = state.get("output_dir", "./output")
+        try:
+            plan_path = Path(output_dir) / "plan.md"
+            plan_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text(plan_md, encoding="utf-8")
+        except Exception as e:
+            logger.warning("Failed to save plan.md to output_dir: %s", e)
 
     # Write plan to session directory if available
     if _sl():
@@ -713,6 +767,16 @@ def parse_plan_node(state: GraphState) -> GraphState:
 
     state["plan_parsed"] = plan
 
+    # Save basic snapshot: plan_parsed.json
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        from dataclasses import asdict as dataclass_asdict
+        try:
+            plan_dict = dataclass_asdict(plan)
+        except Exception:
+            plan_dict = {"business_summary": plan.business_summary}
+        _save_snapshot(memory_dir, "plan_parsed.json", plan_dict)
+
     api_count = len(plan.api_definitions)
     tp_count = sum(len(v) for v in plan.single_test_points.values())
     print(f"  → 解析完成 ({api_count} 个接口定义, {tp_count} 个测试点)")
@@ -772,22 +836,28 @@ def save_interfaces_node(state: GraphState) -> GraphState:
         _sl().log_node_start("save_interfaces", "7/9")
 
     interfaces = state.get("interfaces", [])
-    output_dir = state.get("output_dir", "./output")
+    cases_dir = state.get("cases_dir") or state.get("output_dir", "./output")
+    memory_dir = state.get("memory_dir", "")
+    debug_snapshots = state.get("debug_snapshots", False)
 
     if not interfaces:
         logger.warning("No interfaces to save")
         return state
 
-    interfaces_dir = Path(output_dir) / "interfaces"
+    interfaces_dir = Path(cases_dir) / "interfaces"
     interfaces_dir.mkdir(parents=True, exist_ok=True)
 
     count = 0
     for iface in interfaces:
         try:
-            YamlWriter.write_interface(iface, output_dir)
+            YamlWriter.write_interface(iface, cases_dir)
             count += 1
         except Exception as e:
             logger.warning("Failed to save interface: %s", e)
+
+    # Save debug snapshot: interfaces.json
+    if debug_snapshots and memory_dir:
+        _save_snapshot(memory_dir, "interfaces.json", interfaces)
 
     print(f"\n  → 保存 {count} 个接口定义到 {interfaces_dir}")
     if _sl():
@@ -821,6 +891,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
     plan = state.get("plan_parsed")
     interfaces_raw = state.get("interfaces", [])
     output_dir = state.get("output_dir", "./output")
+    cases_dir = state.get("cases_dir") or state.get("output_dir", "./output")
     user_guidance = state.get("user_guidance", "")
     batch_size = state.get("batch_size", _settings.batch_size)
     enable_validation = state.get("enable_validation", _settings.enable_validation)
@@ -830,7 +901,11 @@ def batch_controller_node(state: GraphState) -> GraphState:
 
     # Resume mode: build minimal TestPlan from existing interface YAMLs
     if state.get("resume") and (plan is None or not interfaces_raw):
-        existing_ifaces = YamlWriter.read_interfaces(output_dir)
+        # Try new directory structure first, then fall back to old
+        if Path(cases_dir + "/interfaces").is_dir():
+            existing_ifaces = YamlWriter.read_interfaces(cases_dir)
+        else:
+            existing_ifaces = YamlWriter.read_interfaces(output_dir)
         if not interfaces_raw:
             interfaces_raw = existing_ifaces
         if plan is None:
@@ -897,7 +972,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
         result = controller.run(
             plan=plan,
             interfaces=interfaces_raw,
-            output_dir=output_dir,
+            output_dir=cases_dir,
             single_skel_gen=single_skel_gen,
             biz_skel_gen=biz_skel_gen,
             single_data_filler=single_data_filler,
@@ -930,7 +1005,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
 
     print(f"  → 生成 {len(single_cases)} 条单接口用例, {len(biz_flows)} 条业务链路")
     if failures:
-        print(f"  → {len(failures)} 个用例生成失败 (详见 {output_dir}/failures.yaml)")
+        print(f"  → {len(failures)} 个用例生成失败 (详见 {cases_dir}/failures.yaml)")
 
     if _sl():
         _sl().log_node_end("batch_controller")
@@ -949,6 +1024,7 @@ def write_output_node(state: GraphState) -> GraphState:
 
     output_format = state.get("output_format", "both")
     output_dir = state.get("output_dir", "./output")
+    cases_dir = state.get("cases_dir") or state.get("output_dir", "./output")
     output_path = state.get("output_path", "test_cases.xlsx")
     single = state.get("single_cases", [])
     biz = state.get("biz_flows", [])
@@ -960,7 +1036,7 @@ def write_output_node(state: GraphState) -> GraphState:
 
     if output_format in ("excel", "both"):
         try:
-            ExcelWriter.yaml_to_excel(output_dir, output_path)
+            ExcelWriter.yaml_to_excel(cases_dir, output_path)
             print(f"  → Excel 已写入 {output_path}")
 
             if _sl():
@@ -974,13 +1050,13 @@ def write_output_node(state: GraphState) -> GraphState:
             print(f"  ✗ {msg}")
 
     if output_format in ("yaml", "both"):
-        print(f"  → YAML 用例已保存到 {output_dir}")
-        print(f"     interfaces/: {_count_yaml(output_dir, 'interfaces')} 个")
-        print(f"     single_cases/: {_count_yaml(output_dir, 'single_cases')} 个")
-        print(f"     biz_flows/: {_count_yaml(output_dir, 'biz_flows')} 个")
+        print(f"  → YAML 用例已保存到 {cases_dir}")
+        print(f"     interfaces/: {_count_yaml(cases_dir, 'interfaces')} 个")
+        print(f"     single_cases/: {_count_yaml(cases_dir, 'single_cases')} 个")
+        print(f"     biz_flows/: {_count_yaml(cases_dir, 'biz_flows')} 个")
 
     if failures:
-        print(f"  → 校验失败: {len(failures)} 个 (详见 {output_dir}/failures.yaml)")
+        print(f"  → 校验失败: {len(failures)} 个 (详见 {cases_dir}/failures.yaml)")
 
     if _sl():
         _sl().log_node_end("write_output")

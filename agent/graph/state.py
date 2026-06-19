@@ -19,7 +19,10 @@ class GraphState(TypedDict, total=False):
     plan_only: bool
 
     # === Output config ===
-    output_dir: str             # YAML output root directory
+    output_dir: str             # Output root directory
+    cases_dir: str              # Test case output subdirectory ({output_dir}/cases)
+    memory_dir: str             # Agent output subdirectory ({output_dir}/memory)
+    debug_snapshots: bool       # Save optional debug snapshots
     output_format: str          # "yaml" | "excel" | "both"
     batch_size: int             # Max cases per batch
     enable_validation: bool     # Whether to run case validation

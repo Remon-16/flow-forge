@@ -42,7 +42,7 @@ Core workflow:
 4. **Plan Generation**: Generate a Markdown test plan based on analysis results and interface definitions, automatically saved to the session directory
 5. **Manual Review** (Mandatory interrupt): Display the plan; user can approve, provide text revision feedback, or use annotation-based revision
 6. **Feedback Loop**: When rejected, the system revises the plan based on feedback and resubmits for review, looping until approval
-7. **Save Interfaces**: Write analyzed interface definitions to `output/interfaces/` directory, one YAML file per interface for version control
+7. **Save Interfaces**: Write analyzed interface definitions to `{output}/cases/interfaces/` directory, one YAML file per interface for version control
 8. **Case Skeleton Generation**: SingleSkeletonGenerator produces all single-API case skeletons in one shot; BizSkeletonGenerator produces all business flow skeletons in one shot. Includes meaningful test_id/StepID, relevance_id, api_name, method, url, remark, sheet_name. URLs and relevance_ids are strictly sourced from interface definitions
 9. **URL Validation & Correction**: Every skeleton URL is checked against the raw API documentation text. URLs not found are submitted back to the skeleton generator for correction (up to 3 retries by default, configurable via `URL_CORRECTION_MAX_RETRIES`). Exhausted cases receive the `<URL not exist>` marker, skip subsequent steps, and are written directly to YAML with a failure summary printed to the console
 10. **Test Data Filling**: SingleDataFiller / BizDataFiller process cases in code-based batches (no LLM batch decisions). Fills request_head, request_body, status_code, and tag based on interface definitions. Business flows additionally fill Trans and `#{varName}` references. Request bodies use interface-defined data types — no free-form invention. Set `BATCH_SIZE=-1` to disable batching
@@ -233,6 +233,24 @@ agent/
 │       ├── state.json           # Final GraphState snapshot
 │       └── excel_result.xlsx    # Output Excel copy
 │
+├── <output>/                    # Output directory (e.g. ./output_20260619_143052)
+│   ├── cases/                   # Test case artifacts
+│   │   ├── interfaces/          # Interface definition YAMLs
+│   │   ├── single_cases/        # Single API test case YAMLs
+│   │   ├── biz_flows/           # Business flow case YAMLs
+│   │   ├── failures.yaml        # Validation failures
+│   │   └── test_cases.xlsx      # Excel output (optional)
+│   └── memory/                  # Agent output files (conversation memory)
+│       ├── plan.md              # Generated test plan
+│       ├── plan_comments.json   # Annotations (during review)
+│       ├── history-comments/    # Archived annotations
+│       └── snapshots/           # Intermediate pipeline state snapshots
+│           ├── api_summary.json          # [always] API analysis summary
+│           ├── requirement_analysis.json # [always] Requirement analysis
+│           ├── plan_parsed.json          # [always] Structured test plan
+│           ├── interfaces.json           # [--debug-snapshots]
+│           └── extracted_texts.json      # [--debug-snapshots]
+│
 └── docs/
     ├── req.md                   # Example requirement document
     └── api.yaml                 # Example OpenAPI document
@@ -252,7 +270,7 @@ cp .env.example .env
 ### 1. Full Pipeline (with Interactive Review)
 
 ```bash
-python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
+python main.py --requirement docs/req.md --api docs/api.yaml
 ```
 
 **Parse Mode Overview:**
@@ -266,7 +284,7 @@ python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.x
 Inject user guidance with `--prompt`:
 
 ```bash
-python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx \
+python main.py --requirement docs/req.md --api docs/api.yaml \
     --prompt "Focus on VIP user discount logic and holiday special pricing"
 ```
 
@@ -274,7 +292,7 @@ Parse non-standard API docs with `--parse-mode llm`:
 
 ```bash
 python main.py --requirement docs/req.md --api docs/handwritten_api.md \
-    -m llm --output testcase.xlsx
+    -m llm
 ```
 
 Use a custom parser:
@@ -300,7 +318,7 @@ The system pauses after generating the plan, waiting for user review:
 ### 3. Using Multiple Requirement Documents
 
 ```bash
-python main.py --requirement docs/req1.md docs/req2.txt docs/api_spec.pdf --api docs/api.yaml --output testcase.xlsx
+python main.py --requirement docs/req1.md docs/req2.txt docs/api_spec.pdf --api docs/api.yaml
 ```
 
 ## Input/Output Formats
@@ -352,7 +370,7 @@ Markdown table example:
 
 **Session Log**: Each run creates a timestamped directory under `logs/` containing `session.jsonl` (event stream), `state.json` (final state snapshot), and a copy of the output Excel. Use `--debug` to additionally generate `debug.log` (full LLM I/O).
 
-**YAML Case Files** (default): Each interface/case is a separate `.yaml` file stored in `output/interfaces/`, `output/single_cases/`, `output/biz_flows/` directories. Enables Git version control, incremental generation, and resumable generation.
+**YAML Case Files** (default): Each interface/case is a separate `.yaml` file stored in `{output}/cases/interfaces/`, `{output}/cases/single_cases/`, `{output}/cases/biz_flows/` directories. Enables Git version control, incremental generation, and resumable generation.
 
 **Excel Case File** (optional): Set `OUTPUT_FORMAT=excel` or `both` to convert from YAML. Multi-sheet structure, fully compatible with executor format:
 - Sheet 1 — API Definitions: interface definition table
@@ -377,7 +395,7 @@ Markdown table example:
 | `MAX_STEPS` | Max steps per agent | `10` |
 | `MAX_STEPS_NO_PROGRESS` | Max consecutive no-progress LLM calls (triggers ConvergenceError) | `5` |
 | `MAX_RETRIES` | Max LLM call retries | `3` |
-| `OUTPUT_DIR` | YAML output root directory | `./output` |
+| `OUTPUT_DIR` | Output root directory (test case artifacts and agent conversation memory) | `./output` |
 | `BATCH_SIZE` | Max cases per generation batch (`-1` for no batching) | `10` |
 | `URL_CORRECTION_MAX_RETRIES` | Max URL correction retries after validation failure | `3` |
 | `ENABLE_VALIDATION` | Enable case format validation | `true` |
@@ -386,16 +404,33 @@ Markdown table example:
 
 ### Output Directory Structure
 
-When using YAML mode, the output directory looks like:
+When `--output` specifies the root output directory, the structure is:
 
 ```
-output/
-├── interfaces/          # Interface definitions, one .yaml per interface
-├── single_cases/        # Single API test cases, one .yaml per case
-├── biz_flows/           # Business flow cases, one .yaml per flow
-├── failures.yaml        # Cases that failed validation (if any)
-└── test_cases.xlsx      # (Optional) Excel converted from YAML
+{output_dir}/
+├── cases/                         # Test case artifacts
+│   ├── interfaces/                # Interface definition YAMLs (yaml/both mode)
+│   │   └── <test_id>.yaml
+│   ├── single_cases/              # Single API test case YAMLs (yaml/both mode)
+│   │   └── <test_id>.yaml
+│   ├── biz_flows/                 # Business flow case YAMLs (yaml/both mode)
+│   │   └── <sheet_name>.yaml
+│   ├── failures.yaml              # Validation failures (if any)
+│   └── test_cases.xlsx            # Excel output (excel/both mode)
+│
+└── memory/                        # Agent output files (conversation memory)
+    ├── plan.md                    # Generated / approved test plan
+    ├── plan_comments.json         # Annotation data (during review)
+    ├── history-comments/          # Archived annotation history
+    └── snapshots/                 # Intermediate pipeline state snapshots
+        ├── api_summary.json           # [always] API analysis summary
+        ├── requirement_analysis.json  # [always] Requirement analysis
+        ├── plan_parsed.json           # [always] Structured test plan
+        ├── interfaces.json            # [--debug-snapshots] Interface snapshot
+        └── extracted_texts.json       # [--debug-snapshots] Raw extracted texts
 ```
+
+Basic snapshots (3, always saved) support LLM output quality debugging and resumable generation. Debug snapshots (2) are enabled via `--debug-snapshots` and are only needed when troubleshooting.
 
 ### config/prompts.yaml — Prompts & Termination Conditions
 
@@ -433,9 +468,7 @@ optional arguments:
   --requirement REQUIREMENT [REQUIREMENT ...]
                         Requirement document path(s) (.txt, .md, .pdf)
   --api API             API documentation path (OpenAPI .yaml/.json or Markdown .md)
-  --output OUTPUT       Output Excel file path
-  --output-dir OUTPUT_DIR
-                        YAML output root directory (default: ./output)
+  --output OUTPUT       Output root directory (default: ./output_&lt;timestamp&gt;)
   --output-format {yaml,excel,both}
                         Output format (default: both)
   --batch-size BATCH_SIZE
@@ -457,6 +490,7 @@ optional arguments:
   --env ENV             Path to .env file
   -v, --verbose         Verbose console logging
   --debug               Debug mode: write full LLM input/output to session directory
+  --debug-snapshots     Save optional debug snapshots (interfaces.json + extracted_texts.json)
 ```
 
 ## Progress-Based Step Counting
@@ -490,10 +524,10 @@ When the pipeline crashes or the user interrupts it mid-run, use `--resume` to p
 
 ```bash
 # Resume after pipeline interruption
-python main.py --resume --output-dir ./output --api docs/api.yaml
+python main.py --resume --output ./output --api docs/api.yaml
 ```
 
-Prerequisite: The `output_dir/interfaces/` directory must already contain interface YAML files.
+Prerequisite: The `{output}/cases/interfaces/` directory must already contain interface YAML files.
 
 ### Scenario B: Incremental Updates (`--reference-dir`)
 
@@ -508,16 +542,16 @@ When requirements or API documentation change (new scenarios, modified fields), 
 ```bash
 # Incremental update to a different directory (recommended: keep old output, new output separate)
 python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
-    --reference-dir ./output_v1 --output-dir ./output_v2 --output testcase_v2.xlsx
+    --reference-dir ./output_v1 --output ./output_v2
 
 # In-place incremental update (same directory; files get _v2/_v3 suffixes on conflict)
 python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
-    --reference-dir ./output --output-dir ./output --output testcase.xlsx
+    --reference-dir ./output --output ./output
 ```
 
 ### File Name Conflicts
 
-When `--reference-dir` and `--output-dir` are the same (in-place incremental update), existing YAML files are not overwritten. Newly generated case files get `_v2`, `_v3` suffixes automatically, letting you choose which version to keep.
+When `--reference-dir` and `--output` point to the same directory (in-place incremental update), existing YAML files are not overwritten. Newly generated case files get `_v2`, `_v3` suffixes automatically, letting you choose which version to keep.
 
 ## Custom Parsers
 

@@ -20,7 +20,7 @@ class Settings:
     llm_doc_max_chars: int = 30000
     max_steps: int = 10
     max_retries: int = 3
-    output_dir: str = "./output"
+    output_dir: str = "./output"  # Root output directory (CLI appends timestamp by default)
     batch_size: int = 10
     enable_validation: bool = True
     max_validation_retries: int = 3

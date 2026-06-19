@@ -2,19 +2,21 @@
 """Flow Forge — API Test Case Generation Agent CLI (LangGraph + ReAct).
 
 Usage:
-    # TODO: Re-enable when conversation memory is implemented
-    # # Generate test plan only (for human review)
-    # python main.py --requirement docs/req.md --api docs/api.yaml --plan-only
-    #
-    # # Generate Excel from a confirmed plan
-    # python main.py --from-plan plan_20260601_120000.md --api docs/api.yaml --output testcase.xlsx
-
     # Full pipeline with interactive review loop
-    python main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
+    python main.py --requirement docs/req.md --api docs/api.yaml
+
+    # Specify output directory
+    python main.py --requirement docs/req.md --api docs/api.yaml --output my_output
 
     # With user guidance injected into plan/case generation
     python main.py --requirement docs/req.md --api docs/api.yaml \\
-        --prompt "关注 VIP 用户的折扣逻辑和节假日特殊定价" --output testcase.xlsx
+        --prompt "关注 VIP 用户的折扣逻辑和节假日特殊定价"
+
+    # Output YAML only (no Excel)
+    python main.py --requirement docs/req.md --api docs/api.yaml --output-format yaml
+
+    # Save debug snapshots for troubleshooting
+    python main.py --requirement docs/req.md --api docs/api.yaml --debug-snapshots
 
     # With debug logging (full LLM I/O written to session debug.log)
     python main.py --requirement docs/req.md --api docs/api.yaml --debug
@@ -66,6 +68,27 @@ def _make_session_dir() -> Path:
     return session_dir
 
 
+def _ensure_output_structure(output_dir: Path) -> tuple[Path, Path]:
+    """Create the output directory structure.
+
+    Returns (cases_dir, memory_dir).
+    """
+    cases_dir = output_dir / "cases"
+    memory_dir = output_dir / "memory"
+    snapshots_dir = memory_dir / "snapshots"
+
+    # Create all subdirectories upfront
+    for d in [
+        cases_dir / "interfaces",
+        cases_dir / "single_cases",
+        cases_dir / "biz_flows",
+        snapshots_dir,
+    ]:
+        d.mkdir(parents=True, exist_ok=True)
+
+    return cases_dir, memory_dir
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Flow Forge — API Test Case Generation Agent"
@@ -81,19 +104,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--output",
-        default=f"testcase_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-        help="Output Excel file path (used when output-format includes excel)",
-    )
-    p.add_argument(
-        "--output-dir",
-        default="",
-        help="YAML output root directory (default: ./output, or from .env)",
+        default=f"output_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        help="Output root directory (default: ./output_<timestamp>)",
     )
     p.add_argument(
         "--output-format",
         choices=["yaml", "excel", "both"],
         default="",
         help="Output format: yaml, excel, or both (default: both, or from .env)",
+    )
+    p.add_argument(
+        "--debug-snapshots",
+        action="store_true",
+        help="Save optional debug snapshots (interfaces.json + extracted_texts.json)",
     )
     p.add_argument(
         "--batch-size",
@@ -157,8 +180,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--resume",
         action="store_true",
-        help="Resume batch generation from existing output_dir. Skips "
-             "document parsing and plan generation. Use with --output-dir.",
+        help="Resume batch generation from existing output directory. Skips "
+             "document parsing and plan generation. Use with --output.",
     )
     return p
 
@@ -251,8 +274,8 @@ def _run_interactive(
                 import json as _json
                 snapshot = graph.get_state(config)
                 state = dict(snapshot.values)
-                output_dir = state.get("output_dir", "./output")
-                comments_path = Path(output_dir) / "plan_comments.json"
+                memory_dir = state.get("memory_dir", "./output/memory")
+                comments_path = Path(memory_dir) / "plan_comments.json"
 
                 if not comments_path.exists():
                     print(f"\n错误: 未找到批注文件: {comments_path.resolve()}")
@@ -285,7 +308,7 @@ def _run_interactive(
 
                 # 归档批注文件
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                history_dir = Path(output_dir) / "history-comments"
+                history_dir = Path(memory_dir) / "history-comments"
                 history_dir.mkdir(parents=True, exist_ok=True)
                 archive_name = f"plan_comments_{ts}.json"
                 comments_path.rename(history_dir / archive_name)
@@ -378,12 +401,26 @@ def main() -> int:
     # Resume mode: skip to batch generation from existing output_dir
     # ------------------------------------------------------------------
     if args.resume:
-        output_dir = args.output_dir or settings.output_dir
-        ifaces_dir = Path(output_dir) / "interfaces"
+        output_dir = args.output or settings.output_dir
+        cases_dir = Path(output_dir) / "cases"
+        memory_dir = Path(output_dir) / "memory"
+
+        # Create directory structure
+        _cases_dir, _memory_dir = _ensure_output_structure(Path(output_dir))
+
+        # Check for existing interfaces YAMLs
+        ifaces_dir = _cases_dir / "interfaces"
         if not ifaces_dir.is_dir() or not list(ifaces_dir.glob("*.yaml")):
-            print(f"Error: 未在 {ifaces_dir} 中找到接口 YAML 文件")
-            print("  --resume 需要已有接口定义的 output 目录")
-            return 2
+            # Also check old-style structure for compatibility
+            old_ifaces_dir = Path(output_dir) / "interfaces"
+            if old_ifaces_dir.is_dir() and list(old_ifaces_dir.glob("*.yaml")):
+                print(f"Warning: 检测到旧版目录结构（无 cases/ 子目录）")
+                print(f"  建议迁移：将 {output_dir}/interfaces/ 等移到 {output_dir}/cases/ 下")
+                ifaces_dir = old_ifaces_dir
+            else:
+                print(f"Error: 未在 {ifaces_dir} 中找到接口 YAML 文件")
+                print("  --resume 需要已有接口定义的 output 目录")
+                return 2
 
         plan_md = ""
         # TODO: Re-enable when conversation memory is implemented
@@ -400,8 +437,11 @@ def main() -> int:
         initial: GraphState = {
             "requirement_paths": [],
             "api_path": args.api or "",
-            "output_path": args.output or "",
+            "output_path": str(_cases_dir / "test_cases.xlsx"),
             "output_dir": output_dir,
+            "cases_dir": str(_cases_dir),
+            "memory_dir": str(_memory_dir),
+            "debug_snapshots": args.debug_snapshots,
             "output_format": args.output_format or settings.output_format,
             "batch_size": args.batch_size or settings.batch_size,
             "enable_validation": settings.enable_validation,
@@ -487,11 +527,17 @@ def main() -> int:
     if args.prompt:
         print(f"[Prompt] 用户指导: {args.prompt}")
 
+    output_dir = args.output or settings.output_dir
+    cases_dir, memory_dir = _ensure_output_structure(Path(output_dir))
+
     initial: GraphState = {
         "requirement_paths": list(args.requirement),
         "api_path": args.api,
-        "output_path": args.output,
-        "output_dir": args.output_dir or settings.output_dir,
+        "output_path": str(cases_dir / "test_cases.xlsx"),
+        "output_dir": output_dir,
+        "cases_dir": str(cases_dir),
+        "memory_dir": str(memory_dir),
+        "debug_snapshots": args.debug_snapshots,
         "output_format": args.output_format or settings.output_format,
         "batch_size": args.batch_size or settings.batch_size,
         "enable_validation": settings.enable_validation,
@@ -519,7 +565,9 @@ def main() -> int:
     session_logger.save_state(dict(result))
     session_logger.log_session_end("completed")
 
-    print(f"\nAll done! Excel written to: {args.output}")
+    print(f"\nAll done! Output directory: {output_dir}")
+    print(f"  Cases: {cases_dir}")
+    print(f"  Memory: {memory_dir}")
     print(f"  Interfaces: {len(result.get('interfaces', []))}")
     print(f"  Single cases: {len(result.get('single_cases', []))}")
     print(f"  Biz flows: {len(result.get('biz_flows', []))}")

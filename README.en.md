@@ -17,11 +17,14 @@ The minimum viable pipeline has been validated end-to-end. Given a set of requir
 **Agent example** — see [agent/README.md](./agent/README.md) for details:
 
 ```bash
-# Option 1: Output YAML cases
-python agent/main.py --requirement docs/req.md --api docs/api.yaml --output-dir someDir
+# Full pipeline (output defaults to ./output_<timestamp>)
+python agent/main.py --requirement docs/req.md --api docs/api.yaml
 
-# Option 2: Output Excel cases
-python agent/main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
+# Specify output directory
+python agent/main.py --requirement docs/req.md --api docs/api.yaml --output my_output
+
+# Output YAML only (no Excel)
+python agent/main.py --requirement docs/req.md --api docs/api.yaml --output-format yaml
 ```
 
 The executor supports both single-threaded and multi-threaded modes (concurrent case execution, not load testing). In business-flow mode, responses from earlier steps can feed data into later steps, enabling cross-API parameter chaining. The assertion engine supports both simple equality checks and advanced multi-operator assertion rules (numeric comparisons, regex matching, list aggregation, etc.).

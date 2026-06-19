@@ -17,11 +17,14 @@ AI智能体可以实现快速的用例输出，但由于AI可能产生幻觉，�
 智能体使用示例，详情见 [agent/README.md](./agent/README.md)。
 
 ```bash
-# 方式一：输出 YAML 用例
-python agent/main.py --requirement docs/req.md --api docs/api.yaml --output-dir someDir
+# 完整流水线（输出目录默认为 ./output_<timestamp>）
+python agent/main.py --requirement docs/req.md --api docs/api.yaml
 
-# 方式二：输出 Excel 用例
-python agent/main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
+# 指定输出目录
+python agent/main.py --requirement docs/req.md --api docs/api.yaml --output my_output
+
+# 仅输出 YAML（不导出 Excel）
+python agent/main.py --requirement docs/req.md --api docs/api.yaml --output-format yaml
 ```
 
 执行器能够以单线程和多线程（并发执行多个用例，非压力测试）的方式执行测试用例。执行业务链路用例时，前面步骤的执行结果可以解析到当前步骤，实现测试数据的跨接口传递。断言引擎支持简单等值断言和高级多运算符断言规则（数值比较、正则匹配、列表聚合等）。
