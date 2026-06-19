@@ -7,6 +7,7 @@ import YamlFileTree from '../components/yaml-editor/YamlFileTree.vue'
 import YamlTabBar from '../components/yaml-editor/YamlTabBar.vue'
 import SingleCaseForm from '../components/yaml-editor/SingleCaseForm.vue'
 import BizFlowForm from '../components/yaml-editor/BizFlowForm.vue'
+import InterfaceForm from '../components/yaml-editor/InterfaceForm.vue'
 import YamlRawView from '../components/yaml-editor/YamlRawView.vue'
 import SearchBar from '../components/search/SearchBar.vue'
 import SearchResultsPanel from '../components/search/SearchResultsPanel.vue'
@@ -444,6 +445,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
           <!-- Biz flow form -->
           <BizFlowForm v-else-if="yamlStore.isBizCase" />
+
+          <!-- Interface form -->
+          <InterfaceForm v-else-if="yamlStore.isInterfaceCase" />
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import yaml from 'js-yaml'
 import { toRaw } from 'vue'
-import type { YamlCase, SingleYamlCase, BizYamlCase } from '../types/yaml'
+import type { YamlCase, SingleYamlCase, BizYamlCase, InterfaceYamlCase } from '../types/yaml'
+import type { PreProcessorItem, PostProcessorItem } from '../types/excel'
 
 /**
  * Parse a YAML string into a YamlCase object.
@@ -16,9 +17,11 @@ export function parseYaml(content: string): YamlCase {
     return normalizeSingleCase(obj)
   } else if (caseType === 'biz') {
     return normalizeBizCase(obj)
+  } else if (caseType === 'interfaces') {
+    return normalizeInterfaceCase(obj)
   }
 
-  throw new Error(`Unknown case_type: "${caseType}". Expected "single" or "biz".`)
+  throw new Error(`Unknown case_type: "${caseType}". Expected "single", "biz", or "interfaces".`)
 }
 
 /**
@@ -57,6 +60,8 @@ function normalizeSingleCase(raw: Record<string, unknown>): SingleYamlCase {
     status_code: (raw['status_code'] as string | number) ?? 200,
     assert_dict: asObject(raw['assert_dict']),
     assert_rules: asStringArray(raw['assert_rules']),
+    preprocessors: asProcessorArray(raw['preprocessors']),
+    postprocessors: asProcessorArray(raw['postprocessors']),
     remark: String(raw['remark'] ?? ''),
   }
 }
@@ -90,8 +95,29 @@ function normalizeBizStep(raw: Record<string, unknown>): any {
     status_code: getField(raw, 'StatusCode', 'status_code') ?? 200,
     assert_dict: asObject(getField(raw, 'AssertDict', 'assert_dict')),
     assert_rules: asStringArray(getField(raw, 'AssertRules', 'assert_rules')),
+    preprocessors: asProcessorArray(getField(raw, 'PreProcessors', 'preprocessors')),
+    postprocessors: asProcessorArray(getField(raw, 'PostProcessors', 'postprocessors')),
     tag: String(getField(raw, 'Tag', 'tag') ?? 'P0'),
     remark: String(getField(raw, 'Remark', 'remark') ?? ''),
+  }
+}
+
+function normalizeInterfaceCase(raw: Record<string, unknown>): InterfaceYamlCase {
+  return {
+    case_type: 'interfaces',
+    test_id: String(raw['test_id'] ?? ''),
+    api_name: String(raw['api_name'] ?? ''),
+    app_name: String(raw['app_name'] ?? ''),
+    method: String(raw['method'] ?? 'GET'),
+    url: String(raw['url'] ?? ''),
+    request_head: asObject(raw['request_head']),
+    request_body: asObject(raw['request_body']),
+    status_code: (raw['status_code'] as string | number) ?? 200,
+    assert_dict: asObject(raw['assert_dict']),
+    assert_rules: asStringArray(raw['assert_rules']),
+    preprocessors: asProcessorArray(raw['preprocessors']),
+    postprocessors: asProcessorArray(raw['postprocessors']),
+    remark: String(raw['remark'] ?? ''),
   }
 }
 
@@ -104,6 +130,22 @@ function asObject(val: unknown): Record<string, unknown> | null {
 function asStringArray(val: unknown): string[] | null {
   if (val === null || val === undefined) return null
   if (Array.isArray(val)) return val.map(String) as string[]
+  return null
+}
+
+function asProcessorArray(val: unknown): PreProcessorItem[] | PostProcessorItem[] | null {
+  if (val === null || val === undefined) return null
+  if (Array.isArray(val)) {
+    return val.map(item => {
+      if (typeof item === 'object' && item !== null) {
+        return {
+          name: String((item as Record<string, unknown>).name ?? (item as Record<string, unknown>).Name ?? ''),
+          config: ((item as Record<string, unknown>).config ?? (item as Record<string, unknown>).Config ?? null) as Record<string, string> | null,
+        }
+      }
+      return { name: String(item), config: null }
+    })
+  }
   return null
 }
 

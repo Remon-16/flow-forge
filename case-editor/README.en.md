@@ -66,10 +66,11 @@ npm run dev:desktop
 ### YAML Editor
 - **Form-based editing**: not a text editor — edit YAML cases through structured form fields
 - **Right-side YAML edit panel**: direct raw YAML editing by default with real-time auto-sync to form (500ms debounce); toggle to read-only preview mode (similar to Markdown editor split view)
-- Auto-detect case type via `case_type` field: `single` (single-API case) / `biz` (business flow case)
+- Auto-detect case type via `case_type` field: `single` (single-API case) / `biz` (business flow case) / `interfaces` (interface definition)
 - Open a directory (left file tree browsing, VS Code style) or open a single .yaml file (via header "Open" dropdown menu)
 - **File tabs**: open multiple files simultaneously, switch between them via tabs (similar to VS Code)
 - Single-API form: full fields (test_id, relevance_id, tag, api_name, method, url, request_head/body, assert_dict/rules, etc.)
+- Interface definition form: similar to single-API form but without relevance_id and tag fields
 - Business flow form: sheet_name + step list (draggable sort), each step with full fields
 - Reuses Excel editor's JSON Editor and AssertRules Editor
 - Field validation mirrors Excel editor (StepID duplicate, Trans format)
@@ -105,6 +106,7 @@ graph TD
     YAML --> FileTree[YamlFileTree - File Tree Sidebar]
     YAML --> TabBar[YamlTabBar - File Tab Bar]
     YAML --> SingleForm[SingleCaseForm - Single-API Form]
+    YAML --> InterfaceForm[InterfaceForm - Interface Definition Form]
     YAML --> BizForm[BizFlowForm - Business Flow Form]
     YAML --> RawView[YamlRawView - Raw YAML View]
     YAML --> StepEditor[StepEditor - Step Sub-form]
@@ -275,6 +277,7 @@ The AssertRules column shows a read-only preview area (one rule per line). Click
 The form type automatically switches based on the `case_type` field in the YAML file:
 - `single`: single-API case form (test_id, relevance_id, api_name, method, url, etc.)
 - `biz`: business flow form (sheet_name + step list)
+- `interfaces`: interface definition form (test_id, api_name, app_name, method, url, etc.; no relevance_id or tag)
 
 Simple fields are arranged in a two-column grid layout, while JSON fields (RequestHead, RequestBody, AssertDict), AssertRules, PreProcessors, PostProcessors, and Remark each occupy a full row. JSON and AssertRules fields can be edited directly in the text area (auto-saves on blur), or the "Edit Details" button opens a structured editor for visual editing. PreProcessors / PostProcessors are JSON arrays (`[{"name": "...", "config": {...}}]`), supporting inline editing, JSON tree editor, and a name + key=value configuration list editor. JSON text areas auto-size to fit content.
 

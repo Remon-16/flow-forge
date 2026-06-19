@@ -66,10 +66,11 @@ npm run dev:desktop
 ### YAML 编辑器
 - **表单化编辑**：非文本编辑器，通过结构化表单字段编辑 YAML 用例
 - **右侧 YAML 编辑面板**：默认可直接编辑原生 YAML 文本，支持实时自动同步到表单（半秒延迟），也支持切换为只读预览模式（类似 Markdown 编辑器分屏视图）
-- 通过 `case_type` 字段自动识别用例类型：`single`（单接口用例）/ `biz`（业务链路用例）
+- 通过 `case_type` 字段自动识别用例类型：`single`（单接口用例）/ `biz`（业务链路用例）/ `interfaces`（接口定义）
 - 支持打开目录（左侧文件树浏览，VS Code 风格）或单独打开 .yaml 文件（通过头部「打开」下拉菜单）
 - **文件标签页**：支持同时打开多个文件，通过标签页切换（类似 VS Code）
 - 单接口表单：完整字段（test_id、relevance_id、tag、api_name、method、url、request_head/body、assert_dict/rules 等）
+- 接口定义表单：与单接口表单类似，但不含 relevance_id 和 tag 字段
 - 业务链路表单：sheet_name + 步骤列表（可拖拽排序），每步含完整字段
 - 复用 Excel 编辑器的 JSON 编辑器和 AssertRules 编辑器
 - 字段校验镜像 Excel 编辑器（StepID 重复、Trans 格式）
@@ -105,6 +106,7 @@ graph TD
     YAML --> FileTree[YamlFileTree 文件树侧栏]
     YAML --> TabBar[YamlTabBar 文件标签栏]
     YAML --> SingleForm[SingleCaseForm 单接口表单]
+    YAML --> InterfaceForm[InterfaceForm 接口定义表单]
     YAML --> BizForm[BizFlowForm 业务链路表单]
     YAML --> RawView[YamlRawView 原始 YAML 视图]
     YAML --> StepEditor[StepEditor 步骤子表单]
@@ -274,6 +276,7 @@ AssertRules 列显示只读预览区（每行一条规则），点击「编辑�
 根据 YAML 文件中的 `case_type` 字段自动切换表单类型：
 - `single`：单接口用例表单（test_id、relevance_id、api_name、method、url 等字段）
 - `biz`：业务链路表单（sheet_name + 步骤列表）
+- `interfaces`：接口定义表单（test_id、api_name、app_name、method、url 等字段，不含 relevance_id 和 tag）
 
 简单字段以两列网格布局呈现，JSON 字段（RequestHead、RequestBody、AssertDict）、AssertRules、PreProcessors、PostProcessors 和备注字段独占一行。JSON 和 AssertRules 字段可直接在文本框中编辑原始内容（失焦自动保存），也可点击「编辑详情」按钮打开结构化编辑器进行可视化编辑。PreProcessors / PostProcessors 为 JSON 数组格式（`[{"name": "...", "config": {...}}]`），支持内联编辑、JSON 树编辑器以及名称+key=value 配置列表编辑器。JSON 文本区域高度自适应内容。
 

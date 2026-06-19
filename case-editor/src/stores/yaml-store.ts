@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { YamlCase, SingleYamlCase, BizYamlCase, YamlBizStep } from '../types/yaml'
-import { createDefaultSingleCase, createDefaultBizCase, createDefaultBizStep } from '../types/yaml'
+import type { YamlCase, SingleYamlCase, BizYamlCase, InterfaceYamlCase, YamlBizStep } from '../types/yaml'
+import { createDefaultSingleCase, createDefaultBizCase, createDefaultInterfaceCase, createDefaultBizStep } from '../types/yaml'
 import { parseYaml, stringifyYaml } from '../utils/yaml-parser'
 import {
   isDesktop,
@@ -74,6 +74,7 @@ export const useYamlStore = defineStore('yaml', () => {
 
   const isSingleCase = computed(() => currentCase.value?.case_type === 'single')
   const isBizCase = computed(() => currentCase.value?.case_type === 'biz')
+  const isInterfaceCase = computed(() => currentCase.value?.case_type === 'interfaces')
 
   const hasUnsavedTabs = computed(() => openTabs.value.some(t => t.modified))
 
@@ -229,12 +230,17 @@ export const useYamlStore = defineStore('yaml', () => {
     }
   }
 
-  function newFile(caseType: 'single' | 'biz') {
+  function newFile(caseType: 'single' | 'biz' | 'interfaces') {
     untitledCounter++
     const title = `Untitled-${untitledCounter}`
-    const newCase = caseType === 'single'
-      ? createDefaultSingleCase()
-      : createDefaultBizCase()
+    let newCase: YamlCase
+    if (caseType === 'single') {
+      newCase = createDefaultSingleCase()
+    } else if (caseType === 'biz') {
+      newCase = createDefaultBizCase()
+    } else {
+      newCase = createDefaultInterfaceCase()
+    }
     saveCurrentTabState()
     openTabs.value.push({ path: null, title, case: newCase, modified: true })
     activeTabIndex.value = openTabs.value.length - 1
@@ -298,6 +304,13 @@ export const useYamlStore = defineStore('yaml', () => {
   // Single case field update
   function updateSingleField(field: keyof SingleYamlCase, value: unknown) {
     if (!isSingleCase.value || !currentCase.value) return
+    currentCase.value = { ...currentCase.value, [field]: value }
+    markModified()
+  }
+
+  // Interface case field update
+  function updateInterfaceField(field: keyof InterfaceYamlCase, value: unknown) {
+    if (!isInterfaceCase.value || !currentCase.value) return
     currentCase.value = { ...currentCase.value, [field]: value }
     markModified()
   }
@@ -402,6 +415,7 @@ export const useYamlStore = defineStore('yaml', () => {
     currentFileName,
     isSingleCase,
     isBizCase,
+    isInterfaceCase,
     hasUnsavedTabs,
     // actions
     openDirectory,
@@ -415,6 +429,7 @@ export const useYamlStore = defineStore('yaml', () => {
     // mutations
     markModified,
     updateSingleField,
+    updateInterfaceField,
     updateBizField,
     addBizStep,
     removeBizStep,

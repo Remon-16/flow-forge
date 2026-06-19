@@ -44,7 +44,7 @@ graph TD
 
 3. **接口 URL 校验**（源级验证）：将分析出的接口 URL 与接口文档原文进行比对，确保接口定义中的 URL 在原始文档中真实存在。未通过校验的 URL 会触发自动纠错重试。仅源级验证通过的接口才流入下游流程
 
-4. **保存接口定义**：将校验后的接口定义写入 `{output}/cases/interfaces/` 目录，每个接口一个 YAML 文件。接口 YAML 在测试计划审核前即已保存——用户可在审核期间直接编辑 YAML 文件微调接口定义，审核通过后系统会重新加载编辑后的接口
+4. **保存接口定义**：将校验后的接口定义写入 `{output}/cases/interfaces/` 目录，每个接口一个 YAML 文件（含 `case_type: interfaces`）。接口 YAML 在测试计划审核前即已保存——用户可在审核期间直接编辑 YAML 文件微调接口定义，审核通过后系统会重新加载编辑后的接口
 
 5. **需求分析**：LLM 从需求中提取业务流程、用户角色、约束条件、异常场景
 
@@ -253,7 +253,7 @@ agent/
 │
 ├── <output>/                    # 输出目录（例: ./output_20260619_143052）
 │   ├── cases/                   # 测试用例产物
-│   │   ├── interfaces/          # 接口定义 YAML
+│   │   ├── interfaces/          # 接口定义 YAML（case_type: interfaces）
 │   │   ├── single_cases/        # 单接口测试用例 YAML
 │   │   ├── biz_flows/           # 业务链路用例 YAML
 │   │   ├── failures.yaml        # 校验失败的用例
@@ -388,7 +388,7 @@ Markdown 表格示例：
 
 **会话日志**：每次运行在 `logs/` 下创建按时间戳命名的目录，包含 `session.jsonl`（事件流）、`state.json`（最终状态快照）和输出 Excel 副本。使用 `--debug` 时额外生成 `debug.log`（完整 LLM I/O）。
 
-**YAML 用例文件**（默认）：每个接口/用例独立一个 `.yaml` 文件，存放在 `{output}/cases/interfaces/`、`{output}/cases/single_cases/`、`{output}/cases/biz_flows/` 目录下。便于 Git 版本管理、增量生成和断点续生成。
+**YAML 用例文件**（默认）：每个接口/用例独立一个 `.yaml` 文件，存放在 `{output}/cases/interfaces/`（`case_type: interfaces`）、`{output}/cases/single_cases/`（`case_type: single`）、`{output}/cases/biz_flows/`（`case_type: biz`）目录下。便于 Git 版本管理、增量生成和断点续生成。
 
 **Excel 用例文件**（可选）：设置 `OUTPUT_FORMAT=excel` 或 `both` 时从 YAML 转换生成，多 Sheet 结构，与执行器格式完全兼容：
 - Sheet 1 — API Definitions：接口定义表

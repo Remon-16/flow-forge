@@ -44,7 +44,7 @@ Core workflow:
 
 3. **Interface URL Validation** (source-level): Validate each interface URL against the raw API documentation to ensure it actually exists in the source document. URLs failing validation trigger automatic correction retries. Only source-validated interfaces proceed downstream
 
-4. **Save Interfaces**: Write validated interface definitions to `{output}/cases/interfaces/` directory, one YAML file per interface. Interface YAMLs are saved before test plan review — users can directly edit YAML files during the plan approval pause, and the system will reload edited interfaces after approval
+4. **Save Interfaces**: Write validated interface definitions to `{output}/cases/interfaces/` directory, one YAML file per interface (with `case_type: interfaces`). Interface YAMLs are saved before test plan review — users can directly edit YAML files during the plan approval pause, and the system will reload edited interfaces after approval
 
 5. **Requirements Analysis**: LLM extracts business flows, user roles, constraints, and exception scenarios from requirements
 
@@ -253,7 +253,7 @@ agent/
 │
 ├── <output>/                    # Output directory (e.g. ./output_20260619_143052)
 │   ├── cases/                   # Test case artifacts
-│   │   ├── interfaces/          # Interface definition YAMLs
+│   │   ├── interfaces/          # Interface definition YAMLs (case_type: interfaces)
 │   │   ├── single_cases/        # Single API test case YAMLs
 │   │   ├── biz_flows/           # Business flow case YAMLs
 │   │   ├── failures.yaml        # Validation failures
@@ -388,7 +388,7 @@ Markdown table example:
 
 **Session Log**: Each run creates a timestamped directory under `logs/` containing `session.jsonl` (event stream), `state.json` (final state snapshot), and a copy of the output Excel. Use `--debug` to additionally generate `debug.log` (full LLM I/O).
 
-**YAML Case Files** (default): Each interface/case is a separate `.yaml` file stored in `{output}/cases/interfaces/`, `{output}/cases/single_cases/`, `{output}/cases/biz_flows/` directories. Enables Git version control, incremental generation, and resumable generation.
+**YAML Case Files** (default): Each interface/case is a separate `.yaml` file stored in `{output}/cases/interfaces/` (`case_type: interfaces`), `{output}/cases/single_cases/` (`case_type: single`), `{output}/cases/biz_flows/` (`case_type: biz`) directories. Enables Git version control, incremental generation, and resumable generation.
 
 **Excel Case File** (optional): Set `OUTPUT_FORMAT=excel` or `both` to convert from YAML. Multi-sheet structure, fully compatible with executor format:
 - Sheet 1 — API Definitions: interface definition table
