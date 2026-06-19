@@ -78,6 +78,79 @@ fn read_dir_recursive(dir_path: String) -> Result<Vec<FileEntry>, String> {
 }
 
 #[tauri::command]
+fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
+    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_to_trash(path: String) -> Result<(), String> {
+    trash::delete(&path).map_err(|e| e.to_string())
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    let read_dir = fs::read_dir(src).map_err(|e| e.to_string())?;
+    for entry in read_dir {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let file_name = entry.file_name();
+        let src_path = entry.path();
+        let dst_path = dst.join(&file_name);
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn copy_file_or_dir(from: String, to: String) -> Result<(), String> {
+    let src = Path::new(&from);
+    let dst = Path::new(&to);
+    if src.is_dir() {
+        copy_dir_recursive(src, dst)
+    } else {
+        std::fs::copy(src, dst).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+#[tauri::command]
+fn move_file_or_dir(from: String, to: String) -> Result<(), String> {
+    std::fs::rename(&from, &to).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_in_explorer(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg("/select,")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let parent = Path::new(&path).parent().unwrap_or(Path::new(&path));
+        std::process::Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn list_dir_all(dir_path: String) -> Result<Vec<FileEntry>, String> {
     fn walk(dir: &Path) -> Result<Vec<FileEntry>, String> {
         let mut entries = Vec::new();
@@ -136,6 +209,11 @@ pub fn run() {
             write_file_bytes,
             read_dir_recursive,
             list_dir_all,
+            rename_file,
+            delete_to_trash,
+            copy_file_or_dir,
+            move_file_or_dir,
+            open_in_explorer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

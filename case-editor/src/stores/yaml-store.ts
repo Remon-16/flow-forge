@@ -11,6 +11,11 @@ import {
   openDirectoryDialog,
   openFileDialog,
   saveFileDialog,
+  renameFile as renameFileBackend,
+  deleteToTrash as deleteToTrashBackend,
+  copyFileOrDir as copyFileOrDirBackend,
+  moveFileOrDir as moveFileOrDirBackend,
+  openInExplorer as openInExplorerBackend,
 } from '../utils/desktop-bridge'
 import { findDuplicateStepIDs, validateTrans } from '../utils/validators'
 
@@ -28,6 +33,11 @@ export interface OpenTab {
   modified: boolean
 }
 
+interface FileClipboard {
+  path: string
+  mode: 'cut' | 'copy'
+}
+
 let untitledCounter = 0
 
 export const useYamlStore = defineStore('yaml', () => {
@@ -41,6 +51,8 @@ export const useYamlStore = defineStore('yaml', () => {
 
   const openTabs = ref<OpenTab[]>([])
   const activeTabIndex = ref<number>(-1)
+
+  const fileClipboard = ref<FileClipboard | null>(null)
 
   // --- Tab helpers ---
 
@@ -77,6 +89,60 @@ export const useYamlStore = defineStore('yaml', () => {
   const isInterfaceCase = computed(() => currentCase.value?.case_type === 'interfaces')
 
   const hasUnsavedTabs = computed(() => openTabs.value.some(t => t.modified))
+
+  const hasClipboard = computed(() => fileClipboard.value !== null)
+
+  // --- Helpers ---
+
+  function refreshFileTree() {
+    if (!rootPath.value || !isDesktop) return
+    readDirectory(rootPath.value).then((entries) => {
+      fileTree.value = entries as unknown as FileEntry[]
+    })
+  }
+
+  function splitDirAndName(filePath: string): { dir: string; name: string } {
+    const normalized = filePath.replace(/\\/g, '/')
+    const lastSlash = normalized.lastIndexOf('/')
+    if (lastSlash < 0) return { dir: '', name: normalized }
+    return { dir: normalized.substring(0, lastSlash), name: normalized.substring(lastSlash + 1) }
+  }
+
+  function splitNameExt(fileName: string): { base: string; ext: string } {
+    const dotIdx = fileName.lastIndexOf('.')
+    if (dotIdx <= 0) return { base: fileName, ext: '' }
+    return { base: fileName.substring(0, dotIdx), ext: fileName.substring(dotIdx) }
+  }
+
+  function findEntryInTree(path: string, tree: FileEntry[]): FileEntry | null {
+    for (const entry of tree) {
+      if (entry.path === path) return entry
+      if (entry.children) {
+        const found = findEntryInTree(path, entry.children)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  function nameExistsInDir(dirPath: string, name: string): boolean {
+    const entry = findEntryInTree(dirPath, fileTree.value)
+    if (!entry || !entry.children) return false
+    return entry.children.some(c => c.name === name)
+  }
+
+  function collectDescendantPaths(entry: FileEntry): string[] {
+    const paths: string[] = []
+    if (!entry.isDirectory && entry.path) {
+      paths.push(entry.path)
+    }
+    if (entry.children) {
+      for (const child of entry.children) {
+        paths.push(...collectDescendantPaths(child))
+      }
+    }
+    return paths
+  }
 
   // --- Actions ---
 
@@ -288,6 +354,109 @@ export const useYamlStore = defineStore('yaml', () => {
     }
   }
 
+  async function renameFile(oldPath: string, newName: string) {
+    const { dir } = splitDirAndName(oldPath)
+    const separator = oldPath.includes('\\') ? '\\' : '/'
+    const newPath = dir ? `${dir}${separator}${newName}` : newName
+    await renameFileBackend(oldPath, newPath)
+
+    for (const tab of openTabs.value) {
+      if (tab.path === oldPath) {
+        tab.path = newPath
+        tab.title = newName
+      }
+    }
+    if (currentFilePath.value === oldPath) {
+      currentFilePath.value = newPath
+    }
+    refreshFileTree()
+  }
+
+  async function deleteFile(path: string) {
+    const entry = findEntryInTree(path, fileTree.value)
+    const pathsToClose: string[] = []
+    if (entry && entry.isDirectory) {
+      pathsToClose.push(...collectDescendantPaths(entry))
+    }
+    pathsToClose.push(path)
+
+    await deleteToTrashBackend(path)
+
+    const tabsToClose: number[] = []
+    for (let i = 0; i < openTabs.value.length; i++) {
+      const tabPath = openTabs.value[i].path
+      if (tabPath && pathsToClose.some(p => tabPath === p || tabPath.startsWith(p + '/') || tabPath.startsWith(p + '\\'))) {
+        tabsToClose.push(i)
+      }
+    }
+    // Close from highest index to avoid shifting
+    for (let i = tabsToClose.length - 1; i >= 0; i--) {
+      closeTab(tabsToClose[i])
+    }
+    refreshFileTree()
+  }
+
+  function cutFile(path: string) {
+    fileClipboard.value = { path, mode: 'cut' }
+  }
+
+  function copyFile(path: string) {
+    fileClipboard.value = { path, mode: 'copy' }
+  }
+
+  async function pasteFile(targetPath: string) {
+    if (!fileClipboard.value || !isDesktop) return
+    const srcPath = fileClipboard.value.path
+    const mode = fileClipboard.value.mode
+
+    const targetEntry = findEntryInTree(targetPath, fileTree.value)
+    let targetDir: string
+    if (targetEntry && targetEntry.isDirectory) {
+      targetDir = targetPath
+    } else {
+      const { dir } = splitDirAndName(targetPath)
+      targetDir = dir
+    }
+
+    const { name: srcName } = splitDirAndName(srcPath)
+    let destName = srcName
+    if (nameExistsInDir(targetDir, destName)) {
+      const { base, ext } = splitNameExt(srcName)
+      let counter = 2
+      do {
+        destName = `${base} - Copy${ext}`
+        if (counter > 2) {
+          destName = `${base} - Copy (${counter})${ext}`
+        }
+        counter++
+      } while (nameExistsInDir(targetDir, destName))
+    }
+
+    const separator = targetDir.includes('\\') ? '\\' : '/'
+    const destPath = targetDir ? `${targetDir}${separator}${destName}` : destName
+
+    if (mode === 'cut') {
+      await moveFileOrDirBackend(srcPath, destPath)
+      fileClipboard.value = null
+      for (const tab of openTabs.value) {
+        if (tab.path === srcPath) {
+          tab.path = destPath
+          tab.title = destName
+        }
+      }
+      if (currentFilePath.value === srcPath) {
+        currentFilePath.value = destPath
+      }
+    } else {
+      await copyFileOrDirBackend(srcPath, destPath)
+    }
+    refreshFileTree()
+  }
+
+  async function openInExplorer(path: string) {
+    await openInExplorerBackend(path)
+  }
+
   // --- Mutations ---
 
   function markModified() {
@@ -411,12 +580,14 @@ export const useYamlStore = defineStore('yaml', () => {
     loading,
     openTabs,
     activeTabIndex,
+    fileClipboard,
     // getters
     currentFileName,
     isSingleCase,
     isBizCase,
     isInterfaceCase,
     hasUnsavedTabs,
+    hasClipboard,
     // actions
     openDirectory,
     openFile,
@@ -426,6 +597,13 @@ export const useYamlStore = defineStore('yaml', () => {
     closeFile,
     switchTab,
     closeTab,
+    renameFile,
+    deleteFile,
+    cutFile,
+    copyFile,
+    pasteFile,
+    openInExplorer,
+    refreshFileTree,
     // mutations
     markModified,
     updateSingleField,

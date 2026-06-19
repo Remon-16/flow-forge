@@ -75,6 +75,7 @@ npm run dev:desktop
 - Reuses Excel editor's JSON Editor and AssertRules Editor
 - Field validation mirrors Excel editor (StepID duplicate, Trans format)
 - **Find & Replace**: search and replace within the raw YAML text — auto-expands the right-side panel on activation; matching line numbers and content are clearly displayed
+- **Right-click file operations**: right-click files or folders in the file tree to rename, cut, copy, paste, delete to recycle bin, and open in file explorer. Cross-platform support for Windows, macOS, and Linux
 
 ### Markdown Plan Annotator
 - Select text directly on the rendered Markdown preview to add annotations

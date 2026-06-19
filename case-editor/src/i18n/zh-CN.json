@@ -158,7 +158,20 @@
     "unsavedPrompt": "有未保存的修改，是否关闭？",
     "unsavedGoHome": "有未保存的修改，确定离开吗？",
     "discardChanges": "不保存",
-    "saveAndClose": "保存并关闭"
+    "saveAndClose": "保存并关闭",
+    "cut": "剪切",
+    "copy": "复制",
+    "paste": "粘贴",
+    "openInExplorer": "在文件资源管理器中打开",
+    "renameSuccess": "重命名成功",
+    "renameFailed": "重命名失败",
+    "renamePlaceholder": "输入新名称",
+    "confirmDelete": "确认删除",
+    "confirmDeleteMsg": "确定要删除 \"{name}\" 吗？",
+    "deleteSuccess": "删除成功",
+    "deleteFailed": "删除失败",
+    "pasteFailed": "粘贴失败",
+    "openInExplorerFailed": "打开文件资源管理器失败"
   },
   "annotator": {
     "title": "计划批注器",

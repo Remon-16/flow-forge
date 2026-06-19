@@ -41,7 +41,7 @@ python main.py --config /path/to/env.yml --scriptType APITest --envName local \
                --apiMode all
 ```
 
-已实现 Tauri 桌面测试用例编辑器。支持 Excel (.xlsx) 和 YAML (.yaml) 两种用例格式的可视化编辑，提供表单化 YAML 编辑、高级断言规则编辑器、JSON 树形编辑器、字体缩放（Ctrl+滚轮）、计划批注器交互式批注弹窗等功能。详情见 [case-editor/README.md](./case-editor/README.md)。
+已实现 Tauri 桌面测试用例编辑器。支持 Excel (.xlsx) 和 YAML (.yaml) 两种用例格式的可视化编辑，提供表单化 YAML 编辑、右键菜单文件操作、高级断言规则编辑器、JSON 树形编辑器、字体缩放（Ctrl+滚轮）、计划批注器交互式批注弹窗等功能。详情见 [case-editor/README.md](./case-editor/README.md)。
 
 ## 后续计划
 

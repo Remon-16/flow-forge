@@ -158,7 +158,20 @@
     "unsavedPrompt": "Unsaved changes. Close anyway?",
     "unsavedGoHome": "You have unsaved changes. Leave anyway?",
     "discardChanges": "Don't Save",
-    "saveAndClose": "Save & Close"
+    "saveAndClose": "Save & Close",
+    "cut": "Cut",
+    "copy": "Copy",
+    "paste": "Paste",
+    "openInExplorer": "Open in File Explorer",
+    "renameSuccess": "Renamed successfully",
+    "renameFailed": "Rename failed",
+    "renamePlaceholder": "Enter new name",
+    "confirmDelete": "Confirm Delete",
+    "confirmDeleteMsg": "Are you sure you want to delete \"{name}\"?",
+    "deleteSuccess": "Deleted successfully",
+    "deleteFailed": "Delete failed",
+    "pasteFailed": "Paste failed",
+    "openInExplorerFailed": "Failed to open file explorer"
   },
   "annotator": {
     "title": "Plan Annotator",

@@ -112,4 +112,29 @@ export async function listDirectoryAll(dirPath: string): Promise<FileEntry[]> {
   throw new Error('Directory listing is not supported in browser mode.')
 }
 
+export async function renameFile(oldPath: string, newPath: string): Promise<void> {
+  if (isDesktop) return invoke<void>('rename_file', { oldPath, newPath })
+  throw new Error('File renaming is not supported in browser mode.')
+}
+
+export async function deleteToTrash(path: string): Promise<void> {
+  if (isDesktop) return invoke<void>('delete_to_trash', { path })
+  throw new Error('File deletion is not supported in browser mode.')
+}
+
+export async function copyFileOrDir(from: string, to: string): Promise<void> {
+  if (isDesktop) return invoke<void>('copy_file_or_dir', { from, to })
+  throw new Error('File copy is not supported in browser mode.')
+}
+
+export async function moveFileOrDir(from: string, to: string): Promise<void> {
+  if (isDesktop) return invoke<void>('move_file_or_dir', { from, to })
+  throw new Error('File move is not supported in browser mode.')
+}
+
+export async function openInExplorer(path: string): Promise<void> {
+  if (isDesktop) return invoke<void>('open_in_explorer', { path })
+  throw new Error('Open in explorer is not supported in browser mode.')
+}
+
 export { isDesktop }
