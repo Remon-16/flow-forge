@@ -1,13 +1,13 @@
-# Flow Forge — Test Case Editor
+# Flow Forge Studio
 
 **English** | [中文](README.md)
 
-A desktop test case editor built with Vue 3 + Ant Design Vue + Tauri 2, supporting visual editing of both Excel (.xlsx) and YAML (.yaml) test case formats.
+A desktop test case workspace built with Vue 3 + Ant Design Vue + Tauri 2, supporting visual editing of both Excel (.xlsx) and YAML (.yaml) test case formats, plus interactive Markdown annotation of test plans.
 
 ## Quick Start
 
 ```bash
-cd case-editor
+cd studio
 npm install
 
 # Tauri desktop app dev mode
@@ -143,7 +143,7 @@ graph TD
 ## Project Structure
 
 ```text
-case-editor/
+studio/
 ├── README.md
 ├── README.en.md
 ├── package.json
@@ -405,6 +405,17 @@ The PreProcessors / PostProcessors columns support the following editing modes:
 | Ctrl+- | Zoom out |
 | Ctrl+0 | Reset zoom |
 | Ctrl+MouseWheel | Zoom in/out |
+
+## Recommended Workflow
+
+The recommended workflow for using Flow Forge in real projects:
+
+1. **AI generates Excel cases**: Run the Agent with `--output-format excel` or `both` to generate test cases in Excel format.
+2. **Batch edit in Studio**: Open the generated Excel in Flow Forge Studio, use the table view to batch-adjust tag levels, fill in request parameters, and modify assertion rules.
+3. **Convert to YAML for diff**: After editing, run `python converter_main.py excel2yaml` to convert the Excel to YAML format, then commit each file to Git. With one YAML file per case, git diff clearly shows every change.
+4. **Executor runs the cases**: Run the YAML directory with the executor to get a test report.
+
+> **Why this workflow?** Excel is ideal for batch editing — quickly browse, sort, and modify large numbers of cases in Studio. YAML is ideal for diffing — one file per case means code review changes are crystal clear.
 
 ## Development
 

@@ -31,10 +31,19 @@ graph TD
 
 ```
 python/
-├── main.py                      # CLI 入口，流程编排
+├── main.py                      # CLI 入口，流程编排（执行器）
+├── converter_main.py             # CLI 入口，格式转换（Excel ↔ YAML）
 ├── requirements.txt             # 依赖：requests, openpyxl, pyyaml
 ├── env.yml                      # 基础配置（可提交到仓库）
 ├── env-local.yml                # 环境特定配置（含登录凭据，不可提交）
+│
+├── converter/                    # 用例格式转换工具
+│   ├── __init__.py
+│   ├── field_mapping.py          # snake_case ↔ PascalCase 字段映射
+│   ├── excel_reader.py           # Excel 读取 → 结构化数据
+│   ├── excel_writer.py           # 结构化数据 → Excel 多 Sheet 写入
+│   ├── yaml_writer.py            # 结构化数据 → YAML 文件写入
+│   └── converter.py              # 编排：excel_to_yaml() / yaml_to_excel()
 │
 ├── config/
 │   ├── __init__.py
@@ -564,6 +573,34 @@ Excel 中的 JSON 字段支持以下格式：
 | `SUM_PRODUCT(p1, p2)` | 两字段乘积求和 | `SUM_PRODUCT($.data.list[*].price, $.data.list[*].count)` |
 
 路径中 `[*]` 表示遍历数组的每个元素，用于 `SUM` 和 `SUM_PRODUCT` 函数。
+
+## 用例格式转换（converter）
+
+`python/converter/` 子包提供 Excel 与 YAML 用例格式的双向转换。入口文件为 `python/converter_main.py`。
+
+### Excel → YAML
+
+```bash
+python converter_main.py excel2yaml --input cases.xlsx --output ./output/
+```
+
+读取 Excel 工作簿，按 Sheet 分类提取：Sheet "API Definitions" → `interfaces/`，Sheet "Single Cases" → `single_cases/`，其余 Sheet → `biz_flows/`。每个条目生成一个 `.yaml` 文件，JSON 列自动解析为 Python 对象，字段名从 PascalCase 转换为 snake_case。
+
+### YAML → Excel
+
+```bash
+python converter_main.py yaml2excel \
+  --interfaces ./cases/interfaces/ \
+  --single-cases ./cases/single_cases/ \
+  --biz-flows ./cases/biz_flows/ \
+  --output cases.xlsx
+```
+
+三个目录均为可选参数——不提供的目录在生成 Excel 中对应 Sheet 留空（仅写表头）。YAML 文件需符合 Flow Forge 的用例格式（包含 `case_type` 字段，或通过结构自动推断类型）。
+
+### 推荐工作流
+
+在实际项目中，建议先使用 AI Agent 生成 Excel 格式的用例（`--output-format excel`），在 Flow Forge Studio 中进行批量编辑（调整 Tag、补全参数、修改断言），然后用 converter 将 Excel 转为 YAML 格式纳入 Git 版本控制。YAML 每个用例一个文件，git diff 可清晰展示每次变更，方便代码评审。
 
 ## 前置处理器 / 后置处理器
 

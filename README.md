@@ -41,12 +41,7 @@ python main.py --config /path/to/env.yml --scriptType APITest --envName local \
                --apiMode all
 ```
 
-已实现 Tauri 桌面测试用例编辑器。支持 Excel (.xlsx) 和 YAML (.yaml) 两种用例格式的可视化编辑，提供表单化 YAML 编辑、右键菜单文件操作、高级断言规则编辑器、JSON 树形编辑器、字体缩放（Ctrl+滚轮）、计划批注器交互式批注弹窗等功能。详情见 [case-editor/README.md](./case-editor/README.md)。
-
-## 后续计划
-
-1. 继续验证其他方面的内容。
-2. 提升通用性，比如实现一个转换器，将测试用例转为postman。
+已实现 Tauri 桌面应用 Flow Forge Studio。支持 Excel (.xlsx) 和 YAML (.yaml) 两种用例格式的可视化编辑，提供表单化 YAML 编辑、右键菜单文件操作、高级断言规则编辑器、JSON 树形编辑器、字体缩放（Ctrl+滚轮）、Markdown 计划批注器交互式批注弹窗等功能。同时提供用例格式转换工具，支持 Excel 与 YAML 的互相转换。详情见 [studio/README.md](./studio/README.md)。
 
 ## 系统架构
 
@@ -65,12 +60,13 @@ graph TD
     EXEC --> |退出码| JENKINS
 ```
 
-人工审核环节支持两种方式：(1) 直接在 CLI 中输入 `y`/`n` 及文字反馈；(2) 输入 `r` 通过 [case-editor 的 Markdown 计划批注器](./case-editor/README.md) 在渲染后的测试计划上添加结构化批注，支持点击批注高亮查看详情、直接编辑和删除批注，智能体将根据批注文件修改计划。
+人工审核环节支持两种方式：(1) 直接在 CLI 中输入 `y`/`n` 及文字反馈；(2) 输入 `r` 通过 [studio 的 Markdown 计划批注器](./studio/README.md) 在渲染后的测试计划上添加结构化批注，支持点击批注高亮查看详情、直接编辑和删除批注，智能体将根据批注文件修改计划。
 
 整个框架由两个核心组件构成：
 
 - **[agent/](./agent/)** — AI 用例生成智能体：读取需求文档 + 接口文档，经过"计划生成 → 人工审核 → 用例编排"两阶段流水线，输出测试用例 YAML 文件（可选导出 Excel）。
-- **[python/](./python/)** — 接口测试执行器：读取 YAML 用例目录/文件或 Excel 用例文件，自动管理登录态，多线程执行 HTTP 请求，运行断言，生成自包含 HTML 测试报告。
+- **[python/](./python/)** — 接口测试执行器 + 用例格式转换器：读取 YAML 用例目录/文件或 Excel 用例文件，自动管理登录态，多线程执行 HTTP 请求，运行断言，生成自包含 HTML 测试报告。同时提供 Excel ↔ YAML 用例格式双向转换工具。
+- **[studio/](./studio/)** — Flow Forge Studio 桌面应用：提供测试用例的可视化编辑（Excel + YAML）、测试计划的 Markdown 交互式批注。
 
 两个组件之间通过 **YAML 文件** 作为主要契约（Excel 仍兼容）——智能体生成什么格式，执行器就解析什么格式。用户可以自由选择：用智能体自动生成用例，手动编写 YAML/Excel 用例后直接用执行器运行，或使用 Excel 编辑器编辑用例。
 
@@ -82,9 +78,10 @@ flow-forge/
 ├── agent/                        # AI 用例生成智能体
 │   ├── plugins/                  # 自定义用例属性生成器插件（可选）
 │   └── utils/                    # 工具模块（token_counter.py 等）
-├── python/                       # 接口测试执行器
+├── python/                       # 接口测试执行器 + 用例格式转换器
+│   ├── converter/                # Excel ↔ YAML 用例格式转换工具
 │   └── processors/               # 前置/后置处理器插件（可选）
-└── case-editor/                  # Tauri 桌面测试用例编辑器（Excel + YAML），包含 Markdown 计划批注器
+└── studio/                       # Flow Forge Studio 桌面应用（用例编辑、计划批注）
 ```
 
 ## 工作流程
@@ -125,6 +122,29 @@ flow-forge/
   查看 HTML 测试报告
 ```
 
+### 方式三：AI 生成 Excel → Studio 批量编辑 → 转 YAML 做 diff（推荐）
+
+```text
+AI 智能体输出 Excel 格式（--output-format excel 或 both）
+       │
+       ▼
+  在 Flow Forge Studio 中批量查看和编辑（调整 Tag、补全参数、修改断言等）
+       │
+       ▼
+  用 converter 将 Excel 转为 YAML 格式（python converter_main.py excel2yaml）
+       │
+       ▼
+  YAML 纳入 Git 版本控制，逐文件 diff 审查变更
+       │
+       ▼
+  执行器运行 YAML 目录
+       │
+       ▼
+  查看 HTML 测试报告
+```
+
+> **为什么推荐这个工作流？** Excel 格式适合批量编辑——在 Studio 中可以快速浏览、排序、批量修改大量用例；YAML 格式适合做 diff——每个用例一个文件，git diff 可以清晰展示每次变更的内容，方便代码评审。先用 Excel 编辑，再转为 YAML 提交，兼顾效率和可追溯性。
+
 ## CI/CD 集成（Jenkins）
 
 执行器是纯命令行工具，通过退出码反馈执行结果，可直接集成到 Jenkins 流水线中。
@@ -155,11 +175,11 @@ flow-forge/
 |------|--------|------|
 | `python/processors/` | PreProcessor / PostProcessor | 请求前后的处理逻辑，修改请求/响应，处理外部资源 |
 | `agent/plugins/` | CaseAttributeGenerator | AI 智能体插件，在用例生成后自动补充自定义属性 |
-| `case-editor` | PreProcessors / PostProcessors 字段 | 在编辑器中编辑、校验处理器配置 |
+| `studio/` | PreProcessors / PostProcessors 字段 | 在编辑器中编辑、校验处理器配置 |
 
 **典型场景**：
 - 在请求前添加 HMAC 签名（PreProcessor）
 - 在请求后清理数据库测试数据（PostProcessor）
 - 通过 AI 智能体自动为生成的用例推荐处理器配置（agent plugin）
 
-详见各子目录的 README：`python/README.md`、`agent/README.md`、`case-editor/README.md`。
+详见各子目录的 README：`python/README.md`、`agent/README.md`、`studio/README.md`。

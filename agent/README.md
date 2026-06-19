@@ -70,6 +70,14 @@ graph TD
 
 每个步骤在 CLI 中均有详细进度输出，包括：当前步骤 [N/9]、文件路径与大小、LLM 调用模型名、生成结果统计。用户始终清楚系统正在做什么。
 
+### 推荐工作流：Excel 编辑 + YAML 版本控制
+
+AI 生成测试用例时，**建议先生成 Excel 格式**（`--output-format excel` 或 `both`），原因如下：
+
+- **Excel 适合批量编辑**：在 Flow Forge Studio 中打开生成的 Excel，可以快速浏览、排序、批量修改大量用例（调整 Tag 级别、补全请求参数、修改断言规则等）
+- **YAML 适合做 diff**：编辑完成后，用 converter 将 Excel 转为 YAML（`python converter_main.py excel2yaml`），每个用例一个文件，git diff 可清晰展示每次变更内容，方便代码评审
+- **转换工具独立可用**：即使不使用 AI 生成，也可以在任何时候用 `python converter_main.py` 在 Excel 和 YAML 之间互相转换
+
 ## 自定义用例属性生成器插件
 
 ### 概念
@@ -330,7 +338,7 @@ python main.py --requirement docs/req.md --api docs/api.yaml --debug
 
 - 输入 `y` —— 批准计划，继续执行用例生成
 - 输入 `n` —— 输入文字修改意见，系统根据反馈修改计划后重新提交审核
-- 输入 `r` —— 按批注文件修改。需先在 case-editor 中对 plan.md 添加批注，系统会读取 plan_comments.json 进行修订
+- 输入 `r` —— 按批注文件修改。需先在 studio 中对 plan.md 添加批注，系统会读取 plan_comments.json 进行修订
 - 审核循环进行，直到用户批准为止
 
 ### 3. 使用多个需求文档
@@ -659,7 +667,7 @@ python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
 
 ### plan_comments.json 格式
 
-当用户在 case-editor 中对 `plan.md` 添加行级批注后，case-editor 会生成 `plan_comments.json` 文件。选择 `r` 修订模式时，系统读取该文件并交由 `plan_annotation_reviser` 智能体按批注逐条修订计划。文件格式如下：
+当用户在 studio 中对 `plan.md` 添加行级批注后，studio 会生成 `plan_comments.json` 文件。选择 `r` 修订模式时，系统读取该文件并交由 `plan_annotation_reviser` 智能体按批注逐条修订计划。文件格式如下：
 
 ```json
 [

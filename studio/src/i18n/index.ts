@@ -4,7 +4,7 @@ import enUS from './en-US.json'
 
 export type SupportedLocale = 'zh-CN' | 'en-US'
 
-const savedLocale = (localStorage.getItem('case-editor-lang') as SupportedLocale) || 'zh-CN'
+const savedLocale = (localStorage.getItem('studio-lang') as SupportedLocale) || 'zh-CN'
 
 const i18n = createI18n({
   legacy: false,

@@ -1,13 +1,13 @@
-# Flow Forge — 测试用例编辑器
+# Flow Forge Studio
 
 **中文** | [English](README.en.md)
 
-基于 Vue 3 + Ant Design Vue + Tauri 2 的桌面测试用例编辑器，支持 Excel (.xlsx) 和 YAML (.yaml) 两种用例格式的可视化编辑。
+基于 Vue 3 + Ant Design Vue + Tauri 2 的桌面测试用例工作台，支持 Excel (.xlsx) 和 YAML (.yaml) 两种用例格式的可视化编辑、测试计划 Markdown 交互式批注。
 
 ## 快速开始
 
 ```bash
-cd case-editor
+cd studio
 npm install
 
 # Tauri 桌面应用开发模式
@@ -143,7 +143,7 @@ graph TD
 ## 项目结构
 
 ```text
-case-editor/
+studio/
 ├── README.md
 ├── README.en.md
 ├── package.json
@@ -404,6 +404,17 @@ PreProcessors / PostProcessors 列支持以下编辑方式：
 | Ctrl+0 | 重置缩放 |
 | Ctrl+鼠标滚轮 | 缩放字体 |
 | Esc | 关闭查找栏 |
+
+## 推荐工作流
+
+在实际项目中使用 Flow Forge 的推荐工作流：
+
+1. **AI 生成 Excel 用例**：运行 Agent 时使用 `--output-format excel` 或 `both`，生成 Excel 格式的测试用例
+2. **在 Studio 中批量编辑**：在 Flow Forge Studio 中打开生成的 Excel，利用表格视图批量调整 Tag 级别、补全请求参数、修改断言规则
+3. **转换为 YAML 并做 diff**：编辑完成后，用 `python converter_main.py excel2yaml` 将 Excel 转为 YAML 格式，逐文件提交到 Git。YAML 每个用例一个文件，git diff 可以清晰展示每次变更
+4. **执行器运行**：用执行器直接运行 YAML 目录，得到测试报告
+
+> **为什么推荐这个工作流？** Excel 格式适合批量编辑——在 Studio 中可以快速浏览、排序、批量修改大量用例；YAML 格式适合做 diff——每个用例一个文件，代码评审时变更一目了然。
 
 ## 开发说明
 

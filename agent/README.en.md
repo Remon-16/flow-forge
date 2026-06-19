@@ -70,6 +70,14 @@ Core workflow:
 
 Each step provides detailed progress output in the CLI, including: current step [N/9], file path and size, LLM model name, and generation statistics. Users always know what the system is doing.
 
+### Recommended Workflow: Excel for Editing + YAML for Version Control
+
+When generating test cases with the AI agent, **generate Excel format first** (`--output-format excel` or `both`), for these reasons:
+
+- **Excel is ideal for batch editing**: Open the generated Excel in Flow Forge Studio to quickly browse, sort, and batch-modify large numbers of cases (adjust tag levels, fill in request parameters, modify assertion rules, etc.)
+- **YAML is ideal for diffing**: After editing, convert Excel to YAML with the converter (`python converter_main.py excel2yaml`). One file per case means git diff clearly shows every change, making code review straightforward.
+- **Converter is independently usable**: Even without AI generation, you can convert between Excel and YAML at any time with `python converter_main.py`.
+
 ## Custom Case-Attribute Generator Plugins
 
 ### Overview
@@ -330,7 +338,7 @@ The system pauses after generating the plan, waiting for user review:
 
 - Type `y` — approve the plan, continue to case generation
 - Type `n` — enter text revision feedback; the system revises the plan based on your feedback and resubmits for review
-- Type `r` — annotation-based revision. First add annotations to plan.md in case-editor, then the system reads plan_comments.json to apply revisions
+- Type `r` — annotation-based revision. First add annotations to plan.md in studio, then the system reads plan_comments.json to apply revisions
 - The review loop continues until the user approves
 
 ### 3. Using Multiple Requirement Documents
@@ -678,7 +686,7 @@ Press `Ctrl+C` at any time to abort.
 
 ### plan_comments.json Format
 
-When the user adds line-level annotations to `plan.md` in case-editor, case-editor generates a `plan_comments.json` file. When the `r` revision mode is selected, the system reads this file and hands it to the `plan_annotation_reviser` agent to revise the plan line-by-line per annotations. The file format is as follows:
+When the user adds line-level annotations to `plan.md` in studio, studio generates a `plan_comments.json` file. When the `r` revision mode is selected, the system reads this file and hands it to the `plan_annotation_reviser` agent to revise the plan line-by-line per annotations. The file format is as follows:
 
 ```json
 [

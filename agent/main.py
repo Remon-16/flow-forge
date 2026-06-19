@@ -244,7 +244,7 @@ def _run_interactive(
                 "\n是否批准此测试计划？\n"
                 "  y = 批准，继续执行用例生成\n"
                 "  n = 提出文字修改意见\n"
-                "  r = 按批注文件修改（需先在 case-editor 中对 plan.md 添加批注）\n"
+                "  r = 按批注文件修改（需先在 Studio 中对 plan.md 添加批注）\n"
                 "请输入 (y/n/r): "
             ).strip().lower()
             if choice == "y":
@@ -279,7 +279,7 @@ def _run_interactive(
 
                 if not comments_path.exists():
                     print(f"\n错误: 未找到批注文件: {comments_path.resolve()}")
-                    print("请先在 case-editor 中对测试计划添加批注。")
+                    print("请先在 Studio 中对测试计划添加批注。")
                     continue
 
                 try:

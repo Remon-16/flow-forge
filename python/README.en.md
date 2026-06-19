@@ -31,10 +31,19 @@ graph TD
 
 ```
 python/
-├── main.py                      # CLI entry point, workflow orchestration
+├── main.py                      # CLI entry point, workflow orchestration (executor)
+├── converter_main.py             # CLI entry point, format conversion (Excel ↔ YAML)
 ├── requirements.txt             # Dependencies: requests, openpyxl, pyyaml
 ├── env.yml                      # Base configuration (can be committed)
 ├── env-local.yml                # Environment-specific config (with credentials, DO NOT commit)
+│
+├── converter/                    # Case format conversion tool
+│   ├── __init__.py
+│   ├── field_mapping.py          # snake_case ↔ PascalCase field name mapping
+│   ├── excel_reader.py           # Excel reading → structured data
+│   ├── excel_writer.py           # Structured data → multi-sheet Excel writing
+│   ├── yaml_writer.py            # Structured data → YAML file writing
+│   └── converter.py              # Orchestration: excel_to_yaml() / yaml_to_excel()
 │
 ├── config/
 │   ├── __init__.py
@@ -564,6 +573,34 @@ Supported functions:
 | `SUM_PRODUCT(p1, p2)` | Sum of products of two fields | `SUM_PRODUCT($.data.list[*].price, $.data.list[*].count)` |
 
 The `[*]` wildcard in paths iterates over each element of an array, used with `SUM` and `SUM_PRODUCT` functions.
+
+## Case Format Conversion (converter)
+
+The `python/converter/` subpackage provides bidirectional Excel ↔ YAML case format conversion. Entry point: `python/converter_main.py`.
+
+### Excel → YAML
+
+```bash
+python converter_main.py excel2yaml --input cases.xlsx --output ./output/
+```
+
+Reads an Excel workbook and categorizes by sheet: Sheet "API Definitions" → `interfaces/`, Sheet "Single Cases" → `single_cases/`, remaining sheets → `biz_flows/`. Each entry becomes one `.yaml` file, with JSON columns auto-parsed into Python objects and field names converted from PascalCase to snake_case.
+
+### YAML → Excel
+
+```bash
+python converter_main.py yaml2excel \
+  --interfaces ./cases/interfaces/ \
+  --single-cases ./cases/single_cases/ \
+  --biz-flows ./cases/biz_flows/ \
+  --output cases.xlsx
+```
+
+All three directory arguments are optional — sheets for omitted directories are left blank (headers only) in the resulting Excel file. YAML files must follow the Flow Forge case format (with `case_type` field, or the converter auto-infers the type by structure).
+
+### Recommended Workflow
+
+For real projects, we recommend generating cases in Excel format from the AI Agent (`--output-format excel`), batch-editing in Flow Forge Studio (adjust tags, fill in parameters, modify assertions), then converting Excel to YAML with the converter for Git version control. With one YAML file per case, git diff clearly shows every change, making code review straightforward.
 
 ## Pre-Processors / Post-Processors
 

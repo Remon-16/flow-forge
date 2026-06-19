@@ -41,12 +41,7 @@ python main.py --config /path/to/env.yml --scriptType APITest --envName local \
                --apiMode all
 ```
 
-A Tauri desktop test case editor has been implemented. It supports visual editing of both Excel (.xlsx) and YAML (.yaml) test case formats, featuring form-based YAML editing, right-click file operations, an advanced assertion rule editor, a JSON tree editor, font zoom (Ctrl+wheel), interactive annotation popovers, and more. See [case-editor/README.en.md](./case-editor/README.en.md) for details.
-
-## Roadmap
-
-1. Broader validation across additional scenarios and document formats.
-2. Improve interoperability, such as a converter that exports test cases to Postman collections.
+A Tauri desktop application, Flow Forge Studio, has been implemented. It supports visual editing of both Excel (.xlsx) and YAML (.yaml) test case formats, featuring form-based YAML editing, right-click file operations, an advanced assertion rule editor, a JSON tree editor, font zoom (Ctrl+wheel), and an interactive Markdown plan annotator with popovers. A case format converter is also provided for bidirectional Excel ↔ YAML conversion. See [studio/README.en.md](./studio/README.en.md) for details.
 
 ## System Architecture
 
@@ -65,12 +60,13 @@ graph TD
     EXEC --> |Exit Code| JENKINS
 ```
 
-The manual review step supports two modes: (1) typing `y`/`n` with text feedback directly in the CLI; (2) typing `r` to use the [case-editor's Markdown Plan Annotator](./case-editor/README.en.md) to add structured annotations on the rendered test plan — click on annotation highlights to view, edit, or delete annotations inline via a popover — the agent then revises the plan based on the annotation file.
+The manual review step supports two modes: (1) typing `y`/`n` with text feedback directly in the CLI; (2) typing `r` to use the [studio's Markdown Plan Annotator](./studio/README.en.md) to add structured annotations on the rendered test plan — click on annotation highlights to view, edit, or delete annotations inline via a popover — the agent then revises the plan based on the annotation file.
 
 The framework consists of two core components:
 
 - **[agent/](./agent/)** — AI Case Generation Agent: reads requirement documents + API documentation, passes through a two-phase pipeline of "Plan Generation → Manual Review → Case Orchestration", and outputs test case YAML files (with optional Excel export).
-- **[python/](./python/)** — API Test Executor: reads YAML case directories/files or Excel case files, automatically manages login state, executes HTTP requests with multi-threading, runs assertions, and generates self-contained HTML test reports.
+- **[python/](./python/)** — API Test Executor + Case Format Converter: reads YAML case directories/files or Excel case files, automatically manages login state, executes HTTP requests with multi-threading, runs assertions, and generates self-contained HTML test reports. Also provides Excel ↔ YAML bidirectional format conversion.
+- **[studio/](./studio/)** — Flow Forge Studio desktop application: provides visual editing of test cases (Excel + YAML) and interactive Markdown annotation of test plans.
 
 The two components are decoupled via **YAML files** as the primary contract (Excel remains compatible) — the agent generates a specific format, and the executor parses that format. Users are free to choose: use the agent to auto-generate cases, manually write YAML/Excel cases and run them directly with the executor, or use the Excel editor for editing.
 
@@ -82,9 +78,10 @@ flow-forge/
 ├── agent/                        # AI Case Generation Agent
 │   ├── plugins/                  # Custom case-attribute generator plugins (optional)
 │   └── utils/                    # Utility modules (token_counter.py, etc.)
-├── python/                       # API Test Executor
+├── python/                       # API Test Executor + Case Format Converter
+│   ├── converter/                # Excel ↔ YAML bidirectional conversion tool
 │   └── processors/               # Pre/Post processor plugins (optional)
-└── case-editor/                  # Tauri Desktop Test Case Editor (Excel + YAML), includes a Markdown Plan Annotator
+└── studio/                       # Flow Forge Studio desktop app (case editor, plan annotator)
 ```
 
 ## Workflow
@@ -125,6 +122,29 @@ Manually write YAML or Excel cases (executor format)
   View HTML test report
 ```
 
+### Option 3: AI Generates Excel → Batch Edit in Studio → Convert to YAML for Diff (Recommended)
+
+```text
+AI Agent outputs Excel format (--output-format excel or both)
+       │
+       ▼
+  Batch review and edit in Flow Forge Studio (adjust tags, fill in parameters, modify assertions, etc.)
+       │
+       ▼
+  Convert Excel to YAML with converter (python converter_main.py excel2yaml)
+       │
+       ▼
+  Commit YAML to Git for version control; review changes file-by-file with git diff
+       │
+       ▼
+  Executor runs the YAML directory
+       │
+       ▼
+  View HTML test report
+```
+
+> **Why this workflow?** Excel is ideal for batch editing — in Studio you can quickly browse, sort, and modify large numbers of cases at once. YAML is ideal for diffing — one file per case means git diff shows exactly what changed in each review. Generate Excel first for editing efficiency, then convert to YAML for traceability.
+
 ## CI/CD Integration (Jenkins)
 
 The executor is a pure CLI tool that communicates results via exit codes, allowing direct integration into Jenkins pipelines.
@@ -155,11 +175,11 @@ The project provides a three-layer extension mechanism for custom requirements:
 |--------|----------------|-------------|
 | `python/processors/` | PreProcessor / PostProcessor | Request/response processing — modify requests, inspect responses, manage external resources |
 | `agent/plugins/` | CaseAttributeGenerator | AI agent plugins — automatically fill custom attributes after case generation |
-| `case-editor` | PreProcessors / PostProcessors fields | Edit and validate processor configs in the UI |
+| `studio` | PreProcessors / PostProcessors fields | Edit and validate processor configs in the UI |
 
 **Typical scenarios**:
 - Add HMAC signature before requests (PreProcessor)
 - Clean up test data in a database after requests (PostProcessor)
 - AI agent automatically recommends processor configs for generated cases (agent plugin)
 
-See each subdirectory's README for details: `python/README.md`, `agent/README.md`, `case-editor/README.md`.
+See each subdirectory's README for details: `python/README.md`, `agent/README.md`, `studio/README.md`.
