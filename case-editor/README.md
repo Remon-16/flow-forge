@@ -10,15 +10,11 @@
 cd case-editor
 npm install
 
-# 浏览器开发模式
-npm run dev
-
 # Tauri 桌面应用开发模式
-npm run dev:desktop
+npm run dev
 ```
 
-- 浏览器模式：访问 `http://localhost:5173`
-- 桌面模式：自动启动 Tauri 窗口
+桌面模式自动启动 Tauri 窗口。
 
 ## 技术栈
 
@@ -239,7 +235,7 @@ case-editor/
 
 #### 打开文件
 
-点击顶部工具栏「打开」按钮（或 Ctrl+O），选择 `.xlsx` 格式的测试用例文件。Tauri 模式下直接读取本地文件并记录路径，浏览器模式通过文件对话框读取。
+点击顶部工具栏「打开」按钮（或 Ctrl+O），选择 `.xlsx` 格式的测试用例文件。Tauri 模式下直接读取本地文件并记录路径。
 
 #### 编辑接口定义
 
@@ -261,7 +257,7 @@ AssertRules 列显示只读预览区（每行一条规则），点击「编辑�
 
 #### 保存文件
 
-- **保存**（Ctrl+S）：Tauri 模式下直接写回原始文件路径；浏览器模式下载新文件
+- **保存**（Ctrl+S）：直接写回原始文件路径
 - **另存为**（Ctrl+Alt+S）：弹出保存对话框选择新路径
 
 ### YAML 编辑器
@@ -414,25 +410,22 @@ PreProcessors / PostProcessors 列支持以下编辑方式：
 ### 本地开发
 
 ```bash
-# 纯浏览器模式（不依赖 Tauri）
+# Tauri 桌面应用开发模式
 npm run dev
-
-# Tauri 桌面应用模式
-npm run dev:desktop
 ```
 
 ### 构建
 
 ```bash
-# 纯 Web 构建（静态文件部署）
+# Tauri 桌面应用打包
 npm run build
 
-# Tauri 桌面应用打包
-npm run build:desktop
+# 纯 Web 构建（静态文件部署，特殊场景使用）
+npm run build:web
 ```
 
-- Web 构建产物输出到 `dist/`
 - Tauri 打包产物输出到 `src-tauri/target/release/`
+- Web 构建产物输出到 `dist/`
 
 ### 扩展开发
 

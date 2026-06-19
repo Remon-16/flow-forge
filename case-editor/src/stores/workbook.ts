@@ -32,6 +32,15 @@ export const useWorkbookStore = defineStore('workbook', () => {
 
   const validTestIds = computed(() => apiDefinitions.value.map((a) => a.TestID).filter(Boolean))
 
+  const validTestIdOptions = computed(() =>
+    apiDefinitions.value
+      .filter((a) => a.TestID)
+      .map((a) => ({
+        value: a.TestID,
+        label: a.APIName ? `${a.APIName} ${a.TestID}` : a.TestID,
+      }))
+  )
+
   const sheetCount = computed(() => 2 + bizFlows.value.length)
 
   // --- Actions ---
@@ -337,6 +346,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
     bizFlows,
     // getters
     validTestIds,
+    validTestIdOptions,
     sheetCount,
     // actions
     openFile,

@@ -10,15 +10,11 @@ A desktop test case editor built with Vue 3 + Ant Design Vue + Tauri 2, supporti
 cd case-editor
 npm install
 
-# Browser dev mode
-npm run dev
-
 # Tauri desktop app dev mode
-npm run dev:desktop
+npm run dev
 ```
 
-- Browser mode: visit `http://localhost:5173`
-- Desktop mode: Tauri window launches automatically
+Desktop mode launches the Tauri window automatically.
 
 ## Tech Stack
 
@@ -239,7 +235,7 @@ The app opens to a home page with three selection cards:
 
 #### Opening a File
 
-Click the **Open** button in the top toolbar (or press Ctrl+O), then select a `.xlsx` test case file. In Tauri mode, the file is read directly from the local path; in browser mode, it is read via a file dialog.
+Click the **Open** button in the top toolbar (or press Ctrl+O), then select a `.xlsx` test case file. The file is read directly from the local path.
 
 #### Editing API Definitions
 
@@ -262,7 +258,7 @@ The AssertRules column shows a read-only preview area (one rule per line). Click
 
 #### Saving Files
 
-- **Save** (Ctrl+S): in Tauri mode, writes directly back to the original file path; in browser mode, downloads a new file
+- **Save** (Ctrl+S): writes directly back to the original file path
 - **Save As** (Ctrl+Alt+S): opens a save dialog to choose a new path
 
 ### YAML Editor
@@ -415,25 +411,22 @@ The PreProcessors / PostProcessors columns support the following editing modes:
 ### Local Development
 
 ```bash
-# Pure browser mode (no Tauri dependency)
+# Tauri desktop app dev mode
 npm run dev
-
-# Tauri desktop app mode
-npm run dev:desktop
 ```
 
 ### Build
 
 ```bash
-# Pure web build (static file deployment)
+# Tauri desktop app packaging
 npm run build
 
-# Tauri desktop app packaging
-npm run build:desktop
+# Pure web build (static file deployment, for special use cases)
+npm run build:web
 ```
 
-- Web build output goes to `dist/`
 - Tauri package output goes to `src-tauri/target/release/`
+- Web build output goes to `dist/`
 
 ### Extending the Editor
 

@@ -133,7 +133,7 @@ function getRowClassName(record: Record<string, unknown>) {
 }
 
 // Filtered relevance options based on input
-const relevanceOptions = computed(() => workbook.validTestIds)
+const relevanceOptions = computed(() => workbook.validTestIdOptions)
 </script>
 
 <template>
@@ -165,12 +165,18 @@ const relevanceOptions = computed(() => workbook.validTestIds)
             <template v-if="col === 'RelevanceID'">
               <a-auto-complete
                 :value="record[col]"
-                :options="relevanceOptions.map((id: string) => ({ value: id }))"
+                :options="relevanceOptions"
                 size="small"
                 style="width: 100%;"
                 :status="record._relevanceValid === false ? 'error' : ''"
                 :dropdown-match-select-width="false"
-                :dropdown-style="{ minWidth: '320px' }"
+                :dropdown-style="{ minWidth: '400px' }"
+                :filter-option="(inputValue: string, option: any) => {
+                  const label = (option.label || '').toLowerCase()
+                  const val = (option.value || '').toLowerCase()
+                  const q = inputValue.toLowerCase()
+                  return label.includes(q) || val.includes(q)
+                }"
                 @change="(v: string) => onCellChange(index, col, v)"
                 @select="(v: string) => onCellChange(index, col, v)"
               >
