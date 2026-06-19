@@ -89,6 +89,9 @@ class ApiAnalyzer(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
         )
         self._settings = settings
 
@@ -117,24 +120,67 @@ class ApiAnalyzer(BaseAgent):
     ) -> List[Dict[str, Any]]:
         """Analyze raw API document text — identify interfaces first, then summarize.
 
-        Used when ``--parse-mode raw`` (default). The LLM receives the full
-        document text and must both discover and analyze the interfaces.
+        Uses token-aware chunking for long documents.  If the text fits within
+        the context window, a single call is made.  Otherwise the text is
+        split into chunks and results are merged.
 
         Returns same format as :meth:`analyze`.
         """
-        # Truncate to configured limit from settings
-        max_chars = self._settings.llm_doc_max_chars
-        if len(raw_text) > max_chars:
-            raw_text = raw_text[:max_chars] + "\n\n[... 文本已截断 ...]"
+        file_label = file_name or "unknown"
+        test_prompt = RAW_API_ANALYSIS_USER.format(
+            file_name=file_label, raw_text=raw_text,
+        )
+        input_tokens = self._estimate_input_tokens(RAW_API_ANALYSIS_SYSTEM, test_prompt)
 
-        prompt = RAW_API_ANALYSIS_USER.format(
-            file_name=file_name or "unknown",
-            raw_text=raw_text,
+        if input_tokens < self._context_window * self._compression_threshold:
+            # Single round — fits comfortably
+            logger.info("Analyzing raw API doc text (%d chars)...", len(raw_text))
+            result = self.call_llm_json(test_prompt, RAW_API_ANALYSIS_SYSTEM)
+            return self._normalize_result(result)
+
+        logger.info(
+            "API doc text (%d chars, ~%d tokens) exceeds threshold, "
+            "using multi-round chunking",
+            len(raw_text), input_tokens,
+        )
+        return self._process_long_text(
+            text=raw_text,
+            system_msg=RAW_API_ANALYSIS_SYSTEM,
+            chunk_processor=lambda chunk, _: self._analyze_raw_chunk(chunk, file_label),
+            result_merger=self._merge_raw_results,
+            chunk_notice="[这是API文档的一块，后面还有内容。请识别本块中的接口并生成摘要。]",
         )
 
-        logger.info("Analyzing raw API doc text (%d chars)...", len(raw_text))
+    def _analyze_raw_chunk(self, chunk: str, file_name: str) -> List[Dict[str, Any]]:
+        """Process a single chunk of the raw API document."""
+        prompt = RAW_API_ANALYSIS_USER.format(
+            file_name=file_name, raw_text=chunk,
+        )
         result = self.call_llm_json(prompt, RAW_API_ANALYSIS_SYSTEM)
         return self._normalize_result(result)
+
+    @staticmethod
+    def _merge_raw_results(
+        results: list, _system_msg: str
+    ) -> List[Dict[str, Any]]:
+        """Merge API analysis results from multiple chunks, deduplicating by api_path+method."""
+        seen = set()
+        merged = []
+        for r in results:
+            if isinstance(r, list):
+                for item in r:
+                    if isinstance(item, dict):
+                        key = (item.get("api_path", ""), item.get("method", ""))
+                        if key not in seen:
+                            seen.add(key)
+                            merged.append(item)
+            elif isinstance(r, dict):
+                key = (r.get("api_path", ""), r.get("method", ""))
+                if key not in seen:
+                    seen.add(key)
+                    merged.append(r)
+        logger.info("Merged raw API analysis: %d unique interfaces", len(merged))
+        return merged
 
     def revise(
         self,

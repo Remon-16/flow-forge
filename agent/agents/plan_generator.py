@@ -28,6 +28,9 @@ class PlanGenerator(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
         )
         self._knowledge = knowledge
 
@@ -89,8 +92,18 @@ class PlanGenerator(BaseAgent):
                 knowledge_context = "\n---\n".join(docs)
                 prompt += f"\n\n## 知识库参考\n{knowledge_context}"
 
+        # Token check
+        input_tokens = self._estimate_input_tokens(PLAN_GENERATION_SYSTEM, prompt)
+        if input_tokens > self._context_window:
+            raise ValueError(
+                f"Plan generation input exceeds context window: "
+                f"{input_tokens} / {self._context_window} tokens. "
+                f"Consider reducing the number of interfaces or splitting the task."
+            )
+
         logger.info(
-            "Generating test plan for %d interfaces...", len(interfaces)
+            "Generating test plan for %d interfaces (~%d tokens)...",
+            len(interfaces), input_tokens,
         )
         plan_md = self.call_llm(prompt, PLAN_GENERATION_SYSTEM)
         logger.info("Test plan generated (%d chars)", len(plan_md))

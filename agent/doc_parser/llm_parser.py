@@ -91,6 +91,9 @@ class DocParserAgent:
             max_retries=2,
             max_steps=1,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
         )
 
     def parse(
@@ -113,27 +116,65 @@ class DocParserAgent:
             logger.warning("DocParserAgent received empty text, returning []")
             return []
 
-        max_chars = self._settings.llm_doc_max_chars
-        if len(raw_text) > max_chars:
-            logger.info(
-                "Document text too long (%d chars), truncating to %d chars",
-                len(raw_text), max_chars,
-            )
-            raw_text = raw_text[:max_chars] + "\n\n[... 文本已截断 ...]"
-
-        prompt = DOC_PARSER_USER.format(
+        test_prompt = DOC_PARSER_USER.format(
             file_name=file_name or "unknown",
             raw_text=raw_text,
             file_type_hint=file_type_hint or "未知格式",
         )
+        input_tokens = self._agent._estimate_input_tokens(DOC_PARSER_SYSTEM, test_prompt)
 
+        if input_tokens < self._agent._context_window * self._agent._compression_threshold:
+            # Single round
+            try:
+                result = self._agent.call_llm_json(test_prompt, DOC_PARSER_SYSTEM)
+                return self._parse_response(result)
+            except Exception as e:
+                logger.error("DocParserAgent LLM call failed: %s", e)
+                return []
+
+        # Token-aware chunking
+        logger.info(
+            "Doc text (%d chars, ~%d tokens) exceeds threshold, chunking",
+            len(raw_text), input_tokens,
+        )
+        return self._agent._process_long_text(
+            text=raw_text,
+            system_msg=DOC_PARSER_SYSTEM,
+            chunk_processor=lambda chunk, _: self._parse_chunk(chunk, file_name, file_type_hint),
+            result_merger=self._merge_parsed_interfaces,
+            chunk_notice="[这是API文档的一块，后面还有内容。请提取本块中的接口定义。]",
+        )
+
+    def _parse_chunk(
+        self, chunk: str, file_name: str, file_type_hint: str
+    ) -> list:
+        """Parse a single chunk of the document."""
+        prompt = DOC_PARSER_USER.format(
+            file_name=file_name or "unknown",
+            raw_text=chunk,
+            file_type_hint=file_type_hint or "未知格式",
+        )
         try:
             result = self._agent.call_llm_json(prompt, DOC_PARSER_SYSTEM)
+            return self._parse_response(result)
         except Exception as e:
-            logger.error("DocParserAgent LLM call failed: %s", e)
+            logger.warning("DocParserAgent chunk parse failed: %s", e)
             return []
 
-        return self._parse_response(result)
+    @staticmethod
+    def _merge_parsed_interfaces(results: list, _system_msg: str) -> list:
+        """Merge interface lists from multiple chunks, deduplicating by test_id."""
+        seen = set()
+        merged = []
+        for r in results:
+            if isinstance(r, list):
+                for iface in r:
+                    tid = iface.test_id if hasattr(iface, "test_id") else ""
+                    if tid not in seen:
+                        seen.add(tid)
+                        merged.append(iface)
+        logger.info("Merged %d unique interfaces from %d chunks", len(merged), len(results))
+        return merged
 
     def _parse_response(self, raw: Any) -> List[InterfaceDef]:
         """Normalize LLM JSON response into InterfaceDef objects.

@@ -80,7 +80,8 @@ The two components are decoupled via **YAML files** as the primary contract (Exc
 flow-forge/
 ├── README.en.md                  # Project overview (this file)
 ├── agent/                        # AI Case Generation Agent
-│   └── plugins/                  # Custom case-attribute generator plugins (optional)
+│   ├── plugins/                  # Custom case-attribute generator plugins (optional)
+│   └── utils/                    # Utility modules (token_counter.py, etc.)
 ├── python/                       # API Test Executor
 │   └── processors/               # Pre/Post processor plugins (optional)
 └── case-editor/                  # Tauri Desktop Test Case Editor (Excel + YAML), includes a Markdown Plan Annotator

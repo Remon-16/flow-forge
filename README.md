@@ -80,7 +80,8 @@ graph TD
 flow-forge/
 ├── README.md                     # 项目总览（本文件）
 ├── agent/                        # AI 用例生成智能体
-│   └── plugins/                  # 自定义用例属性生成器插件（可选）
+│   ├── plugins/                  # 自定义用例属性生成器插件（可选）
+│   └── utils/                    # 工具模块（token_counter.py 等）
 ├── python/                       # 接口测试执行器
 │   └── processors/               # 前置/后置处理器插件（可选）
 └── case-editor/                  # Tauri 桌面测试用例编辑器（Excel + YAML），包含 Markdown 计划批注器

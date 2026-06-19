@@ -30,6 +30,9 @@ class SingleAssertionGenerator(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
         )
         self._knowledge = knowledge
 
@@ -114,6 +117,9 @@ class BizAssertionGenerator(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
         )
         self._knowledge = knowledge
 

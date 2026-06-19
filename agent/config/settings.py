@@ -15,6 +15,9 @@ class Settings:
     llm_model: str = "gpt-4o"
     llm_temperature: float = 0.3
     llm_max_tokens: int = 4096
+    llm_context_window: int = 128000
+    llm_context_compression_threshold: float = 0.9
+    llm_max_output_tokens: int = 4096
     enable_knowledge: bool = False
     knowledge_dir: str = "./knowledge"
     llm_doc_max_chars: int = 30000
@@ -38,6 +41,9 @@ class Settings:
             "llm_model": self.llm_model,
             "llm_temperature": self.llm_temperature,
             "llm_max_tokens": self.llm_max_tokens,
+            "llm_context_window": self.llm_context_window,
+            "llm_context_compression_threshold": self.llm_context_compression_threshold,
+            "llm_max_output_tokens": self.llm_max_output_tokens,
             "enable_knowledge": self.enable_knowledge,
             "knowledge_dir": self.knowledge_dir,
             "llm_doc_max_chars": self.llm_doc_max_chars,
@@ -60,7 +66,14 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
     load_dotenv(dotenv_path, override=False)
 
     temperature = float(os.getenv("LLM_TEMPERATURE", "0.3"))
-    max_tokens = int(os.getenv("LLM_MAX_TOKENS", "4096"))
+    max_tokens = int(os.getenv("LLM_MAX_OUTPUT_TOKENS",
+                    os.getenv("LLM_MAX_TOKENS", "4096")))
+    context_window = int(os.getenv("LLM_CONTEXT_WINDOW", "128000"))
+    compression_threshold = float(
+        os.getenv("LLM_CONTEXT_COMPRESSION_THRESHOLD", "0.9")
+    )
+    max_output_tokens = int(os.getenv("LLM_MAX_OUTPUT_TOKENS",
+                           os.getenv("LLM_MAX_TOKENS", "4096")))
     max_steps = int(os.getenv("MAX_STEPS", "10"))
     max_retries = int(os.getenv("MAX_RETRIES", "3"))
     enable_knowledge = os.getenv("ENABLE_KNOWLEDGE", "false").strip().lower() in (
@@ -86,6 +99,9 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
         llm_model=os.getenv("LLM_MODEL", "gpt-4o"),
         llm_temperature=temperature,
         llm_max_tokens=max_tokens,
+        llm_context_window=context_window,
+        llm_context_compression_threshold=compression_threshold,
+        llm_max_output_tokens=max_output_tokens,
         enable_knowledge=enable_knowledge,
         knowledge_dir=os.getenv("KNOWLEDGE_DIR", "./knowledge"),
         llm_doc_max_chars=llm_doc_max_chars,

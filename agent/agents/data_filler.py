@@ -30,6 +30,9 @@ class SingleDataFiller(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
         )
         self._knowledge = knowledge
 
@@ -42,7 +45,11 @@ class SingleDataFiller(BaseAgent):
         user_guidance: str = "",
         previous_errors: Optional[List[Dict]] = None,
     ) -> List[Dict]:
-        """Fill request data for a batch of single case skeletons."""
+        """Fill request data for a batch of single case skeletons.
+
+        Uses pre-search against API doc text to provide relevant snippets
+        instead of truncated full text.
+        """
         api_summary_str = json.dumps(api_summary or [], ensure_ascii=False, indent=2)
 
         # Filter interfaces relevant to this batch
@@ -66,6 +73,41 @@ class SingleDataFiller(BaseAgent):
                     "request_body": getattr(item, "request_body", {}),
                 })
 
+        # Build relevant doc snippets via pre-search
+        doc_snippets = ""
+        if api_doc_text:
+            snippets_list = []
+            for skeleton in skeletons:
+                relevance_id = skeleton.get("relevance_id", "")
+                http_method = skeleton.get("method", "GET")
+                # Find correct interface
+                correct_url = ""
+                for iface in iface_dicts:
+                    if iface.get("test_id") == relevance_id:
+                        correct_url = iface.get("url", "")
+                        break
+                if correct_url:
+                    snippet = self._fuzzy_search_api_doc(
+                        url=correct_url, http_method=http_method,
+                        api_doc_text=api_doc_text, max_snippet_tokens=2000,
+                    )
+                else:
+                    # Fuzzy match fallback
+                    matched = self._fuzzy_match_interface(
+                        url=skeleton.get("url", ""),
+                        api_name=skeleton.get("api_name", ""),
+                        http_method=http_method,
+                        interfaces=iface_dicts,
+                    )
+                    search_url = matched.get("url", "") if matched else skeleton.get("url", "")
+                    snippet = self._fuzzy_search_api_doc(
+                        url=search_url, http_method=http_method,
+                        api_doc_text=api_doc_text, max_snippet_tokens=2000,
+                    )
+                if snippet:
+                    snippets_list.append(snippet)
+            doc_snippets = "\n---\n".join(snippets_list) if snippets_list else "(无)"
+
         error_context = ""
         if previous_errors:
             error_context = (
@@ -79,7 +121,7 @@ class SingleDataFiller(BaseAgent):
             skeletons=json.dumps(skeletons, ensure_ascii=False, indent=2),
             interface_defs=json.dumps(iface_dicts, ensure_ascii=False, indent=2),
             api_summary=api_summary_str,
-            api_doc_text=api_doc_text[:6000] if api_doc_text else "(无)",
+            api_doc_text=doc_snippets,
             user_guidance=user_guidance or "(无)",
         )
         prompt += error_context
@@ -108,6 +150,9 @@ class BizDataFiller(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
         )
         self._knowledge = knowledge
 
@@ -120,7 +165,10 @@ class BizDataFiller(BaseAgent):
         user_guidance: str = "",
         previous_errors: Optional[List[Dict]] = None,
     ) -> List[Dict]:
-        """Fill request data and Trans for a batch of biz flow skeletons."""
+        """Fill request data and Trans for a batch of biz flow skeletons.
+
+        Uses pre-search against API doc text to provide relevant snippets.
+        """
         api_summary_str = json.dumps(api_summary or [], ensure_ascii=False, indent=2)
 
         # Collect all relevance_ids from all steps
@@ -150,6 +198,40 @@ class BizDataFiller(BaseAgent):
                     "request_body": getattr(item, "request_body", {}),
                 })
 
+        # Build relevant doc snippets via pre-search
+        doc_snippets = ""
+        if api_doc_text:
+            snippets_list = []
+            for flow in skeletons:
+                for step in flow.get("steps", []):
+                    relevance_id = step.get("relevance_id", "")
+                    http_method = step.get("method", "GET")
+                    correct_url = ""
+                    for iface in iface_dicts:
+                        if iface.get("test_id") == relevance_id:
+                            correct_url = iface.get("url", "")
+                            break
+                    if correct_url:
+                        snippet = self._fuzzy_search_api_doc(
+                            url=correct_url, http_method=http_method,
+                            api_doc_text=api_doc_text, max_snippet_tokens=2000,
+                        )
+                    else:
+                        matched = self._fuzzy_match_interface(
+                            url=step.get("url", ""),
+                            api_name=step.get("api_name", ""),
+                            http_method=http_method,
+                            interfaces=iface_dicts,
+                        )
+                        search_url = matched.get("url", "") if matched else step.get("url", "")
+                        snippet = self._fuzzy_search_api_doc(
+                            url=search_url, http_method=http_method,
+                            api_doc_text=api_doc_text, max_snippet_tokens=2000,
+                        )
+                    if snippet:
+                        snippets_list.append(snippet)
+            doc_snippets = "\n---\n".join(snippets_list) if snippets_list else "(无)"
+
         error_context = ""
         if previous_errors:
             error_context = (
@@ -163,7 +245,7 @@ class BizDataFiller(BaseAgent):
             skeletons=json.dumps(skeletons, ensure_ascii=False, indent=2),
             interface_defs=json.dumps(iface_dicts, ensure_ascii=False, indent=2),
             api_summary=api_summary_str,
-            api_doc_text=api_doc_text[:6000] if api_doc_text else "(无)",
+            api_doc_text=doc_snippets,
             user_guidance=user_guidance or "(无)",
         )
         prompt += error_context

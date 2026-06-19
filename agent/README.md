@@ -11,16 +11,18 @@ graph TD
     CLI[CLI 入口] --> GRAPH[LangGraph StateGraph]
     GRAPH --> PARSE[parse_docs<br/>文档解析]
     PARSE --> ANALYZE_API[analyze_api<br/>接口分析 + 自评]
-    ANALYZE_API -->|自评通过/用户跳过| ANALYZE_REQ[analyze_requirement<br/>需求分析]
+    ANALYZE_API -->|自评通过/用户跳过| VALIDATE_URLS[validate_interface_urls<br/>接口 URL 校验]
     ANALYZE_API -.->|关键不确定性| API_ASK{可选询问<br/>用户输入/skip}
     API_ASK -.->|用户提供反馈| ANALYZE_API
+    VALIDATE_URLS --> SAVE_IFACES[save_interfaces<br/>保存接口 YAML]
+    SAVE_IFACES --> ANALYZE_REQ[analyze_requirement<br/>需求分析]
     ANALYZE_REQ --> GEN_PLAN[generate_plan<br/>测试计划生成]
     GEN_PLAN --> CONFIRM{human_confirm<br/>人工审核中断点}
-    CONFIRM -->|批准| PARSE_PLAN[parse_plan<br/>计划解析]
+    CONFIRM -->|批准| RELOAD_IFACES[reload_interfaces<br/>重载接口 YAML]
     CONFIRM -->|拒绝| REVISE[revise_plan<br/>根据反馈修改]
     REVISE --> CONFIRM
-    PARSE_PLAN --> SAVE_IFACES[save_interfaces<br/>保存接口 YAML]
-    SAVE_IFACES --> BATCH[batch_controller<br/>三步用例生成]
+    RELOAD_IFACES --> PARSE_PLAN[parse_plan<br/>计划解析]
+    PARSE_PLAN --> BATCH[batch_controller<br/>三步用例生成]
     BATCH --> WRITE[write_output<br/>YAML + 可选 Excel]
     WRITE --> END((结束))
 
@@ -36,19 +38,35 @@ graph TD
 
 核心流程：
 
-1. **文档解析**：读取需求文档（Markdown / PDF / 纯文本）和接口文档（OpenAPI 3.0 / Markdown 表格）
+1. **文档解析**：读取需求文档（Markdown / PDF / 纯文本）和接口文档（OpenAPI 3.0 / Markdown 表格）。支持 Token 感知的长文本处理：当输入文本超过上下文窗口（`LLM_CONTEXT_WINDOW`）时自动分块，避免超出 LLM 上下文限制
+
 2. **接口分析**：分析接口文档完整性——认证方式、参数模式、缺失信息；智能体自评通过则自动继续，仅关键不确定性时询问用户
-3. **需求分析**：LLM 从需求中提取业务流程、用户角色、约束条件、异常场景
-4. **计划生成**：基于分析结果和接口定义生成 Markdown 测试计划，自动保存至 session 目录
-5. **人工审核**（强制中断点）：展示计划，用户可批准、提出文字修改意见或按批注文件修改
-6. **反馈循环**：用户拒绝时，系统根据反馈修改计划后重新提交审核，直至批准
-7. **保存接口定义**：将分析后的接口定义写入 `{output}/cases/interfaces/` 目录，每个接口一个 YAML 文件，便于版本管理
-8. **用例骨架生成**：SingleSkeletonGenerator 一次性生成全部单接口用例骨架；BizSkeletonGenerator 一次性生成全部业务链路骨架。包含 test_id/StepID（有含义）、relevance_id、api_name、method、url、remark、sheet_name。URL/relevance_id 严格来自接口定义
-9. **URL 校验与纠错**：检查骨架中所有 URL 是否在接口文档原文中存在。不存在的 URL 提交给骨架生成器纠错重试（默认最多 3 次，通过 `URL_CORRECTION_MAX_RETRIES` 配置）。重试耗尽后添加 `<URL not exist>` 标记，跳过后续步骤直接写入 YAML，打印失败清单告知用户
-10. **测试数据填充**：SingleDataFiller / BizDataFiller 按 `batch_size` 分批（纯代码切分，不再由 LLM 决定批次）。根据接口定义填充 request_head、request_body、status_code、tag；业务链路额外填充 Trans 和 `#{varName}` 引用。请求体使用接口定义中的数据类型，不自由发挥。设 `BATCH_SIZE=-1` 不分批
-11. **断言生成**：SingleAssertionGenerator / BizAssertionGenerator 按 `batch_size` 分批。根据接口响应结构和测试场景生成 assert_dict（简单等值断言）和 assert_rules（高级断言规则）。业务链路额外处理跨步骤数据依赖的非空断言
-12. **格式校验**（可选）：CaseValidator 校验每批生成的用例格式，错误自动重试（最多 3 次），最终报告失败用例
-13. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出
+
+3. **接口 URL 校验**（源级验证）：将分析出的接口 URL 与接口文档原文进行比对，确保接口定义中的 URL 在原始文档中真实存在。未通过校验的 URL 会触发自动纠错重试。仅源级验证通过的接口才流入下游流程
+
+4. **保存接口定义**：将校验后的接口定义写入 `{output}/cases/interfaces/` 目录，每个接口一个 YAML 文件。接口 YAML 在测试计划审核前即已保存——用户可在审核期间直接编辑 YAML 文件微调接口定义，审核通过后系统会重新加载编辑后的接口
+
+5. **需求分析**：LLM 从需求中提取业务流程、用户角色、约束条件、异常场景
+
+6. **计划生成**：基于分析结果和接口定义生成 Markdown 测试计划，自动保存至 session 目录
+
+7. **人工审核**（强制中断点）：展示计划，用户可批准、提出文字修改意见或按批注文件修改
+
+8. **反馈循环**：用户拒绝时，系统根据反馈修改计划后重新提交审核，直至批准。多轮对话中自动进行上下文压缩——当会话历史接近 `LLM_CONTEXT_WINDOW` 的 `LLM_CONTEXT_COMPRESSION_THRESHOLD` 阈值时触发压缩，精简历史消息以避免超出 LLM 上下文限制
+
+9. **重载接口定义**：审核通过后重新加载接口 YAML 文件，获取用户在审核期间可能做的编辑，确保后续步骤使用最新接口定义
+
+10. **用例骨架生成**：SingleSkeletonGenerator 一次性生成全部单接口用例骨架；BizSkeletonGenerator 一次性生成全部业务链路骨架。包含 test_id/StepID（有含义）、relevance_id、api_name、method、url、remark、sheet_name。URL/relevance_id 严格来自接口定义
+
+11. **URL 校验与纠错**：检查骨架中所有 URL 是否在接口文档原文中存在。不存在的 URL 提交给骨架生成器纠错重试（默认最多 3 次，通过 `URL_CORRECTION_MAX_RETRIES` 配置）。重试耗尽后添加 `<URL not exist>` 标记，跳过后续步骤直接写入 YAML，打印失败清单告知用户
+
+12. **测试数据填充**：SingleDataFiller / BizDataFiller 按 `batch_size` 分批（纯代码切分，不再由 LLM 决定批次）。根据接口定义填充 request_head、request_body、status_code、tag；业务链路额外填充 Trans 和 `#{varName}` 引用。请求体使用接口定义中的数据类型，不自由发挥。设 `BATCH_SIZE=-1` 不分批
+
+13. **断言生成**：SingleAssertionGenerator / BizAssertionGenerator 按 `batch_size` 分批。根据接口响应结构和测试场景生成 assert_dict（简单等值断言）和 assert_rules（高级断言规则）。业务链路额外处理跨步骤数据依赖的非空断言
+
+14. **格式校验**（可选）：CaseValidator 校验每批生成的用例格式，错误自动重试（最多 3 次），最终报告失败用例
+
+15. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出
 
 每个步骤在 CLI 中均有详细进度输出，包括：当前步骤 [N/9]、文件路径与大小、LLM 调用模型名、生成结果统计。用户始终清楚系统正在做什么。
 
@@ -388,10 +406,13 @@ Markdown 表格示例：
 | `LLM_BASE_URL` | Base URL | 非必填，默认OpenAI端点 |
 | `LLM_MODEL` | 模型名称 | `gpt-4o` |
 | `LLM_TEMPERATURE` | 生成温度 (0-1) | `0.3` |
-| `LLM_MAX_TOKENS` | 最大输出 Token | `4096` |
+| `LLM_MAX_TOKENS` | 最大输出 Token（已被 `LLM_MAX_OUTPUT_TOKENS` 取代，仍支持作为回退） | `4096` |
+| `LLM_MAX_OUTPUT_TOKENS` | 每次 LLM 调用的最大输出 Token 数。取代 `LLM_MAX_TOKENS`（仍支持作为回退） | `128000` |
 | `ENABLE_KNOWLEDGE` | 启用外部知识库（grep 文本检索） | `false` |
 | `KNOWLEDGE_DIR` | 知识库 .md 文件目录 | `./knowledge` |
 | `LLM_DOC_MAX_CHARS` | API 文档解析时发送给 LLM 的最大字符数 | `30000`（8K模型设2000，1M模型设100000+） |
+| `LLM_CONTEXT_WINDOW` | LLM 上下文窗口大小（Token 数）。用于判断何时拆分长文本或压缩对话历史 | `128000` |
+| `LLM_CONTEXT_COMPRESSION_THRESHOLD` | 上下文压缩触发阈值（0.0-1.0）。推理模型可调高（如 0.95），小窗口模型可调低（如 0.8） | `0.9` |
 | `MAX_STEPS` | 单智能体最大步数 | `10` |
 | `MAX_STEPS_NO_PROGRESS` | 连续无进展 LLM 调用上限（触发 ConvergenceError） | `5` |
 | `MAX_RETRIES` | LLM 调用最大重试 | `3` |
@@ -603,12 +624,14 @@ python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
 |------|------|
 | `parse_docs` | 读取需求文件和 API 文档，存入 state |
 | `analyze_api` | 调用 ApiAnalyzer 分析接口文档完整性，生成结构化摘要；自评通过则自动继续，关键不确定性时可选询问用户 |
+| `validate_interface_urls` | 校验接口 URL 是否在 API 文档原文中存在，不存在则自动纠错重试 |
+| `save_interfaces` | 将校验后的接口定义保存为 YAML 文件到 {output}/cases/interfaces/。在计划审核前即保存，用户可在审核期间编辑 YAML 微调接口定义 |
 | `analyze_requirement` | 调用 RequirementAnalyzer，提取结构化分析结果 |
 | `generate_plan` | 调用 PlanGenerator，基于分析结果、接口摘要、接口定义生成 Markdown 测试计划 |
 | `human_confirm` | **强制中断点**，暂停执行等待人工审核 |
 | `revise_plan` | 根据用户反馈修改计划，完成后回到 human_confirm |
+| `reload_interfaces` | 审核通过后重新加载接口 YAML，获取用户在审核期间可能做的编辑 |
 | `parse_plan` | 调用 PlanParser，解析计划为结构化数据 |
-| `save_interfaces` | 将接口定义保存为 YAML 文件到 {output}/cases/interfaces/ |
 | `batch_controller` | 运行三步生成流程：骨架生成（一次性）→ 数据填充（分批）→ 断言生成（分批）。支持断点续生成 |
 | `write_output` | 根据 output_format 输出 YAML + 可选 Excel |
 

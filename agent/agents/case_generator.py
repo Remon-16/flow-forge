@@ -68,6 +68,9 @@ class CaseGenerator(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
         )
         self._knowledge = knowledge
 
@@ -104,7 +107,16 @@ class CaseGenerator(BaseAgent):
                 knowledge_context = "\n---\n".join(docs)
                 prompt += f"\n\n## 知识库参考\n{knowledge_context}"
 
-        logger.info("Generating test cases from plan...")
+        # Token check
+        input_tokens = self._estimate_input_tokens(CASE_GENERATION_SYSTEM, prompt)
+        if input_tokens > self._context_window * self._compression_threshold:
+            logger.warning(
+                "Case generation input is large (%d tokens). "
+                "Consider using generate_batch() for batch processing.",
+                input_tokens,
+            )
+
+        logger.info("Generating test cases from plan (~%d tokens)...", input_tokens)
         result = self.call_llm_json(prompt, CASE_GENERATION_SYSTEM)
 
         single_cases = self._parse_single_cases(result.get("single_cases", []))

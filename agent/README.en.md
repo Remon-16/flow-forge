@@ -11,16 +11,18 @@ graph TD
     CLI[CLI Entry] --> GRAPH[LangGraph StateGraph]
     GRAPH --> PARSE[parse_docs<br/>Document Parsing]
     PARSE --> ANALYZE_API[analyze_api<br/>API Analysis + Self-Eval]
-    ANALYZE_API -->|Self-eval passed / User skipped| ANALYZE_REQ[analyze_requirement<br/>Requirements Analysis]
+    ANALYZE_API -->|Self-eval passed / User skipped| VALIDATE_URLS[validate_interface_urls<br/>Interface URL Validation]
     ANALYZE_API -.->|Critical uncertainties| API_ASK{Optional query<br/>User input / skip}
     API_ASK -.->|User provides feedback| ANALYZE_API
+    VALIDATE_URLS --> SAVE_IFACES[save_interfaces<br/>Save Interface YAMLs]
+    SAVE_IFACES --> ANALYZE_REQ[analyze_requirement<br/>Requirements Analysis]
     ANALYZE_REQ --> GEN_PLAN[generate_plan<br/>Test Plan Generation]
     GEN_PLAN --> CONFIRM{human_confirm<br/>Manual Review Interrupt}
-    CONFIRM -->|Approved| PARSE_PLAN[parse_plan<br/>Plan Parsing]
+    CONFIRM -->|Approved| RELOAD_IFACES[reload_interfaces<br/>Reload Interface YAMLs]
     CONFIRM -->|Rejected| REVISE[revise_plan<br/>Revise Based on Feedback]
     REVISE --> CONFIRM
-    PARSE_PLAN --> SAVE_IFACES[save_interfaces<br/>Save Interface YAMLs]
-    SAVE_IFACES --> BATCH[batch_controller<br/>3-Step Case Generation]
+    RELOAD_IFACES --> PARSE_PLAN[parse_plan<br/>Plan Parsing]
+    PARSE_PLAN --> BATCH[batch_controller<br/>3-Step Case Generation]
     BATCH --> WRITE[write_output<br/>YAML + Optional Excel]
     WRITE --> END((End))
 
@@ -36,19 +38,35 @@ graph TD
 
 Core workflow:
 
-1. **Document Parsing**: Read requirement documents (Markdown / PDF / plain text) and API documentation (OpenAPI 3.0 / Markdown tables)
+1. **Document Parsing**: Read requirement documents (Markdown / PDF / plain text) and API documentation (OpenAPI 3.0 / Markdown tables). Supports token-aware long text processing — input exceeding the context window (`LLM_CONTEXT_WINDOW`) is automatically chunked to stay within LLM limits
+
 2. **API Analysis**: Analyze API documentation completeness — authentication methods, parameter patterns, missing information. Agent self-evaluates; auto-passes when quality is good, only asks user for critical uncertainties
-3. **Requirements Analysis**: LLM extracts business flows, user roles, constraints, and exception scenarios from requirements
-4. **Plan Generation**: Generate a Markdown test plan based on analysis results and interface definitions, automatically saved to the session directory
-5. **Manual Review** (Mandatory interrupt): Display the plan; user can approve, provide text revision feedback, or use annotation-based revision
-6. **Feedback Loop**: When rejected, the system revises the plan based on feedback and resubmits for review, looping until approval
-7. **Save Interfaces**: Write analyzed interface definitions to `{output}/cases/interfaces/` directory, one YAML file per interface for version control
-8. **Case Skeleton Generation**: SingleSkeletonGenerator produces all single-API case skeletons in one shot; BizSkeletonGenerator produces all business flow skeletons in one shot. Includes meaningful test_id/StepID, relevance_id, api_name, method, url, remark, sheet_name. URLs and relevance_ids are strictly sourced from interface definitions
-9. **URL Validation & Correction**: Every skeleton URL is checked against the raw API documentation text. URLs not found are submitted back to the skeleton generator for correction (up to 3 retries by default, configurable via `URL_CORRECTION_MAX_RETRIES`). Exhausted cases receive the `<URL not exist>` marker, skip subsequent steps, and are written directly to YAML with a failure summary printed to the console
-10. **Test Data Filling**: SingleDataFiller / BizDataFiller process cases in code-based batches (no LLM batch decisions). Fills request_head, request_body, status_code, and tag based on interface definitions. Business flows additionally fill Trans and `#{varName}` references. Request bodies use interface-defined data types — no free-form invention. Set `BATCH_SIZE=-1` to disable batching
-11. **Assertion Generation**: SingleAssertionGenerator / BizAssertionGenerator process cases in code-based batches. Generates assert_dict (simple equality assertions) and assert_rules (advanced operator-based rules) from interface response structures and test scenarios. Business flows additionally handle cross-step data dependency assertions (e.g., is_not_null on fields consumed by later steps)
-12. **Validation** (Optional): CaseValidator checks each batch's format; errors trigger automatic retries (up to 3 times), with a final failure report
-13. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
+
+3. **Interface URL Validation** (source-level): Validate each interface URL against the raw API documentation to ensure it actually exists in the source document. URLs failing validation trigger automatic correction retries. Only source-validated interfaces proceed downstream
+
+4. **Save Interfaces**: Write validated interface definitions to `{output}/cases/interfaces/` directory, one YAML file per interface. Interface YAMLs are saved before test plan review — users can directly edit YAML files during the plan approval pause, and the system will reload edited interfaces after approval
+
+5. **Requirements Analysis**: LLM extracts business flows, user roles, constraints, and exception scenarios from requirements
+
+6. **Plan Generation**: Generate a Markdown test plan based on analysis results and interface definitions, automatically saved to the session directory
+
+7. **Manual Review** (Mandatory interrupt): Display the plan; user can approve, provide text revision feedback, or use annotation-based revision
+
+8. **Feedback Loop**: When rejected, the system revises the plan based on feedback and resubmits for review, looping until approval. Multi-round conversations employ automatic context compression — when conversation history approaches `LLM_CONTEXT_COMPRESSION_THRESHOLD` of `LLM_CONTEXT_WINDOW`, older messages are compressed to stay within LLM context limits
+
+9. **Reload Interfaces**: After plan approval, reload interface YAML files to pick up any edits the user made during review, ensuring downstream steps use the latest interface definitions
+
+10. **Case Skeleton Generation**: SingleSkeletonGenerator produces all single-API case skeletons in one shot; BizSkeletonGenerator produces all business flow skeletons in one shot. Includes meaningful test_id/StepID, relevance_id, api_name, method, url, remark, sheet_name. URLs and relevance_ids are strictly sourced from interface definitions
+
+11. **URL Validation & Correction**: Every skeleton URL is checked against the raw API documentation text. URLs not found are submitted back to the skeleton generator for correction (up to 3 retries by default, configurable via `URL_CORRECTION_MAX_RETRIES`). Exhausted cases receive the `<URL not exist>` marker, skip subsequent steps, and are written directly to YAML with a failure summary printed to the console
+
+12. **Test Data Filling**: SingleDataFiller / BizDataFiller process cases in code-based batches (no LLM batch decisions). Fills request_head, request_body, status_code, and tag based on interface definitions. Business flows additionally fill Trans and `#{varName}` references. Request bodies use interface-defined data types — no free-form invention. Set `BATCH_SIZE=-1` to disable batching
+
+13. **Assertion Generation**: SingleAssertionGenerator / BizAssertionGenerator process cases in code-based batches. Generates assert_dict (simple equality assertions) and assert_rules (advanced operator-based rules) from interface response structures and test scenarios. Business flows additionally handle cross-step data dependency assertions (e.g., is_not_null on fields consumed by later steps)
+
+14. **Validation** (Optional): CaseValidator checks each batch's format; errors trigger automatic retries (up to 3 times), with a final failure report
+
+15. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
 
 Each step provides detailed progress output in the CLI, including: current step [N/9], file path and size, LLM model name, and generation statistics. Users always know what the system is doing.
 
@@ -388,10 +406,13 @@ Markdown table example:
 | `LLM_BASE_URL` | Base URL | Not required, defaults to OpenAI endpoint |
 | `LLM_MODEL` | Model name | `gpt-4o` |
 | `LLM_TEMPERATURE` | Generation temperature (0-1) | `0.3` |
-| `LLM_MAX_TOKENS` | Max output tokens | `4096` |
+| `LLM_MAX_TOKENS` | Max output tokens (superseded by `LLM_MAX_OUTPUT_TOKENS`; still supported as fallback) | `4096` |
+| `LLM_MAX_OUTPUT_TOKENS` | Max output tokens per LLM call. Replaces `LLM_MAX_TOKENS` (still supported as fallback) | `128000` |
 | `ENABLE_KNOWLEDGE` | Enable external knowledge base (grep text search) | `false` |
 | `KNOWLEDGE_DIR` | Knowledge base .md file directory | `./knowledge` |
 | `LLM_DOC_MAX_CHARS` | Max characters sent to LLM during API doc parsing | `30000` (set 2000 for 8K models, 100000+ for 1M models) |
+| `LLM_CONTEXT_WINDOW` | LLM context window size in tokens. Used to determine when to split long text or compress conversation history | `128000` |
+| `LLM_CONTEXT_COMPRESSION_THRESHOLD` | Threshold (0.0-1.0) at which context compression triggers. Adjust higher for reasoning models (0.95), lower for small-window models (0.8) | `0.9` |
 | `MAX_STEPS` | Max steps per agent | `10` |
 | `MAX_STEPS_NO_PROGRESS` | Max consecutive no-progress LLM calls (triggers ConvergenceError) | `5` |
 | `MAX_RETRIES` | Max LLM call retries | `3` |
@@ -622,13 +643,16 @@ The system uses LangGraph `StateGraph` to manage the pipeline. All state is auto
 |------|----------|
 | `parse_docs` | Read requirement files and API docs, store in state |
 | `analyze_api` | Call ApiAnalyzer to analyze API documentation completeness, generate structured summaries; auto-pass when quality is good, optionally ask user for critical uncertainties |
+| `validate_interface_urls` | Validate interface URLs against raw API documentation text; non-existent URLs trigger automatic correction retries |
+| `save_interfaces` | Save validated interface definitions as YAML files to {output}/cases/interfaces/. Saved before plan review so users can edit YAMLs during the approval pause |
 | `analyze_requirement` | Call RequirementAnalyzer, extract structured analysis results |
 | `generate_plan` | Call PlanGenerator, generate Markdown test plan based on analysis results, API summaries, and interface definitions |
 | `human_confirm` | **Mandatory interrupt**, pause execution for manual review |
 | `revise_plan` | Revise plan based on user feedback, then return to human_confirm |
+| `reload_interfaces` | Reload interface YAMLs after plan approval to pick up any user edits made during review |
 | `parse_plan` | Call PlanParser, parse plan into structured data |
-| `generate_cases` | Call CaseGenerator, generate concrete test cases |
-| `write_excel` | Call ExcelWriter, output Excel file |
+| `batch_controller` | Run the 3-step generation pipeline: skeleton generation (one-shot) → data filling (batched) → assertion generation (batched). Supports resumable generation |
+| `write_output` | Output YAML + optional Excel based on output_format setting |
 
 ### Interrupts & Feedback Loops
 

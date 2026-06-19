@@ -72,6 +72,9 @@ class BaseAgent:
         max_retries: int = 3,
         max_steps: int = 10,
         base_url: str = "",
+        context_window: int = 128000,
+        max_output_tokens: int = 4096,
+        compression_threshold: float = 0.9,
     ):
         client_kwargs: Dict[str, Any] = {"api_key": api_key}
         if base_url:
@@ -85,6 +88,18 @@ class BaseAgent:
         self._step_count = 0
         self._progress_getter: Callable[[], str] | None = None
         self._last_progress: str | None = None
+
+        # Context window management
+        self._context_window = context_window
+        self._max_output_tokens = max_output_tokens
+        self._compression_threshold = compression_threshold
+        from utils.token_counter import TokenCounter
+        self._token_counter = TokenCounter(model)
+
+        # Multi-round conversation state (per-instance, isolated)
+        self._conversation_tokens: int = 0
+        self._conversation_summary: str = ""
+        self._round_count: int = 0
 
     def set_progress_getter(
         self, getter: Callable[[], str], max_no_progress: int = 5
@@ -128,14 +143,374 @@ class BaseAgent:
     def reset_steps(self) -> None:
         self._step_count = 0
 
+    # ------------------------------------------------------------------
+    # Context window management
+    # ------------------------------------------------------------------
+
+    def _estimate_input_tokens(self, system_msg: str, prompt: str) -> int:
+        """Estimate input tokens for this call (system + user + history summary)."""
+        total = self._token_counter.count(system_msg)
+        total += self._token_counter.count(prompt)
+        if self._conversation_summary:
+            total += self._token_counter.count(self._conversation_summary)
+        return total
+
+    def _context_usage_ratio(self, system_msg: str, prompt: str) -> float:
+        """Return current input as a fraction of context window (0.0 ~ 1.0+)."""
+        estimated = self._estimate_input_tokens(system_msg, prompt)
+        return estimated / self._context_window
+
+    def _check_context_fit(self, system_msg: str, prompt: str) -> bool:
+        """Check whether input fits within the context window.
+
+        Uses the configurable _compression_threshold (default 0.9).
+        Returns False if input exceeds the context window.
+        Logs a warning when the threshold is exceeded.
+        """
+        ratio = self._context_usage_ratio(system_msg, prompt)
+        if ratio >= 1.0:
+            return False
+        if ratio >= self._compression_threshold:
+            logger.warning(
+                "Context usage at %.0f%%, exceeding compression threshold %.0f%%",
+                ratio * 100, self._compression_threshold * 100,
+            )
+        return True
+
+    def reset_conversation(self) -> None:
+        """Reset multi-round conversation token state."""
+        self._conversation_tokens = 0
+        self._conversation_summary = ""
+        self._round_count = 0
+
+    def _compress_conversation(self, system_msg: str) -> str:
+        """Compress accumulated conversation history into a concise summary.
+
+        Calls the LLM to distill prior rounds into key points, replacing
+        verbose history with a compact summary.  Updates _conversation_summary
+        and resets _conversation_tokens.
+        """
+        if not self._conversation_summary and self._round_count <= 1:
+            return ""
+
+        compress_prompt = (
+            "请将以下对话历史和中间结果精简为关键要点摘要，"
+            "保留所有重要的数据、结论和决策。"
+            "丢弃重复内容和不必要的细节。"
+            f"\n\n历史内容:\n{self._conversation_summary}"
+        )
+        try:
+            summary = self.call_llm(compress_prompt, system_msg)
+            self._conversation_summary = summary
+            self._conversation_tokens = self._token_counter.count(summary)
+            logger.info(
+                "Conversation compressed to %d tokens", self._conversation_tokens
+            )
+            return summary
+        except Exception as e:
+            logger.warning("Context compression failed: %s", e)
+            return self._conversation_summary
+
+    # ------------------------------------------------------------------
+    # Long text chunking
+    # ------------------------------------------------------------------
+
+    def _chunk_text(self, text: str, max_chunk_tokens: int) -> list:
+        """Split long text into chunks respecting token budget.
+
+        Chunks are split at paragraph / sentence boundaries when possible.
+        """
+        if not text:
+            return [""]
+
+        chunks: list = []
+        paragraphs = text.split("\n\n")
+        current = ""
+
+        for para in paragraphs:
+            candidate = current + ("\n\n" if current else "") + para
+            if self._token_counter.count(candidate) <= max_chunk_tokens:
+                current = candidate
+            else:
+                if current:
+                    chunks.append(current)
+                # If a single paragraph exceeds budget, split by sentences
+                if self._token_counter.count(para) > max_chunk_tokens:
+                    sub_chunks = self._chunk_by_sentences(para, max_chunk_tokens)
+                    chunks.extend(sub_chunks)
+                else:
+                    current = para
+
+        if current:
+            chunks.append(current)
+
+        return chunks if chunks else [text]
+
+    def _chunk_by_sentences(self, text: str, max_chunk_tokens: int) -> list:
+        """Split a long paragraph into sentence-level chunks."""
+        import re
+        sentences = re.split(r"(?<=[。.!！?？])\s*", text)
+        chunks: list = []
+        current = ""
+        for sent in sentences:
+            candidate = current + sent
+            if self._token_counter.count(candidate) <= max_chunk_tokens:
+                current = candidate
+            else:
+                if current:
+                    chunks.append(current)
+                current = sent
+        if current:
+            chunks.append(current)
+        return chunks if chunks else [text]
+
+    def _process_long_text(
+        self,
+        text: str,
+        system_msg: str,
+        chunk_processor: Callable[[str, str], Any],
+        result_merger: Callable[[list, str], Any],
+        chunk_overlap: int = 200,
+        chunk_notice: str = "",
+    ) -> Any:
+        """Process a long text through multiple LLM rounds.
+
+        1. Compute available token budget
+        2. Split text into chunks
+        3. Process each chunk, passing accumulated context
+        4. Before each call: check context usage, compress if needed
+        5. Merge all results
+
+ Args:
+            text: The full text to process.
+            system_msg: System prompt for each LLM call.
+            chunk_processor: Called with (chunk, accumulated_summary) → result.
+            result_merger: Called with (list_of_results, system_msg) → final.
+            chunk_overlap: Token overlap between chunks.
+            chunk_notice: Notice added to each chunk (e.g. "Part 2/5").
+        """
+        output_reserve = max(self._max_output_tokens, 4096)
+        max_chunk = self._context_window - self._token_counter.count(system_msg) - output_reserve - chunk_overlap
+        if max_chunk < 1000:
+            max_chunk = 1000
+
+        chunks = self._chunk_text(text, max_chunk)
+        total = len(chunks)
+
+        if total <= 1:
+            return chunk_processor(text, "")
+
+        logger.info("Processing long text in %d chunks (budget=%d tokens/chunk)", total, max_chunk)
+        self.reset_conversation()
+
+        results = []
+        accumulated = ""
+        for i, chunk in enumerate(chunks):
+            notice = chunk_notice or f"[这是第 {i + 1}/{total} 块，后面还有内容，请继续处理]"
+            chunk_with_notice = f"{notice}\n\n{chunk}"
+
+            # Check context before each round
+            if not self._check_context_fit(system_msg, chunk_with_notice):
+                self._compress_conversation(system_msg)
+                if self._conversation_summary:
+                    chunk_with_notice = (
+                        f"[前文摘要]\n{self._conversation_summary}\n\n"
+                        f"{chunk_with_notice}"
+                    )
+
+            try:
+                result = chunk_processor(chunk_with_notice, accumulated)
+                results.append(result)
+                # Update accumulated context
+                accumulated = json.dumps(results[-3:], ensure_ascii=False, default=str) if len(results) > 1 else ""
+                self._round_count += 1
+                self._conversation_tokens += self._token_counter.count(chunk_with_notice)
+            except Exception as e:
+                logger.error("Chunk %d/%d failed: %s", i + 1, total, e)
+                results.append({"error": str(e), "chunk_index": i})
+
+        return result_merger(results, system_msg)
+
+    # ------------------------------------------------------------------
+    # Pre-search helpers (shared by SkeletonGenerator / DataFiller)
+    # ------------------------------------------------------------------
+
+    def _fuzzy_match_interface(
+        self,
+        url: str,
+        api_name: str,
+        http_method: str,
+        interfaces: list,
+    ) -> dict | None:
+        """Find the closest matching interface when relevance_id lookup fails.
+
+        Uses URL path segments, api_name, and HTTP method for fuzzy scoring.
+        Returns the best match if similarity exceeds threshold, otherwise None.
+        """
+        if not interfaces:
+            return None
+
+        # Extract path segments from the URL
+        segments = [s.lower() for s in url.split("/") if s and len(s) >= 3]
+
+        scored = []
+        for iface in interfaces:
+            if isinstance(iface, dict):
+                iface_url = (iface.get("url") or "").lower()
+                iface_name = (iface.get("api_name") or "").lower()
+                iface_method = (iface.get("method") or "").upper()
+            elif hasattr(iface, "url"):
+                iface_url = (getattr(iface, "url", "") or "").lower()
+                iface_name = (getattr(iface, "api_name", "") or "").lower()
+                iface_method = (getattr(iface, "method", "") or "").upper()
+            else:
+                continue
+
+            score = 0
+            # URL segment matches
+            for seg in segments:
+                if seg in iface_url:
+                    score += 3
+            # API name overlap
+            name_segments = api_name.lower().split()
+            for ns in name_segments:
+                if ns and len(ns) >= 2 and ns in iface_name:
+                    score += 2
+            # HTTP method match
+            if http_method.upper() == iface_method:
+                score += 4
+
+            if score > 0:
+                scored.append((score, iface))
+
+        if not scored:
+            return None
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        best_score, best_iface = scored[0]
+        if best_score >= 3:
+            logger.info(
+                "Fuzzy matched interface: score=%d url=%s",
+                best_score,
+                best_iface.get("url") if isinstance(best_iface, dict) else getattr(best_iface, "url", ""),
+            )
+            return best_iface
+        return None
+
+    def _fuzzy_search_api_doc(
+        self,
+        url: str,
+        http_method: str = "",
+        api_doc_text: str = "",
+        max_snippet_tokens: int = 3000,
+    ) -> str:
+        """Search API doc for sections relevant to a URL using fuzzy matching.
+
+        Does NOT depend on interfaces list — only uses the raw API doc text.
+        This is the fallback when all other lookup strategies fail.
+
+        Strategy:
+        1. Extract meaningful path segments from the URL
+        2. Substring-match each segment against doc lines (case-insensitive)
+        3. Score lines by segment hit count, take top matches
+        4. Expand to surrounding context lines
+        5. Merge overlapping windows, truncate to token budget
+        """
+        if not api_doc_text or not url:
+            return api_doc_text[:2000] if api_doc_text else ""
+
+        segments = [
+            s.lower() for s in url.split("/")
+            if s and len(s) >= 3 and not s.isdigit()
+        ]
+        if not segments:
+            return api_doc_text[:2000]
+
+        lines = api_doc_text.split("\n")
+        scored_lines = []
+        for idx, line in enumerate(lines):
+            line_lower = line.lower()
+            score = sum(1 for seg in segments if seg in line_lower)
+            if score > 0:
+                scored_lines.append((score, idx))
+
+        if not scored_lines:
+            # Fallback: try HTTP method filtering
+            if http_method:
+                method_lines = [
+                    (0, idx) for idx, line in enumerate(lines)
+                    if http_method.upper() in line.upper()
+                ]
+                if method_lines:
+                    scored_lines = method_lines
+                else:
+                    return api_doc_text[:2000]
+            else:
+                return api_doc_text[:2000]
+
+        scored_lines.sort(key=lambda x: x[0], reverse=True)
+        top_indices = {idx for _, idx in scored_lines[:20]}
+
+        # Expand to context windows (±5 lines)
+        context_indices = set()
+        for idx in top_indices:
+            for ci in range(max(0, idx - 5), min(len(lines), idx + 6)):
+                context_indices.add(ci)
+
+        # Build snippet from contiguous ranges
+        sorted_indices = sorted(context_indices)
+        ranges = []
+        start_range = sorted_indices[0]
+        end_range = start_range
+        for idx in sorted_indices[1:]:
+            if idx <= end_range + 1:
+                end_range = idx
+            else:
+                ranges.append((start_range, end_range))
+                start_range = idx
+                end_range = idx
+        ranges.append((start_range, end_range))
+
+        snippets = []
+        total_tokens = 0
+        for r_start, r_end in ranges:
+            block = "\n".join(lines[r_start:r_end + 1])
+            block_tokens = self._token_counter.count(block)
+            if total_tokens + block_tokens > max_snippet_tokens:
+                remaining = max_snippet_tokens - total_tokens
+                if remaining > 200:
+                    snippets.append(block[:remaining * 4])
+                break
+            snippets.append(block)
+            total_tokens += block_tokens
+
+        return "\n---\n".join(snippets) if snippets else api_doc_text[:2000]
+
+    # ------------------------------------------------------------------
+    # LLM call
+    # ------------------------------------------------------------------
+
     def call_llm(
         self,
         prompt: str,
         system_msg: str = "You are a helpful assistant.",
         response_format: Optional[str] = None,
     ) -> str:
-        """Call LLM with retry. Returns raw text response."""
+        """Call LLM with retry and context window awareness. Returns raw text response."""
         self.check_step()
+
+        # Context window check
+        if not self._check_context_fit(system_msg, prompt):
+            ratio = self._context_usage_ratio(system_msg, prompt)
+            if ratio >= 1.0:
+                raise ValueError(
+                    f"Input exceeds context window: "
+                    f"{self._estimate_input_tokens(system_msg, prompt)} / "
+                    f"{self._context_window} tokens"
+                )
+            # Near limit — try compression for multi-round scenarios
+            if self._round_count > 0:
+                self._compress_conversation(system_msg)
 
         last_error = None
         for attempt in range(1, self._max_retries + 1):

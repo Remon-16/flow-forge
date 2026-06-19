@@ -19,9 +19,11 @@ from graph.nodes import (
     human_confirm_node,
     parse_docs_node,
     parse_plan_node,
+    reload_interfaces_node,
     revise_plan_node,
     route_after_api_confirm,
     save_interfaces_node,
+    validate_interface_urls_node,
     write_excel_node,
     write_output_node,
 )
@@ -61,12 +63,14 @@ def build_workflow(
     # --- Add nodes ---
     graph.add_node("parse_docs", parse_docs_node)
     graph.add_node("analyze_api", analyze_api_node)
+    graph.add_node("validate_interface_urls", validate_interface_urls_node)
+    graph.add_node("save_interfaces", save_interfaces_node)
     graph.add_node("analyze_requirement", analyze_requirement_node)
     graph.add_node("generate_plan", generate_plan_node)
     graph.add_node("human_confirm", human_confirm_node)
     graph.add_node("revise_plan", revise_plan_node)
+    graph.add_node("reload_interfaces", reload_interfaces_node)
     graph.add_node("parse_plan", parse_plan_node)
-    graph.add_node("save_interfaces", save_interfaces_node)
     graph.add_node("batch_controller", batch_controller_node)
     graph.add_node("write_output", write_output_node)
     # Legacy nodes (non-batch mode)
@@ -86,17 +90,19 @@ def build_workflow(
     graph.add_edge("parse_docs", "analyze_api")
     graph.add_conditional_edges("analyze_api", route_after_api_confirm, {
         "loop": "analyze_api",
-        "next": "analyze_requirement",
+        "next": "validate_interface_urls",
     })
+    graph.add_edge("validate_interface_urls", "save_interfaces")
+    graph.add_edge("save_interfaces", "analyze_requirement")
     graph.add_edge("analyze_requirement", "generate_plan")
     graph.add_edge("generate_plan", "human_confirm")
     graph.add_conditional_edges("human_confirm", check_confirmed, {
-        "confirmed": "parse_plan",
+        "confirmed": "reload_interfaces",
         "rejected": "revise_plan",
     })
     graph.add_edge("revise_plan", "human_confirm")  # Feedback loop
-    graph.add_edge("parse_plan", "save_interfaces")
-    graph.add_edge("save_interfaces", "batch_controller")
+    graph.add_edge("reload_interfaces", "parse_plan")
+    graph.add_edge("parse_plan", "batch_controller")
     graph.add_edge("batch_controller", "write_output")
     graph.add_edge("write_output", END)
 

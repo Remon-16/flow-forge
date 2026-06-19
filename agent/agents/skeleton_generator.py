@@ -89,6 +89,9 @@ class SingleSkeletonGenerator(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
         )
         self._knowledge = knowledge
 
@@ -117,7 +120,15 @@ class SingleSkeletonGenerator(BaseAgent):
             if docs:
                 prompt += f"\n\n## 知识库参考\n" + "\n---\n".join(docs)
 
-        logger.info("Generating single case skeletons...")
+        # Token check
+        input_tokens = self._estimate_input_tokens(SINGLE_SKELETON_SYSTEM, prompt)
+        if input_tokens > self._context_window:
+            raise ValueError(
+                f"Skeleton generation input exceeds context window: "
+                f"{input_tokens} / {self._context_window} tokens"
+            )
+
+        logger.info("Generating single case skeletons (~%d tokens)...", input_tokens)
         result = self.call_llm_json(prompt, SINGLE_SKELETON_SYSTEM)
         skeletons = result.get("single_skeletons", [])
         logger.info("Generated %d single case skeletons", len(skeletons))
@@ -130,14 +141,62 @@ class SingleSkeletonGenerator(BaseAgent):
         api_doc_text: str,
         api_summary: Optional[List[Dict]] = None,
     ) -> List[Dict]:
-        """Correct URLs in skeletons that failed URL existence check."""
+        """Correct URLs using trusted interfaces + API doc pre-search.
+
+        Interfaces are assumed to have passed source validation
+        (validate_interface_urls_node + user review + reload).
+        """
         iface_dicts = _normalize_interfaces(interfaces)
+
+        # Build search snippets per bad case
+        snippets_parts = []
+        for case in bad_cases:
+            relevance_id = case.get("relevance_id", "")
+            bad_url = case.get("url", "")
+            api_name = case.get("api_name", "")
+            http_method = case.get("method", "GET")
+
+            # Look up correct URL from trusted interfaces
+            correct_iface = None
+            for iface in iface_dicts:
+                if iface.get("test_id") == relevance_id:
+                    correct_iface = iface
+                    break
+
+            if correct_iface:
+                correct_url = correct_iface.get("url", "")
+                snippet = self._fuzzy_search_api_doc(
+                    url=correct_url, http_method=http_method,
+                    api_doc_text=api_doc_text, max_snippet_tokens=2000,
+                )
+            else:
+                # Fuzzy match in interfaces, then search
+                matched = self._fuzzy_match_interface(
+                    url=bad_url, api_name=api_name,
+                    http_method=http_method, interfaces=iface_dicts,
+                )
+                if matched:
+                    snippet = self._fuzzy_search_api_doc(
+                        url=matched.get("url", ""), http_method=http_method,
+                        api_doc_text=api_doc_text, max_snippet_tokens=2000,
+                    )
+                else:
+                    snippet = self._fuzzy_search_api_doc(
+                        url=bad_url, http_method=http_method,
+                        api_doc_text=api_doc_text, max_snippet_tokens=2000,
+                    )
+
+            snippets_parts.append(
+                f"### Case: {case.get('test_id', '?')}\n"
+                f"Current URL: {bad_url}\n"
+                f"Relevant API doc:\n{snippet}"
+            )
 
         prompt = URL_CORRECTION_USER.replace(
             "{{bad_cases}}",
             json.dumps(bad_cases, ensure_ascii=False, indent=2),
         ).replace(
-            "{{api_doc_text}}", api_doc_text[:8000]
+            "{{api_doc_text}}", "\n---\n".join(snippets_parts)
         ).replace(
             "{{interface_defs}}",
             json.dumps(iface_dicts, ensure_ascii=False, indent=2),
@@ -164,6 +223,9 @@ class BizSkeletonGenerator(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
         )
         self._knowledge = knowledge
 
@@ -197,7 +259,15 @@ class BizSkeletonGenerator(BaseAgent):
             if docs:
                 prompt += f"\n\n## 知识库参考\n" + "\n---\n".join(docs)
 
-        logger.info("Generating biz flow skeletons...")
+        # Token check
+        input_tokens = self._estimate_input_tokens(BIZ_SKELETON_SYSTEM, prompt)
+        if input_tokens > self._context_window:
+            raise ValueError(
+                f"Biz skeleton generation input exceeds context window: "
+                f"{input_tokens} / {self._context_window} tokens"
+            )
+
+        logger.info("Generating biz flow skeletons (~%d tokens)...", input_tokens)
         result = self.call_llm_json(prompt, BIZ_SKELETON_SYSTEM)
         skeletons = result.get("biz_skeletons", [])
         logger.info("Generated %d biz flow skeletons", len(skeletons))
@@ -210,14 +280,59 @@ class BizSkeletonGenerator(BaseAgent):
         api_doc_text: str,
         api_summary: Optional[List[Dict]] = None,
     ) -> List[Dict]:
-        """Correct URLs in biz flow skeletons that failed URL existence check."""
+        """Correct URLs using trusted interfaces + API doc pre-search."""
         iface_dicts = _normalize_interfaces(interfaces)
+
+        # Build search snippets per bad case
+        snippets_parts = []
+        for case in bad_cases:
+            # For biz flows, check each step's URL
+            steps = case.get("steps", [])
+            for step in steps:
+                relevance_id = step.get("relevance_id", "")
+                bad_url = step.get("url", "")
+                api_name = step.get("api_name", "")
+                http_method = step.get("method", "GET")
+
+                correct_iface = None
+                for iface in iface_dicts:
+                    if iface.get("test_id") == relevance_id:
+                        correct_iface = iface
+                        break
+
+                if correct_iface:
+                    correct_url = correct_iface.get("url", "")
+                    snippet = self._fuzzy_search_api_doc(
+                        url=correct_url, http_method=http_method,
+                        api_doc_text=api_doc_text, max_snippet_tokens=2000,
+                    )
+                else:
+                    matched = self._fuzzy_match_interface(
+                        url=bad_url, api_name=api_name,
+                        http_method=http_method, interfaces=iface_dicts,
+                    )
+                    if matched:
+                        snippet = self._fuzzy_search_api_doc(
+                            url=matched.get("url", ""), http_method=http_method,
+                            api_doc_text=api_doc_text, max_snippet_tokens=2000,
+                        )
+                    else:
+                        snippet = self._fuzzy_search_api_doc(
+                            url=bad_url, http_method=http_method,
+                            api_doc_text=api_doc_text, max_snippet_tokens=2000,
+                        )
+
+                snippets_parts.append(
+                    f"### Step: {step.get('step_id', '?')}\n"
+                    f"Current URL: {bad_url}\n"
+                    f"Relevant API doc:\n{snippet}"
+                )
 
         prompt = URL_CORRECTION_USER.replace(
             "{{bad_cases}}",
             json.dumps(bad_cases, ensure_ascii=False, indent=2),
         ).replace(
-            "{{api_doc_text}}", api_doc_text[:8000]
+            "{{api_doc_text}}", "\n---\n".join(snippets_parts)
         ).replace(
             "{{interface_defs}}",
             json.dumps(iface_dicts, ensure_ascii=False, indent=2),

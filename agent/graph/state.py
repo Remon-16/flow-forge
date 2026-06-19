@@ -49,6 +49,9 @@ class GraphState(TypedDict, total=False):
     api_summary_feedback: str
     api_summary_confirmed: bool
 
+    # === Interface URL validation ===
+    url_validation_errors: List[Dict[str, Any]]  # Interfaces that failed URL validation
+
     # === Human review ===
     plan_confirmed: bool
     plan_feedback: str
