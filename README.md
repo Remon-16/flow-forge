@@ -3,7 +3,7 @@
 **中文** | [English](README.en.md)
 
 ![Development Status](https://img.shields.io/badge/状态-早期版本-orange) 
-![Version](https://img.shields.io/badge/版本-v0.2.1--alpha-blue)
+![Version](https://img.shields.io/badge/版本-v0.3.0--alpha-blue)
 ![Branch](https://img.shields.io/badge/开发分支-dev-brightgreen)
 
 基于 AI 智能体的接口自动化测试框架。输入需求文档和接口文档，智能体自动生成测试用例 YAML 文件（可选导出 Excel）；将用例交给命令行执行器，即可得到测试报告。执行器可无缝集成 Jenkins，实现 CI/CD 流水线。
