@@ -419,17 +419,20 @@ class BatchController(BaseAgent):
                 logger.warning("Data filling [%s] converged at batch %d: %s", batch_type, i + 1, e)
                 if self._check_consecutive_failures(consecutive_failures, batch_type):
                     break
+                self._maybe_wait_between_batches()
                 continue
             except Exception as e:
                 consecutive_failures += 1
                 logger.exception("Data filling [%s] failed for batch %d", batch_type, i + 1)
                 if self._check_consecutive_failures(consecutive_failures, batch_type):
                     break
+                self._maybe_wait_between_batches()
                 continue
 
             consecutive_failures = 0
 
             if not filled:
+                self._maybe_wait_between_batches()
                 continue
 
             # Validate + retry
@@ -451,10 +454,8 @@ class BatchController(BaseAgent):
 
             all_filled.extend(filled)
 
-            # Batch 间延迟（最后一个 batch 不需要等）
-            if i < len(batches) - 1 and self._rate_limit_delay > 0:
-                logger.info("Waiting %.1fs before next batch", self._rate_limit_delay)
-                time.sleep(self._rate_limit_delay)
+            # Batch 间延迟
+            self._maybe_wait_between_batches()
 
         logger.info("Data filling [%s]: %d cases filled total", batch_type, len(all_filled))
         return all_filled
@@ -493,17 +494,20 @@ class BatchController(BaseAgent):
                 logger.warning("Assertion generation [%s] converged at batch %d: %s", batch_type, i + 1, e)
                 if self._check_consecutive_failures(consecutive_failures, batch_type):
                     break
+                self._maybe_wait_between_batches()
                 continue
             except Exception as e:
                 consecutive_failures += 1
                 logger.exception("Assertion generation [%s] failed for batch %d", batch_type, i + 1)
                 if self._check_consecutive_failures(consecutive_failures, batch_type):
                     break
+                self._maybe_wait_between_batches()
                 continue
 
             consecutive_failures = 0
 
             if not complete:
+                self._maybe_wait_between_batches()
                 continue
 
             # Validate + retry
@@ -525,10 +529,8 @@ class BatchController(BaseAgent):
 
             all_complete.extend(complete)
 
-            # Batch 间延迟（最后一个 batch 不需要等）
-            if i < len(batches) - 1 and self._rate_limit_delay > 0:
-                logger.info("Waiting %.1fs before next batch", self._rate_limit_delay)
-                time.sleep(self._rate_limit_delay)
+            # Batch 间延迟
+            self._maybe_wait_between_batches()
 
         logger.info("Assertion generation [%s]: %d cases completed", batch_type, len(all_complete))
         return all_complete
@@ -612,6 +614,12 @@ class BatchController(BaseAgent):
             )
             return True
         return False
+
+    def _maybe_wait_between_batches(self):
+        """Sleep between batches to allow API rate limit window to recover."""
+        if self._rate_limit_delay > 0:
+            logger.info("Waiting %.1fs before next batch", self._rate_limit_delay)
+            time.sleep(self._rate_limit_delay)
 
     # ------------------------------------------------------------------
     # Code-based batch splitting
