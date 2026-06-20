@@ -35,6 +35,7 @@ class Settings:
     enable_plugins: bool = False
     plugin_modules: str = ""  # comma-separated module paths, executed in order
     llm_max_concurrency: int = 1  # max simultaneous LLM requests (0=unlimited, GLM free tier requires 1)
+    consecutive_batch_failure_limit: int = 3  # stop after N consecutive batch failures (-1=never stop)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -64,6 +65,7 @@ class Settings:
             "enable_plugins": self.enable_plugins,
             "plugin_modules": self.plugin_modules,
             "llm_max_concurrency": self.llm_max_concurrency,
+            "consecutive_batch_failure_limit": self.consecutive_batch_failure_limit,
         }
 
 
@@ -100,6 +102,7 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
     )
     plugin_modules = os.getenv("PLUGIN_MODULES", "")
     llm_max_concurrency = int(os.getenv("LLM_MAX_CONCURRENCY", "1"))
+    consecutive_batch_failure_limit = int(os.getenv("CONSECUTIVE_BATCH_FAILURE_LIMIT", "3"))
 
     return Settings(
         llm_provider=os.getenv("LLM_PROVIDER", "openai"),
@@ -128,4 +131,5 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
         enable_plugins=enable_plugins,
         plugin_modules=plugin_modules,
         llm_max_concurrency=llm_max_concurrency,
+        consecutive_batch_failure_limit=consecutive_batch_failure_limit,
     )

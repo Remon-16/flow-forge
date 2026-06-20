@@ -70,6 +70,11 @@ class BaseAgent:
     _call_lock = threading.Lock()
     _concurrency_semaphore: threading.Semaphore | None = None
 
+    # Class-level defaults — injected by nodes.configure() from Settings
+    _default_rate_limit_delay: float = 0.0
+    _default_retry_base_delay: float = 2.0
+    _default_max_concurrency: int = 1
+
     def __init__(
         self,
         api_key: str,
@@ -82,9 +87,9 @@ class BaseAgent:
         context_window: int = 128000,
         max_output_tokens: int = 4096,
         compression_threshold: float = 0.9,
-        rate_limit_delay: float = 0.0,
-        retry_base_delay: float = 2.0,
-        max_concurrency: int = 1,
+        rate_limit_delay: float | None = None,
+        retry_base_delay: float | None = None,
+        max_concurrency: int | None = None,
     ):
         client_kwargs: Dict[str, Any] = {"api_key": api_key, "max_retries": 0}
         if base_url:
@@ -95,12 +100,22 @@ class BaseAgent:
         self._max_tokens = max_tokens
         self._max_retries = max_retries
         self._max_steps = max_steps
-        self._rate_limit_delay = rate_limit_delay
-        self._retry_base_delay = retry_base_delay
+        self._rate_limit_delay = (
+            rate_limit_delay if rate_limit_delay is not None
+            else BaseAgent._default_rate_limit_delay
+        )
+        self._retry_base_delay = (
+            retry_base_delay if retry_base_delay is not None
+            else BaseAgent._default_retry_base_delay
+        )
+        _mc = (
+            max_concurrency if max_concurrency is not None
+            else BaseAgent._default_max_concurrency
+        )
 
         # Initialize global concurrency semaphore (once, shared across all instances)
-        if BaseAgent._concurrency_semaphore is None and max_concurrency > 0:
-            BaseAgent._concurrency_semaphore = threading.Semaphore(max_concurrency)
+        if BaseAgent._concurrency_semaphore is None and _mc > 0:
+            BaseAgent._concurrency_semaphore = threading.Semaphore(_mc)
         self._step_count = 0
         self._progress_getter: Callable[[], str] | None = None
         self._last_progress: str | None = None
@@ -574,7 +589,7 @@ class BaseAgent:
                         attempt, self._max_retries, e,
                     )
                     if attempt < self._max_retries:
-                        time.sleep(self._retry_base_delay ** attempt)
+                        time.sleep(self._retry_base_delay)
 
             raise RuntimeError(
                 f"LLM call failed after {self._max_retries} attempts: {last_error}"

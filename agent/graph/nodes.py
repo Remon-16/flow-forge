@@ -43,6 +43,13 @@ def configure(
     from tools.builtin import set_knowledge_instance
     set_knowledge_instance(knowledge)
 
+    # Inject rate-limiting settings into BaseAgent class-level defaults
+    # so all subclasses automatically get the configured values
+    from agents.base import BaseAgent
+    BaseAgent._default_rate_limit_delay = settings.llm_rate_limit_delay
+    BaseAgent._default_retry_base_delay = settings.llm_retry_base_delay
+    BaseAgent._default_max_concurrency = settings.llm_max_concurrency
+
 
 def _sl():
     """Shorthand to get the session logger (may be None)."""

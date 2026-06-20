@@ -9,6 +9,7 @@ Batching is done by simple code splitting — no LLM involved in batch decisions
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -46,6 +47,9 @@ class BatchController(BaseAgent):
         )
         self._enable_plugins = getattr(settings, "enable_plugins", False)
         self._plugin_modules = getattr(settings, "plugin_modules", "")
+        self._consecutive_failure_limit = getattr(
+            settings, "consecutive_batch_failure_limit", 3
+        )
         self._reference_dir = ""
 
     # ------------------------------------------------------------------
@@ -402,6 +406,7 @@ class BatchController(BaseAgent):
         )
 
         all_filled: List[Dict] = []
+        consecutive_failures = 0
         for i, batch in enumerate(batches):
             logger.info("Data filling [%s] batch %d/%d: %d items",
                         batch_type, i + 1, len(batches), len(batch))
@@ -410,11 +415,19 @@ class BatchController(BaseAgent):
                     batch, interfaces, api_summary, api_doc_text, user_guidance
                 )
             except ConvergenceError as e:
+                consecutive_failures += 1
                 logger.warning("Data filling [%s] converged at batch %d: %s", batch_type, i + 1, e)
+                if self._check_consecutive_failures(consecutive_failures, batch_type):
+                    break
                 continue
             except Exception as e:
+                consecutive_failures += 1
                 logger.exception("Data filling [%s] failed for batch %d", batch_type, i + 1)
+                if self._check_consecutive_failures(consecutive_failures, batch_type):
+                    break
                 continue
+
+            consecutive_failures = 0
 
             if not filled:
                 continue
@@ -437,6 +450,11 @@ class BatchController(BaseAgent):
                     filled = valid + retry_valid
 
             all_filled.extend(filled)
+
+            # Batch 间延迟（最后一个 batch 不需要等）
+            if i < len(batches) - 1 and self._rate_limit_delay > 0:
+                logger.info("Waiting %.1fs before next batch", self._rate_limit_delay)
+                time.sleep(self._rate_limit_delay)
 
         logger.info("Data filling [%s]: %d cases filled total", batch_type, len(all_filled))
         return all_filled
@@ -462,6 +480,7 @@ class BatchController(BaseAgent):
         )
 
         all_complete: List[Dict] = []
+        consecutive_failures = 0
         for i, batch in enumerate(batches):
             logger.info("Assertion generation [%s] batch %d/%d: %d items",
                         batch_type, i + 1, len(batches), len(batch))
@@ -470,11 +489,19 @@ class BatchController(BaseAgent):
                     batch, interfaces, api_summary, user_guidance
                 )
             except ConvergenceError as e:
+                consecutive_failures += 1
                 logger.warning("Assertion generation [%s] converged at batch %d: %s", batch_type, i + 1, e)
+                if self._check_consecutive_failures(consecutive_failures, batch_type):
+                    break
                 continue
             except Exception as e:
+                consecutive_failures += 1
                 logger.exception("Assertion generation [%s] failed for batch %d", batch_type, i + 1)
+                if self._check_consecutive_failures(consecutive_failures, batch_type):
+                    break
                 continue
+
+            consecutive_failures = 0
 
             if not complete:
                 continue
@@ -498,6 +525,11 @@ class BatchController(BaseAgent):
 
             all_complete.extend(complete)
 
+            # Batch 间延迟（最后一个 batch 不需要等）
+            if i < len(batches) - 1 and self._rate_limit_delay > 0:
+                logger.info("Waiting %.1fs before next batch", self._rate_limit_delay)
+                time.sleep(self._rate_limit_delay)
+
         logger.info("Assertion generation [%s]: %d cases completed", batch_type, len(all_complete))
         return all_complete
 
@@ -517,14 +549,17 @@ class BatchController(BaseAgent):
         decl = plugin.declaration
         batches = self._split_batches(cases)
         results: List[Dict] = []
+        consecutive_failures = 0
 
-        for batch in batches:
+        for i, batch in enumerate(batches):
+            batch_ok = False
             for attempt in range(decl.max_retries):
                 try:
                     updated = plugin.generate(
                         batch, interfaces, api_summary, api_doc_text
                     )
                     results.extend(updated)
+                    batch_ok = True
                     break
                 except Exception:
                     if attempt + 1 >= decl.max_retries:
@@ -544,10 +579,39 @@ class BatchController(BaseAgent):
                             decl.plugin_name, attempt + 1, decl.max_retries,
                         )
 
+            if batch_ok:
+                consecutive_failures = 0
+            else:
+                consecutive_failures += 1
+                if self._check_consecutive_failures(consecutive_failures, f"plugin '{decl.plugin_name}'"):
+                    break
+
+            # Batch 间延迟
+            if i < len(batches) - 1 and self._rate_limit_delay > 0:
+                logger.info("Waiting %.1fs before next batch", self._rate_limit_delay)
+                time.sleep(self._rate_limit_delay)
+
         logger.info(
             "Plugin '%s': processed %d cases", decl.plugin_name, len(results)
         )
         return results
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _check_consecutive_failures(self, consecutive: int, batch_type: str) -> bool:
+        """Return True if batch processing should stop due to consecutive failures."""
+        limit = self._consecutive_failure_limit
+        if limit < 0:
+            return False
+        if consecutive >= limit:
+            logger.warning(
+                "Stopping [%s]: %d consecutive batch failures (limit=%d)",
+                batch_type, consecutive, limit,
+            )
+            return True
+        return False
 
     # ------------------------------------------------------------------
     # Code-based batch splitting
