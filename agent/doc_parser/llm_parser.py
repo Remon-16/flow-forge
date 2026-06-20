@@ -96,6 +96,7 @@ class DocParserAgent:
             compression_threshold=settings.llm_context_compression_threshold,
             rate_limit_delay=settings.llm_rate_limit_delay,
             retry_base_delay=settings.llm_retry_base_delay,
+            max_concurrency=settings.llm_max_concurrency,
         )
 
     def parse(

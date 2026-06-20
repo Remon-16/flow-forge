@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import hashlib
 import logging
+import os
 import re
+import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -63,6 +65,11 @@ class BaseAgent:
     - Step counter with max_steps guard
     """
 
+    # Global rate limiting: shared across all instances
+    _last_call_time: float = 0.0
+    _call_lock = threading.Lock()
+    _concurrency_semaphore: threading.Semaphore | None = None
+
     def __init__(
         self,
         api_key: str,
@@ -77,8 +84,9 @@ class BaseAgent:
         compression_threshold: float = 0.9,
         rate_limit_delay: float = 0.0,
         retry_base_delay: float = 2.0,
+        max_concurrency: int = 1,
     ):
-        client_kwargs: Dict[str, Any] = {"api_key": api_key}
+        client_kwargs: Dict[str, Any] = {"api_key": api_key, "max_retries": 0}
         if base_url:
             client_kwargs["base_url"] = base_url
         self._client = OpenAI(**client_kwargs)
@@ -89,7 +97,10 @@ class BaseAgent:
         self._max_steps = max_steps
         self._rate_limit_delay = rate_limit_delay
         self._retry_base_delay = retry_base_delay
-        self._last_call_time: float = 0.0
+
+        # Initialize global concurrency semaphore (once, shared across all instances)
+        if BaseAgent._concurrency_semaphore is None and max_concurrency > 0:
+            BaseAgent._concurrency_semaphore = threading.Semaphore(max_concurrency)
         self._step_count = 0
         self._progress_getter: Callable[[], str] | None = None
         self._last_progress: str | None = None
@@ -501,7 +512,7 @@ class BaseAgent:
         system_msg: str = "You are a helpful assistant.",
         response_format: Optional[str] = None,
     ) -> str:
-        """Call LLM with retry and context window awareness. Returns raw text response."""
+        """Call LLM with retry, global rate limiting, and concurrency control."""
         self.check_step()
 
         # Context window check
@@ -517,45 +528,60 @@ class BaseAgent:
             if self._round_count > 0:
                 self._compress_conversation(system_msg)
 
-        # Rate limiting: enforce minimum interval between calls
-        if self._rate_limit_delay > 0:
-            elapsed = time.time() - self._last_call_time
-            if elapsed < self._rate_limit_delay:
-                time.sleep(self._rate_limit_delay - elapsed)
+        # Concurrency control — ensure at most max_concurrency requests in flight
+        if BaseAgent._concurrency_semaphore:
+            BaseAgent._concurrency_semaphore.acquire()
 
-        last_error = None
-        for attempt in range(1, self._max_retries + 1):
-            try:
-                kwargs: dict = {
-                    "model": self._model,
-                    "temperature": self._temperature,
-                    "max_tokens": self._max_tokens,
-                    "messages": [
-                        {"role": "system", "content": system_msg},
-                        {"role": "user", "content": prompt},
-                    ],
-                }
+        try:
+            last_error = None
+            for attempt in range(1, self._max_retries + 1):
+                # Global rate limiting: enforce minimum interval between calls
+                # across ALL BaseAgent instances (class-level _last_call_time)
+                with BaseAgent._call_lock:
+                    if self._rate_limit_delay > 0:
+                        elapsed = time.time() - BaseAgent._last_call_time
+                        if elapsed < self._rate_limit_delay:
+                            time.sleep(self._rate_limit_delay - elapsed)
 
-                if response_format == "json_object":
-                    kwargs["response_format"] = {"type": "json_object"}
+                try:
+                    kwargs: dict = {
+                        "model": self._model,
+                        "temperature": self._temperature,
+                        "max_tokens": self._max_tokens,
+                        "messages": [
+                            {"role": "system", "content": system_msg},
+                            {"role": "user", "content": prompt},
+                        ],
+                    }
 
-                response = self._client.chat.completions.create(**kwargs)
-                content = response.choices[0].message.content or ""
-                self._last_call_time = time.time()
-                return content
+                    if response_format == "json_object":
+                        kwargs["response_format"] = {"type": "json_object"}
 
-            except Exception as e:
-                last_error = e
-                logger.warning(
-                    "LLM call attempt %d/%d failed: %s",
-                    attempt, self._max_retries, e,
-                )
-                if attempt < self._max_retries:
-                    time.sleep(self._retry_base_delay ** attempt)
+                    response = self._client.chat.completions.create(**kwargs)
+                    content = response.choices[0].message.content or ""
+                    with BaseAgent._call_lock:
+                        BaseAgent._last_call_time = time.time()
+                    return content
 
-        raise RuntimeError(
-            f"LLM call failed after {self._max_retries} attempts: {last_error}"
-        )
+                except Exception as e:
+                    last_error = e
+                    # Update timestamp even on failure — failed requests
+                    # still consume rate-limit quota on providers like GLM
+                    with BaseAgent._call_lock:
+                        BaseAgent._last_call_time = time.time()
+                    logger.warning(
+                        "LLM call attempt %d/%d failed: %s",
+                        attempt, self._max_retries, e,
+                    )
+                    if attempt < self._max_retries:
+                        time.sleep(self._retry_base_delay ** attempt)
+
+            raise RuntimeError(
+                f"LLM call failed after {self._max_retries} attempts: {last_error}"
+            )
+        finally:
+            if BaseAgent._concurrency_semaphore:
+                BaseAgent._concurrency_semaphore.release()
 
     def call_llm_json(
         self,

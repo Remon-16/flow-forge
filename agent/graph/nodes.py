@@ -683,6 +683,7 @@ def revise_plan_node(state: GraphState) -> GraphState:
         base_url=_settings.llm_base_url,
         rate_limit_delay=_settings.llm_rate_limit_delay,
         retry_base_delay=_settings.llm_retry_base_delay,
+        max_concurrency=_settings.llm_max_concurrency,
     )
 
     system = _prompt_registry.get_system(agent_key)
