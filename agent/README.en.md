@@ -516,6 +516,8 @@ optional arguments:
                         changed scenarios
   --resume              Resume batch generation from existing output_dir. Skips
                         document parsing and plan generation
+  --resume-overwrite    When resuming, overwrite existing output files instead
+                        of auto-adding _v2/_v3 suffix
   --env ENV             Path to .env file
   -v, --verbose         Verbose console logging
   --debug               Debug mode: write full LLM input/output to session directory
@@ -549,14 +551,57 @@ Set via the `MAX_STEPS_NO_PROGRESS` environment variable in `.env` (default: 5).
 
 ### Scenario A: Resumable Generation (`--resume`)
 
-When the pipeline crashes or the user interrupts it mid-run, use `--resume` to pick up where it left off. The system skips document parsing and plan generation, jumping directly to batch generation using the existing interfaces and cases in `output_dir`.
+When the pipeline crashes or the user interrupts it mid-run, use `--resume` to pick up where it left off. The system skips document parsing and plan generation, jumping directly to batch generation using the existing state in `output_dir`.
+
+#### Checkpoint Mechanism
+
+After each phase of batch_controller completes, two checkpoint files are automatically saved under `{output_dir}/memory/`:
+
+| File | Content | Purpose |
+|------|---------|---------|
+| `checkpoint.json` | Phase marker, runtime settings (batch_size, plugin list, etc.), case counts | Lightweight metadata; users can manually edit the `phase` field to roll back |
+| `checkpoint_data.json` | Complete intermediate case data (skeletons, filled data, assertions, failures) | Machine read/write; restores full in-memory state on resume |
+
+Key fields in `checkpoint.json`:
+
+- `phase` — the last completed phase (`skeletons_generated` → `data_filled_single` → `data_filled_biz` → `assertions_generated_single` → `assertions_generated_biz` → `plugins_applied`)
+- `settings` — a snapshot of the runtime configuration at the time of the original run (resume uses these values, not the current `.env` settings)
+- `settings.plugin_modules` — the plugin list at the time of the run
+- `counts.plugins_applied` — array of plugin paths already executed
+
+#### Resume Behavior
 
 ```bash
 # Resume after pipeline interruption
 python main.py --resume --output ./output --api docs/api.yaml
 ```
 
-Prerequisite: The `{output}/cases/interfaces/` directory must already contain interface YAML files.
+1. Loads `checkpoint.json` + `checkpoint_data.json` and determines the last completed phase
+2. Validates that all plugins recorded in the checkpoint still exist as importable modules — if a plugin has been removed, raises a clear error telling the user they can edit `checkpoint.json` to roll back the `phase` field
+3. Restores runtime settings from the checkpoint (ignoring any changes in the current `.env` file), ensuring consistency with the original run
+4. Skips already-completed phases, restoring intermediate data from `checkpoint_data.json`
+5. Resumes execution from the restart phase, updating checkpoint files after each subsequent phase completes
+
+#### Manual Rollback
+
+If resume fails due to missing plugins or other issues, users can manually roll back:
+
+1. Edit `{output_dir}/memory/checkpoint.json` and change `phase` to an earlier value (e.g. `"data_filled_biz"`)
+2. Re-run `--resume` — the system will restart from the rolled-back phase
+
+#### `--resume-overwrite` Flag
+
+By default, if the output directory already contains case files, resume appends a `_v2`/`_v3` suffix to avoid overwriting existing content. To overwrite the original directory instead:
+
+```bash
+python main.py --resume --output ./output --resume-overwrite
+```
+
+#### Use Cases
+
+- Free-tier models that frequently return 500/502 errors, causing mid-run crashes
+- Large batch generation runs that take a long time — no need to restart from scratch
+- Intentional user interruption followed by later resume
 
 ### Scenario B: Incremental Updates (`--reference-dir`)
 
@@ -659,7 +704,7 @@ The system uses LangGraph `StateGraph` to manage the pipeline. All state is auto
 | `revise_plan` | Revise plan based on user feedback, then return to human_confirm |
 | `reload_interfaces` | Reload interface YAMLs after plan approval to pick up any user edits made during review |
 | `parse_plan` | Call PlanParser, parse plan into structured data |
-| `batch_controller` | Run the 3-step generation pipeline: skeleton generation (one-shot) → data filling (batched) → assertion generation (batched). Supports resumable generation |
+| `batch_controller` | Run the 3-step generation pipeline: skeleton generation (one-shot) → data filling (batched) → assertion generation (batched). Saves checkpoint.json + checkpoint_data.json after each phase, enabling phase-level resume |
 | `write_output` | Output YAML + optional Excel based on output_format setting |
 
 ### Interrupts & Feedback Loops

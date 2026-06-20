@@ -3,6 +3,11 @@
 Step 1: Skeleton generation (one-shot, no batching)
 Step 2: Data filling (code-based batching)
 Step 3: Assertion generation (code-based batching)
+Step 4: Plugin execution (optional)
+
+Checkpoint files ({memory_dir}/checkpoint.json and checkpoint_data.json)
+are saved after each phase, enabling resume after crashes (common with
+free models that return 500/502 errors).
 
 Batching is done by simple code splitting — no LLM involved in batch decisions.
 """
@@ -15,10 +20,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from agents.base import BaseAgent, ConvergenceError
 from config.settings import Settings
+from graph.checkpoint import CheckpointManager
 from writers.yaml_writer import YamlWriter
 from validators.url_checker import check_url_existence
 
 logger = logging.getLogger(__name__)
+
+_PHASES = [
+    "skeletons_generated",
+    "data_filled_single",
+    "data_filled_biz",
+    "assertions_generated_single",
+    "assertions_generated_biz",
+    "plugins_applied",
+]
 
 
 class BatchController(BaseAgent):
@@ -51,6 +66,7 @@ class BatchController(BaseAgent):
             settings, "consecutive_batch_failure_limit", 3
         )
         self._reference_dir = ""
+        self._memory_dir = ""
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -72,6 +88,9 @@ class BatchController(BaseAgent):
         reference_dir: str = "",
         api_doc_text: str = "",
         api_summary: Optional[List[Dict]] = None,
+        resume: bool = False,
+        memory_dir: str = "",
+        resume_overwrite: bool = False,
     ) -> Dict[str, Any]:
         """Run the three-step generation pipeline.
 
@@ -81,124 +100,390 @@ class BatchController(BaseAgent):
           - failures: list of cases that failed after all retries
         """
         self._reference_dir = reference_dir
+        self._memory_dir = memory_dir
         all_failures: List[Dict] = []
+
+        ckpt_mgr = CheckpointManager(memory_dir) if memory_dir else None
+
+        # ------------------------------------------------------------------
+        # Resume: load checkpoint and restore state
+        # ------------------------------------------------------------------
+        restart_phase = "skeletons_generated"
+        single_valid: List[Dict] = []
+        biz_valid: List[Dict] = []
+        single_filled: List[Dict] = []
+        biz_filled: List[Dict] = []
+        single_complete: List[Dict] = []
+        biz_complete: List[Dict] = []
+        plugins_applied_list: List[str] = []
+
+        if resume and ckpt_mgr and ckpt_mgr.exists():
+            meta = ckpt_mgr.load_meta()
+            if meta:
+                # 1. Validate plugins still exist
+                missing = CheckpointManager.validate_plugins(meta)
+                if missing:
+                    msg = (
+                        "断点中记录的以下插件模块不存在:\n  "
+                        + "\n  ".join(missing)
+                        + "\n请检查插件是否被删除或移动。"
+                        + "如需回滚，请编辑 "
+                        + str(Path(memory_dir) / "checkpoint.json")
+                        + "，将 phase 字段改为更早的阶段（如 \"data_filled_biz\"），"
+                        + "然后重新执行 --resume。"
+                    )
+                    raise RuntimeError(msg)
+
+                # 2. Determine restart phase
+                restart_phase = CheckpointManager.get_restart_phase(meta)
+                logger.info(
+                    "Resume mode: restarting from phase '%s'", restart_phase
+                )
+
+                # 3. Restore settings from checkpoint (override current .env)
+                ckpt_settings = meta.get("settings", {})
+                if ckpt_settings:
+                    self._batch_size = ckpt_settings.get(
+                        "batch_size", self._batch_size
+                    )
+                    self._enable_validation = ckpt_settings.get(
+                        "enable_validation", self._enable_validation
+                    )
+                    self._max_validation_retries = ckpt_settings.get(
+                        "max_validation_retries", self._max_validation_retries
+                    )
+                    self._url_correction_max_retries = ckpt_settings.get(
+                        "url_correction_max_retries",
+                        self._url_correction_max_retries,
+                    )
+                    self._enable_plugins = ckpt_settings.get(
+                        "enable_plugins", self._enable_plugins
+                    )
+                    self._plugin_modules = ckpt_settings.get(
+                        "plugin_modules", self._plugin_modules
+                    )
+                    logger.info(
+                        "Restored settings from checkpoint: batch_size=%d",
+                        self._batch_size,
+                    )
+
+                # 4. Restore intermediate data from checkpoint_data.json
+                data = ckpt_mgr.load_data()
+                if data:
+                    single_valid = data.get("single_skeletons", [])
+                    biz_valid = data.get("biz_skeletons", [])
+                    single_filled = data.get("single_data_filled", [])
+                    biz_filled = data.get("biz_data_filled", [])
+                    single_complete = data.get("single_assertions", [])
+                    biz_complete = data.get("biz_assertions", [])
+                    all_failures = data.get("failures", [])
+                    logger.info(
+                        "Restored checkpoint data: %d single skeletons, "
+                        "%d biz skeletons, %d single filled, %d biz filled, "
+                        "%d single assertions, %d biz assertions",
+                        len(single_valid), len(biz_valid),
+                        len(single_filled), len(biz_filled),
+                        len(single_complete), len(biz_complete),
+                    )
+            else:
+                logger.warning(
+                    "Checkpoint exists but is invalid; starting from scratch."
+                )
+                resume = False
+        elif resume:
+            logger.warning(
+                "Resume requested but no checkpoint found; starting from scratch."
+            )
+            resume = False
+
+        def _phase_lt(a: str, b: str) -> bool:
+            """True if phase 'a' comes before phase 'b'."""
+            try:
+                return _PHASES.index(a) < _PHASES.index(b)
+            except ValueError:
+                return False
 
         # ================================================================
         # Step 1: Skeleton generation (one-shot) + URL check + correction
         # ================================================================
-        logger.info("=" * 60)
-        logger.info("Step 1: Skeleton generation")
-        logger.info("=" * 60)
+        if restart_phase == "skeletons_generated":
+            logger.info("=" * 60)
+            logger.info("Step 1: Skeleton generation")
+            logger.info("=" * 60)
 
-        # 1a. Single case skeletons
-        logger.info("Generating single case skeletons...")
-        single_skeletons = single_skel_gen.generate(
-            plan, interfaces, api_summary, user_guidance
-        )
-        logger.info("Generated %d single case skeletons", len(single_skeletons))
-
-        # 1b. Biz flow skeletons
-        logger.info("Generating biz flow skeletons...")
-        biz_skeletons = []
-        if hasattr(plan, "biz_flow_scenarios") and plan.biz_flow_scenarios:
-            biz_skeletons = biz_skel_gen.generate(
+            # 1a. Single case skeletons
+            logger.info("Generating single case skeletons...")
+            single_skeletons = single_skel_gen.generate(
                 plan, interfaces, api_summary, user_guidance
             )
-            logger.info("Generated %d biz flow skeletons", len(biz_skeletons))
+            logger.info("Generated %d single case skeletons", len(single_skeletons))
+
+            # 1b. Biz flow skeletons
+            logger.info("Generating biz flow skeletons...")
+            biz_skeletons = []
+            if hasattr(plan, "biz_flow_scenarios") and plan.biz_flow_scenarios:
+                biz_skeletons = biz_skel_gen.generate(
+                    plan, interfaces, api_summary, user_guidance
+                )
+                logger.info("Generated %d biz flow skeletons", len(biz_skeletons))
+            else:
+                logger.info("No biz flow scenarios in plan, skipping")
+
+            # 1c. URL check + correction retry
+            single_valid, single_url_failed = self._url_check_and_correct(
+                single_skeletons, interfaces, api_doc_text, api_summary,
+                single_skel_gen, "single"
+            )
+            biz_valid, biz_url_failed = self._url_check_and_correct(
+                biz_skeletons, interfaces, api_doc_text, api_summary,
+                biz_skel_gen, "biz"
+            )
+
+            # Handle URL-correction-exhausted cases
+            if single_url_failed:
+                for case in single_url_failed:
+                    case["url"] = f"<URL not exist>{case.get('url', '')}"
+                    YamlWriter.write_single_case(case, output_dir)
+                    all_failures.append({
+                        "case": case,
+                        "reason": "URL correction exhausted — URL not found in API doc",
+                    })
+            if biz_url_failed:
+                for case in biz_url_failed:
+                    for step in case.get("steps", []):
+                        step["url"] = f"<URL not exist>{step.get('url', '')}"
+                    YamlWriter.write_biz_flow(case, output_dir)
+                    all_failures.append({
+                        "case": case,
+                        "reason": "URL correction exhausted — URL not found in API doc",
+                    })
+
+            # Save checkpoint
+            if ckpt_mgr:
+                ckpt_mgr.save_data("skeletons_generated", {
+                    "single_skeletons": single_valid,
+                    "biz_skeletons": biz_valid,
+                    "single_data_filled": [],
+                    "biz_data_filled": [],
+                    "single_assertions": [],
+                    "biz_assertions": [],
+                    "failures": all_failures,
+                })
+                counts = {
+                    "single_skeletons": len(single_valid),
+                    "biz_skeletons": len(biz_valid),
+                    "single_data_filled": 0,
+                    "biz_data_filled": 0,
+                    "single_assertions": 0,
+                    "biz_assertions": 0,
+                    "plugins_applied": [],
+                }
+                ckpt_mgr.save_meta(
+                    "skeletons_generated", self._collect_settings(),
+                    counts, output_dir,
+                )
         else:
-            logger.info("No biz flow scenarios in plan, skipping")
-
-        # 1c. URL check + correction retry
-        single_valid, single_url_failed = self._url_check_and_correct(
-            single_skeletons, interfaces, api_doc_text, api_summary,
-            single_skel_gen, "single"
-        )
-        biz_valid, biz_url_failed = self._url_check_and_correct(
-            biz_skeletons, interfaces, api_doc_text, api_summary,
-            biz_skel_gen, "biz"
-        )
-
-        # Handle URL-correction-exhausted cases: mark, skip, log
-        if single_url_failed:
-            for case in single_url_failed:
-                case["url"] = f"<URL not exist>{case.get('url', '')}"
-                YamlWriter.write_single_case(case, output_dir)
-                all_failures.append({
-                    "case": case,
-                    "reason": "URL correction exhausted — URL not found in API doc",
-                })
-        if biz_url_failed:
-            for case in biz_url_failed:
-                for step in case.get("steps", []):
-                    step["url"] = f"<URL not exist>{step.get('url', '')}"
-                YamlWriter.write_biz_flow(case, output_dir)
-                all_failures.append({
-                    "case": case,
-                    "reason": "URL correction exhausted — URL not found in API doc",
-                })
+            logger.info(
+                "Step 1: Skeleton generation — SKIPPED (already completed)"
+            )
 
         # ================================================================
         # Step 2: Data filling (code-based batching)
         # ================================================================
-        logger.info("=" * 60)
-        logger.info("Step 2: Data filling")
-        logger.info("=" * 60)
+        if _phase_lt(restart_phase, "data_filled_single") or restart_phase == "data_filled_single":
+            logger.info("=" * 60)
+            logger.info("Step 2: Data filling")
+            logger.info("=" * 60)
 
-        single_filled = self._run_data_filling_phase(
-            single_valid, interfaces, api_summary, api_doc_text,
-            user_guidance, "single", single_data_filler, validator
-        )
-        biz_filled = self._run_data_filling_phase(
-            biz_valid, interfaces, api_summary, api_doc_text,
-            user_guidance, "biz", biz_data_filler, validator
-        )
+            single_filled = self._run_data_filling_phase(
+                single_valid, interfaces, api_summary, api_doc_text,
+                user_guidance, "single", single_data_filler, validator
+            )
+            if ckpt_mgr:
+                ckpt_mgr.save_data("data_filled_single", {
+                    "single_skeletons": single_valid,
+                    "biz_skeletons": biz_valid,
+                    "single_data_filled": single_filled,
+                    "biz_data_filled": biz_filled,
+                    "single_assertions": [],
+                    "biz_assertions": [],
+                    "failures": all_failures,
+                })
+                counts = {
+                    "single_skeletons": len(single_valid),
+                    "biz_skeletons": len(biz_valid),
+                    "single_data_filled": len(single_filled),
+                    "biz_data_filled": len(biz_filled),
+                    "single_assertions": 0,
+                    "biz_assertions": 0,
+                    "plugins_applied": [],
+                }
+                ckpt_mgr.save_meta(
+                    "data_filled_single", self._collect_settings(),
+                    counts, output_dir,
+                )
+        else:
+            logger.info("Data filling [single] — SKIPPED (already completed)")
+
+        if _phase_lt(restart_phase, "data_filled_biz") or restart_phase == "data_filled_biz":
+            biz_filled = self._run_data_filling_phase(
+                biz_valid, interfaces, api_summary, api_doc_text,
+                user_guidance, "biz", biz_data_filler, validator
+            )
+            if ckpt_mgr:
+                ckpt_mgr.save_data("data_filled_biz", {
+                    "single_skeletons": single_valid,
+                    "biz_skeletons": biz_valid,
+                    "single_data_filled": single_filled,
+                    "biz_data_filled": biz_filled,
+                    "single_assertions": [],
+                    "biz_assertions": [],
+                    "failures": all_failures,
+                })
+                counts = {
+                    "single_skeletons": len(single_valid),
+                    "biz_skeletons": len(biz_valid),
+                    "single_data_filled": len(single_filled),
+                    "biz_data_filled": len(biz_filled),
+                    "single_assertions": 0,
+                    "biz_assertions": 0,
+                    "plugins_applied": [],
+                }
+                ckpt_mgr.save_meta(
+                    "data_filled_biz", self._collect_settings(),
+                    counts, output_dir,
+                )
+        else:
+            logger.info("Data filling [biz] — SKIPPED (already completed)")
 
         # ================================================================
         # Step 3: Assertion generation (code-based batching)
         # ================================================================
-        logger.info("=" * 60)
-        logger.info("Step 3: Assertion generation")
-        logger.info("=" * 60)
+        if _phase_lt(restart_phase, "assertions_generated_single") or restart_phase == "assertions_generated_single":
+            logger.info("=" * 60)
+            logger.info("Step 3: Assertion generation")
+            logger.info("=" * 60)
 
-        single_complete = self._run_assertion_phase(
-            single_filled, interfaces, api_summary, user_guidance, "single",
-            single_assert_gen, validator
-        )
-        biz_complete = self._run_assertion_phase(
-            biz_filled, interfaces, api_summary, user_guidance, "biz",
-            biz_assert_gen, validator
-        )
+            single_complete = self._run_assertion_phase(
+                single_filled, interfaces, api_summary, user_guidance, "single",
+                single_assert_gen, validator
+            )
+            if ckpt_mgr:
+                ckpt_mgr.save_data("assertions_generated_single", {
+                    "single_skeletons": single_valid,
+                    "biz_skeletons": biz_valid,
+                    "single_data_filled": single_filled,
+                    "biz_data_filled": biz_filled,
+                    "single_assertions": single_complete,
+                    "biz_assertions": biz_complete,
+                    "failures": all_failures,
+                })
+                counts = {
+                    "single_skeletons": len(single_valid),
+                    "biz_skeletons": len(biz_valid),
+                    "single_data_filled": len(single_filled),
+                    "biz_data_filled": len(biz_filled),
+                    "single_assertions": len(single_complete),
+                    "biz_assertions": len(biz_complete),
+                    "plugins_applied": [],
+                }
+                ckpt_mgr.save_meta(
+                    "assertions_generated_single", self._collect_settings(),
+                    counts, output_dir,
+                )
+        else:
+            logger.info("Assertion generation [single] — SKIPPED (already completed)")
+
+        if _phase_lt(restart_phase, "assertions_generated_biz") or restart_phase == "assertions_generated_biz":
+            biz_complete = self._run_assertion_phase(
+                biz_filled, interfaces, api_summary, user_guidance, "biz",
+                biz_assert_gen, validator
+            )
+            if ckpt_mgr:
+                ckpt_mgr.save_data("assertions_generated_biz", {
+                    "single_skeletons": single_valid,
+                    "biz_skeletons": biz_valid,
+                    "single_data_filled": single_filled,
+                    "biz_data_filled": biz_filled,
+                    "single_assertions": single_complete,
+                    "biz_assertions": biz_complete,
+                    "failures": all_failures,
+                })
+                counts = {
+                    "single_skeletons": len(single_valid),
+                    "biz_skeletons": len(biz_valid),
+                    "single_data_filled": len(single_filled),
+                    "biz_data_filled": len(biz_filled),
+                    "single_assertions": len(single_complete),
+                    "biz_assertions": len(biz_complete),
+                    "plugins_applied": [],
+                }
+                ckpt_mgr.save_meta(
+                    "assertions_generated_biz", self._collect_settings(),
+                    counts, output_dir,
+                )
+        else:
+            logger.info("Assertion generation [biz] — SKIPPED (already completed)")
 
         # ================================================================
         # Step 4: Custom plugin execution (optional)
         # ================================================================
+        plugins_applied_list = []
         if self._enable_plugins and self._plugin_modules:
-            logger.info("=" * 60)
-            logger.info("Step 4: Custom plugin execution")
-            logger.info("=" * 60)
+            if _phase_lt(restart_phase, "plugins_applied") or restart_phase == "plugins_applied":
+                logger.info("=" * 60)
+                logger.info("Step 4: Custom plugin execution")
+                logger.info("=" * 60)
 
-            plugin_paths = [
-                p.strip() for p in self._plugin_modules.split(",") if p.strip()
-            ]
-            from plugins.loader import load_plugins
-            plugins = load_plugins(plugin_paths)
+                plugin_paths = [
+                    p.strip() for p in self._plugin_modules.split(",") if p.strip()
+                ]
+                from plugins.loader import load_plugins
+                plugins = load_plugins(plugin_paths)
 
-            for plugin in plugins:
-                decl = plugin.declaration
-                logger.info(
-                    "Running plugin: %s (single=%s, biz=%s)",
-                    decl.plugin_name,
-                    decl.applies_to_single,
-                    decl.applies_to_biz,
-                )
-                if decl.applies_to_single:
-                    single_complete = self._apply_plugin(
-                        plugin, single_complete, interfaces, api_summary, api_doc_text
+                for plugin_path, plugin in zip(plugin_paths, plugins):
+                    decl = plugin.declaration
+                    logger.info(
+                        "Running plugin: %s (single=%s, biz=%s)",
+                        decl.plugin_name,
+                        decl.applies_to_single,
+                        decl.applies_to_biz,
                     )
-                if decl.applies_to_biz:
-                    biz_complete = self._apply_plugin(
-                        plugin, biz_complete, interfaces, api_summary, api_doc_text
+                    if decl.applies_to_single:
+                        single_complete = self._apply_plugin(
+                            plugin, single_complete, interfaces, api_summary, api_doc_text
+                        )
+                    if decl.applies_to_biz:
+                        biz_complete = self._apply_plugin(
+                            plugin, biz_complete, interfaces, api_summary, api_doc_text
+                        )
+                    plugins_applied_list.append(plugin_path)
+
+                if ckpt_mgr:
+                    ckpt_mgr.save_data("plugins_applied", {
+                        "single_skeletons": single_valid,
+                        "biz_skeletons": biz_valid,
+                        "single_data_filled": single_filled,
+                        "biz_data_filled": biz_filled,
+                        "single_assertions": single_complete,
+                        "biz_assertions": biz_complete,
+                        "failures": all_failures,
+                    })
+                    counts = {
+                        "single_skeletons": len(single_valid),
+                        "biz_skeletons": len(biz_valid),
+                        "single_data_filled": len(single_filled),
+                        "biz_data_filled": len(biz_filled),
+                        "single_assertions": len(single_complete),
+                        "biz_assertions": len(biz_complete),
+                        "plugins_applied": plugins_applied_list,
+                    }
+                    ckpt_mgr.save_meta(
+                        "plugins_applied", self._collect_settings(),
+                        counts, output_dir,
                     )
+            else:
+                logger.info("Plugin execution — SKIPPED (already completed)")
 
         # ================================================================
         # Final URL safety-net check before writing
@@ -630,3 +915,18 @@ class BatchController(BaseAgent):
         if self._batch_size == -1:
             return [items]
         return [items[i:i + self._batch_size] for i in range(0, len(items), self._batch_size)]
+
+    # ------------------------------------------------------------------
+    # Checkpoint helpers
+    # ------------------------------------------------------------------
+
+    def _collect_settings(self) -> Dict[str, Any]:
+        """Collect current runtime settings for checkpoint."""
+        return {
+            "batch_size": self._batch_size,
+            "enable_validation": self._enable_validation,
+            "max_validation_retries": self._max_validation_retries,
+            "url_correction_max_retries": self._url_correction_max_retries,
+            "enable_plugins": self._enable_plugins,
+            "plugin_modules": self._plugin_modules,
+        }

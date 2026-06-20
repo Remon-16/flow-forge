@@ -515,6 +515,7 @@ optional arguments:
                         仅对新增或变更部分进行规划
   --resume              断点续生成，跳过文档解析和计划生成，直接从已有
                         output 目录继续批量生成
+  --resume-overwrite    resume 时覆盖已有输出文件（默认自动加 _v2/_v3 后缀）
   --env ENV             .env 文件路径
   -v, --verbose         详细控制台日志输出
   --debug               调试模式，在 session 目录中写入完整 LLM 输入输出
@@ -548,14 +549,57 @@ optional arguments:
 
 ### 场景 A：断点续生成（`--resume`）
 
-管道中途崩溃或用户主动中断后，使用 `--resume` 恢复生成。系统跳过文档解析和计划生成，直接从已有 `output_dir` 的接口和用例继续批量生成。
+管道中途崩溃或用户主动中断后，使用 `--resume` 恢复生成。系统跳过文档解析和计划生成，直接从已有 `output_dir` 继续批量生成。
+
+#### 断点机制
+
+batch_controller 的每个阶段完成后，自动在 `{output_dir}/memory/` 下保存两个断点文件：
+
+| 文件 | 内容 | 用途 |
+|------|------|------|
+| `checkpoint.json` | 阶段标记、运行设置（batch_size、插件列表等）、用例计数 | 轻量元数据，用户可手动编辑 `phase` 字段回滚流程 |
+| `checkpoint_data.json` | 完整的中间用例数据（骨架、数据填充、断言结果、失败列表） | 机器读写，恢复时直接还原内存状态 |
+
+`checkpoint.json` 中的关键字段：
+
+- `phase`：最后完成的阶段（`skeletons_generated` → `data_filled_single` → `data_filled_biz` → `assertions_generated_single` → `assertions_generated_biz` → `plugins_applied`）
+- `settings`：运行时的配置快照（resume 时以此为准，而非当前 `.env` 配置）
+- `settings.plugin_modules`：运行时的插件列表
+- `counts.plugins_applied`：已执行完成的插件路径数组
+
+#### 恢复行为
 
 ```bash
 # 管道中断后继续生成
 python main.py --resume --output ./output --api docs/api.yaml
 ```
 
-前提：`{output}/cases/interfaces/` 目录中已存在接口 YAML 文件。
+1. 加载 `checkpoint.json` + `checkpoint_data.json`，确定上次中断的阶段
+2. 校验 checkpoint 中记录的插件模块是否仍然存在——若插件已被删除，抛出明确错误并提示用户编辑 `checkpoint.json` 回滚 `phase` 字段
+3. 从 checkpoint 恢复运行设置（忽略当前 `.env` 中的变化），保证与首次运行时一致
+4. 已完成阶段自动跳过，从 `checkpoint_data.json` 恢复中间数据
+5. 从断点阶段继续执行，完成后更新断点文件
+
+#### 回滚流程
+
+如果 resume 时因插件缺失等原因失败，用户可以手动回滚：
+
+1. 编辑 `{output_dir}/memory/checkpoint.json`，将 `phase` 改为更早的阶段（如 `"data_filled_biz"`）
+2. 重新执行 `--resume`，系统从回滚后的阶段重新执行
+
+#### `--resume-overwrite` 参数
+
+默认情况下，如果输出目录中已有用例文件，resume 会自动为目录添加 `_v2`/`_v3` 后缀，避免覆盖已有内容。如需直接覆盖原目录，使用：
+
+```bash
+python main.py --resume --output ./output --resume-overwrite
+```
+
+#### 适用场景
+
+- 免费模型频繁报 500/502 错误导致中断
+- 大批量用例生成耗时较长，不希望从头重跑
+- 用户主动中断后需要从断点恢复
 
 ### 场景 B：增量更新（`--reference-dir`）
 
@@ -640,7 +684,7 @@ python main.py --requirement docs/req_v2.md --api docs/api_v2.yaml \
 | `revise_plan` | 根据用户反馈修改计划，完成后回到 human_confirm |
 | `reload_interfaces` | 审核通过后重新加载接口 YAML，获取用户在审核期间可能做的编辑 |
 | `parse_plan` | 调用 PlanParser，解析计划为结构化数据 |
-| `batch_controller` | 运行三步生成流程：骨架生成（一次性）→ 数据填充（分批）→ 断言生成（分批）。支持断点续生成 |
+| `batch_controller` | 运行三步生成流程：骨架生成（一次性）→ 数据填充（分批）→ 断言生成（分批）。每个阶段完成后自动保存 checkpoint.json + checkpoint_data.json 断点文件，支持精确到阶段的断点续生成 |
 | `write_output` | 根据 output_format 输出 YAML + 可选 Excel |
 
 ### 中断点与反馈循环

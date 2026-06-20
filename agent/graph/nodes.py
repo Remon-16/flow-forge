@@ -1214,6 +1214,9 @@ def batch_controller_node(state: GraphState) -> GraphState:
             reference_dir=reference_dir,
             api_doc_text=api_doc_text,
             api_summary=api_summary,
+            resume=state.get("resume", False),
+            memory_dir=state.get("memory_dir", ""),
+            resume_overwrite=state.get("resume_overwrite", False),
         )
     except Exception as e:
         msg = f"BatchController failed: {e}"

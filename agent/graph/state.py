@@ -68,6 +68,7 @@ class GraphState(TypedDict, total=False):
 
     # === Resume & incremental ===
     resume: bool                         # Skip to batch generation from existing output_dir
+    resume_overwrite: bool               # Overwrite existing output when resuming
     reference_dir: str                   # Reference directory for incremental updates
 
     # === Shared messages (ReAct agents use add_messages reducer) ===

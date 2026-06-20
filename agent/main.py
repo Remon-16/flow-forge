@@ -183,6 +183,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Resume batch generation from existing output directory. Skips "
              "document parsing and plan generation. Use with --output.",
     )
+    p.add_argument(
+        "--resume-overwrite",
+        action="store_true",
+        help="When resuming, overwrite existing output files instead of "
+             "auto-adding _v2/_v3 suffix to the output directory.",
+    )
     return p
 
 
@@ -402,17 +408,17 @@ def main() -> int:
     # ------------------------------------------------------------------
     if args.resume:
         output_dir = args.output or settings.output_dir
-        cases_dir = Path(output_dir) / "cases"
-        memory_dir = Path(output_dir) / "memory"
+        output_path = Path(output_dir)
 
-        # Create directory structure
-        _cases_dir, _memory_dir = _ensure_output_structure(Path(output_dir))
+        # Create directory structure (before suffix logic, so checkpoint
+        # detection works against the original path)
+        _cases_dir, _memory_dir = _ensure_output_structure(output_path)
 
         # Check for existing interfaces YAMLs
         ifaces_dir = _cases_dir / "interfaces"
         if not ifaces_dir.is_dir() or not list(ifaces_dir.glob("*.yaml")):
             # Also check old-style structure for compatibility
-            old_ifaces_dir = Path(output_dir) / "interfaces"
+            old_ifaces_dir = output_path / "interfaces"
             if old_ifaces_dir.is_dir() and list(old_ifaces_dir.glob("*.yaml")):
                 print(f"Warning: 检测到旧版目录结构（无 cases/ 子目录）")
                 print(f"  建议迁移：将 {output_dir}/interfaces/ 等移到 {output_dir}/cases/ 下")
@@ -421,6 +427,29 @@ def main() -> int:
                 print(f"Error: 未在 {ifaces_dir} 中找到接口 YAML 文件")
                 print("  --resume 需要已有接口定义的 output 目录")
                 return 2
+
+        # Resume output directory suffix logic
+        resume_overwrite = args.resume_overwrite
+        if not resume_overwrite:
+            # Check if output directory has existing content (non-empty cases dir)
+            has_content = output_path.exists() and any(
+                p.suffix in (".yaml", ".yml", ".xlsx")
+                for p in output_path.rglob("*")
+                if p.is_file()
+            )
+            if has_content:
+                base = output_dir
+                suffix = 2
+                while Path(f"{base}_v{suffix}").exists():
+                    suffix += 1
+                output_dir = f"{base}_v{suffix}"
+                logger.info("输出目录已有内容，自动使用: %s", output_dir)
+                logger.info("如需覆盖，请使用 --resume-overwrite")
+                # Re-create structure in the new directory
+                output_path = Path(output_dir)
+                _cases_dir, _memory_dir = _ensure_output_structure(output_path)
+        else:
+            logger.info("--resume-overwrite 已设置，将覆盖原输出目录")
 
         plan_md = ""
         # TODO: Re-enable when conversation memory is implemented
@@ -457,6 +486,7 @@ def main() -> int:
             "parser_path": args.parser_path or "",
             "reference_dir": args.reference_dir or "",
             "resume": True,
+            "resume_overwrite": resume_overwrite,
         }
 
         result = graph.invoke(initial, config)
