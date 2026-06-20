@@ -424,6 +424,11 @@ Markdown 表格示例：
 | `MAX_STEPS` | 单智能体最大步数 | `10` |
 | `MAX_STEPS_NO_PROGRESS` | 连续无进展 LLM 调用上限（触发 ConvergenceError） | `5` |
 | `MAX_RETRIES` | LLM 调用最大重试 | `3` |
+| `LLM_RATE_LIMIT_DELAY` | LLM 调用最小间隔秒数（0 = 不限） | `0.0` |
+| `LLM_RETRY_BASE_DELAY` | LLM 调用重试等待秒数（固定延迟，不增长） | `2.0` |
+| `LLM_MAX_CONCURRENCY` | 最大同时 LLM 请求数（0 = 不限） | `1` |
+| `LLM_REQUEST_TIMEOUT` | HTTP 请求超时秒数（连接 + 读取）。OpenAI SDK 底层 httpx 默认 600 秒。免费模型调试建议设为 60-120 秒 | `600.0` |
+| `CONSECUTIVE_BATCH_FAILURE_LIMIT` | 连续 N 个 batch 失败后停止（-1 = 永不停止） | `3` |
 | `OUTPUT_DIR` | 输出根目录（测试用例产物与智能体对话记忆） | `./output` |
 | `BATCH_SIZE` | 每批生成用例数上限（`-1` 表示不分批） | `10` |
 | `URL_CORRECTION_MAX_RETRIES` | URL 校验失败后最大纠错重试次数 | `3` |

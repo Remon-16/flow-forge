@@ -18,9 +18,19 @@ from langgraph.graph.message import add_messages
 from openai import OpenAI
 from typing_extensions import Annotated
 
+import httpx
+
 from models.state import AgentConfig, ReActTerminationConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _short_error(exc: Exception) -> str:
+    """Return a short human-readable error summary (class name + brief message)."""
+    msg = str(exc).strip()
+    if len(msg) > 80:
+        msg = msg[:77] + "..."
+    return f"{type(exc).__name__}: {msg}" if msg else type(exc).__name__
 
 
 class ConvergenceError(Exception):
@@ -79,6 +89,7 @@ class BaseAgent:
     _default_rate_limit_delay: float = 0.0
     _default_retry_base_delay: float = 2.0
     _default_max_concurrency: int = 1
+    _default_request_timeout: float = 600.0
 
     def __init__(
         self,
@@ -95,6 +106,7 @@ class BaseAgent:
         rate_limit_delay: float | None = None,
         retry_base_delay: float | None = None,
         max_concurrency: int | None = None,
+        request_timeout: float | None = None,
     ):
         # Use shared client to avoid creating multiple httpx connection pools.
         # Each pool maintains keep-alive connections; with 10+ agent instances,
@@ -103,7 +115,15 @@ class BaseAgent:
         if BaseAgent._shared_client is None:
             with BaseAgent._shared_client_lock:
                 if BaseAgent._shared_client is None:
-                    client_kwargs = {"api_key": api_key, "max_retries": 0}
+                    _timeout = (
+                        request_timeout if request_timeout is not None
+                        else BaseAgent._default_request_timeout
+                    )
+                    client_kwargs = {
+                        "api_key": api_key,
+                        "max_retries": 0,
+                        "timeout": httpx.Timeout(_timeout, connect=5.0),
+                    }
                     if base_url:
                         client_kwargs["base_url"] = base_url
                     BaseAgent._shared_client = OpenAI(**client_kwargs)
@@ -120,6 +140,10 @@ class BaseAgent:
         self._retry_base_delay = (
             retry_base_delay if retry_base_delay is not None
             else BaseAgent._default_retry_base_delay
+        )
+        self._request_timeout = (
+            request_timeout if request_timeout is not None
+            else BaseAgent._default_request_timeout
         )
         _mc = (
             max_concurrency if max_concurrency is not None
@@ -602,6 +626,12 @@ class BaseAgent:
                         attempt, self._max_retries, e,
                     )
                     if attempt < self._max_retries:
+                        logger.info(
+                            "第 %d/%d 次 LLM 调用失败 (%s)，%0.1f 秒后重试第 %d 次...",
+                            attempt, self._max_retries,
+                            _short_error(e),
+                            self._retry_base_delay, attempt + 1,
+                        )
                         time.sleep(self._retry_base_delay)
 
             raise RuntimeError(

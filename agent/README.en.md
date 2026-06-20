@@ -424,6 +424,11 @@ Markdown table example:
 | `MAX_STEPS` | Max steps per agent | `10` |
 | `MAX_STEPS_NO_PROGRESS` | Max consecutive no-progress LLM calls (triggers ConvergenceError) | `5` |
 | `MAX_RETRIES` | Max LLM call retries | `3` |
+| `LLM_RATE_LIMIT_DELAY` | Min seconds between LLM calls (0 = no limit) | `0.0` |
+| `LLM_RETRY_BASE_DELAY` | Fixed-delay seconds between LLM retries (non-growing) | `2.0` |
+| `LLM_MAX_CONCURRENCY` | Max simultaneous LLM requests (0 = unlimited) | `1` |
+| `LLM_REQUEST_TIMEOUT` | HTTP request timeout in seconds (connect + read). OpenAI SDK uses httpx default of 600 s. For free model debugging, consider setting 60–120 s | `600.0` |
+| `CONSECUTIVE_BATCH_FAILURE_LIMIT` | Stop after N consecutive batch failures (-1 = never stop) | `3` |
 | `OUTPUT_DIR` | Output root directory (test case artifacts and agent conversation memory) | `./output` |
 | `BATCH_SIZE` | Max cases per generation batch (`-1` for no batching) | `10` |
 | `URL_CORRECTION_MAX_RETRIES` | Max URL correction retries after validation failure | `3` |

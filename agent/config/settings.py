@@ -36,6 +36,7 @@ class Settings:
     plugin_modules: str = ""  # comma-separated module paths, executed in order
     llm_max_concurrency: int = 1  # max simultaneous LLM requests (0=unlimited, GLM free tier requires 1)
     consecutive_batch_failure_limit: int = 3  # stop after N consecutive batch failures (-1=never stop)
+    llm_request_timeout: float = 600.0  # HTTP request timeout in seconds (connect + read)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -66,6 +67,7 @@ class Settings:
             "plugin_modules": self.plugin_modules,
             "llm_max_concurrency": self.llm_max_concurrency,
             "consecutive_batch_failure_limit": self.consecutive_batch_failure_limit,
+            "llm_request_timeout": self.llm_request_timeout,
         }
 
 
@@ -103,6 +105,7 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
     plugin_modules = os.getenv("PLUGIN_MODULES", "")
     llm_max_concurrency = int(os.getenv("LLM_MAX_CONCURRENCY", "1"))
     consecutive_batch_failure_limit = int(os.getenv("CONSECUTIVE_BATCH_FAILURE_LIMIT", "3"))
+    llm_request_timeout = float(os.getenv("LLM_REQUEST_TIMEOUT", "600.0"))
 
     return Settings(
         llm_provider=os.getenv("LLM_PROVIDER", "openai"),
@@ -132,4 +135,5 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
         plugin_modules=plugin_modules,
         llm_max_concurrency=llm_max_concurrency,
         consecutive_batch_failure_limit=consecutive_batch_failure_limit,
+        llm_request_timeout=llm_request_timeout,
     )

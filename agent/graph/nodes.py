@@ -49,6 +49,7 @@ def configure(
     BaseAgent._default_rate_limit_delay = settings.llm_rate_limit_delay
     BaseAgent._default_retry_base_delay = settings.llm_retry_base_delay
     BaseAgent._default_max_concurrency = settings.llm_max_concurrency
+    BaseAgent._default_request_timeout = settings.llm_request_timeout
 
 
 def _sl():
