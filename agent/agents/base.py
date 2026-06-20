@@ -70,6 +70,11 @@ class BaseAgent:
     _call_lock = threading.Lock()
     _concurrency_semaphore: threading.Semaphore | None = None
 
+    # Shared OpenAI client — avoids multiple httpx connection pools
+    # that can cause providers (e.g. GLM) to misdetect concurrency
+    _shared_client: Any = None
+    _shared_client_lock = threading.Lock()
+
     # Class-level defaults — injected by nodes.configure() from Settings
     _default_rate_limit_delay: float = 0.0
     _default_retry_base_delay: float = 2.0
@@ -91,10 +96,18 @@ class BaseAgent:
         retry_base_delay: float | None = None,
         max_concurrency: int | None = None,
     ):
-        client_kwargs: Dict[str, Any] = {"api_key": api_key, "max_retries": 0}
-        if base_url:
-            client_kwargs["base_url"] = base_url
-        self._client = OpenAI(**client_kwargs)
+        # Use shared client to avoid creating multiple httpx connection pools.
+        # Each pool maintains keep-alive connections; with 10+ agent instances,
+        # providers like GLM may see many open TCP connections and misdetect
+        # concurrency, triggering rate-limit errors.
+        if BaseAgent._shared_client is None:
+            with BaseAgent._shared_client_lock:
+                if BaseAgent._shared_client is None:
+                    client_kwargs = {"api_key": api_key, "max_retries": 0}
+                    if base_url:
+                        client_kwargs["base_url"] = base_url
+                    BaseAgent._shared_client = OpenAI(**client_kwargs)
+        self._client = BaseAgent._shared_client
         self._model = model
         self._temperature = temperature
         self._max_tokens = max_tokens
