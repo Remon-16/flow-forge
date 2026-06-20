@@ -97,7 +97,7 @@
       <a-textarea
         v-model:value="pasteText"
         :rows="8"
-        :placeholder="'[\n  {\"name\": \"...\", \"config\": {\"key\": \"value\"}}\n]'"
+        :placeholder="pastePlaceholder"
       />
       <div class="paste-actions">
         <a-button @click="showPasteModal = false">{{ t('common.cancel') }}</a-button>
@@ -121,6 +121,8 @@ import { useI18n } from 'vue-i18n'
 import type { PreProcessorItem } from '@/types/excel'
 
 const { t } = useI18n()
+
+const pastePlaceholder = '[\n  {"name": "...", "config": {"key": "value"}}\n]'
 
 interface ConfigEntry {
   key: string
