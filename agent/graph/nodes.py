@@ -681,6 +681,8 @@ def revise_plan_node(state: GraphState) -> GraphState:
         temperature=0.3,
         max_tokens=_settings.llm_max_tokens,
         base_url=_settings.llm_base_url,
+        rate_limit_delay=_settings.llm_rate_limit_delay,
+        retry_base_delay=_settings.llm_retry_base_delay,
     )
 
     system = _prompt_registry.get_system(agent_key)
@@ -743,6 +745,16 @@ def revise_plan_node(state: GraphState) -> GraphState:
     # Overwrite plan.md in session directory
     if _sl():
         _sl().save_plan(revised)
+
+    # Also write to memory_dir so the output directory stays in sync
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        try:
+            plan_path = Path(memory_dir) / "plan.md"
+            plan_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text(revised, encoding="utf-8")
+        except Exception as e:
+            logger.warning("Failed to save revised plan to memory_dir: %s", e)
 
     return state
 

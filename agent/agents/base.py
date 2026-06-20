@@ -75,6 +75,8 @@ class BaseAgent:
         context_window: int = 128000,
         max_output_tokens: int = 4096,
         compression_threshold: float = 0.9,
+        rate_limit_delay: float = 0.0,
+        retry_base_delay: float = 2.0,
     ):
         client_kwargs: Dict[str, Any] = {"api_key": api_key}
         if base_url:
@@ -85,6 +87,9 @@ class BaseAgent:
         self._max_tokens = max_tokens
         self._max_retries = max_retries
         self._max_steps = max_steps
+        self._rate_limit_delay = rate_limit_delay
+        self._retry_base_delay = retry_base_delay
+        self._last_call_time: float = 0.0
         self._step_count = 0
         self._progress_getter: Callable[[], str] | None = None
         self._last_progress: str | None = None
@@ -512,6 +517,12 @@ class BaseAgent:
             if self._round_count > 0:
                 self._compress_conversation(system_msg)
 
+        # Rate limiting: enforce minimum interval between calls
+        if self._rate_limit_delay > 0:
+            elapsed = time.time() - self._last_call_time
+            if elapsed < self._rate_limit_delay:
+                time.sleep(self._rate_limit_delay - elapsed)
+
         last_error = None
         for attempt in range(1, self._max_retries + 1):
             try:
@@ -530,6 +541,7 @@ class BaseAgent:
 
                 response = self._client.chat.completions.create(**kwargs)
                 content = response.choices[0].message.content or ""
+                self._last_call_time = time.time()
                 return content
 
             except Exception as e:
@@ -539,7 +551,7 @@ class BaseAgent:
                     attempt, self._max_retries, e,
                 )
                 if attempt < self._max_retries:
-                    time.sleep(2 ** attempt)
+                    time.sleep(self._retry_base_delay ** attempt)
 
         raise RuntimeError(
             f"LLM call failed after {self._max_retries} attempts: {last_error}"

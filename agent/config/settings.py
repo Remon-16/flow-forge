@@ -23,6 +23,8 @@ class Settings:
     llm_doc_max_chars: int = 30000
     max_steps: int = 10
     max_retries: int = 3
+    llm_rate_limit_delay: float = 0.0  # Min seconds between LLM calls (0 = no limit)
+    llm_retry_base_delay: float = 2.0  # Base seconds for exponential backoff
     output_dir: str = "./output"  # Root output directory (CLI appends timestamp by default)
     batch_size: int = 10
     enable_validation: bool = True
@@ -49,6 +51,8 @@ class Settings:
             "llm_doc_max_chars": self.llm_doc_max_chars,
             "max_steps": self.max_steps,
             "max_retries": self.max_retries,
+            "llm_rate_limit_delay": self.llm_rate_limit_delay,
+            "llm_retry_base_delay": self.llm_retry_base_delay,
             "output_dir": self.output_dir,
             "batch_size": self.batch_size,
             "enable_validation": self.enable_validation,
@@ -76,6 +80,8 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
                            os.getenv("LLM_MAX_TOKENS", "4096")))
     max_steps = int(os.getenv("MAX_STEPS", "10"))
     max_retries = int(os.getenv("MAX_RETRIES", "3"))
+    llm_rate_limit_delay = float(os.getenv("LLM_RATE_LIMIT_DELAY", "0.0"))
+    llm_retry_base_delay = float(os.getenv("LLM_RETRY_BASE_DELAY", "2.0"))
     enable_knowledge = os.getenv("ENABLE_KNOWLEDGE", "false").strip().lower() in (
         "true", "1", "yes", "on"
     )
@@ -107,6 +113,8 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
         llm_doc_max_chars=llm_doc_max_chars,
         max_steps=max_steps,
         max_retries=max_retries,
+        llm_rate_limit_delay=llm_rate_limit_delay,
+        llm_retry_base_delay=llm_retry_base_delay,
         output_dir=os.getenv("OUTPUT_DIR", "./output"),
         batch_size=batch_size,
         enable_validation=enable_validation,
