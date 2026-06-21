@@ -36,6 +36,7 @@ class Settings:
     llm_max_concurrency: int = 1  # max simultaneous LLM requests (0=unlimited, GLM free tier requires 1)
     consecutive_batch_failure_limit: int = 3  # stop after N consecutive batch failures (-1=never stop)
     llm_request_timeout: float = 600.0  # HTTP request timeout in seconds (connect + read)
+    agent_lang: str = "zh_CN"  # UI language: zh_CN / en_US
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -132,4 +133,5 @@ def load_settings(dotenv_path: str = ".env") -> Settings:
         llm_max_concurrency=llm_max_concurrency,
         consecutive_batch_failure_limit=consecutive_batch_failure_limit,
         llm_request_timeout=llm_request_timeout,
+        agent_lang=os.getenv("AGENT_LANG", "zh_CN"),
     )

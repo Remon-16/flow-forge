@@ -1,0 +1,49 @@
+"""计划解析节点 — 将确认的 plan.md 解析为结构化 TestPlan。
+
+parse_plan node: parses confirmed plan.md into a structured TestPlan.
+"""
+
+import logging
+
+from agents.plan_parser import PlanParser
+from graph.state import GraphState
+
+from .helpers import _settings, _sl, save_snapshot
+
+logger = logging.getLogger(__name__)
+
+
+def parse_plan_node(state: GraphState) -> GraphState:
+    """解析确认后的 plan.md 为结构化 TestPlan。
+
+    Parse the confirmed plan.md into a structured TestPlan.
+    """
+    state.setdefault("errors", [])
+    plan_md = state.get("plan_md", "")
+
+    print(f"\n[6/9] 解析测试计划...")
+    print(f"  → PlanParser 正在调用 LLM ({_settings.llm_model})...")
+    if _sl():
+        _sl().log_node_start("parse_plan", "6/9")
+
+    agent = PlanParser(_settings)
+    plan = agent.parse(plan_md, interfaces=state.get("interfaces", []))
+
+    state["plan_parsed"] = plan
+
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        from dataclasses import asdict as dataclass_asdict
+        try:
+            plan_dict = dataclass_asdict(plan)
+        except Exception:
+            plan_dict = {"business_summary": plan.business_summary}
+        save_snapshot(memory_dir, "plan_parsed.json", plan_dict)
+
+    api_count = len(plan.api_definitions)
+    tp_count = sum(len(v) for v in plan.single_test_points.values())
+    print(f"  → 解析完成 ({api_count} 个接口定义, {tp_count} 个测试点)")
+    if _sl():
+        _sl().log_node_end("parse_plan")
+
+    return state

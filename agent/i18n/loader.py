@@ -1,0 +1,63 @@
+"""i18n 加载器 — 根据语言环境加载翻译表。
+
+i18n loader: loads translation table based on locale.
+"""
+
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Dict
+
+logger = logging.getLogger(__name__)
+
+_current_lang: str = ""
+_translations: Dict[str, str] = {}
+_fallback: Dict[str, str] = {}
+
+
+def _load_translations(lang: str) -> Dict[str, str]:
+    """加载指定语言的翻译表。Load translation table for given language."""
+    path = Path(__file__).resolve().parent / f"{lang}.json"
+    if not path.exists():
+        logger.warning("Translation file not found: %s", path)
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning("Failed to load translations for %s: %s", lang, e)
+        return {}
+
+
+def set_lang(lang: str) -> None:
+    """设置当前语言并加载翻译表。Set language and load translations."""
+    global _current_lang, _translations, _fallback
+    _current_lang = lang
+    _translations = _load_translations(lang)
+    if lang != "zh_CN":
+        _fallback = _load_translations("zh_CN")
+    else:
+        _fallback = {}
+
+
+def get_lang() -> str:
+    """获取当前语言。Get current language."""
+    return _current_lang
+
+
+def _(key: str, **kwargs) -> str:
+    """翻译键名对应的文本。
+
+    Translate key to current language. Falls back to zh_CN, then key itself.
+    Usage: _("pipeline.start") → "流水线启动" or "Pipeline started"
+    """
+    global _current_lang
+    if not _current_lang:
+        lang = os.getenv("AGENT_LANG", "zh_CN")
+        set_lang(lang)
+
+    text = _translations.get(key) or _fallback.get(key) or key
+    if kwargs:
+        text = text.format(**kwargs)
+    return text

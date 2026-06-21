@@ -29,34 +29,31 @@ from graph.nodes import (
 )
 from graph.state import GraphState
 from knowledge.search import KnowledgeSearch
-from prompts.registry import PromptRegistry
 
 logger = logging.getLogger(__name__)
 
 
 def build_workflow(
     settings: Settings,
-    prompt_registry: PromptRegistry | None = None,
     knowledge: KnowledgeSearch | None = None,
     session_logger=None,
 ) -> StateGraph:
-    """Build and compile the full test-case-generation StateGraph.
+    """构建完整的测试用例生成 StateGraph。
+
+    Build and compile the full test-case-generation StateGraph.
 
     Args:
-        settings: Global settings loaded from .env.
-        prompt_registry: Optional PromptRegistry. Created from defaults if None.
-        knowledge: Optional KnowledgeSearch. Created if enable_knowledge is on.
-        session_logger: Optional SessionLogger for structured event logging.
+        settings: 从 .env 加载的全局设置。Global settings loaded from .env.
+        knowledge: 可选的知识库搜索。Created if enable_knowledge is on.
+        session_logger: 可选的会话日志记录器。Optional SessionLogger.
 
     Returns:
-        A compiled StateGraph ready for ``.invoke()``.
+        已编译的 StateGraph。A compiled StateGraph ready for ``.invoke()``.
     """
-    if prompt_registry is None:
-        prompt_registry = PromptRegistry()
     if knowledge is None and settings.enable_knowledge:
         knowledge = KnowledgeSearch(settings.knowledge_dir)
 
-    configure(settings, prompt_registry, knowledge, session_logger)
+    configure(settings, knowledge, session_logger)
 
     graph = StateGraph(GraphState)
 

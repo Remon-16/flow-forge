@@ -1,0 +1,244 @@
+"""共享辅助函数和模块级依赖注入。
+
+Shared helpers and module-level dependency injection for all nodes.
+"""
+
+import json
+import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from config.settings import Settings
+from knowledge.search import KnowledgeSearch
+from models.schema import InterfaceDef
+from writers.yaml_writer import YamlWriter
+
+logger = logging.getLogger(__name__)
+
+# 模块级单例 — 由 build_workflow 注入
+# Module-level singletons — injected by build_workflow
+_settings: Settings = None
+_knowledge: Optional[KnowledgeSearch] = None
+_session_logger = None
+
+
+def configure(
+    settings: Settings,
+    knowledge: Optional[KnowledgeSearch],
+    session_logger=None,
+):
+    """注入模块级依赖。
+
+    Wire module-level dependencies before building the graph.
+    """
+    global _settings, _knowledge, _session_logger
+    _settings = settings
+    _knowledge = knowledge
+    _session_logger = session_logger
+
+    from tools.builtin import set_knowledge_instance
+    set_knowledge_instance(knowledge)
+
+    from agents.base import BaseAgent
+    BaseAgent._default_rate_limit_delay = settings.llm_rate_limit_delay
+    BaseAgent._default_retry_base_delay = settings.llm_retry_base_delay
+    BaseAgent._default_max_concurrency = settings.llm_max_concurrency
+    BaseAgent._default_request_timeout = settings.llm_request_timeout
+
+
+def _sl():
+    """获取会话日志记录器（可能为 None）。
+
+    Shorthand to get the session logger (may be None).
+    """
+    return _session_logger
+
+
+def save_snapshot(memory_dir: str, filename: str, data: Any) -> None:
+    """保存中间流水线状态为 JSON 快照。
+
+    Save intermediate pipeline state as a JSON snapshot.
+    """
+    if not memory_dir:
+        return
+    try:
+        snapshots_dir = Path(memory_dir) / "snapshots"
+        snapshots_dir.mkdir(parents=True, exist_ok=True)
+        path = snapshots_dir / filename
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        logger.warning("Failed to save snapshot %s: %s", filename, e)
+
+
+def fmt_size(path: str) -> str:
+    """格式化文件大小以供显示。
+
+    Format file size for display.
+    """
+    try:
+        size = Path(path).stat().st_size
+        if size >= 1024:
+            return f"{size / 1024:.1f} KB"
+        return f"{size} B"
+    except OSError:
+        return "? B"
+
+
+def summarize_reference_dir(reference_dir: str) -> str:
+    """扫描参考目录获取已有测试资产摘要。
+
+    Scan reference directory for existing test assets and return a summary
+    for the plan generation prompt. Returns "(无)" if empty.
+    """
+    if not reference_dir:
+        return "(无)"
+
+    ref_path = Path(reference_dir)
+    parts = []
+
+    ref_cases = ref_path / "cases" if (ref_path / "cases").is_dir() else ref_path
+    ref_memory = ref_path / "memory" if (ref_path / "memory").is_dir() else ref_path
+
+    # 已有测试计划 / Existing plan
+    plan_path = ref_memory / "plan.md"
+    if not plan_path.exists():
+        plan_path = ref_path / "plan.md"
+    if plan_path.exists():
+        try:
+            plan_text = plan_path.read_text(encoding="utf-8")
+            parts.append(f"### 已有测试计划\n{plan_text[:5000]}")
+        except Exception:
+            pass
+
+    # 已有接口 / Existing interfaces
+    try:
+        ifaces = YamlWriter.read_interfaces(ref_cases)
+        if ifaces:
+            lines = [
+                f"- {i.get('test_id', '?')}: {i.get('method', 'GET')} {i.get('url', '')}"
+                for i in ifaces
+            ]
+            parts.append(f"### 已有接口 ({len(ifaces)} 个)\n" + "\n".join(lines))
+    except Exception:
+        pass
+
+    # 已有单接口用例 / Existing single cases
+    try:
+        cases = YamlWriter.read_single_cases(ref_cases)
+        if cases:
+            ids = [str(c.get("test_id", "?")) for c in cases]
+            parts.append(
+                f"### 已生成单接口用例 ({len(cases)} 个)\n"
+                f"覆盖: {', '.join(ids[:50])}"
+            )
+    except Exception:
+        pass
+
+    # 已有业务链路用例 / Existing biz flows
+    try:
+        flows = YamlWriter.read_biz_flows(ref_cases)
+        if flows:
+            names = [str(f.get("sheet_name", "?")) for f in flows]
+            parts.append(
+                f"### 已生成业务链路用例 ({len(flows)} 个)\n"
+                f"{', '.join(names[:20])}"
+            )
+    except Exception:
+        pass
+
+    if not parts:
+        return "(参考目录为空或无法读取)"
+
+    parts.append(
+        "\n请仅对新增或变更的接口和场景进行测试规划。"
+        "已覆盖且未变更的部分无需重复，可在计划中标注'已覆盖'。"
+    )
+    return "\n\n".join(parts)
+
+
+def iface_to_dict(i: InterfaceDef) -> Dict[str, Any]:
+    """InterfaceDef → 字典。Convert InterfaceDef to dict."""
+    return {
+        "test_id": i.test_id,
+        "api_name": i.api_name,
+        "app_name": i.app_name,
+        "method": i.method,
+        "url": i.url,
+        "request_head": i.request_head,
+        "request_body": i.request_body,
+        "status_code": i.status_code,
+        "assert_dict": i.assert_dict,
+        "remark": i.remark,
+    }
+
+
+def summary_to_interfaces(summary: List[Dict]) -> List[Dict[str, Any]]:
+    """从 ApiAnalyzer 摘要重建接口定义字典。
+
+    Convert ApiAnalyzer summary dicts to InterfaceDef-like dicts.
+    """
+    result: List[Dict[str, Any]] = []
+    for item in summary:
+        url = str(item.get("api_path", ""))
+        method = str(item.get("method", "GET")).upper()
+        description = str(item.get("description", ""))
+
+        clean = (
+            url.strip("/").replace("/", "_").replace("-", "_")
+            .replace("{", "").replace("}", "").lower()
+        )
+        test_id = f"api_{clean}_{method.lower()}" if clean else ""
+
+        name = description or f"{method} {url}"
+        remark = description
+        notes = str(item.get("notes", ""))
+        if notes:
+            remark = f"{description} | {notes}" if description else notes
+
+        result.append({
+            "test_id": test_id,
+            "api_name": name,
+            "app_name": "default",
+            "method": method,
+            "url": url,
+            "request_head": {"Content-Type": "application/json"},
+            "request_body": {},
+            "status_code": 200,
+            "assert_dict": {"status_code": 200},
+            "remark": remark,
+        })
+    return result
+
+
+def dicts_to_interfaces(items: List[Any]) -> List[InterfaceDef]:
+    """混合列表（dict/InterfaceDef）→ 统一的 List[InterfaceDef]。
+
+    Convert mixed list of dicts/InterfaceDef to unified List[InterfaceDef].
+    """
+    result = []
+    for item in items:
+        if isinstance(item, InterfaceDef):
+            result.append(item)
+        elif isinstance(item, dict):
+            try:
+                result.append(InterfaceDef(
+                    test_id=str(item.get("test_id", "")),
+                    api_name=str(item.get("api_name", item.get("name", ""))),
+                    app_name=str(item.get("app_name", item.get("app", ""))),
+                    method=str(item.get("method", "GET")).upper(),
+                    url=str(item.get("url", "")),
+                    request_head=dict(item.get("request_head", item.get("headers", {})) or {}),
+                    request_body=dict(item.get("request_body", item.get("body", item.get("params", {}))) or {}),
+                    status_code=int(item.get("status_code", 200)),
+                    assert_dict=dict(item.get("assert_dict", item.get("assertion", {})) or {}),
+                    assert_rules=list(item.get("assert_rules", []) or []),
+                    remark=str(item.get("remark", item.get("note", ""))),
+                ))
+            except Exception as e:
+                logger.warning("Failed to convert dict to InterfaceDef: %s", e)
+        else:
+            logger.warning("Unexpected interface item type: %s", type(item))
+    return result
