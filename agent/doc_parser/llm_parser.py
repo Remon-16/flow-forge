@@ -38,25 +38,27 @@ DOC_PARSER_SYSTEM = """你是一个 API 文档解析专家。你的任务是从�
 4. 如果文档中描述了请求参数，用 "字段名": "示例值" 的格式填入 request_body
 5. 如果文档中描述了响应字段，将其加入 assert_dict 作为检查项
 
-请以严格的 JSON 数组格式返回，每个元素是一个接口定义：
+请以严格的 JSON 对象格式返回，对象中包含 "interfaces" 字段，其值为接口定义数组：
 ```json
-[
-  {
-    "test_id": "api_user_login_post",
-    "api_name": "用户登录",
-    "app_name": "user_management",
-    "method": "POST",
-    "url": "/api/user/login",
-    "request_head": {"Content-Type": "application/json"},
-    "request_body": {"username": "string", "password": "string"},
-    "status_code": 200,
-    "assert_dict": {"status_code": 200, "data.token": "not_empty"},
-    "remark": "用户登录接口"
-  }
-]
+{
+  "interfaces": [
+    {
+      "test_id": "api_user_login_post",
+      "api_name": "用户登录",
+      "app_name": "user_management",
+      "method": "POST",
+      "url": "/api/user/login",
+      "request_head": {"Content-Type": "application/json"},
+      "request_body": {"username": "string", "password": "string"},
+      "status_code": 200,
+      "assert_dict": {"status_code": 200, "data.token": "not_empty"},
+      "remark": "用户登录接口"
+    }
+  ]
+}
 ```
 
-只返回 JSON 数组，不要包含其他文字说明。"""
+只返回 JSON 对象，不要包含其他文字说明。"""
 
 DOC_PARSER_USER = """请从以下 API 文档内容中提取所有接口定义。
 
@@ -69,9 +71,9 @@ DOC_PARSER_USER = """请从以下 API 文档内容中提取所有接口定义。
 ## 提示
 - 文件类型提示: {file_type_hint}
 - 请仔细阅读全文，不要遗漏任何接口
-- 如果文档内容看起来不包含 API 定义，请返回空数组 []
+- 如果文档内容看起来不包含 API 定义，请返回空对象 {"interfaces": []}
 
-请返回 JSON 数组格式的接口定义列表。"""
+请返回 JSON 对象，其中 "interfaces" 字段包含接口定义列表。"""
 
 
 class DocParserAgent:
