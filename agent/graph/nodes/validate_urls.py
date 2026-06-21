@@ -31,7 +31,7 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
         logger.info("Skipping URL validation: no interfaces or api_raw_text")
         return state
 
-    print(f"\n[URL校验] 校验接口 URL 与文档原文的一致性...")
+    print(_("url_check.checking"))
     if _sl():
         _sl().log_node_start("validate_interface_urls", "url_check")
 
@@ -45,13 +45,13 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
             bad_interfaces.append(iface)
 
     if not bad_interfaces:
-        print(f"  → 所有 {len(interfaces)} 个接口 URL 校验通过")
+        print(_("url_check.all_passed", count=len(interfaces)))
         if _sl():
             _sl().log_event("validate_interface_urls", status="all_passed", count=len(interfaces))
             _sl().log_node_end("validate_interface_urls")
         return state
 
-    print(f"  → 发现 {len(bad_interfaces)} 个接口 URL 不在文档原文中，尝试 LLM 纠正...")
+    print(_("url_check.found_bad", count=len(bad_interfaces)))
 
     api_analyzer = ApiAnalyzer(_settings)
     corrected_count = 0
@@ -114,12 +114,12 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
             })
 
     if url_errors:
-        print(f"\n  ⚠ 以下 {len(url_errors)} 个接口 URL 无法自动纠正，已标记为 [URL_MAY_INCORRECT]：")
+        print(_("url_check.cannot_correct", count=len(url_errors)))
         for err in url_errors:
-            print(f"    - {err['test_id']}: {err['method']} {err['url']}")
+            print(_("url_check.cannot_correct_item", test_id=err["test_id"], method=err["method"], url=err["url"]))
         state["url_validation_errors"] = url_errors
     else:
-        print(f"\n  → 成功纠正 {corrected_count} 个接口 URL")
+        print(_("url_check.corrected_count", count=corrected_count))
 
     if _sl():
         _sl().log_event(

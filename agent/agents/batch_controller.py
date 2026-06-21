@@ -226,7 +226,7 @@ class BatchController:
 
         if all_failures:
             logger.warning("%d cases had URL correction failures", len(all_failures))
-            print(f"\n  URL {len(all_failures)} <URL not exist> ")
+            print(_("batch_controller.url_failures", count=len(all_failures)))
             YamlWriter.write_failures(all_failures, output_dir)
 
         return {

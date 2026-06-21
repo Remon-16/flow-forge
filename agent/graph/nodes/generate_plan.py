@@ -33,11 +33,11 @@ def generate_plan_node(state: GraphState) -> GraphState:
     user_guidance = state.get("user_guidance", "")
 
     if reference_dir:
-        print(f"\n[4/9] 生成测试计划 (增量模式)...")
-        print(f"  → 参考目录: {reference_dir}")
+        print(_step("generate_plan", "pipeline.generate_plan_incremental"))
+        print(_("plan.generating_incremental", model=_settings.llm_model, reference_dir=reference_dir))
     else:
-        print(f"\n[4/9] 生成测试计划...")
-    print(f"  → PlanGenerator 正在调用 LLM ({_settings.llm_model})...")
+        print(_step("generate_plan", "pipeline.generate_plan"))
+    print(_("plan.generating", model=_settings.llm_model))
     if _sl():
         _sl().log_node_start("generate_plan", "4/9")
 
@@ -62,9 +62,9 @@ def generate_plan_node(state: GraphState) -> GraphState:
     plan_len = len(plan_md)
     if _sl():
         plan_path = _sl().save_plan(plan_md)
-        print(f"  → 计划已生成 ({plan_len} 字符)，已保存至 {plan_path}")
+        print(_("plan.generated_saved", len=plan_len, path=plan_path))
     else:
-        print(f"  → 计划已生成 ({plan_len} 字符)")
+        print(_("plan.generated", len=plan_len))
 
     if _sl():
         _sl().log_node_end("generate_plan")

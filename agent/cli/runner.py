@@ -30,14 +30,12 @@ def main() -> int:
 
     settings = load_settings(args.env)
     if not settings.llm_api_key:
-        print("Error: LLM_API_KEY not set. Configure it in .env file.")
-        print("  cp .env.example .env")
-        print("  # Edit .env and add your API key")
+        print(_("cli.no_api_key"))
         return 2
 
     session_dir = make_session_dir()
     session_logger = SessionLogger(session_dir, debug=args.debug)
-    print(f"[Session] 日志目录: {session_dir.resolve()}")
+    print(_("cli.session_log_dir", path=session_dir.resolve()))
 
     # ------------------------------------------------------------------
     # Resume mode: skip to batch generation from existing output
@@ -51,11 +49,10 @@ def main() -> int:
         if not ifaces_dir.is_dir() or not list(ifaces_dir.glob("*.yaml")):
             old_ifaces_dir = output_path / "interfaces"
             if old_ifaces_dir.is_dir() and list(old_ifaces_dir.glob("*.yaml")):
-                print(f"Warning: 检测到旧版目录结构（无 cases/ 子目录）")
+                print(_("cli.resume_old_structure"))
                 ifaces_dir = old_ifaces_dir
             else:
-                print(f"Error: 未在 {ifaces_dir} 中找到接口 YAML 文件")
-                print("  --resume 需要已有接口定义的 output 目录")
+                print(_("cli.resume_no_interfaces", dir=ifaces_dir))
                 return 2
 
         resume_overwrite = args.resume_overwrite
@@ -110,14 +107,12 @@ def main() -> int:
 
         if result.get("errors"):
             for err in result["errors"]:
-                print(f"  Error: {err}")
+                print(_("cli.resume_error", error=err))
             session_logger.save_state(dict(result))
             session_logger.log_session_end("failed")
             return 2
 
-        print(f"\nResume complete. Output in: {output_dir}")
-        print(f"  Single cases: {len(result.get('single_cases', []))}")
-        print(f"  Biz flows: {len(result.get('biz_flows', []))}")
+        print(_("cli.resume_complete", dir=output_dir, single=len(result.get("single_cases", [])), biz=len(result.get("biz_flows", []))))
         session_logger.save_state(dict(result))
         session_logger.log_session_end("completed")
         return 0
@@ -126,14 +121,14 @@ def main() -> int:
     # Full pipeline
     # ------------------------------------------------------------------
     if not args.requirement or not args.api:
-        print("Error: --requirement and --api are required")
+        print(_("cli.requirement_required"))
         return 2
 
     graph = build_workflow(settings, session_logger=session_logger)
     thread_id = f"flow_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
     if args.prompt:
-        print(f"[Prompt] 用户指导: {args.prompt}")
+        print(_("cli.user_guidance", guidance=args.prompt))
 
     output_dir = args.output or settings.output_dir
     cases_dir, memory_dir = ensure_output_structure(Path(output_dir))
@@ -162,7 +157,7 @@ def main() -> int:
 
     if result.get("errors"):
         for err in result["errors"]:
-            print(f"  Error: {err}")
+            print(_("cli.pipeline_error", error=err))
         session_logger.save_state(dict(result))
         session_logger.log_session_end("failed")
         return 2
@@ -174,11 +169,5 @@ def main() -> int:
     session_logger.save_state(dict(result))
     session_logger.log_session_end("completed")
 
-    print(f"\nAll done! Output directory: {output_dir}")
-    print(f"  Cases: {cases_dir}")
-    print(f"  Memory: {memory_dir}")
-    print(f"  Interfaces: {len(result.get('interfaces', []))}")
-    print(f"  Single cases: {len(result.get('single_cases', []))}")
-    print(f"  Biz flows: {len(result.get('biz_flows', []))}")
-    print(f"  Session log: {session_dir.resolve() / 'session.jsonl'}")
+    print(_("cli.output_summary", cases_dir=cases_dir, memory_dir=memory_dir, interfaces=len(result.get("interfaces", [])), single=len(result.get("single_cases", [])), biz=len(result.get("biz_flows", [])), session_log=session_dir.resolve() / "session.jsonl"))
     return 0

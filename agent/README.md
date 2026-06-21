@@ -138,7 +138,8 @@ class CustomPlugin(CaseAttributeGenerator):
 agent/
 ├── main.py                      # CLI 入口（薄入口，实际逻辑在 cli/）
 ├── requirements.txt             # Python 依赖
-├── .env.example                 # 环境变量模板
+├── .env.example.cn              # 环境变量模板（中文）
+├── .env.example.en              # 环境变量模板（英文）
 │
 ├── cli/
 │   ├── __init__.py
@@ -325,6 +326,10 @@ optional arguments:
 ```
 
 ## 环境变量配置
+
+通过复制模板文件创建 `.env`：
+- 中文用户：`cp .env.example.cn .env`
+- 英文用户：`cp .env.example.en .env`
 
 `.env` 文件支持的环境变量：
 

@@ -138,7 +138,8 @@ Users can override default plugins by specifying a plugin with the same name in 
 agent/
 ├── main.py                      # CLI entry (thin wrapper, logic in cli/)
 ├── requirements.txt             # Python dependencies
-├── .env.example                 # Environment variable template
+├── .env.example.cn              # Environment variable template (Chinese)
+├── .env.example.en              # Environment variable template (English)
 │
 ├── cli/
 │   ├── parser.py                # CLI argument parsing
@@ -285,6 +286,10 @@ optional arguments:
 ```
 
 ## Environment Variables
+
+Create `.env` from a template:
+- Chinese users: `cp .env.example.cn .env`
+- English users: `cp .env.example.en .env`
 
 Supported `.env` variables:
 

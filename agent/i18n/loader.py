@@ -61,3 +61,14 @@ def _(key: str, **kwargs) -> str:
     if kwargs:
         text = text.format(**kwargs)
     return text
+
+
+def _step(step_key: str, msg_key: str, **kwargs) -> str:
+    """带步骤编号的翻译。Translate with step number prefix.
+
+    Usage: _step("parse_docs", "pipeline.reading_docs")
+    → "[1/9] 读取文档..."  or  "[1/9] Reading documents..."
+    """
+    from i18n.step_order import step_msg
+
+    return step_msg(step_key, _(msg_key, **kwargs))

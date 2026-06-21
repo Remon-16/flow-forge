@@ -22,7 +22,7 @@ def save_interfaces_node(state: GraphState) -> GraphState:
     """
     state.setdefault("errors", [])
 
-    print(f"\n[6/9] 保存接口定义...")
+    print(_step("save_interfaces", "pipeline.save_ifaces"))
     if _sl():
         _sl().log_node_start("save_interfaces", "6/9")
 
@@ -56,12 +56,12 @@ def save_interfaces_node(state: GraphState) -> GraphState:
     if debug_snapshots and memory_dir:
         save_snapshot(memory_dir, "interfaces.json", interfaces)
 
-    print(f"\n  → 保存 {count} 个接口定义到 {interfaces_dir}")
+    print(_("ifaces.saved", count=count, dir=str(interfaces_dir)))
 
     if url_issues:
-        print(f"\n  ⚠ 以下接口 URL 可能存在问题，请在审核计划时检查并修改 YAML 文件：")
+        print(_("ifaces.url_issues"))
         for issue in url_issues:
-            print(f"    - {issue['test_id']}: {issue['url']}")
+            print(_("ifaces.url_issue_item", test_id=issue['test_id'], url=issue['url']))
 
     if _sl():
         _sl().log_event("save_interfaces", count=count, dir=str(interfaces_dir),
@@ -86,7 +86,7 @@ def reload_interfaces_node(state: GraphState) -> GraphState:
         logger.warning("Interfaces directory not found: %s", interfaces_dir)
         return state
 
-    print(f"\n[重新加载] 从 YAML 文件中重新读取接口定义...")
+    print(_("ifaces.reloading"))
     if _sl():
         _sl().log_node_start("reload_interfaces", "reload")
 
@@ -106,12 +106,12 @@ def reload_interfaces_node(state: GraphState) -> GraphState:
             url_issues.append({"test_id": iface.get("test_id", "?"), "url": url})
 
     if url_issues:
-        print(f"  ⚠ 重新加载后仍有 {len(url_issues)} 个接口 URL 不在文档中：")
+        print(_("ifaces.url_still_issues", count=len(url_issues)))
         for issue in url_issues:
-            print(f"    - {issue['test_id']}: {issue['url']}")
+            print(_("ifaces.url_issue_item", test_id=issue['test_id'], url=issue['url']))
 
     state["interfaces"] = reloaded
-    print(f"  → 重新加载 {len(reloaded)} 个接口定义")
+    print(_("ifaces.reloaded", count=len(reloaded)))
 
     if _sl():
         _sl().log_event("reload_interfaces", count=len(reloaded), url_issues=len(url_issues))

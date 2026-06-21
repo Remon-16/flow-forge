@@ -14,6 +14,7 @@ from graph.state import GraphState
 from models.schema import InterfaceDef
 
 from .helpers import _settings, _sl, save_snapshot, summary_to_interfaces
+from i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +40,10 @@ def analyze_api_node(state: GraphState) -> GraphState:
 
     agent = ApiAnalyzer(_settings)
 
-    print(f"\n[2/9] 分析接口文档...")
+    print(_step("analyze_api", "pipeline.analyze_api"))
 
     if api_raw_text and not interfaces:
-        print(f"  → ApiAnalyzer 正在从原文识别并分析接口 ({_settings.llm_model})...")
+        print(_("analyze_api.parsing_raw", model=_settings.llm_model))
         if _sl():
             _sl().log_node_start("analyze_api", "2/9")
             _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
@@ -52,7 +53,7 @@ def analyze_api_node(state: GraphState) -> GraphState:
         else:
             summary = agent.analyze_raw_text(api_raw_text, Path(state.get("api_path", "")).name)
     else:
-        print(f"  → ApiAnalyzer 正在调用 LLM ({_settings.llm_model})...")
+        print(_("analyze_api.llm_calling", model=_settings.llm_model))
         if _sl():
             _sl().log_node_start("analyze_api", "2/9")
         if feedback:
@@ -60,7 +61,7 @@ def analyze_api_node(state: GraphState) -> GraphState:
         else:
             summary = agent.analyze(interfaces)
 
-    print(f"  → 生成 {len(summary)} 个接口摘要")
+    print(_("analyze_api.generated_summaries", count=len(summary)))
     if _sl():
         _sl().log_node_end("analyze_api")
 
@@ -73,20 +74,20 @@ def analyze_api_node(state: GraphState) -> GraphState:
 
     if api_raw_text and not interfaces:
         state["interfaces"] = summary_to_interfaces(summary)
-        print(f"  → 从摘要重建 {len(state['interfaces'])} 个接口定义")
+        print(_("analyze_api.rebuilt_interfaces", count=len(state["interfaces"])))
 
     critical = _has_critical_uncertainties(summary)
 
     if not critical:
-        print("  → 未发现关键信息缺失，自动通过。")
+        print(_("analyze_api.auto_pass"))
         _print_api_summary_brief(summary)
         state["api_summary_confirmed"] = True
         return state
 
-    print("\n  [接口分析] 发现以下不确定信息：")
+    print(_("analyze_api.uncertainties_title"))
     _print_uncertainties(summary)
 
-    choice = interrupt("是否需要澄清以上问题？(输入修改意见 / 输入 skip 跳过): ")
+    choice = interrupt(_("review.prompt_clarify"))
 
     if choice.strip().lower() == "skip":
         state["api_summary_confirmed"] = True
@@ -107,15 +108,15 @@ def _dispatch_rule_parser(api_path: str, parser_path: str = "") -> List[Interfac
     ext = Path(api_path).suffix.lower()
 
     if ext in (".yaml", ".yml", ".json"):
-        print(f"  → 使用 OpenApiParser 解析...")
+        print(_("analyze_api.openapi_parsing"))
         return OpenApiParser.parse(api_path)
 
     if ext in (".md", ".markdown"):
-        print(f"  → 使用 MarkdownParser 解析...")
+        print(_("analyze_api.markdown_parsing"))
         return MarkdownParser.parse(api_path)
 
     try:
-        print(f"  → 尝试 OpenApiParser...")
+        print(_("analyze_api.trying_openapi"))
         interfaces = OpenApiParser.parse(api_path)
         if interfaces:
             return interfaces
@@ -123,7 +124,7 @@ def _dispatch_rule_parser(api_path: str, parser_path: str = "") -> List[Interfac
         pass
 
     try:
-        print(f"  → 尝试 MarkdownParser...")
+        print(_("analyze_api.trying_markdown"))
         interfaces = MarkdownParser.parse(api_path)
         if interfaces:
             return interfaces
@@ -151,7 +152,7 @@ def _load_custom_parser(parser_path: str):
             f"自定义解析器 {path} 必须实现 parse(file_path: str) -> List[InterfaceDef] 函数"
         )
 
-    print(f"  → 使用自定义解析器: {path}")
+    print(_("analyze_api.custom_parser", path=path))
     return module.parse
 
 
@@ -172,16 +173,17 @@ def _has_critical_uncertainties(summary: List[Dict]) -> bool:
 
 def _print_api_summary_brief(summary: List[Dict]) -> None:
     """打印紧凑的摘要表格。Print a compact summary table."""
-    print("-" * 60)
+    sep = "-" * 60
+    print(sep)
     print(f"{'Endpoint':<30} {'Auth':<15} {'Need Token':<10}")
-    print("-" * 60)
+    print(sep)
     for item in summary:
         path = item.get("api_path", "")[:28]
         method = item.get("method", "")
         auth = item.get("auth_type", "none")
         need_token = "Yes" if item.get("need_token") else "No"
         print(f"{method} {path:<27} {auth:<15} {need_token:<10}")
-    print("-" * 60)
+    print(sep)
 
 
 def _print_uncertainties(summary: List[Dict]) -> None:
@@ -193,6 +195,6 @@ def _print_uncertainties(summary: List[Dict]) -> None:
         uncertainties = item.get("uncertainties", [])
         if uncertainties:
             path = f"{item.get('method', '?')} {item.get('api_path', '?')}"
-            print(f"\n  [{path}]")
+            print(_("analyze_api.endpoint_header", path=path))
             for u in uncertainties:
-                print(f"    ? {u}")
+                print(_("analyze_api.uncertainty_item", question=u))

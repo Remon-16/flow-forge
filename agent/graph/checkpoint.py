@@ -1,9 +1,11 @@
-"""Checkpoint manager for resumable batch generation.
+"""断点续写管理器 — 支持分批生成的断点续写。
 
-Writes two files under {memory_dir}/:
-  - checkpoint.json      — lightweight metadata (phase, settings, counts);
-                           small enough for users to hand-edit for rollback.
-  - checkpoint_data.json — bulk case data; machine read/write only.
+Checkpoint manager for resumable batch generation.
+
+在 {memory_dir}/ 下写入两个文件：
+  - checkpoint.json      — 轻量元数据（阶段、设置、计数）；
+                           足够小，用户可手动编辑以回滚。
+  - checkpoint_data.json — 批量用例数据；仅机器读写。
 """
 
 import importlib.util
@@ -28,7 +30,7 @@ _PHASES = [
 
 
 class CheckpointManager:
-    """Read / write batch-generation checkpoint files."""
+    """断点文件读写管理器。Read / write batch-generation checkpoint files."""
 
     def __init__(self, memory_dir: str) -> None:
         base = Path(memory_dir)

@@ -27,8 +27,8 @@ def analyze_requirement_node(state: GraphState) -> GraphState:
         }
         return state
 
-    print(f"\n[3/9] 分析需求文档...")
-    print(f"  → RequirementAnalyzer 正在调用 LLM ({_settings.llm_model})...")
+    print(_step("analyze_requirement", "pipeline.analyze_req"))
+    print(_("req.analyzing", model=_settings.llm_model))
     if _sl():
         _sl().log_node_start("analyze_requirement", "3/9")
 
@@ -42,7 +42,7 @@ def analyze_requirement_node(state: GraphState) -> GraphState:
 
     flows = len(result.get("business_flows", []))
     roles = len(result.get("roles", []))
-    print(f"  → 提取 {flows} 个业务流程, {roles} 个角色")
+    print(_("req.result", flows=flows, roles=roles))
     if _sl():
         _sl().log_node_end("analyze_requirement")
 

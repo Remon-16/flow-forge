@@ -1,4 +1,7 @@
-"""LangGraph global state TypedDict — passed between nodes in the main workflow."""
+"""LangGraph 全局状态 TypedDict — 在主工作流节点间传递。
+
+LangGraph global state TypedDict — passed between nodes in the main workflow.
+"""
 
 from typing import Any, Dict, List, TypedDict
 
@@ -7,18 +10,19 @@ from typing_extensions import Annotated
 
 
 class GraphState(TypedDict, total=False):
-    """State carried through the test-case-generation pipeline.
+    """用例生成流水线的全局状态，每个 key 由一个节点写入、下游节点读取。
 
+    State carried through the test-case-generation pipeline.
     Each key is written by one node and read by downstream nodes.
     """
 
-    # === Input ===
+    # === 输入 / Input ===
     requirement_paths: List[str]
     api_path: str
     output_path: str
     plan_only: bool
 
-    # === Output config ===
+    # === 输出配置 / Output config ===
     output_dir: str             # Output root directory
     cases_dir: str              # Test case output subdirectory ({output_dir}/cases)
     memory_dir: str             # Agent output subdirectory ({output_dir}/memory)
@@ -28,51 +32,51 @@ class GraphState(TypedDict, total=False):
     enable_validation: bool     # Whether to run case validation
     max_validation_retries: int # Max validation retries
 
-    # === Document parsing ===
+    # === 文档解析 / Document parsing ===
     requirement_text: str
     interfaces: List[Dict[str, Any]]
     api_raw_text: str          # Raw text of API doc (for --parse-mode raw)
     parse_mode: str            # "raw" | "rule" | "llm"
     parser_path: str           # Custom parser script path
 
-    # === Requirement analysis ===
+    # === 需求分析 / Requirement analysis ===
     requirement_analysis: Dict[str, Any]
 
-    # === Plan generation ===
+    # === 计划生成 / Plan generation ===
     plan_md: str
     plan_md_path: str
-    plan_parsed: Any  # Structured TestPlan from parse_plan_node
-    user_guidance: str  # User guidance from --prompt CLI flag
+    plan_parsed: Any  # 从 plan.md 解析的结构化计划 / Structured TestPlan
+    user_guidance: str  # 用户通过 --prompt 传入的指导 / User guidance from --prompt
 
-    # === API Analysis ===
+    # === 接口分析 / API Analysis ===
     api_summary: List[Dict[str, Any]]
     api_summary_feedback: str
     api_summary_confirmed: bool
 
-    # === Interface URL validation ===
-    url_validation_errors: List[Dict[str, Any]]  # Interfaces that failed URL validation
+    # === 接口 URL 校验 / Interface URL validation ===
+    url_validation_errors: List[Dict[str, Any]]
 
-    # === Human review ===
+    # === 人工审核 / Human review ===
     plan_confirmed: bool
     plan_feedback: str
     plan_feedback_type: str          # "text" | "annotations"
-    plan_annotations: List[Dict[str, Any]]  # parsed plan_comments.json
+    plan_annotations: List[Dict[str, Any]]  # 解析后的 plan_comments.json
 
-    # === Case generation ===
+    # === 用例生成 / Case generation ===
     single_cases: List[Dict[str, Any]]
     biz_flows: List[Dict[str, Any]]
 
-    # === Batch tracking ===
-    batch_state: Dict[str, Any]          # Batch generation progress
-    validation_failures: List[Dict]      # Cases that failed validation
+    # === 批次追踪 / Batch tracking ===
+    batch_state: Dict[str, Any]          # 批次生成进度 / Batch generation progress
+    validation_failures: List[Dict]      # 校验失败的用例 / Cases that failed validation
 
-    # === Resume & incremental ===
-    resume: bool                         # Skip to batch generation from existing output_dir
-    resume_overwrite: bool               # Overwrite existing output when resuming
-    reference_dir: str                   # Reference directory for incremental updates
+    # === 断点续写 & 增量 / Resume & incremental ===
+    resume: bool                         # 从已有 output_dir 跳到批次生成
+    resume_overwrite: bool               # 续写时覆盖已有输出
+    reference_dir: str                   # 增量更新参考目录
 
-    # === Shared messages (ReAct agents use add_messages reducer) ===
+    # === 消息 / Messages ===
     messages: Annotated[List, add_messages]
 
-    # === Errors ===
+    # === 错误 / Errors ===
     errors: List[str]

@@ -26,13 +26,12 @@ def human_confirm_node(state: GraphState) -> GraphState:
     plan_md = state.get("plan_md", "")
     feedback = state.get("plan_feedback", "")
 
-    print(f"\n[5/9] 审核测试计划...")
+    print(_step("review_plan", "pipeline.review_plan"))
     print("\n" + "=" * 60)
     if feedback:
-        print("  [修改后计划] 已根据您的反馈修改测试计划：")
-        print(f"  修改意见: {feedback}")
+        print("  " + _("review.revised_from_feedback", feedback=feedback))
     else:
-        print("  [新生成的测试计划]")
+        print("  " + _("review.revised_new"))
     print("=" * 60)
     preview = plan_md[:500] + ("..." if len(plan_md) > 500 else "")
     print(preview)
@@ -40,7 +39,7 @@ def human_confirm_node(state: GraphState) -> GraphState:
     if _sl():
         _sl().log_node_start("human_confirm", "5/9")
 
-    decision = interrupt("请审核测试计划")
+    decision = interrupt(_("review.interrupt_title"))
 
     if decision == "approved":
         state["plan_confirmed"] = True
@@ -99,7 +98,7 @@ def revise_plan_node(state: GraphState) -> GraphState:
             requirement_analysis=str(analysis),
             api_summary=str(api_summary),
         )
-        print(f"\n  → PlanAnnotationReviser 正在根据 {len(annotations)} 条批注修改计划...")
+        print(_("review.revising_annotation_progress", count=len(annotations)))
     else:
         from prompts.plan_reviser import (
             PLAN_REVISER_SYSTEM as system,
@@ -112,7 +111,7 @@ def revise_plan_node(state: GraphState) -> GraphState:
             requirement_analysis=str(analysis),
             api_summary=str(api_summary),
         )
-        print(f"\n  → PlanReviser 正在调用 LLM ({_settings.llm_model})...")
+        print(_("review.revising_text_progress", model=_settings.llm_model))
 
     revised = agent.call_llm(prompt, system)
     state["plan_md"] = revised

@@ -27,32 +27,29 @@ def write_output_node(state: GraphState) -> GraphState:
     output_path = state.get("output_path", "test_cases.xlsx")
     failures = state.get("validation_failures", [])
 
-    print(f"\n[9/9] 写入输出...")
+    print(_step("write_output", "pipeline.write_output"))
     if _sl():
         _sl().log_node_start("write_output", "9/9")
 
     if output_format in ("excel", "both"):
         try:
             ExcelWriter.yaml_to_excel(cases_dir, output_path)
-            print(f"  → Excel 已写入 {output_path}")
+            print(_("output.excel_written", path=output_path))
             if _sl():
                 excel_copy = _sl().save_excel(output_path)
                 if excel_copy:
-                    print(f"  → 已备份至 {excel_copy}")
+                    print(_("output.excel_backed_up", path=excel_copy))
         except Exception as e:
             msg = f"Failed to write Excel: {e}"
             logger.error(msg)
             state["errors"].append(msg)
-            print(f"  ✗ {msg}")
+            print(_("batch.error", msg=msg))
 
     if output_format in ("yaml", "both"):
-        print(f"  → YAML 用例已保存到 {cases_dir}")
-        print(f"     interfaces/: {_count_yaml(cases_dir, 'interfaces')} 个")
-        print(f"     single_cases/: {_count_yaml(cases_dir, 'single_cases')} 个")
-        print(f"     biz_flows/: {_count_yaml(cases_dir, 'biz_flows')} 个")
+        print(_("output.yaml_saved", dir=cases_dir, iface_count=_count_yaml(cases_dir, "interfaces"), single_count=_count_yaml(cases_dir, "single_cases"), biz_count=_count_yaml(cases_dir, "biz_flows")))
 
     if failures:
-        print(f"  → 校验失败: {len(failures)} 个 (详见 {cases_dir}/failures.yaml)")
+        print(_("output.validation_failed", count=len(failures), dir=cases_dir))
 
     if _sl():
         _sl().log_node_end("write_output")
@@ -72,7 +69,7 @@ def write_excel_node(state: GraphState) -> GraphState:
     single = state.get("single_cases", [])
     biz = state.get("biz_flows", [])
 
-    print(f"\n[8/8] 写入 Excel...")
+    print(_("output.excel_writing"))
     if _sl():
         _sl().log_node_start("write_excel", "8/8")
 
@@ -80,18 +77,18 @@ def write_excel_node(state: GraphState) -> GraphState:
 
     try:
         ExcelWriter.write(interfaces, single, biz, output)
-        print(f"  → 写入 {output}")
+        print(_("output.excel_written_to", path=output))
         if _sl():
             excel_copy = _sl().save_excel(output)
             if excel_copy:
-                print(f"  → 已备份至 {excel_copy}")
+                print(_("output.excel_backed_up", path=excel_copy))
         sheet_count = 2 + len(biz)
-        print(f"  → 共 {sheet_count} 个 Sheet (接口定义 + {len(single)} 条单接口用例 + {len(biz)} 条业务链路)")
+        print(_("output.sheet_count", sheets=sheet_count, single=len(single), biz=len(biz)))
     except Exception as e:
         msg = f"Failed to write Excel: {e}"
         logger.error(msg)
         state["errors"].append(msg)
-        print(f"  ✗ {msg}")
+        print(_("batch.error", msg=msg))
 
     if _sl():
         _sl().log_node_end("write_excel")

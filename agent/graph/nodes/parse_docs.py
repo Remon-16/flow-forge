@@ -27,7 +27,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
     """
     state.setdefault("errors", [])
 
-    print("\n[1/9] 读取文档...")
+    print(_step("parse_docs", "pipeline.reading_docs"))
 
     # --- Requirements ---
     requirement_text_parts: List[str] = []
@@ -39,27 +39,27 @@ def parse_docs_node(state: GraphState) -> GraphState:
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
                     requirement_text_parts.append(content)
-                print(f"  → 读取 {path} ({size_str})")
+                print(_("parse_docs.read_file", path=path, size=size_str))
                 if _sl():
                     _sl().log_file_read(path, len(content))
             elif ext == ".pdf":
                 content = PdfParser.parse(path)
                 requirement_text_parts.append(content)
-                print(f"  → 解析 {path} ({size_str}, PDF)")
+                print(_("parse_docs.pdf_parsing", path=path, size=size_str))
                 if _sl():
                     _sl().log_file_read(path, len(content))
             else:
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
                     requirement_text_parts.append(content)
-                print(f"  → 读取 {path} ({size_str})")
+                print(_("parse_docs.read_file", path=path, size=size_str))
                 if _sl():
                     _sl().log_file_read(path, len(content))
         except Exception as e:
             msg = f"Failed to read requirement file '{path}': {e}"
             logger.error(msg)
             state["errors"].append(msg)
-            print(f"  ✗ {msg}")
+            print(_("batch.error", msg=msg))
 
     state["requirement_text"] = "\n\n".join(requirement_text_parts)
 
@@ -76,7 +76,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
     size_str = fmt_size(api_path)
     ext = Path(api_path).suffix.lower()
 
-    print(f"  → 解析模式: {parse_mode}")
+    print(_("parse_docs.parse_mode", mode=parse_mode))
 
     if parse_mode == "raw":
         raw_text = extract_text(api_path)
@@ -85,8 +85,8 @@ def parse_docs_node(state: GraphState) -> GraphState:
         state["api_raw_text"] = raw_text
         state["interfaces"] = []
         state["interface_extraction_method"] = "raw"
-        print(f"  → 读取 API 文档原文 ({size_str}, {len(raw_text)} 字符)")
-        print(f"  → 接口识别将在下一步由 ApiAnalyzer 完成")
+        print(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
+        print(_("parse_docs.api_identify_next"))
 
     elif parse_mode == "rule":
         from .analyze_api import _dispatch_rule_parser
@@ -101,14 +101,14 @@ def parse_docs_node(state: GraphState) -> GraphState:
             )
         state["interfaces"] = [iface_to_dict(i) for i in interfaces]
         state["interface_extraction_method"] = "rule"
-        print(f"  → 规则解析完成 ({len(interfaces)} 个接口)")
+        print(_("parse_docs.rule_done", count=len(interfaces)))
 
     elif parse_mode == "llm":
         raw_text = extract_text(api_path)
         if not raw_text.strip():
             raise Exception(f"API 文档 '{api_path}' 内容为空，无法解析。")
-        print(f"  → 读取 API 文档原文 ({size_str}, {len(raw_text)} 字符)")
-        print(f"  → DocParserAgent 正在调用 LLM ({_settings.llm_model}) 提取接口...")
+        print(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
+        print(_("parse_docs.llm_extracting", model=_settings.llm_model))
         if _sl():
             _sl().log_event("llm_call", agent="DocParserAgent", model=_settings.llm_model,
                             text_length=len(raw_text))
@@ -129,7 +129,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
         state["interfaces_from_llm"] = True
         state["api_raw_text"] = raw_text
         state["interface_extraction_method"] = "llm"
-        print(f"  → LLM 成功提取 {len(interfaces)} 个接口")
+        print(_("parse_docs.llm_extracted", count=len(interfaces)))
 
     else:
         raise Exception(f"未知的解析模式: {parse_mode}。支持的模式: raw (默认), rule, llm")

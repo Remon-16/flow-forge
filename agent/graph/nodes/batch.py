@@ -60,8 +60,8 @@ def batch_controller_node(state: GraphState) -> GraphState:
         state["plan_parsed"] = plan
         state["interfaces"] = interfaces_raw
 
-    print(f"\n[8/10] 测试用例生成（骨架 + 插件流水线）...")
-    print(f"  → batch_size={batch_size}")
+    print(_step("case_generation", "pipeline.case_generation"))
+    print(_("batch.batch_size", size=batch_size))
     if _sl():
         _sl().log_node_start("batch_controller", "8/10")
 
@@ -73,7 +73,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
     ] if _settings.enable_plugins else []
     plugins = load_all_plugins(_settings, _knowledge, user_module_paths, user_guidance)
     plugin_names = [p.declaration.plugin_name for p in plugins]
-    print(f"  → 已加载插件: {plugin_names}")
+    print(_("batch.plugins_loaded", names=plugin_names))
 
     controller = BatchController(_settings)
     controller._batch_size = batch_size
@@ -107,7 +107,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
         msg = f"BatchController failed: {e}"
         logger.exception(msg)
         state["errors"].append(msg)
-        print(f"  ✗ {msg}")
+        print(_("batch.error", msg=msg))
         state["single_cases"] = []
         state["biz_flows"] = []
         state["validation_failures"] = []
@@ -121,9 +121,9 @@ def batch_controller_node(state: GraphState) -> GraphState:
     state["biz_flows"] = biz_flows
     state["validation_failures"] = failures
 
-    print(f"  → 生成 {len(single_cases)} 条单接口用例, {len(biz_flows)} 条业务链路")
+    print(_("batch.result", single=len(single_cases), biz=len(biz_flows)))
     if failures:
-        print(f"  → {len(failures)} 个用例生成失败 (详见 {cases_dir}/failures.yaml)")
+        print(_("batch.failures_note", count=len(failures), dir=cases_dir))
 
     if _sl():
         _sl().log_node_end("batch_controller")

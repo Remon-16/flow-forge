@@ -21,8 +21,8 @@ def parse_plan_node(state: GraphState) -> GraphState:
     state.setdefault("errors", [])
     plan_md = state.get("plan_md", "")
 
-    print(f"\n[6/9] 解析测试计划...")
-    print(f"  → PlanParser 正在调用 LLM ({_settings.llm_model})...")
+    print(_step("parse_plan", "pipeline.parse_plan"))
+    print(_("parse_plan.parsing", model=_settings.llm_model))
     if _sl():
         _sl().log_node_start("parse_plan", "6/9")
 
@@ -42,7 +42,7 @@ def parse_plan_node(state: GraphState) -> GraphState:
 
     api_count = len(plan.api_definitions)
     tp_count = sum(len(v) for v in plan.single_test_points.values())
-    print(f"  → 解析完成 ({api_count} 个接口定义, {tp_count} 个测试点)")
+    print(_("parse_plan.parsed", api_count=api_count, tp_count=tp_count))
     if _sl():
         _sl().log_node_end("parse_plan")
 

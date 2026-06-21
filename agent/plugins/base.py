@@ -1,9 +1,11 @@
-"""Abstract base class for custom case-attribute generator plugins.
+"""自定义用例属性生成器插件的抽象基类。
 
-Plugins run AFTER assertion generation (Step 3 of the batch pipeline)
-and before final YAML/Excel output.  They can add arbitrary attributes
-to test cases — most commonly ``preprocessors`` and ``postprocessors``
-lists.
+Abstract base class for custom case-attribute generator plugins.
+
+插件在断言生成之后、YAML/Excel 输出之前运行，可为用例添加任意属性
+（最常见的如 ``preprocessors`` 和 ``postprocessors`` 列表）。
+Plugins run after assertion generation and before final output,
+adding arbitrary attributes to test cases.
 """
 
 from abc import ABC, abstractmethod
@@ -13,7 +15,7 @@ from typing import Any, Dict, List
 
 @dataclass
 class PluginDeclaration:
-    """Metadata describing what a plugin does and where it applies."""
+    """插件元数据 — 描述插件功能和适用范围。Metadata describing what a plugin does and where it applies."""
 
     plugin_name: str
     """Human-readable name for logging and debugging."""
@@ -41,21 +43,17 @@ class PluginDeclaration:
 
 
 class CaseAttributeGenerator(ABC):
-    """Base class for plugins that enrich generated test cases.
+    """用例属性生成器基类 — 为已生成的测试用例补充属性。
 
-    Typical use cases:
+    Base class for plugins that enrich generated test cases.
 
-    - A **single-case pre-processor agent** analyses each case's
-      ``request_body`` / ``request_head`` and decides whether to add
-      HMAC signing, parameter encryption, etc. — filling in the
-      ``preprocessors`` field.
+    典型场景 / Typical use cases:
+    - 单接口预处理器：分析 request_body/request_head，决定是否添加
+      HMAC 签名、参数加密等，写入 preprocessors 字段。
+    - 业务链路后处理器：分析流程执行链，决定是否添加 SQL 清理或
+      Redis 刷新步骤，写入 postprocessors 字段。
 
-    - A **biz-flow post-processor agent** analyses the flow execution
-      chain and decides whether to add SQL cleanup or Redis refresh
-      steps — filling in the ``postprocessors`` field.
-
-    Users write a subclass, place it in a module, and register it via
-    the ``PLUGIN_MODULES`` env setting (comma-separated module paths).
+    用户编写子类并通过 ``PLUGIN_MODULES`` 环境变量注册。
     """
 
     @property
