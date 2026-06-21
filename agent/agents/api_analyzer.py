@@ -26,7 +26,9 @@ API_ANALYSIS_SYSTEM = """你是一个专业的接口文档分析专家。分析�
 - 如果接口文档中缺少描述，请推断并在 uncertainties 中标注
 - 认证方式的推断：如果接口有 Authorization 头参数或 security 定义，标记 need_token=true
 - 对不确定的推断，务必在 uncertainties 中列出具体问题
-- 返回一个 JSON 数组，每个元素是一个接口的摘要对象"""
+- 返回一个 JSON 对象，包含 "summaries" 字段，其值为接口摘要数组
+- 格式示例：{"summaries": [{"api_path": "/api/xxx", "method": "POST", ...}]}
+- 如果没有任何接口，返回 {"summaries": []}"""
 
 API_ANALYSIS_USER = """请分析以下接口定义，生成接口摘要：
 
@@ -58,8 +60,9 @@ RAW_API_ANALYSIS_SYSTEM = """你是一个专业的接口文档分析专家。你
 - 如果文档原文中缺少描述，请根据 URL 和方法合理推断，并在 uncertainties 中标注
 - 认证方式的推断：如果接口有 Authorization 头参数或 security 定义，标记 need_token=true
 - 对不确定的推断，务必在 uncertainties 中列出具体问题
-- 返回一个 JSON 数组，每个元素是一个接口的摘要对象
-- 如果文档中完全没有 API 接口定义，返回空数组 []"""
+- 返回一个 JSON 对象，包含 "summaries" 字段，其值为接口摘要数组
+- 格式示例：{"summaries": [{"api_path": "/api/xxx", "method": "GET", ...}]}
+- 如果文档中完全没有 API 接口定义，返回 {"summaries": []}"""
 
 RAW_API_ANALYSIS_USER = """请分析以下 API 文档原文，先识别其中包含的所有接口，再对每个接口生成摘要。
 
@@ -69,7 +72,7 @@ RAW_API_ANALYSIS_USER = """请分析以下 API 文档原文，先识别其中包
 ## 文档原文
 {raw_text}
 
-请返回 JSON 数组格式的接口摘要列表。"""
+请返回 JSON 对象格式的接口摘要列表，格式为 {{"summaries": [...]}}。"""
 
 
 class ApiAnalyzer(BaseAgent):
@@ -198,14 +201,15 @@ class ApiAnalyzer(BaseAgent):
             "你是一个专业的接口文档分析专家。根据用户的反馈意见修改接口摘要。"
             "确保修改后的摘要仍然包含完整的字段："
             "api_path, method, description, need_token, auth_type, "
-            "request_summary, response_summary, notes, uncertainties"
+            "request_summary, response_summary, notes, uncertainties。"
+            "返回一个 JSON 对象，包含 \"summaries\" 字段，其值为修改后的摘要列表。"
         )
 
         revise_template = (
             "## 当前接口摘要\n```json\n{{current_summary}}\n```\n\n"
             "## 接口定义\n```json\n{{interfaces}}\n```\n\n"
             "## 用户反馈\n{{feedback}}\n\n"
-            "请根据用户反馈修改接口摘要，返回完整的修改后摘要列表。"
+            "请根据用户反馈修改接口摘要，返回 JSON 对象格式：{\"summaries\": [...]}"
         )
 
         prompt = render_prompt(
@@ -222,12 +226,14 @@ class ApiAnalyzer(BaseAgent):
     @staticmethod
     def _normalize_result(result: Any) -> List[Dict[str, Any]]:
         """Normalize LLM JSON response to a list of interface summary dicts."""
+        if isinstance(result, list):
+            return result
         if isinstance(result, dict):
+            if "summaries" in result and isinstance(result["summaries"], list):
+                return result["summaries"]
             for v in result.values():
                 if isinstance(v, list):
                     return v
             return [result]
-        if isinstance(result, list):
-            return result
         logger.warning("API analysis returned unrecognized type: %s", type(result))
         return []

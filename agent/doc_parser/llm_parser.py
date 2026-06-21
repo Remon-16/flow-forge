@@ -71,7 +71,7 @@ DOC_PARSER_USER = """请从以下 API 文档内容中提取所有接口定义。
 ## 提示
 - 文件类型提示: {file_type_hint}
 - 请仔细阅读全文，不要遗漏任何接口
-- 如果文档内容看起来不包含 API 定义，请返回空对象 {"interfaces": []}
+- 如果文档内容看起来不包含 API 定义，请返回空对象 {{"interfaces": []}}
 
 请返回 JSON 对象，其中 "interfaces" 字段包含接口定义列表。"""
 

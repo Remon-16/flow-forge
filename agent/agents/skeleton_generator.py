@@ -204,7 +204,7 @@ class SingleSkeletonGenerator(BaseAgent):
 
         logger.info("Correcting URLs for %d cases...", len(bad_cases))
         result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)
-        corrected = result.get("single_skeletons") or result.get("cases") or []
+        corrected = result.get("cases") or result.get("single_skeletons") or []
         if not corrected:
             if isinstance(result, list):
                 corrected = result
@@ -340,7 +340,7 @@ class BizSkeletonGenerator(BaseAgent):
 
         logger.info("Correcting URLs for %d biz flow cases...", len(bad_cases))
         result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)
-        corrected = result.get("biz_skeletons") or result.get("biz_flows") or []
+        corrected = result.get("cases") or result.get("biz_skeletons") or result.get("biz_flows") or []
         if not corrected:
             if isinstance(result, list):
                 corrected = result

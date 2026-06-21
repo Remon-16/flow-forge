@@ -45,7 +45,9 @@ api_analyzer:
     - 如果接口文档中缺少描述，请推断并在 uncertainties 中标注
     - 认证方式的推断：如果接口有 Authorization 头参数或 security 定义，标记 need_token=true
     - 对不确定的推断，务必在 uncertainties 中列出具体问题
-    - 返回一个 JSON 数组，每个元素是一个接口的摘要对象
+    - 返回一个 JSON 对象，包含 "summaries" 字段，其值为接口摘要数组
+    - 格式示例：{"summaries": [{"api_path": "/api/xxx", "method": "POST", ...}]}
+    - 如果没有任何接口，返回 {"summaries": []}
   user_template: |
     请分析以下接口定义，生成接口摘要：
 
