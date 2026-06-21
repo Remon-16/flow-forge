@@ -6,7 +6,7 @@ class ScriptType(str, Enum):
 
 
 _EXECUTOR_REGISTRY = {
-    ScriptType.API_TEST: "executor.api_test.ApiTestExecutor",
+    ScriptType.API_TEST: "executor.single_case.SingleCaseExecutor",
 }
 
 _BIZ_EXECUTOR_CLASS = "executor.biz_flow.BizFlowExecutor"

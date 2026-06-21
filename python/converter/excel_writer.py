@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,24 @@ import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 logger = logging.getLogger(__name__)
+
+
+def _get_font_name() -> str:
+    """返回配置的 Excel 字体名。优先读取环境变量 EXCEL_FONT，其次尝试 config_manager，默认微软雅黑。
+
+    Return the configured Excel font name. Checks EXCEL_FONT env var first,
+    then config_manager if initialized, falling back to Microsoft YaHei.
+    """
+    env_val = os.environ.get("EXCEL_FONT", "").strip()
+    if env_val:
+        return env_val
+    try:
+        from config.config_manager import get, is_initialized
+        if is_initialized():
+            return get("excel_font", "微软雅黑")
+    except (ImportError, RuntimeError):
+        pass
+    return "微软雅黑"
 
 _API_COLUMNS = [
     "TestID", "APIName", "AppName", "Method", "URL",
@@ -37,7 +56,6 @@ _BIZ_COLUMNS = [
 ]
 
 _HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-_HEADER_FONT = Font(name="微软雅黑", bold=True, size=11, color="FFFFFF")
 _THIN_BORDER = Border(
     left=Side(style="thin"),
     right=Side(style="thin"),
@@ -54,9 +72,10 @@ def _safe_sheet_name(name: str) -> str:
 
 
 def _write_headers(ws: Any, columns: list[str]) -> None:
+    header_font = Font(name=_get_font_name(), bold=True, size=11, color="FFFFFF")
     for col_idx, header in enumerate(columns, start=1):
         cell = ws.cell(row=1, column=col_idx, value=header)
-        cell.font = _HEADER_FONT
+        cell.font = header_font
         cell.fill = _HEADER_FILL
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = _THIN_BORDER
@@ -67,7 +86,7 @@ def _write_row(ws: Any, row_idx: int, values: list[object]) -> None:
         cell = ws.cell(row=row_idx, column=col_idx, value=value)
         cell.alignment = Alignment(vertical="top", wrap_text=True)
         cell.border = _THIN_BORDER
-        cell.font = Font(name="微软雅黑", size=10)
+        cell.font = Font(name=_get_font_name(), size=10)
 
 
 def _get(obj: dict[str, object] | Any, key: str, default: object = "") -> object:

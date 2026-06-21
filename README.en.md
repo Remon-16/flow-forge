@@ -80,6 +80,7 @@ flow-forge/
 │   └── utils/                    # Utility modules (token_counter.py, etc.)
 ├── python/                       # API Test Executor + Case Format Converter
 │   ├── converter/                # Excel ↔ YAML bidirectional conversion tool
+│   ├── i18n/                     # Internationalization (Chinese / English)
 │   └── processors/               # Pre/Post processor plugins (optional)
 └── studio/                       # Flow Forge Studio desktop app (case editor, plan annotator)
 ```

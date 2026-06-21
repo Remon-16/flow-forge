@@ -80,6 +80,7 @@ flow-forge/
 │   └── utils/                    # 工具模块（token_counter.py 等）
 ├── python/                       # 接口测试执行器 + 用例格式转换器
 │   ├── converter/                # Excel ↔ YAML 用例格式转换工具
+│   ├── i18n/                     # 国际化支持（中文 / 英文）
 │   └── processors/               # 前置/后置处理器插件（可选）
 └── studio/                       # Flow Forge Studio 桌面应用（用例编辑、计划批注）
 ```

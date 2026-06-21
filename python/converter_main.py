@@ -20,6 +20,7 @@ import logging
 import sys
 
 from converter.converter import excel_to_yaml, yaml_to_excel
+from i18n import _
 
 logger = logging.getLogger("converter")
 
@@ -40,12 +41,11 @@ def _cmd_excel2yaml(args: argparse.Namespace) -> int:
     if total == 0:
         logger.warning("No test cases found in the input Excel file.")
         return 1
-    print(
-        f"Converted {counts['interfaces']} interfaces, "
-        f"{counts['single_cases']} single cases, "
-        f"{counts['biz_flows']} biz flows "
-        f"→ {args.output}/"
-    )
+    print(_("cli.converted_count",
+             interfaces=counts['interfaces'],
+             single=counts['single_cases'],
+             biz=counts['biz_flows'],
+             output=args.output))
     return 0
 
 
@@ -56,7 +56,7 @@ def _cmd_yaml2excel(args: argparse.Namespace) -> int:
         single_cases_dir=args.single_cases,
         biz_flows_dir=args.biz_flows,
     )
-    print(f"Excel written to: {out}")
+    print(_("cli.excel_written", path=out))
     return 0
 
 
@@ -71,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
     p_e2y = sub.add_parser("excel2yaml", help="Convert Excel (.xlsx) → YAML directory")
     p_e2y.add_argument("--input", "-i", required=True, help="Input .xlsx file path")
     p_e2y.add_argument("--output", "-o", required=True, help="Output directory for YAML files")
+    p_e2y.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
 
     # yaml2excel
     p_y2e = sub.add_parser("yaml2excel", help="Convert YAML directories → Excel (.xlsx)")
@@ -78,9 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     p_y2e.add_argument("--single-cases", help="Directory containing single case YAML files")
     p_y2e.add_argument("--biz-flows", help="Directory containing biz flow YAML files")
     p_y2e.add_argument("--output", "-o", required=True, help="Output .xlsx file path")
-
-    # Common option
-    parser.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
+    p_y2e.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
 
     args = parser.parse_args(argv)
     _setup_logging(args.verbose)

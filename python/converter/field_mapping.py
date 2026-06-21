@@ -65,22 +65,3 @@ def convert_row_to_snake(
     return result
 
 
-def convert_row_to_pascal(
-    row: dict[str, object], *, serialize_json: bool = True
-) -> dict[str, object]:
-    """Convert a snake_case dict to an Excel row (PascalCase keys).
-
-    If *serialize_json* is True, JSON column values are serialized to strings.
-    """
-    import json
-
-    result: dict[str, object] = {}
-    for snake_key, value in row.items():
-        pascal_key = snake_to_pascal(snake_key)
-        if value is None:
-            continue
-        if serialize_json and snake_key in JSON_COLUMNS and not isinstance(value, str):
-            result[pascal_key] = json.dumps(value, ensure_ascii=False)
-        else:
-            result[pascal_key] = value
-    return result

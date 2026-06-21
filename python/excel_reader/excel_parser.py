@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 
 import openpyxl
 
+from converter.field_mapping import pascal_to_snake as _pascal_to_snake
+
 
 logger = logging.getLogger(__name__)
 
@@ -247,16 +249,7 @@ class ExcelParser:
 
     @staticmethod
     def _normalize_key(field: str) -> str:
-        mapping = {
-            "APIName": "api_name",
-            "AppName": "app_name",
-            "Method": "method",
-            "URL": "url",
-            "StatusCode": "status_code",
-            "RequestHead": "request_head",
-            "RequestBody": "request_body",
-        }
-        return mapping.get(field, field.lower())
+        return _pascal_to_snake(field)
 
     @staticmethod
     def excel_str_to_dict(s: str) -> Dict[str, Any]:

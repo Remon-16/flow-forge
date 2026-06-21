@@ -13,7 +13,7 @@ class YamlParser:
     """Parse YAML test case files into the same dict structure as ExcelParser.
 
     Returns ``{"single_cases": [...], "biz_flows": [...]}`` for direct
-    consumption by ApiTestExecutor / BizFlowExecutor.
+    consumption by SingleCaseExecutor / BizFlowExecutor.
     """
 
     @staticmethod

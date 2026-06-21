@@ -4,9 +4,7 @@ import importlib
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, Type
-
-from processors.base import PreProcessor, PostProcessor, (
+from processors.base import (
     _PRE_PROCESSOR_REGISTRY,
     _POST_PROCESSOR_REGISTRY,
 )
@@ -65,9 +63,3 @@ def discover_processors(processors_dir: Optional[str] = None) -> None:
     )
 
 
-def get_pre_processor(name: str) -> Optional[Type[PreProcessor]]:
-    return _PRE_PROCESSOR_REGISTRY.get(name)
-
-
-def get_post_processor(name: str) -> Optional[Type[PostProcessor]]:
-    return _POST_PROCESSOR_REGISTRY.get(name)

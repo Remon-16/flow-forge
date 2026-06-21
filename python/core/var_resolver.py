@@ -31,6 +31,3 @@ def has_placeholders(text: str) -> bool:
     return bool(_VAR_PATTERN.search(text))
 
 
-def extract_placeholder_names(text: str) -> list:
-    """Return a deduplicated list of variable names referenced via #{...}."""
-    return list(dict.fromkeys(_VAR_PATTERN.findall(text)))

@@ -6,9 +6,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from assertion.engine import AssertionEngine
 from auth.login_manager import LoginManager
-from config.config_manager import get_app, get_all
+from config.config_manager import get_app
 from core.path_resolver import resolve_path, _Missing
 from core.var_resolver import has_placeholders
 from executor.base import BaseExecutor
@@ -16,12 +15,11 @@ from processors.base import ProcessorError
 
 logger = logging.getLogger(__name__)
 
-_TIMEOUT = 30
 _VAR_RE = re.compile(r"#\{([^}]+)\}")
 
 
 class BizFlowExecutor(BaseExecutor):
-    """Executes multi-step business flow test cases.
+    """业务链路用例执行器。Executes multi-step business flow test cases.
 
     Each business flow (one Excel sheet) runs in its own thread.
     Steps within a flow execute sequentially, with ThreadLocal step data
@@ -102,15 +100,33 @@ class BizFlowExecutor(BaseExecutor):
                 error=f"URL not found in API documentation: {path}",
             )
 
+        try:
+            headers, body, url, base_url = self._prepare_step_request(step, app_name, path)
+        except TransResolutionError as e:
+            return self._build_step_result(
+                step, step_id, "", path, {}, {},
+                passed=False,
+                error=f"Trans resolution error: {e}",
+            )
+
+        result = self._build_step_result(step, step_id, base_url, path, headers, body)
+
+        return self._execute_step_request(result, step, step_id, url, headers, body, app_name, method)
+
+    def _prepare_step_request(
+        self, step: Dict[str, Any], app_name: str, path: str
+    ):
+        """Extract headers, body, resolve trans vars, and build URL.
+
+        Returns ``(headers, body, url, base_url)``.
+        """
         headers = dict(step.get("request_head") or {})
         body = dict(step.get("request_body") or {})
-        expected_status = step.get("status_code")
         trans = step.get("trans", "")
 
         app_config = get_app(app_name) if app_name else {}
         base_url = app_config.get("baseURL", "") if app_config else {}
         url = self._build_url(base_url, path)
-
         url, body = self._resolve_url_placeholders(url, body)
 
         if trans:
@@ -120,83 +136,67 @@ class BizFlowExecutor(BaseExecutor):
                 headers = self._resolve_vars(headers, trans_mapping)
                 url = self._resolve_vars(url, trans_mapping)
             except Exception as e:
-                return self._build_step_result(step, step_id, base_url, path,
-                                               headers, body, passed=False,
-                                               error=f"Trans resolution error: {e}")
+                # Signal error via a sentinel so caller can build error result
+                raise TransResolutionError(str(e)) from e
 
-        # 仅当 headTokenName header 中仍有未解析的 #{} 时，才调用 LoginManager
-        # Trans 已处理的 #{} 不会被 LoginManager 覆写
+        return headers, body, url, base_url
+
+    def _execute_step_request(
+        self,
+        result: Dict[str, Any],
+        step: Dict[str, Any],
+        step_id: str,
+        url: str,
+        headers: Dict,
+        body: Dict,
+        app_name: str,
+        method: str,
+    ) -> Dict[str, Any]:
+        """Token resolution → preprocessors → HTTP request → assertions → postprocessors."""
+
+        # ---- Token / Login (conditional — only if headTokenName header still has unresolved #{}) ----
+        app_config = get_app(app_name) if app_name else {}
         head_token_name = app_config.get("headTokenName") if app_config else None
         if head_token_name and head_token_name in headers and has_placeholders(headers[head_token_name]):
             resolved_headers, token_error = LoginManager.resolve_token(app_config, headers)
             if token_error:
-                return self._build_step_result(step, step_id, base_url, path,
-                                               headers, body, passed=False, error=token_error)
+                result["error"] = token_error
+                result["passed"] = False
+                return result
             headers = resolved_headers
+            result["request_headers"] = dict(headers)
 
         # ---- PreProcessors ----
         preprocessors = step.get("preprocessors") or []
         postprocessors = step.get("postprocessors") or []
-        global_config = None
-
-        if preprocessors or postprocessors:
-            from processors.loader import discover_processors
-            discover_processors()
-            global_config = get_all()
+        global_config = self._load_processors(preprocessors, postprocessors)
 
         if preprocessors:
-            from processors.runner import run_preprocessors
             try:
-                headers, body, preprocessor_results = run_preprocessors(
-                    {"request_head": headers, "request_body": body, "preprocessors": preprocessors},
-                    global_config,
-                )
-                result = self._build_step_result(step, step_id, base_url, path, headers, body)
+                headers, body, preprocessor_results = self._run_preprocessors(
+                    preprocessors, headers, body, global_config)
+                result["request_headers"] = dict(headers)
+                result["request_body"] = dict(body)
                 result["preprocessor_results"] = preprocessor_results
             except ProcessorError as e:
-                return self._build_step_result(
-                    step, step_id, base_url, path, headers, body,
-                    passed=False, error=f"[{e.processor_name}] {e}",
-                )
-        else:
-            result = self._build_step_result(step, step_id, base_url, path, headers, body)
+                result["error"] = f"[{e.processor_name}] {e}"
+                result["passed"] = False
+                return result
 
+        # ---- HTTP request + Assertions ----
         try:
             response = self._send_request(method, url, headers, body)
             result["response_status"] = response.status_code
             result["response_body"] = self._extract_body(response)
 
-            assertions = AssertionEngine.run(
-                response,
-                step.get("assert_dict", {}),
-                step.get("assert_rules", []),
-            )
-
-            if expected_status is not None:
-                status_match = int(expected_status) == response.status_code
-                if not any(a["field"] == "status_code" for a in assertions):
-                    assertions.insert(
-                        0,
-                        {
-                            "field": "status_code",
-                            "expected": int(expected_status),
-                            "actual": response.status_code,
-                            "passed": status_match,
-                        },
-                    )
-
+            assertions = self._run_assertions(response, step)
             result["assertions"] = assertions
 
             # ---- PostProcessors ----
             if postprocessors and global_config is not None:
-                from processors.runner import run_postprocessors
                 try:
-                    postprocessor_results = run_postprocessors(
-                        {"request_head": headers, "request_body": body, "postprocessors": postprocessors},
-                        response,
-                        global_config,
-                    )
-                    result["postprocessor_results"] = postprocessor_results
+                    result["postprocessor_results"] = self._run_postprocessors(
+                        postprocessors, headers, body, response, global_config)
                 except ProcessorError as e:
                     result["error"] = f"[{e.processor_name}] {e}"
                     result["passed"] = False
@@ -210,7 +210,7 @@ class BizFlowExecutor(BaseExecutor):
                 logger.info("[%s] FAIL — assertions failed: %s", step_id, failed_fields)
 
         except requests.Timeout:
-            result["error"] = f"Request timeout after {_TIMEOUT}s"
+            result["error"] = f"Request timeout after {self._TIMEOUT}s"
             result["passed"] = False
             logger.warning("[%s] %s", step_id, result["error"])
         except requests.ConnectionError as e:
@@ -289,50 +289,18 @@ class BizFlowExecutor(BaseExecutor):
         passed: bool = False,
         error: Optional[str] = None,
     ) -> Dict[str, Any]:
-        return {
-            "test_id": step_id,
-            "step_id": step_id,
-            "api_name": step.get("api_name", ""),
-            "app_name": step.get("app_name", ""),
-            "base_url": base_url,
-            "method": step.get("method", ""),
-            "url": path,
-            "tag": step.get("tag", ""),
-            "remark": step.get("remark", ""),
-            "request_headers": dict(headers),
-            "request_body": dict(body),
-            "response_status": None,
-            "response_body": None,
-            "assertions": [],
-            "preprocessor_results": [],
-            "postprocessor_results": [],
-            "passed": passed,
-            "error": error,
-        }
+        return BaseExecutor._build_result(
+            step,
+            test_id=step_id,
+            step_id=step_id,
+            base_url=base_url,
+            url=path,
+            request_headers=dict(headers),
+            request_body=dict(body),
+            passed=passed,
+            error=error,
+        )
 
-    @staticmethod
-    def _build_url(base_url: str, path: str) -> str:
-        base = base_url.rstrip("/") if base_url else ""
-        path = path.lstrip("/") if path and path.startswith("/") else path
-        return f"{base}/{path}" if base else path
 
-    def _send_request(
-        self, method: str, url: str, headers: Dict, body: Dict
-    ) -> requests.Response:
-        kwargs: Dict[str, Any] = {"timeout": _TIMEOUT, "headers": headers}
-        if method in ("GET", "DELETE"):
-            if body:
-                kwargs["params"] = body
-        elif method in ("POST", "PUT", "PATCH"):
-            kwargs["json"] = body
-        else:
-            if body:
-                kwargs["json"] = body
-        return requests.request(method, url, **kwargs)
-
-    @staticmethod
-    def _extract_body(response: requests.Response) -> Any:
-        try:
-            return response.json()
-        except (ValueError, requests.JSONDecodeError):
-            return response.text
+class TransResolutionError(Exception):
+    """Raised when trans variable resolution fails."""

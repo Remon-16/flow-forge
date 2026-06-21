@@ -14,7 +14,7 @@ graph TD
     CM --> |合并后配置| EXEC[执行器工厂]
     YAML[YAML 用例目录/文件] --> YP[YAML 解析器]
     EXCEL[Excel 用例文件] --> EP[Excel 解析器]
-    YP --> |单接口用例| API_EXEC[ApiTestExecutor]
+    YP --> |单接口用例| API_EXEC[SingleCaseExecutor]
     YP --> |业务链路用例| BIZ_EXEC[BizFlowExecutor]
     EP --> |单接口用例| API_EXEC
     EP --> |业务链路用例| BIZ_EXEC
@@ -45,6 +45,12 @@ python/
 │   ├── yaml_writer.py            # 结构化数据 → YAML 文件写入
 │   └── converter.py              # 编排：excel_to_yaml() / yaml_to_excel()
 │
+├── i18n/
+│   ├── __init__.py
+│   ├── loader.py                  # 翻译加载器（支持中英文切换）
+│   ├── zh_CN.json                 # 中文翻译表
+│   └── en_US.json                 # 英文翻译表
+│
 ├── config/
 │   ├── __init__.py
 │   └── config_manager.py        # 配置加载、合并、CLI 覆盖
@@ -66,7 +72,7 @@ python/
 ├── executor/
 │   ├── __init__.py
 │   ├── base.py                  # BaseExecutor 抽象基类（线程池 + 线程安全）
-│   ├── api_test.py              # ApiTestExecutor：单接口测试
+│   ├── single_case.py           # SingleCaseExecutor：单接口测试
 │   ├── biz_flow.py              # BizFlowExecutor：多步骤业务链路测试
 │   └── factory.py               # 执行器工厂，动态导入
 │
@@ -87,8 +93,7 @@ python/
 │
 └── reporter/
     ├── __init__.py
-    ├── html_writer.py           # 自包含 HTML 报告生成器
-    └── md_writer.py             # Markdown 报告生成器（备用）
+    └── html_writer.py           # 自包含 HTML 报告生成器（支持中英文切换）
 ```
 
 ## 安装指南
@@ -179,6 +184,8 @@ CLI 参数 > env-{envName}.yml > env.yml > 内置默认值
 | `maxThread` | int | `5` | 线程池大小，控制并发数 |
 | `reportName` | str | `APIReport` | HTML 报告标题 |
 | `apiMode` | str | `single` | 执行模式：`single` / `biz` / `all` |
+| `lang` | str | `zh_CN` | 界面语言：`zh_CN` / `en_US` |
+| `excel_font` | str | `微软雅黑` | Excel 导出字体名称 |
 
 ### env-{envName}.yml — 环境配置（不可提交，含凭据）
 
@@ -495,7 +502,7 @@ Excel 中的 JSON 字段支持以下格式：
 - 统一的异常捕获和错误结果构建
 - 子类实现 `execute_single()` 方法
 
-#### ApiTestExecutor (`executor/api_test.py`)
+#### SingleCaseExecutor (`executor/single_case.py`)
 
 单接口测试执行器：
 0. **URL 校验**：检查 URL 是否包含 `<URL not exist>` 标记（Agent 生成阶段注入），若是则立即失败并返回错误信息

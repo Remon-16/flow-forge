@@ -14,7 +14,7 @@ graph TD
     CM --> |Merged Config| EXEC[Executor Factory]
     YAML[YAML Case Dir/Files] --> YP[YAML Parser]
     EXCEL[Excel Case File] --> EP[Excel Parser]
-    YP --> |Single API Cases| API_EXEC[ApiTestExecutor]
+    YP --> |Single API Cases| API_EXEC[SingleCaseExecutor]
     YP --> |Business Flow Cases| BIZ_EXEC[BizFlowExecutor]
     EP --> |Single API Cases| API_EXEC
     EP --> |Business Flow Cases| BIZ_EXEC
@@ -45,6 +45,12 @@ python/
 │   ├── yaml_writer.py            # Structured data → YAML file writing
 │   └── converter.py              # Orchestration: excel_to_yaml() / yaml_to_excel()
 │
+├── i18n/
+│   ├── __init__.py
+│   ├── loader.py                  # Translation loader (Chinese / English)
+│   ├── zh_CN.json                 # Chinese translations
+│   └── en_US.json                 # English translations
+│
 ├── config/
 │   ├── __init__.py
 │   └── config_manager.py        # Config loading, merging, CLI override
@@ -66,7 +72,7 @@ python/
 ├── executor/
 │   ├── __init__.py
 │   ├── base.py                  # BaseExecutor abstract base (thread pool + thread safety)
-│   ├── api_test.py              # ApiTestExecutor: single API testing
+│   ├── single_case.py           # SingleCaseExecutor: single API testing
 │   ├── biz_flow.py              # BizFlowExecutor: multi-step business flow testing
 │   └── factory.py               # Executor factory with dynamic import
 │
@@ -87,8 +93,7 @@ python/
 │
 └── reporter/
     ├── __init__.py
-    ├── html_writer.py           # Self-contained HTML report generator
-    └── md_writer.py             # Markdown report generator (fallback)
+    └── html_writer.py           # Self-contained HTML report generator (i18n: zh_CN / en_US)
 ```
 
 ## Installation
@@ -179,6 +184,8 @@ CLI arguments > env-{envName}.yml > env.yml > built-in defaults
 | `maxThread` | int | `5` | Thread pool size; controls concurrency |
 | `reportName` | str | `APIReport` | HTML report title |
 | `apiMode` | str | `single` | Execution mode: `single` / `biz` / `all` |
+| `lang` | str | `zh_CN` | UI language: `zh_CN` / `en_US` |
+| `excel_font` | str | `微软雅黑` | Font name for Excel export |
 
 ### env-{envName}.yml — Environment Config (DO NOT commit, contains credentials)
 
@@ -495,7 +502,7 @@ Abstract base class providing:
 - Unified exception handling and error result construction
 - Subclasses implement `execute_single()` method
 
-#### ApiTestExecutor (`executor/api_test.py`)
+#### SingleCaseExecutor (`executor/single_case.py`)
 
 Single API test executor:
 0. **URL validation**: Checks whether the URL contains the `<URL not exist>` marker (injected by the Agent during generation). If present, the case fails immediately with an error message.

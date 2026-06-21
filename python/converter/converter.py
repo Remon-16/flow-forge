@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+
+import yaml
 
 from .excel_reader import read_excel
 from .yaml_writer import write_biz_flows, write_interfaces, write_single_cases
@@ -13,34 +15,15 @@ from .excel_writer import write_excel as _write_excel
 logger = logging.getLogger(__name__)
 
 
-def _read_yaml_dir(dir_path: str | None) -> list[dict[str, object]]:
-    """Read all YAML files from a directory, returning parsed dicts."""
-    import yaml
+def _read_yaml_dir(
+    dir_path: str | None,
+    *,
+    validator: Callable[[dict[str, object]], bool] | None = None,
+) -> list[dict[str, object]]:
+    """Read all YAML files from a directory, returning parsed dicts.
 
-    if not dir_path:
-        return []
-    p = Path(dir_path)
-    if not p.is_dir():
-        logger.warning("Directory not found, skipping: %s", dir_path)
-        return []
-    results: list[dict[str, object]] = []
-    for f in sorted(p.glob("*.yaml")):
-        try:
-            with open(f, "r", encoding="utf-8") as fh:
-                data = yaml.safe_load(fh)
-            if isinstance(data, dict):
-                # Remove case_type if present (it's metadata, not data)
-                data.pop("case_type", None)
-                results.append(data)
-        except Exception:
-            logger.warning("Failed to read YAML file: %s", f, exc_info=True)
-    return results
-
-
-def _read_yaml_biz_flows(dir_path: str | None) -> list[dict[str, object]]:
-    """Read biz flow YAML files. Each file has ``sheet_name`` and ``steps``."""
-    import yaml
-
+    If *validator* is provided, only dicts passing the validator are kept.
+    """
     if not dir_path:
         return []
     p = Path(dir_path)
@@ -54,11 +37,8 @@ def _read_yaml_biz_flows(dir_path: str | None) -> list[dict[str, object]]:
                 data = yaml.safe_load(fh)
             if isinstance(data, dict):
                 data.pop("case_type", None)
-                # Ensure steps exist
-                if "steps" in data and isinstance(data["steps"], list):
+                if validator is None or validator(data):
                     results.append(data)
-                else:
-                    logger.warning("YAML file missing 'steps' list, skipping: %s", f)
         except Exception:
             logger.warning("Failed to read YAML file: %s", f, exc_info=True)
     return results
@@ -107,6 +87,13 @@ def yaml_to_excel(
 
     interfaces = _read_yaml_dir(interfaces_dir) if interfaces_dir else []
     single_cases = _read_yaml_dir(single_cases_dir) if single_cases_dir else []
-    biz_flows = _read_yaml_biz_flows(biz_flows_dir) if biz_flows_dir else []
+    biz_flows = (
+        _read_yaml_dir(
+            biz_flows_dir,
+            validator=lambda d: "steps" in d and isinstance(d["steps"], list),
+        )
+        if biz_flows_dir
+        else []
+    )
 
     return _write_excel(interfaces, single_cases, biz_flows, output_path)
