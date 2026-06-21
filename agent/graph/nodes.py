@@ -280,6 +280,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
 
         state["interfaces"] = [_iface_to_dict(i) for i in interfaces]
         state["interfaces_from_llm"] = True
+        state["api_raw_text"] = raw_text
         state["interface_extraction_method"] = "llm"
         print(f"  → LLM 成功提取 {len(interfaces)} 个接口")
 
@@ -784,7 +785,7 @@ def parse_plan_node(state: GraphState) -> GraphState:
         _sl().log_node_start("parse_plan", "6/9")
 
     agent = PlanParser(_settings)
-    plan = agent.parse(plan_md)
+    plan = agent.parse(plan_md, interfaces=state.get("interfaces", []))
 
     state["plan_parsed"] = plan
 

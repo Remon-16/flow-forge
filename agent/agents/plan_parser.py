@@ -33,8 +33,17 @@ class PlanParser(BaseAgent):
             compression_threshold=settings.llm_context_compression_threshold,
         )
 
-    def parse(self, plan_md: str) -> TestPlan:
-        """Parse plan markdown into a structured TestPlan."""
+    def parse(
+        self, plan_md: str, interfaces: Optional[List[Dict[str, Any]]] = None
+    ) -> TestPlan:
+        """Parse plan markdown into a structured TestPlan.
+
+        Args:
+            plan_md: The plan markdown text.
+            interfaces: Optional pre-validated interface definitions.  Used as
+                fallback when the LLM / regex cannot extract api_definitions
+                from the markdown text.
+        """
         # Extract business summary (first ## section content)
         business_summary = self._extract_section(
             plan_md, r"##\s*(?:1\.)?\s*业务理解", r"##\s"
@@ -47,6 +56,20 @@ class PlanParser(BaseAgent):
         plan = self._llm_parse(plan_md)
         plan.business_summary = business_summary or plan.business_summary
         plan.mermaid_flows = mermaid_flows
+
+        # Fallback: if LLM/regex failed to extract api_definitions,
+        # use the provided interfaces (already validated)
+        if not plan.api_definitions and interfaces:
+            plan.api_definitions = [
+                InterfaceDef(
+                    test_id=iface.get("test_id", ""),
+                    api_name=iface.get("api_name", ""),
+                    app_name=iface.get("app_name", ""),
+                    method=iface.get("method", "GET"),
+                    url=iface.get("url", ""),
+                )
+                for iface in interfaces
+            ]
 
         return plan
 
