@@ -575,6 +575,8 @@ def main() -> int:
         "plan_only": False,
         "user_guidance": args.prompt or "",
         "reference_dir": args.reference_dir or "",
+        "parse_mode": args.parse_mode,
+        "parser_path": args.parser_path or "",
     }
     config = {"configurable": {"thread_id": thread_id}}
 
