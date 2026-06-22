@@ -297,7 +297,8 @@ steps:
     status_code: 200
     assert_dict:
       $.code: 0
-    trans: "smsCode=Step01.data.code"
+    trans:
+      smsCode: Step01.data.code
   - step_id: Step02
     api_name: 用户注册
     app_name: someApp
@@ -332,7 +333,7 @@ steps:
 | `sheet_name` | str | 业务场景名（业务链路用例必填） |
 | `steps` | list | 业务链路步骤列表（业务链路用例必填） |
 | `step_id` | str | 步骤标识（同一业务链路内不可重复），如 `Step01` |
-| `trans` | str | 步骤间数据传递定义，语法同 [Trans 字段语法](#trans-字段语法) |
+| `trans` | dict | 步骤间数据传递定义，JSON 对象格式，语法同 [Trans 字段语法](#trans-字段语法) |
 
 ## Excel 用例格式
 
@@ -374,7 +375,7 @@ Excel 文件包含多张 Sheet，结构如下：
 |------|------|------|
 | `StepID` | str | 步骤标识（同一 Sheet 内不可重复），如 `Step01` |
 | `RelevanceID` | str | 关联到 Sheet 1 的 `TestID`（执行器不强制校验，主要用于用例生成智能体的索引和查询） |
-| `Trans` | str | 步骤间数据传递定义，格式见下文 |
+| `Trans` | str | 步骤间数据传递定义，JSON 字符串格式，格式见下文 |
 | 其他列 | — | 同 Sheet 1/Sheet 2 |
 
 ### API Definitions 说明
@@ -383,16 +384,16 @@ Sheet 1（API Definitions）中定义的接口信息作为 Agent 的参考文档
 
 ### Trans 字段语法
 
-`Trans` 用于在业务链路的步骤之间传递数据：
+`Trans` 用于在业务链路的步骤之间传递数据，格式为 JSON 对象（YAML 中可使用原生映射格式）：
 
-```
-变量名=来源StepID.响应JSON路径, 变量名2=来源StepID2.响应JSON路径
+```yaml
+# YAML 格式（原生映射）
+trans:
+  变量名: 来源StepID.响应JSON路径
+  变量名2: 来源StepID2.响应JSON路径
 ```
 
-示例：
-```
-username=Step01.data.username, orderId=Step02.data.orderId
-```
+Excel 单元格中以 JSON 字符串存储：`{"变量名": "来源StepID.响应JSON路径"}`。
 
 在 `RequestHead`、`RequestBody` 或 `URL` 路径中使用 `#{变量名}` 引用传递的值：
 
@@ -431,7 +432,9 @@ steps:
       phone: "13800138000"
       password: "123456"
     status_code: 200
-    trans: "authToken=Step_Login.data.token, userId=Step_Login.data.id"
+    trans:
+      authToken: Step_Login.data.token
+      userId: Step_Login.data.id
     # 将登录响应的 token 和 id 通过 Trans 传递给后续步骤
 
   - step_id: Step_CreateOrder
@@ -453,7 +456,7 @@ steps:
 
 转义：使用 `\#{...}` 表示字面量 `#{...}`，不会被替换。
 
-**Trans 校验规则：**
+**Trans 校验规则（JSON 对象格式）：**
 - 不允许包含中文字符
 - 必须是 `key=value` 格式
 - 方括号 `[]` 必须成对出现
@@ -523,7 +526,7 @@ Excel 中的 JSON 字段支持以下格式：
 - 先解析 URL 路径中的 `#{}`（从 `request_body` 取值），再通过 `_resolve_vars()` 解析 Trans 依赖的 `#{}`（URL、headers、body 均会解析）
 - 请求头中的 `#{}` 采用 **Trans 优先、LoginManager 回退** 策略：若 Trans 中已声明该变量，则从前往步骤响应中取值，跳过 LoginManager；仅当 Trans 未声明时，才调用 LoginManager 进行登录态注入
 - 使用 `threading.local()` 存储每线程的步骤响应数据
-- `_parse_trans()` 解析 `key=StepID.path` 映射
+- `_parse_trans()` 解析 JSON 对象为 `{key: (StepID, path)}` 映射（兼容旧逗号分隔格式）
 - `_resolve_vars()` 将 `#{key}` 替换为前序步骤的实际响应值（支持 URL、请求头、请求体中的占位符）
 - 最终生成"执行链路"字符串（成功用 `→`，失败用 `×` 标记）
 

@@ -5,6 +5,7 @@ import { useYamlStore } from '../../stores/yaml-store'
 import { TAG_LEVELS, HTTP_METHODS } from '../../types/excel'
 import type { YamlBizStep } from '../../types/yaml'
 import ProcessorListEditor from '../editor/ProcessorListEditor.vue'
+import TransEditorModal from '../editor/TransEditorModal.vue'
 
 const { t } = useI18n()
 const yamlStore = useYamlStore()
@@ -18,6 +19,7 @@ watch(() => yamlStore.currentCase, () => {
 const props = defineProps<{
   step: YamlBizStep & { _stepIdDuplicate?: boolean; _transError?: string | null }
   index: number
+  stepIds?: string[]
 }>()
 
 const isUrlWarning = computed(() =>
@@ -107,6 +109,68 @@ function onRulesEditBlur() {
   emit('updateRules', props.index, rules)
   rulesEditText.value = ''
 }
+
+// Trans editing
+const transModalVisible = ref(false)
+const transModalValue = ref<Record<string, string>>({})
+
+function openTransEditor() {
+  transModalValue.value = props.step.trans || {}
+  transModalVisible.value = true
+}
+
+function onTransConfirm(value: Record<string, string>) {
+  emit('update', props.index, 'trans', value)
+  transModalVisible.value = false
+}
+
+function formatTransDisplay(val: unknown): string {
+  if (!val) return ''
+  if (typeof val === 'object') return JSON.stringify(val, null, 2)
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val)
+      if (parsed && typeof parsed === 'object') return JSON.stringify(parsed, null, 2)
+    } catch { /* ignore */ }
+    return val
+  }
+  return String(val)
+}
+
+// Inline Trans editing cache
+const transEditText = ref('')
+
+function getTransEditText(val: unknown): string {
+  if (transEditText.value) return transEditText.value
+  return formatTransDisplay(val)
+}
+
+function onTransEditChange(text: string) {
+  transEditText.value = text
+}
+
+function onTransEditBlur() {
+  if (!transEditText.value) {
+    emit('update', props.index, 'trans', {})
+    transEditText.value = ''
+    return
+  }
+  const text = transEditText.value.trim()
+  if (!text) {
+    emit('update', props.index, 'trans', {})
+    transEditText.value = ''
+    return
+  }
+  try {
+    const parsed = JSON.parse(text)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      emit('update', props.index, 'trans', parsed)
+      transEditText.value = ''
+    }
+  } catch {
+    // Keep dirty text
+  }
+}
 </script>
 
 <template>
@@ -171,15 +235,27 @@ function onRulesEditBlur() {
         </a-form-item>
       </a-col>
       <a-col :span="12">
-        <a-form-item :label="t('table.Trans')" class="compact-item">
-          <a-tooltip :title="step._transError || ''">
-            <a-input
-              :value="step.trans"
+        <a-form-item class="compact-item">
+          <template #label>
+            <span>{{ t('table.Trans') }}</span>
+            <a-button
               size="small"
-              :status="step._transError ? 'error' : ''"
-              @change="(e: any) => onFieldChange('trans', e.target.value)"
-            />
-          </a-tooltip>
+              type="link"
+              style="padding: 0 0 0 8px; font-size: 11px;"
+              @click="openTransEditor"
+            >
+              {{ t('transEditor.editDetails') }}
+            </a-button>
+          </template>
+          <a-textarea
+            :value="getTransEditText(step.trans)"
+            :auto-size="{ minRows: 2, maxRows: 6 }"
+            size="small"
+            :status="step._transError ? 'error' : ''"
+            :placeholder="t('transEditor.noVariables')"
+            @change="(e: any) => onTransEditChange(e.target.value)"
+            @blur="onTransEditBlur"
+          />
         </a-form-item>
       </a-col>
     </a-row>
@@ -394,6 +470,15 @@ function onRulesEditBlur() {
         </a-form-item>
       </a-col>
     </a-row>
+
+    <!-- Trans Editor Modal -->
+    <TransEditorModal
+      :visible="transModalVisible"
+      :trans="transModalValue"
+      :stepIds="props.stepIds || []"
+      @confirm="onTransConfirm"
+      @cancel="transModalVisible = false"
+    />
   </div>
 </template>
 

@@ -97,6 +97,20 @@
     "unsavedContent": "You have unsaved changes. Save before continuing?",
     "urlWarning": "URL not found in API documentation - possible AI hallucination"
   },
+  "transEditor": {
+    "editDetails": "Edit Details",
+    "modal": {
+      "title": "Trans Editor",
+      "variableName": "Variable Name",
+      "stepId": "Source Step",
+      "path": "Response Path",
+      "variableNamePlaceholder": "e.g. authToken",
+      "stepIdPlaceholder": "Select step",
+      "pathPlaceholder": "e.g. data.token"
+    },
+    "addVariable": "Add Variable",
+    "noVariables": "No variables to pass"
+  },
   "dialog": {
     "yes": "Yes",
     "no": "No",

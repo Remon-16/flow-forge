@@ -345,7 +345,7 @@ PreProcessors / PostProcessors 列支持以下编辑方式：
 |--------|---------|------|---------|
 | RelevanceID | 单接口用例、业务链路 | 必须在接口定义页的 TestID 集合中存在 | 单元格标红 |
 | StepID | 业务链路 | 同一 Sheet 内不得重复 | 单元格标红 |
-| Trans 格式 | 业务链路 | `key=value, key=value` 格式 | 单元格标红 + Tooltip |
+| Trans 格式 | 业务链路 | JSON 对象格式（key: StepID.path） | 单元格标红 + Tooltip |
 | Trans 括号 | 业务链路 | `[` 与 `]` 数量一致，`(` 与 `)` 数量一致 | 单元格标红 + Tooltip |
 | Trans 中文 | 业务链路 | 不允许包含中文字符 | 单元格标红 + Tooltip |
 | AssertRules 格式 | 全部 | 运算符合法性、路径语法、函数名、期望值 | 行尾 ✗ 图标 + Tooltip |
@@ -357,7 +357,7 @@ PreProcessors / PostProcessors 列支持以下编辑方式：
 | 校验项 | 适用范围 | 规则 | UI 表现 |
 |--------|---------|------|---------|
 | StepID | 业务链路 | 同一文件内不得重复 | 输入框标红 |
-| Trans 格式 | 业务链路 | `key=value, key=value` 格式，括号匹配，无中文 | 输入框标红 + Tooltip |
+| Trans 格式 | 业务链路 | JSON 对象格式，括号匹配，无中文 | 输入框标红 + Tooltip |
 | URL 存在性 | 全部 | URL 包含 `<URL not exist>` 标记 | 输入框标红 |
 | AssertRules 格式 | 全部 | 同 Excel 编辑器 | 行尾 ✗ 图标 + Tooltip |
 

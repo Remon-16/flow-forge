@@ -224,24 +224,37 @@ class BizFlowExecutor(BaseExecutor):
 
         return result
 
-    def _parse_trans(self, trans: str) -> Dict[str, tuple]:
+    def _parse_trans(self, trans) -> Dict[str, tuple]:
         mapping: Dict[str, tuple] = {}
-        pairs = [p.strip() for p in trans.split(",")]
-        for pair in pairs:
-            if not pair or "=" not in pair:
-                continue
-            key, value = pair.split("=", 1)
-            key = key.strip()
-            value = value.strip()
-            if not value:
-                continue
+
+        def _store(key: str, value: str) -> None:
             dot_idx = value.find(".")
             if dot_idx == -1:
                 mapping[key] = (value, "")
             else:
-                step_id = value[:dot_idx]
-                path = value[dot_idx + 1:]
-                mapping[key] = (step_id, path)
+                mapping[key] = (value[:dot_idx], value[dot_idx + 1:])
+
+        # 新格式：JSON dict（YAML 原生映射 或 Excel 解析后的 dict）
+        if isinstance(trans, dict):
+            for key, value in trans.items():
+                key = str(key).strip()
+                val = str(value).strip()
+                if key and val:
+                    _store(key, val)
+            return mapping
+
+        # 旧格式回退：逗号分隔字符串
+        if isinstance(trans, str) and trans.strip():
+            pairs = [p.strip() for p in trans.split(",")]
+            for pair in pairs:
+                if not pair or "=" not in pair:
+                    continue
+                key, value = pair.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                if key and value:
+                    _store(key, value)
+
         return mapping
 
     def _resolve_vars(

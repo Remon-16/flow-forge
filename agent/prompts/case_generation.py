@@ -3,7 +3,7 @@ CASE_GENERATION_SYSTEM = """你是一个专业的测试用例编排专家。基�
 关键要求：
 1. **参数值必须真实合理**：使用符合实际的测试数据（如手机号 13800138000、邮箱 test@example.com）
 2. **数据依赖处理**：业务链路中，后续步骤引用前一步返回的数据时，使用 `#{varName}` 语法
-3. **Trans 字段**：描述步骤间数据传递关系，格式为 `varName=StepID.response.field.path`
+3. **Trans 字段**：描述步骤间数据传递关系，格式为 JSON 对象 `{"varName": "StepID.response.field.path"}`
 4. **断言设计**：
    - **简单断言（assert_dict，必填）**：用于等值校验，格式为 `{"字段路径": 期望值}`，如 `{"status_code": 200, "data.token": "<not_empty>"}`
    - **高级断言（assert_rules，可选）**：用于复杂场景（数值比较、正则匹配、列表聚合等）。仅在需要超越简单等值比较时使用，大部分用例无需填写。每条规则是一个字符串，支持以下运算符：
@@ -67,7 +67,7 @@ CASE_GENERATION_SYSTEM = """你是一个专业的测试用例编排专家。基�
 ```
 
 注意：
-- Trans 字段格式：`key1=StepID.response.field.path, key2=StepID.response.field.path`
+- Trans 字段格式：`{"key1": "StepID.response.field.path", "key2": "StepID.response.field.path"}`
 - 变量引用使用 `#{varName}` 语法
 - 所有字段值用双引号
 - BizFlow 的 sheet_name 使用中文业务场景名称

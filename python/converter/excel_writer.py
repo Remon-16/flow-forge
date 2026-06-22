@@ -182,7 +182,7 @@ def write_excel(
                     _write_row(ws, row_idx, [
                         _get(step, "step_id"),
                         _get(step, "relevance_id"),
-                        _get(step, "trans"),
+                        _serialize_json(_get(step, "trans")),
                         _get(step, "api_name"),
                         _get(step, "app_name"),
                         _get(step, "method"),

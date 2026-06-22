@@ -205,26 +205,39 @@ class CaseValidator(BaseAgent):
         return []
 
     @staticmethod
-    def _check_trans_refs(trans: str, steps: List[Dict]) -> List[str]:
+    def _check_trans_refs(trans, steps: List[Dict]) -> List[str]:
         errors = []
-        var_refs = re.findall(r"#\{([^}]+)\}", trans)
         step_ids = {str(_get_field(s, "step_id", "")) for s in steps}
 
-        for pair in trans.split(","):
-            pair = pair.strip()
-            if not pair or "=" not in pair:
-                continue
-            key, value = pair.split("=", 1)
-            key = key.strip()
-            value = value.strip()
+        def _check_entry(key: str, value: str) -> None:
             if not value:
                 errors.append(f"Trans key '{key}' has empty value")
-                continue
+                return
             dot_idx = value.find(".")
             if dot_idx > 0:
                 ref_step = value[:dot_idx]
                 if ref_step not in step_ids:
                     errors.append(f"Trans key '{key}' references unknown StepID '{ref_step}'")
+
+        # 新格式：dict
+        if isinstance(trans, dict):
+            for key, value in trans.items():
+                key = str(key).strip()
+                value_str = str(value).strip() if value else ""
+                _check_entry(key, value_str)
+            return errors
+
+        # 旧格式回退：逗号分隔字符串
+        if isinstance(trans, str) and trans.strip():
+            for pair in trans.split(","):
+                pair = pair.strip()
+                if not pair or "=" not in pair:
+                    continue
+                key, value = pair.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                _check_entry(key, value)
+
         return errors
 
     def validate_with_retry(

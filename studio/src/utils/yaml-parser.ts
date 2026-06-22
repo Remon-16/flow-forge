@@ -71,6 +71,35 @@ function getField(raw: Record<string, unknown>, pascal: string, snake: string): 
   return raw[snake]
 }
 
+function normalizeTrans(val: unknown): Record<string, string> {
+  if (val === null || val === undefined) return {}
+  if (typeof val === 'object' && !Array.isArray(val)) return val as Record<string, string>
+  if (typeof val === 'string') {
+    if (!val.trim()) return {}
+    try {
+      const parsed = JSON.parse(val)
+      if (typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, string>
+    } catch {
+      return transStringToObj(val)
+    }
+    return {}
+  }
+  return {}
+}
+
+function transStringToObj(s: string): Record<string, string> {
+  const result: Record<string, string> = {}
+  const pairs = s.split(',').map(p => p.trim()).filter(Boolean)
+  for (const pair of pairs) {
+    const eqIdx = pair.indexOf('=')
+    if (eqIdx < 0) continue
+    const key = pair.slice(0, eqIdx).trim()
+    const value = pair.slice(eqIdx + 1).trim()
+    if (key && value) result[key] = value
+  }
+  return result
+}
+
 function normalizeBizCase(raw: Record<string, unknown>): BizYamlCase {
   const stepsVal = getField(raw, 'steps', 'Steps')
   const rawSteps = Array.isArray(stepsVal) ? stepsVal as Record<string, unknown>[] : []
@@ -85,7 +114,7 @@ function normalizeBizStep(raw: Record<string, unknown>): any {
   return {
     step_id: String(getField(raw, 'StepID', 'step_id') ?? ''),
     relevance_id: String(getField(raw, 'RelevanceID', 'relevance_id') ?? ''),
-    trans: String(getField(raw, 'Trans', 'trans') ?? ''),
+    trans: normalizeTrans(getField(raw, 'Trans', 'trans')),
     api_name: String(getField(raw, 'APIName', 'api_name') ?? ''),
     app_name: String(getField(raw, 'AppName', 'app_name') ?? ''),
     method: String(getField(raw, 'Method', 'method') ?? 'GET'),

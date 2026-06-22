@@ -2,7 +2,13 @@
 
 ## 规则
 
-登录步骤的 token 被后续步骤引用时，Trans 格式：`token=Step01.data.token`。
+登录步骤的 token 被后续步骤引用时，Trans 格式为 JSON 对象：
+
+```json
+{
+    "token": "Step01.data.token"
+}
+```
 
 ## 适用范围
 

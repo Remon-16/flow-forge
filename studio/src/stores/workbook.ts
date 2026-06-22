@@ -233,7 +233,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
       _uid: generateUid(),
       StepID: '',
       RelevanceID: '',
-      Trans: '',
+      Trans: '{}',
       APIName: '',
       AppName: '',
       Method: 'GET',

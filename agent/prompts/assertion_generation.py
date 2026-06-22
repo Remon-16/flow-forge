@@ -91,7 +91,7 @@ BIZ_ASSERTION_SYSTEM = f"""你是一个业务链路测试断言设计专家。�
 {_ASSERTION_ENGINE_CAPABILITIES}
 
 业务链路断言的特殊规则：
-1. 如果后续某步骤的 Trans 字段声明了前序步骤产出变量（如 authToken=Step1.response.data.token），且该变量被后续步骤通过 #{{authToken}} 引用，则对应前序步骤必须对产出的字段生成 is_not_null 断言
+1. 如果后续某步骤的 Trans 字段声明了前序步骤产出变量（如 {"authToken": "Step1.response.data.token"}），且该变量被后续步骤通过 #{{authToken}} 引用，则对应前序步骤必须对产出的字段生成 is_not_null 断言
 2. 如果后续步骤使用了前序步骤的返回值，前序步骤的相关字段断言应该更严格
 3. 最后一个步骤通常不需要声明 Trans（没有后续消费者），但仍需正常的业务断言
 
@@ -112,7 +112,7 @@ BIZ_ASSERTION_SYSTEM = f"""你是一个业务链路测试断言设计专家。�
         {{
           "step_id": "Step_Login",
           "relevance_id": "api_login_post",
-          "trans": "authToken=Step_Login.response.data.token",
+          "trans": {"authToken": "Step_Login.response.data.token"},
           "api_name": "用户登录",
           "app_name": "someApp",
           "method": "POST",

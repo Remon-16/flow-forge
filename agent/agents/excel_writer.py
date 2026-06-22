@@ -172,7 +172,7 @@ class ExcelWriter:
             ExcelWriter._write_row(ws, row_idx, [
                 g("step_id"),
                 g("relevance_id"),
-                g("trans"),
+                json.dumps(g("trans"), ensure_ascii=False) if g("trans") else "",
                 g("api_name"),
                 g("app_name"),
                 g("method"),

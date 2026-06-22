@@ -97,6 +97,20 @@
     "processorInvalidFormat": "处理器格式无效，应为数组，每项包含 name 字段",
     "processorConfigInvalid": "处理器配置格式无效"
   },
+  "transEditor": {
+    "editDetails": "编辑详情",
+    "modal": {
+      "title": "参数传递编辑",
+      "variableName": "变量名",
+      "stepId": "来源步骤",
+      "path": "响应路径",
+      "variableNamePlaceholder": "例如 authToken",
+      "stepIdPlaceholder": "选择步骤",
+      "pathPlaceholder": "例如 data.token"
+    },
+    "addVariable": "添加变量",
+    "noVariables": "暂无传递参数"
+  },
   "dialog": {
     "yes": "是",
     "no": "否",

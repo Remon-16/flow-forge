@@ -346,7 +346,7 @@ The PreProcessors / PostProcessors columns support the following editing modes:
 |------|-----------|-------------|--------------|
 | RelevanceID | Single-API cases, Business flows | Must exist in the API definition TestID set | Red cell highlight |
 | StepID | Business flows | Must be unique within the same sheet | Red cell highlight |
-| Trans format | Business flows | `key=value, key=value` format | Red cell + tooltip |
+| Trans format | Business flows | JSON object format (key: StepID.path) | Red cell + tooltip |
 | Trans brackets | Business flows | `[` and `]` counts must match; `(` and `)` counts must match | Red cell + tooltip |
 | Trans Chinese chars | Business flows | Chinese characters are not allowed | Red cell + tooltip |
 | AssertRules format | All | Operator validity, path syntax, function names, expected values | Red ✗ icon + tooltip |
@@ -358,7 +358,7 @@ The PreProcessors / PostProcessors columns support the following editing modes:
 | Rule | Applies To | Description | UI Indicator |
 |------|-----------|-------------|--------------|
 | StepID | Business flows | Must be unique within the same file | Red input highlight |
-| Trans format | Business flows | `key=value, key=value` format, bracket matching, no Chinese chars | Red input + tooltip |
+| Trans format | Business flows | JSON object format, bracket matching, no Chinese chars | Red input + tooltip |
 | URL existence | All | URL contains `<URL not exist>` marker | Red border on input |
 | AssertRules format | All | Same as Excel editor | Red ✗ icon + tooltip |
 

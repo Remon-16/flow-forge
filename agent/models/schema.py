@@ -50,7 +50,7 @@ class BizStep:
 
     step_id: str
     relevance_id: str
-    trans: str = ""
+    trans: Dict[str, str] = field(default_factory=dict)
     api_name: str = ""
     app_name: str = ""
     method: str = "GET"

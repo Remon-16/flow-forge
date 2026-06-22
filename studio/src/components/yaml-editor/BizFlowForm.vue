@@ -99,6 +99,7 @@ function onAssertRulesConfirm(rules: string[]) {
         :key="i"
         :step="step"
         :index="i"
+        :stepIds="(currentCase.steps as any[]).map(s => s.step_id || '')"
         @update="(idx: number, field: string, val: unknown) => onStepFieldChange(idx, field, val)"
         @remove="removeStep"
         @move="moveStep"

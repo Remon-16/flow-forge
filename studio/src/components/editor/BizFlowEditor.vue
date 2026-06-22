@@ -7,6 +7,7 @@ import { BIZ_STEP_COLUMNS, TAG_LEVELS, JSON_COLUMNS } from '../../types/excel'
 import type { BizStep } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
 import AssertRulesModal from './AssertRulesModal.vue'
+import TransEditorModal from './TransEditorModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
 const props = defineProps<{ flowIndex: number; searchBarVisible?: boolean }>()
@@ -136,6 +137,95 @@ function formatRules(val: string[] | null): string {
   return val.join('\n')
 }
 
+// Trans editing
+const stepIds = computed(() => flow.value?.steps.map(s => s.StepID).filter(Boolean) || [])
+
+function parseTransValue(raw: unknown): Record<string, string> {
+  if (!raw) return {}
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, string>
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (!trimmed) return {}
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, string>
+    } catch {
+      // Old format fallback
+      const result: Record<string, string> = {}
+      const pairs = trimmed.split(',').map(p => p.trim()).filter(Boolean)
+      for (const pair of pairs) {
+        const eqIdx = pair.indexOf('=')
+        if (eqIdx < 0) continue
+        result[pair.slice(0, eqIdx).trim()] = pair.slice(eqIdx + 1).trim()
+      }
+      return result
+    }
+  }
+  return {}
+}
+
+const transModalVisible = ref(false)
+const transModalStepIdx = ref(-1)
+const transModalValue = ref<Record<string, string>>({})
+
+function openTransEditor(stepIdx: number) {
+  transModalStepIdx.value = stepIdx
+  transModalValue.value = parseTransValue(flow.value.steps[stepIdx].Trans)
+  transModalVisible.value = true
+}
+
+function onTransConfirm(value: Record<string, string>) {
+  if (transModalStepIdx.value >= 0) {
+    onCellChange(transModalStepIdx.value, 'Trans', JSON.stringify(value))
+  }
+  transModalVisible.value = false
+}
+
+function formatTransDisplay(val: unknown): string {
+  if (!val) return ''
+  if (typeof val === 'string') {
+    // Try to parse then pretty-print
+    try {
+      const parsed = JSON.parse(val)
+      if (parsed && typeof parsed === 'object') return JSON.stringify(parsed, null, 2)
+    } catch { /* ignore */ }
+    return val
+  }
+  return JSON.stringify(val, null, 2)
+}
+
+// Inline Trans editing cache
+const transEditCache = ref<Record<string, string>>({})
+
+function getTransEditText(rowIdx: number, raw: unknown): string {
+  const key = `trans_${rowIdx}`
+  if (key in transEditCache.value) return transEditCache.value[key]
+  return formatTransDisplay(raw)
+}
+
+function onTransEditChange(rowIdx: number, text: string) {
+  transEditCache.value[`trans_${rowIdx}`] = text
+}
+
+function onTransEditBlur(rowIdx: number) {
+  const cacheKey = `trans_${rowIdx}`
+  const text = (transEditCache.value[cacheKey] || '').trim()
+  if (!text) {
+    onCellChange(rowIdx, 'Trans', '{}')
+    delete transEditCache.value[cacheKey]
+    return
+  }
+  try {
+    const parsed = JSON.parse(text)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      onCellChange(rowIdx, 'Trans', JSON.stringify(parsed))
+      delete transEditCache.value[cacheKey]
+    }
+  } catch {
+    // Keep dirty text; validation will show error
+  }
+}
+
 const relevanceOptions = computed(() => workbook.validTestIdOptions)
 
 function getRowClassName(record: BizStep) {
@@ -232,14 +322,28 @@ function getRowClassName(record: BizStep) {
 
             <!-- Trans with validation -->
             <template v-else-if="col === 'Trans'">
-              <a-tooltip :title="record._transError || ''">
-                <a-input
-                  :value="String(record[col] ?? '')"
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 200px;">
+                <a-button
                   size="small"
+                  type="link"
+                  style="padding: 0; text-align: left; height: auto; font-size: 12px;"
+                  @click="openTransEditor(stepIdx)"
+                >
+                  {{ t('transEditor.editDetails') }}: {{ getColumnLabel(col) }}
+                </a-button>
+                <a-textarea
+                  :value="getTransEditText(stepIdx, record[col])"
+                  :autoSize="{ minRows: 2, maxRows: 6 }"
+                  size="small"
+                  style="font-family: monospace; font-size: 12px;"
                   :status="record._transError ? 'error' : ''"
-                  @change="(e: any) => onCellChange(stepIdx, col, e.target.value)"
+                  @change="(e: any) => onTransEditChange(stepIdx, e.target.value)"
+                  @blur="() => onTransEditBlur(stepIdx)"
                 />
-              </a-tooltip>
+                <span v-if="record._transError" style="color: #ff4d4f; font-size: 11px;">
+                  &#x2715; {{ record._transError }}
+                </span>
+              </div>
             </template>
 
             <!-- JSON columns: details link + editable textarea -->
@@ -394,6 +498,15 @@ function getRowClassName(record: BizStep) {
       :rules="assertRulesValue"
       @confirm="onAssertRulesConfirm"
       @cancel="assertRulesModalVisible = false"
+    />
+
+    <!-- Trans Editor Modal -->
+    <TransEditorModal
+      :visible="transModalVisible"
+      :trans="transModalValue"
+      :stepIds="stepIds"
+      @confirm="onTransConfirm"
+      @cancel="transModalVisible = false"
     />
   </div>
 </template>

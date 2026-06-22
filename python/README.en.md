@@ -297,7 +297,8 @@ steps:
     status_code: 200
     assert_dict:
       $.code: 0
-    trans: "smsCode=Step01.data.code"
+    trans:
+      smsCode: Step01.data.code
   - step_id: Step02
     api_name: User Registration
     app_name: someApp
@@ -332,7 +333,7 @@ steps:
 | `sheet_name` | str | Business scenario name (required for business flow cases) |
 | `steps` | list | List of steps (required for business flow cases) |
 | `step_id` | str | Step identifier (must be unique within the same flow), e.g., `Step01` |
-| `trans` | str | Inter-step data passing definition; same syntax as [Trans Field Syntax](#trans-field-syntax) |
+| `trans` | dict | Inter-step data passing definition; JSON object format; see [Trans Field Syntax](#trans-field-syntax) |
 
 ## Excel Case Format
 
@@ -374,7 +375,7 @@ Each sheet represents a business scenario; the sheet name is the scenario name. 
 |--------|------|-------------|
 | `StepID` | str | Step identifier (must be unique within the same sheet), e.g., `Step01` |
 | `RelevanceID` | str | References a `TestID` in Sheet 1 (not enforced by executor; primarily for case generation agent indexing and querying) |
-| `Trans` | str | Inter-step data passing definition (see syntax below) |
+| `Trans` | str | Inter-step data passing definition, JSON string format (see syntax below) |
 | Other columns | — | Same as Sheet 1/Sheet 2 |
 
 ### API Definitions Notes
@@ -383,16 +384,16 @@ Sheet 1 (API Definitions) serves as reference documentation for the AI agent and
 
 ### Trans Field Syntax
 
-`Trans` passes data between steps in a business flow:
+`Trans` passes data between steps in a business flow, using a JSON object format (native YAML mapping in .yaml files):
 
-```
-variableName=sourceStepID.responseJSONPath, variableName2=sourceStepID2.responseJSONPath
+```yaml
+# YAML format (native mapping)
+trans:
+  variableName: sourceStepID.responseJSONPath
+  variableName2: sourceStepID2.responseJSONPath
 ```
 
-Example:
-```
-username=Step01.data.username, orderId=Step02.data.orderId
-```
+In Excel cells, Trans is stored as a JSON string: `{"variableName": "sourceStepID.responseJSONPath"}`.
 
 Reference passed values in `RequestHead`, `RequestBody`, or `URL` path using `#{variableName}`:
 
@@ -431,7 +432,9 @@ steps:
       phone: "13800138000"
       password: "123456"
     status_code: 200
-    trans: "authToken=Step_Login.data.token, userId=Step_Login.data.id"
+    trans:
+      authToken: Step_Login.data.token
+      userId: Step_Login.data.id
     # Pass the login token and user id to subsequent steps via Trans
 
   - step_id: Step_CreateOrder
@@ -454,9 +457,9 @@ In this example, `Authorization: "Bearer #{authToken}"` in Step_CreateOrder is r
 Escape: use `\#{...}` for a literal `#{...}` — it will not be substituted.
 
 **Trans Validation Rules:**
-- No Chinese characters allowed
-- Must be in `key=value` format
-- Square brackets `[]` must appear in matching pairs
+- Must be a valid JSON object (key-value pairs)
+- No Chinese characters allowed in values
+- Square brackets `[]` and parentheses `()` must appear in matching pairs
 - `StepID` must be unique within the same sheet
 
 ### JSON Field Notes
@@ -523,7 +526,7 @@ Business flow test executor:
 - Resolves `#{}` in the URL path from `request_body` first, then via `_resolve_vars()` for Trans dependencies (URL, headers, and body are all resolved)
 - Headers containing `#{}` follow a **Trans-first, LoginManager fallback** strategy: if a variable is declared in Trans, its value is taken from a prior step's response and LoginManager is skipped; LoginManager is only invoked for variables not covered by Trans
 - Uses `threading.local()` to store per-thread step response data
-- `_parse_trans()` parses `key=StepID.path` mappings
+- `_parse_trans()` parses JSON objects into `{key: (StepID, path)}` mappings (backward-compatible with old comma-separated format)
 - `_resolve_vars()` substitutes `#{key}` with actual response values from previous steps (supports placeholders in URL, request headers, and request body)
 - Generates an "execution chain" string (success with `→`, failure marked with `×`)
 
