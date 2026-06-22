@@ -24,7 +24,7 @@ SNAKE_TO_PASCAL: dict[str, str] = {
     "relevance_id": "RelevanceID",
     "tag": "Tag",
     "step_id": "StepID",
-    "trans": "Trans",
+    "inherit": "Inherit",
 }
 
 # PascalCase → snake_case

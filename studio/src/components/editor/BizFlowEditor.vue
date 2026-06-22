@@ -7,7 +7,7 @@ import { BIZ_STEP_COLUMNS, TAG_LEVELS, JSON_COLUMNS } from '../../types/excel'
 import type { BizStep } from '../../types/excel'
 import JsonEditor from '../json-editor/JsonEditor.vue'
 import AssertRulesModal from './AssertRulesModal.vue'
-import TransEditorModal from './TransEditorModal.vue'
+import InheritEditorModal from './InheritEditorModal.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 
 const props = defineProps<{ flowIndex: number; searchBarVisible?: boolean }>()
@@ -137,10 +137,10 @@ function formatRules(val: string[] | null): string {
   return val.join('\n')
 }
 
-// Trans editing
+// Inherit editing
 const stepIds = computed(() => flow.value?.steps.map(s => s.StepID).filter(Boolean) || [])
 
-function parseTransValue(raw: unknown): Record<string, string> {
+function parseInheritValue(raw: unknown): Record<string, string> {
   if (!raw) return {}
   if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, string>
   if (typeof raw === 'string') {
@@ -164,24 +164,24 @@ function parseTransValue(raw: unknown): Record<string, string> {
   return {}
 }
 
-const transModalVisible = ref(false)
-const transModalStepIdx = ref(-1)
-const transModalValue = ref<Record<string, string>>({})
+const inheritModalVisible = ref(false)
+const inheritModalStepIdx = ref(-1)
+const inheritModalValue = ref<Record<string, string>>({})
 
-function openTransEditor(stepIdx: number) {
-  transModalStepIdx.value = stepIdx
-  transModalValue.value = parseTransValue(flow.value.steps[stepIdx].Trans)
-  transModalVisible.value = true
+function openInheritEditor(stepIdx: number) {
+  inheritModalStepIdx.value = stepIdx
+  inheritModalValue.value = parseInheritValue(flow.value.steps[stepIdx].Inherit)
+  inheritModalVisible.value = true
 }
 
-function onTransConfirm(value: Record<string, string>) {
-  if (transModalStepIdx.value >= 0) {
-    onCellChange(transModalStepIdx.value, 'Trans', JSON.stringify(value))
+function onInheritConfirm(value: Record<string, string>) {
+  if (inheritModalStepIdx.value >= 0) {
+    onCellChange(inheritModalStepIdx.value, 'Inherit', JSON.stringify(value))
   }
-  transModalVisible.value = false
+  inheritModalVisible.value = false
 }
 
-function formatTransDisplay(val: unknown): string {
+function formatInheritDisplay(val: unknown): string {
   if (!val) return ''
   if (typeof val === 'string') {
     // Try to parse then pretty-print
@@ -194,32 +194,32 @@ function formatTransDisplay(val: unknown): string {
   return JSON.stringify(val, null, 2)
 }
 
-// Inline Trans editing cache
-const transEditCache = ref<Record<string, string>>({})
+// Inline Inherit editing cache
+const inheritEditCache = ref<Record<string, string>>({})
 
-function getTransEditText(rowIdx: number, raw: unknown): string {
-  const key = `trans_${rowIdx}`
-  if (key in transEditCache.value) return transEditCache.value[key]
-  return formatTransDisplay(raw)
+function getInheritEditText(rowIdx: number, raw: unknown): string {
+  const key = `inherit_${rowIdx}`
+  if (key in inheritEditCache.value) return inheritEditCache.value[key]
+  return formatInheritDisplay(raw)
 }
 
-function onTransEditChange(rowIdx: number, text: string) {
-  transEditCache.value[`trans_${rowIdx}`] = text
+function onInheritEditChange(rowIdx: number, text: string) {
+  inheritEditCache.value[`inherit_${rowIdx}`] = text
 }
 
-function onTransEditBlur(rowIdx: number) {
-  const cacheKey = `trans_${rowIdx}`
-  const text = (transEditCache.value[cacheKey] || '').trim()
+function onInheritEditBlur(rowIdx: number) {
+  const cacheKey = `inherit_${rowIdx}`
+  const text = (inheritEditCache.value[cacheKey] || '').trim()
   if (!text) {
-    onCellChange(rowIdx, 'Trans', '{}')
-    delete transEditCache.value[cacheKey]
+    onCellChange(rowIdx, 'Inherit', '{}')
+    delete inheritEditCache.value[cacheKey]
     return
   }
   try {
     const parsed = JSON.parse(text)
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      onCellChange(rowIdx, 'Trans', JSON.stringify(parsed))
-      delete transEditCache.value[cacheKey]
+      onCellChange(rowIdx, 'Inherit', JSON.stringify(parsed))
+      delete inheritEditCache.value[cacheKey]
     }
   } catch {
     // Keep dirty text; validation will show error
@@ -232,7 +232,7 @@ function getRowClassName(record: BizStep) {
   if ((record as any)._searchActive) return 'row-search-active'
   if ((record as any)._searchMatch) return 'row-search-match'
   if (record._stepIdDuplicate || record._relevanceValid === false
-      || record._transError || (record as any)._urlWarning) {
+      || record._inheritError || (record as any)._urlWarning) {
     return 'row-error'
   }
   return ''
@@ -274,7 +274,7 @@ function getRowClassName(record: BizStep) {
           v-for="col in BIZ_STEP_COLUMNS"
           :key="col"
           :title="getColumnLabel(col)"
-          :width="isJsonColumn(col) ? 250 : col === 'AssertRules' ? 280 : col === 'URL' || col === 'Remark' || col === 'Trans' ? 200 : col === 'StepID' ? 100 : 130"
+          :width="isJsonColumn(col) ? 250 : col === 'AssertRules' ? 280 : col === 'URL' || col === 'Remark' || col === 'Inherit' ? 200 : col === 'StepID' ? 100 : 130"
         >
           <template #default="{ record, index: stepIdx }">
             <!-- StepID with duplicate check -->
@@ -320,28 +320,28 @@ function getRowClassName(record: BizStep) {
               </a-auto-complete>
             </template>
 
-            <!-- Trans with validation -->
-            <template v-else-if="col === 'Trans'">
+            <!-- Inherit with validation -->
+            <template v-else-if="col === 'Inherit'">
               <div style="display: flex; flex-direction: column; gap: 2px; min-width: 200px;">
                 <a-button
                   size="small"
                   type="link"
                   style="padding: 0; text-align: left; height: auto; font-size: 12px;"
-                  @click="openTransEditor(stepIdx)"
+                  @click="openInheritEditor(stepIdx)"
                 >
-                  {{ t('transEditor.editDetails') }}: {{ getColumnLabel(col) }}
+                  {{ t('inheritEditor.editDetails') }}: {{ getColumnLabel(col) }}
                 </a-button>
                 <a-textarea
-                  :value="getTransEditText(stepIdx, record[col])"
+                  :value="getInheritEditText(stepIdx, record[col])"
                   :autoSize="{ minRows: 2, maxRows: 6 }"
                   size="small"
                   style="font-family: monospace; font-size: 12px;"
-                  :status="record._transError ? 'error' : ''"
-                  @change="(e: any) => onTransEditChange(stepIdx, e.target.value)"
-                  @blur="() => onTransEditBlur(stepIdx)"
+                  :status="record._inheritError ? 'error' : ''"
+                  @change="(e: any) => onInheritEditChange(stepIdx, e.target.value)"
+                  @blur="() => onInheritEditBlur(stepIdx)"
                 />
-                <span v-if="record._transError" style="color: #ff4d4f; font-size: 11px;">
-                  &#x2715; {{ record._transError }}
+                <span v-if="record._inheritError" style="color: #ff4d4f; font-size: 11px;">
+                  &#x2715; {{ record._inheritError }}
                 </span>
               </div>
             </template>
@@ -500,13 +500,13 @@ function getRowClassName(record: BizStep) {
       @cancel="assertRulesModalVisible = false"
     />
 
-    <!-- Trans Editor Modal -->
-    <TransEditorModal
-      :visible="transModalVisible"
-      :trans="transModalValue"
+    <!-- Inherit Editor Modal -->
+    <InheritEditorModal
+      :visible="inheritModalVisible"
+      :inheritData="inheritModalValue"
       :stepIds="stepIds"
-      @confirm="onTransConfirm"
-      @cancel="transModalVisible = false"
+      @confirm="onInheritConfirm"
+      @cancel="inheritModalVisible = false"
     />
   </div>
 </template>

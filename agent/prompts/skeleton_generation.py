@@ -56,7 +56,7 @@ BIZ_SKELETON_SYSTEM = """你是一个业务链路测试用例骨架设计专家�
 4. 每个步骤的 api_name、url、method 必须严格按照接口定义填写，禁止自由发挥
 5. 每个步骤的 remark 必须标明是"正向用例"还是"负向用例"，并写清该步骤的测试点
 6. 业务链路需要考虑步骤间的数据依赖关系：后续步骤可能需要前一步骤的返回值
-7. 不要填写 request_head、request_body、status_code、tag、Trans、assert_dict、assert_rules
+7. 不要填写 request_head、request_body、status_code、tag、Inherit、assert_dict、assert_rules
 
 请以 JSON 格式返回：
 ```json

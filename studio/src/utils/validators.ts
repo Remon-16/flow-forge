@@ -37,57 +37,57 @@ export function findDuplicateStepIDs(
 }
 
 /**
- * Validate a Trans field value.
+ * Validate an Inherit field value.
  * Returns null if valid, or an error message string if invalid.
  *
  * New format: JSON object / YAML mapping (Record<string, string>).
  * Old format (still accepted): comma-separated key1=value1, key2=value2...
  */
-export function validateTrans(trans: Record<string, string> | string, stepId?: string): string | null {
-  if (!trans) return null
+export function validateInherit(inherit: Record<string, string> | string, stepId?: string): string | null {
+  if (!inherit) return null
   const idLabel = stepId ? ` (StepID="${stepId}")` : ''
 
   // Normalize to Record<string, string>
-  let transObj: Record<string, string>
-  if (typeof trans === 'string') {
-    const stripped = trans.trim()
+  let inheritObj: Record<string, string>
+  if (typeof inherit === 'string') {
+    const stripped = inherit.trim()
     if (!stripped) return null
     try {
       const parsed = JSON.parse(stripped)
       if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return `Trans 字段必须为 JSON 对象${idLabel}`
+        return `Inherit 字段必须为 JSON 对象${idLabel}`
       }
-      transObj = parsed as Record<string, string>
+      inheritObj = parsed as Record<string, string>
     } catch {
       // Fall back to old comma-separated format
-      return validateTransOld(stripped, stepId)
+      return validateInheritOld(stripped, stepId)
     }
   } else {
-    transObj = trans
+    inheritObj = inherit
   }
 
   // Validate each entry
-  for (const [key, value] of Object.entries(transObj)) {
-    if (!key.trim()) return `Trans 字段 key 为空${idLabel}`
+  for (const [key, value] of Object.entries(inheritObj)) {
+    if (!key.trim()) return `Inherit 字段 key 为空${idLabel}`
     const v = String(value ?? '').trim()
-    if (!v) return `Trans 字段 value 为空（key="${key}"）${idLabel}`
-    if (CHINESE_RE.test(v)) return `Trans 字段包含中文字符${idLabel} (key="${key}": ${v})`
+    if (!v) return `Inherit 字段 value 为空（key="${key}"）${idLabel}`
+    if (CHINESE_RE.test(v)) return `Inherit 字段包含中文字符${idLabel} (key="${key}": ${v})`
     for (const [open, close] of [['[', ']'], ['(', ')']] as [string, string][]) {
       const openCount = (v.match(new RegExp('\\' + open, 'g')) || []).length
       const closeCount = (v.match(new RegExp('\\' + close, 'g')) || []).length
       if (openCount !== closeCount) {
-        return `Trans 字段括号不匹配 "${open}${close}"${idLabel} (key="${key}")`
+        return `Inherit 字段括号不匹配 "${open}${close}"${idLabel} (key="${key}")`
       }
     }
   }
   return null
 }
 
-function validateTransOld(stripped: string, stepId?: string): string | null {
+function validateInheritOld(stripped: string, stepId?: string): string | null {
   const idLabel = stepId ? ` (StepID="${stepId}")` : ''
 
   if (CHINESE_RE.test(stripped)) {
-    return `Trans 字段包含中文字符${idLabel}`
+    return `Inherit 字段包含中文字符${idLabel}`
   }
 
   // Overall bracket matching
@@ -95,7 +95,7 @@ function validateTransOld(stripped: string, stepId?: string): string | null {
     const openCount = (stripped.match(new RegExp('\\' + open, 'g')) || []).length
     const closeCount = (stripped.match(new RegExp('\\' + close, 'g')) || []).length
     if (openCount !== closeCount) {
-      return `Trans 字段括号不匹配 "${open}${close}"${idLabel}`
+      return `Inherit 字段括号不匹配 "${open}${close}"${idLabel}`
     }
   }
 
@@ -103,14 +103,14 @@ function validateTransOld(stripped: string, stepId?: string): string | null {
   const pairs = stripped.split(',').map((p) => p.trim()).filter(Boolean)
   for (const pair of pairs) {
     if (!pair.includes('=')) {
-      return `Trans 格式错误（应为 key=value）${idLabel}: "${pair}"`
+      return `Inherit 格式错误（应为 key=value）${idLabel}: "${pair}"`
     }
     const eqIdx = pair.indexOf('=')
     const key = pair.slice(0, eqIdx).trim()
     const value = pair.slice(eqIdx + 1).trim()
 
-    if (!key) return `Trans 字段 key 为空${idLabel}: "${pair}"`
-    if (!value) return `Trans 字段 value 为空（key="${key}"）${idLabel}`
+    if (!key) return `Inherit 字段 key 为空${idLabel}: "${pair}"`
+    if (!value) return `Inherit 字段 value 为空（key="${key}"）${idLabel}`
   }
   return null
 }

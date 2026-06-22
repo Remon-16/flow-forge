@@ -297,7 +297,7 @@ steps:
     status_code: 200
     assert_dict:
       $.code: 0
-    trans:
+    inherit:
       smsCode: Step01.data.code
   - step_id: Step02
     api_name: User Registration
@@ -333,7 +333,7 @@ steps:
 | `sheet_name` | str | Business scenario name (required for business flow cases) |
 | `steps` | list | List of steps (required for business flow cases) |
 | `step_id` | str | Step identifier (must be unique within the same flow), e.g., `Step01` |
-| `trans` | dict | Inter-step data passing definition; JSON object format; see [Trans Field Syntax](#trans-field-syntax) |
+| `inherit` | dict | Inter-step data passing definition; JSON object format; see [Inherit Field Syntax](#inherit-field-syntax) |
 
 ## Excel Case Format
 
@@ -375,25 +375,25 @@ Each sheet represents a business scenario; the sheet name is the scenario name. 
 |--------|------|-------------|
 | `StepID` | str | Step identifier (must be unique within the same sheet), e.g., `Step01` |
 | `RelevanceID` | str | References a `TestID` in Sheet 1 (not enforced by executor; primarily for case generation agent indexing and querying) |
-| `Trans` | str | Inter-step data passing definition, JSON string format (see syntax below) |
+| `Inherit` | str | Inter-step data passing definition, JSON string format (see syntax below) |
 | Other columns | — | Same as Sheet 1/Sheet 2 |
 
 ### API Definitions Notes
 
 Sheet 1 (API Definitions) serves as reference documentation for the AI agent and is not read by the executor. Test case row values are **used directly** — they are not merged or auto-filled from API definitions. The `RelevanceID` field is for reference association, primarily used by the case generation agent for indexing and querying.
 
-### Trans Field Syntax
+### Inherit Field Syntax
 
-`Trans` passes data between steps in a business flow, using a JSON object format (native YAML mapping in .yaml files):
+`Inherit` passes data between steps in a business flow, using a JSON object format (native YAML mapping in .yaml files):
 
 ```yaml
 # YAML format (native mapping)
-trans:
+inherit:
   variableName: sourceStepID.responseJSONPath
   variableName2: sourceStepID2.responseJSONPath
 ```
 
-In Excel cells, Trans is stored as a JSON string: `{"variableName": "sourceStepID.responseJSONPath"}`.
+In Excel cells, Inherit is stored as a JSON string: `{"variableName": "sourceStepID.responseJSONPath"}`.
 
 Reference passed values in `RequestHead`, `RequestBody`, or `URL` path using `#{variableName}`:
 
@@ -406,7 +406,7 @@ Reference passed values in `RequestHead`, `RequestBody`, or `URL` path using `#{
 
 URL path parameter example: `/api/users/#{userId}/orders/#{orderId}` — `#{userId}` and `#{orderId}` are resolved from the current step's `RequestBody` and replaced in-place.
 
-**Complete example — passing a login token via Trans:**
+**Complete example — passing a login token via Inherit:**
 
 ```yaml
 case_type: biz
@@ -421,7 +421,7 @@ steps:
       phone: "13800138000"
       password: "123456"
     status_code: 200
-    # No trans — the response is stored automatically for later steps
+    # No inherit — the response is stored automatically for later steps
 
   - step_id: Step_Login
     api_name: User Login
@@ -432,10 +432,10 @@ steps:
       phone: "13800138000"
       password: "123456"
     status_code: 200
-    trans:
+    inherit:
       authToken: Step_Login.data.token
       userId: Step_Login.data.id
-    # Pass the login token and user id to subsequent steps via Trans
+    # Pass the login token and user id to subsequent steps via Inherit
 
   - step_id: Step_CreateOrder
     api_name: Create Order
@@ -444,19 +444,19 @@ steps:
     url: /api/order/create
     request_head:
       Content-Type: application/json
-      Authorization: "Bearer #{authToken}"   # Resolved from Trans — skips LoginManager
+      Authorization: "Bearer #{authToken}"   # Resolved from Inherit — skips LoginManager
     request_body:
-      userId: "#{userId}"                     # Resolved from Trans
+      userId: "#{userId}"                     # Resolved from Inherit
       productId: "PROD_001"
       quantity: 1
     status_code: 200
 ```
 
-In this example, `Authorization: "Bearer #{authToken}"` in Step_CreateOrder is resolved from Step_Login's response rather than from LoginManager's pre-configured credentials. Since `authToken` is declared in Trans, the executor recognizes it as Trans-provided and skips LoginManager.
+In this example, `Authorization: "Bearer #{authToken}"` in Step_CreateOrder is resolved from Step_Login's response rather than from LoginManager's pre-configured credentials. Since `authToken` is declared in Inherit, the executor recognizes it as Inherit-provided and skips LoginManager.
 
 Escape: use `\#{...}` for a literal `#{...}` — it will not be substituted.
 
-**Trans Validation Rules:**
+**Inherit Validation Rules:**
 - Must be a valid JSON object (key-value pairs)
 - No Chinese characters allowed in values
 - Square brackets `[]` and parentheses `()` must appear in matching pairs
@@ -484,7 +484,7 @@ Singleton global configuration management:
 ### Excel Parser (`excel_reader/excel_parser.py`)
 
 - Reads Sheet 2 (single API) and Sheet 3+ (business flows) according to `apiMode`
-- Validates `Trans` fields and deduplicates `StepID` for business flows
+- Validates `Inherit` fields and deduplicates `StepID` for business flows
 - Returns `parse_error` on parsing exceptions without blocking other cases
 
 ### YAML Parser (`yaml_reader/yaml_parser.py`)
@@ -523,10 +523,10 @@ Business flow test executor:
 - Each business flow (one sheet) runs in its own thread
 - Steps within a flow execute **sequentially**; any step failure aborts subsequent steps
 - Before each step executes, the URL is checked for the `<URL not exist>` marker. If present, the step fails immediately.
-- Resolves `#{}` in the URL path from `request_body` first, then via `_resolve_vars()` for Trans dependencies (URL, headers, and body are all resolved)
-- Headers containing `#{}` follow a **Trans-first, LoginManager fallback** strategy: if a variable is declared in Trans, its value is taken from a prior step's response and LoginManager is skipped; LoginManager is only invoked for variables not covered by Trans
+- Resolves `#{}` in the URL path from `request_body` first, then via `_resolve_vars()` for Inherit dependencies (URL, headers, and body are all resolved)
+- Headers containing `#{}` follow a **Inherit-first, LoginManager fallback** strategy: if a variable is declared in Inherit, its value is taken from a prior step's response and LoginManager is skipped; LoginManager is only invoked for variables not covered by Inherit
 - Uses `threading.local()` to store per-thread step response data
-- `_parse_trans()` parses JSON objects into `{key: (StepID, path)}` mappings (backward-compatible with old comma-separated format)
+- `_parse_inherit()` parses JSON objects into `{key: (StepID, path)}` mappings (backward-compatible with old comma-separated format)
 - `_resolve_vars()` substitutes `#{key}` with actual response values from previous steps (supports placeholders in URL, request headers, and request body)
 - Generates an "execution chain" string (success with `→`, failure marked with `×`)
 
@@ -730,7 +730,7 @@ sequenceDiagram
 
     Thread->>BizFlow: Execute business flow (one flow per thread)
     loop Steps execute sequentially
-        BizFlow->>BizFlow: Resolve Trans variables (#{key})
+        BizFlow->>BizFlow: Resolve Inherit variables (#{key})
         BizFlow->>LoginMgr: Resolve token
         BizFlow->>API: Send HTTP request
         API-->>BizFlow: Response

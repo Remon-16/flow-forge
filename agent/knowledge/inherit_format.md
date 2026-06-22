@@ -1,8 +1,8 @@
-# Trans 字段格式说明
+# Inherit 字段格式说明
 
 ## 规则
 
-登录步骤的 token 被后续步骤引用时，Trans 格式为 JSON 对象：
+登录步骤的 token 被后续步骤引用时，Inherit 格式为 JSON 对象：
 
 ```json
 {

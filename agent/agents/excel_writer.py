@@ -29,7 +29,7 @@ _CASE_COLUMNS = [
 ]
 
 _BIZ_COLUMNS = [
-    "StepID", "RelevanceID", "Trans",
+    "StepID", "RelevanceID", "Inherit",
     "APIName", "AppName", "Method", "URL",
     "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
     "PreProcessors", "PostProcessors", "Tag", "Remark",
@@ -172,7 +172,7 @@ class ExcelWriter:
             ExcelWriter._write_row(ws, row_idx, [
                 g("step_id"),
                 g("relevance_id"),
-                json.dumps(g("trans"), ensure_ascii=False) if g("trans") else "",
+                json.dumps(g("inherit"), ensure_ascii=False) if g("inherit") else "",
                 g("api_name"),
                 g("app_name"),
                 g("method"),

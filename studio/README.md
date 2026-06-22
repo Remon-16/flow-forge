@@ -46,7 +46,7 @@ npm run dev
 - 打开/编辑/保存 Excel 测试用例文件（.xlsx 格式）
 - 接口定义页编辑（表格形式，支持新增/删除行）
 - 单接口测试用例编辑（RelevanceID 关联校验）
-- 业务链路用例编辑（StepID 重复校验、Trans 字段格式校验）
+- 业务链路用例编辑（StepID 重复校验、Inherit 字段格式校验）
 - **查找与替换**：在当前 Sheet 页中按单元格内容查找/替换，匹配行高亮显示，支持批量替换
 - **JSON 可视化编辑器**：将 RequestHead、RequestBody、AssertDict 等 JSON 字段转化为交互友好的树形编辑器
   - 支持粘贴 JSON 字符串自动解析
@@ -57,7 +57,7 @@ npm run dev
   - 支持 12 种运算符：`==` `!=` `>` `>=` `<` `<=` `=~` `in` `contains` `not_contains` `is_null` `is_not_null` `typeof`
   - 支持 3 种函数：`.length()` `SUM()` `SUM_PRODUCT()`
   - 格式错误实时提示（运算符合法性、路径语法、函数名、期望值缺失等）
-- 实时校验（RelevanceID 存在性、StepID 唯一性、Trans 格式），校验失败标红
+- 实时校验（RelevanceID 存在性、StepID 唯一性、Inherit 格式），校验失败标红
 
 ### YAML 编辑器
 - **表单化编辑**：非文本编辑器，通过结构化表单字段编辑 YAML 用例
@@ -69,7 +69,7 @@ npm run dev
 - 接口定义表单：与单接口表单类似，但不含 relevance_id 和 tag 字段
 - 业务链路表单：sheet_name + 步骤列表（可拖拽排序），每步含完整字段
 - 复用 Excel 编辑器的 JSON 编辑器和 AssertRules 编辑器
-- 字段校验镜像 Excel 编辑器（StepID 重复、Trans 格式）
+- 字段校验镜像 Excel 编辑器（StepID 重复、Inherit 格式）
 - **查找与替换**：在 YAML 原始文本中查找/替换，自动展开右侧 YAML 面板，匹配行号及内容一目了然
 - **右键菜单文件操作**：在文件树中右键点击文件或文件夹，支持重命名、剪切、复制、粘贴、删除至回收站、在文件资源管理器中打开
 
@@ -345,9 +345,9 @@ PreProcessors / PostProcessors 列支持以下编辑方式：
 |--------|---------|------|---------|
 | RelevanceID | 单接口用例、业务链路 | 必须在接口定义页的 TestID 集合中存在 | 单元格标红 |
 | StepID | 业务链路 | 同一 Sheet 内不得重复 | 单元格标红 |
-| Trans 格式 | 业务链路 | JSON 对象格式（key: StepID.path） | 单元格标红 + Tooltip |
-| Trans 括号 | 业务链路 | `[` 与 `]` 数量一致，`(` 与 `)` 数量一致 | 单元格标红 + Tooltip |
-| Trans 中文 | 业务链路 | 不允许包含中文字符 | 单元格标红 + Tooltip |
+| Inherit 格式 | 业务链路 | JSON 对象格式（key: StepID.path） | 单元格标红 + Tooltip |
+| Inherit 括号 | 业务链路 | `[` 与 `]` 数量一致，`(` 与 `)` 数量一致 | 单元格标红 + Tooltip |
+| Inherit 中文 | 业务链路 | 不允许包含中文字符 | 单元格标红 + Tooltip |
 | AssertRules 格式 | 全部 | 运算符合法性、路径语法、函数名、期望值 | 行尾 ✗ 图标 + Tooltip |
 | URL 存在性 | 全部 | URL 包含 `<URL not exist>` 标记（由 Agent 注入） | 输入框红色边框 + 警告图标 + Tooltip |
 | JSON 格式 | JSON 字段 | 合法 JSON 字符串 | 文本区下方红色提示 |
@@ -357,7 +357,7 @@ PreProcessors / PostProcessors 列支持以下编辑方式：
 | 校验项 | 适用范围 | 规则 | UI 表现 |
 |--------|---------|------|---------|
 | StepID | 业务链路 | 同一文件内不得重复 | 输入框标红 |
-| Trans 格式 | 业务链路 | JSON 对象格式，括号匹配，无中文 | 输入框标红 + Tooltip |
+| Inherit 格式 | 业务链路 | JSON 对象格式，括号匹配，无中文 | 输入框标红 + Tooltip |
 | URL 存在性 | 全部 | URL 包含 `<URL not exist>` 标记 | 输入框标红 |
 | AssertRules 格式 | 全部 | 同 Excel 编辑器 | 行尾 ✗ 图标 + Tooltip |
 

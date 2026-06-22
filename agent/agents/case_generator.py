@@ -160,7 +160,7 @@ class CaseGenerator(BaseAgent):
                     steps.append(BizStep(
                         step_id=str(s.get("step_id", "")),
                         relevance_id=str(s.get("relevance_id", "")),
-                        trans=str(s.get("trans", "")),
+                        inherit=str(s.get("inherit", "")),
                         api_name=str(s.get("api_name", "")),
                         app_name=str(s.get("app_name", "")),
                         method=str(s.get("method", "GET")).upper(),

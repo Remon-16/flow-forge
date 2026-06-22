@@ -49,7 +49,7 @@ _CASE_COLUMNS = [
 ]
 
 _BIZ_COLUMNS = [
-    "StepID", "RelevanceID", "Trans",
+    "StepID", "RelevanceID", "Inherit",
     "APIName", "AppName", "Method", "URL",
     "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
     "PreProcessors", "PostProcessors", "Tag", "Remark",
@@ -182,7 +182,7 @@ def write_excel(
                     _write_row(ws, row_idx, [
                         _get(step, "step_id"),
                         _get(step, "relevance_id"),
-                        _serialize_json(_get(step, "trans")),
+                        _serialize_json(_get(step, "inherit")),
                         _get(step, "api_name"),
                         _get(step, "app_name"),
                         _get(step, "method"),

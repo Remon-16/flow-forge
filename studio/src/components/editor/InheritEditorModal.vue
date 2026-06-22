@@ -6,12 +6,12 @@ const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
-  trans: Record<string, string>
+  inheritData: Record<string, string>
   stepIds: string[]
 }>()
 
 const emit = defineEmits<{
-  (e: 'confirm', trans: Record<string, string>): void
+  (e: 'confirm', inheritData: Record<string, string>): void
   (e: 'cancel'): void
 }>()
 
@@ -27,14 +27,13 @@ watch(
   () => props.visible,
   (v) => {
     if (v) {
-      const entries = Object.entries(props.trans || {})
+      const entries = Object.entries(props.inheritData || {})
       rows.value = entries.map(([key, value]) => {
         const dotIdx = value.indexOf('.')
         const stepId = dotIdx > 0 ? value.slice(0, dotIdx) : value
         const path = dotIdx > 0 ? value.slice(dotIdx + 1) : ''
         return { key, stepId, path }
       })
-      // Ensure at least one empty row when empty
       if (rows.value.length === 0) {
         rows.value.push({ key: '', stepId: '', path: '' })
       }
@@ -71,46 +70,46 @@ function handleConfirm() {
 <template>
   <a-modal
     :open="visible"
-    :title="t('transEditor.modal.title')"
+    :title="t('inheritEditor.modal.title')"
     width="750px"
     @ok="handleConfirm"
     @cancel="emit('cancel')"
   >
-    <div class="trans-editor-modal">
-      <div class="trans-toolbar">
+    <div class="inherit-editor-modal">
+      <div class="inherit-toolbar">
         <a-button size="small" type="primary" @click="addVariable">
-          + {{ t('transEditor.addVariable') }}
+          + {{ t('inheritEditor.addVariable') }}
         </a-button>
       </div>
 
-      <div v-if="rows.length === 0" class="trans-empty">
-        {{ t('transEditor.noVariables') }}
+      <div v-if="rows.length === 0" class="inherit-empty">
+        {{ t('inheritEditor.noVariables') }}
       </div>
 
-      <div v-for="(row, i) in rows" :key="i" class="trans-row">
-        <div class="trans-index">{{ i + 1 }}</div>
-        <div class="trans-fields">
+      <div v-for="(row, i) in rows" :key="i" class="inherit-row">
+        <div class="inherit-index">{{ i + 1 }}</div>
+        <div class="inherit-fields">
           <a-form-item
-            :label="t('transEditor.modal.variableName')"
-            class="trans-form-item trans-var-name"
+            :label="t('inheritEditor.modal.variableName')"
+            class="inherit-form-item inherit-var-name"
           >
             <a-input
               :value="row.key"
               size="small"
-              :placeholder="t('transEditor.modal.variableNamePlaceholder')"
+              :placeholder="t('inheritEditor.modal.variableNamePlaceholder')"
               @change="(e: any) => (row.key = e.target.value)"
             />
           </a-form-item>
           <a-form-item
-            :label="t('transEditor.modal.stepId')"
-            class="trans-form-item trans-step-id"
+            :label="t('inheritEditor.modal.stepId')"
+            class="inherit-form-item inherit-step-id"
           >
             <a-select
               :value="row.stepId || undefined"
               size="small"
               allow-clear
               show-search
-              :placeholder="t('transEditor.modal.stepIdPlaceholder')"
+              :placeholder="t('inheritEditor.modal.stepIdPlaceholder')"
               :filter-option="(input: string, option: any) =>
                 (option.label || '').toLowerCase().includes(input.toLowerCase())
               "
@@ -127,13 +126,13 @@ function handleConfirm() {
             </a-select>
           </a-form-item>
           <a-form-item
-            :label="t('transEditor.modal.path')"
-            class="trans-form-item trans-path"
+            :label="t('inheritEditor.modal.path')"
+            class="inherit-form-item inherit-path"
           >
             <a-input
               :value="row.path"
               size="small"
-              :placeholder="t('transEditor.modal.pathPlaceholder')"
+              :placeholder="t('inheritEditor.modal.pathPlaceholder')"
               @change="(e: any) => (row.path = e.target.value)"
             />
           </a-form-item>
@@ -147,25 +146,25 @@ function handleConfirm() {
 </template>
 
 <style scoped>
-.trans-editor-modal {
+.inherit-editor-modal {
   max-height: 400px;
   overflow-y: auto;
 }
 
-.trans-toolbar {
+.inherit-toolbar {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
 }
 
-.trans-empty {
+.inherit-empty {
   padding: 24px;
   text-align: center;
   color: #bbb;
   font-size: 13px;
 }
 
-.trans-row {
+.inherit-row {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -173,7 +172,7 @@ function handleConfirm() {
   border-bottom: 1px solid #f0f0f0;
 }
 
-.trans-index {
+.inherit-index {
   width: 24px;
   height: 28px;
   line-height: 28px;
@@ -186,37 +185,37 @@ function handleConfirm() {
   margin-top: 4px;
 }
 
-.trans-fields {
+.inherit-fields {
   flex: 1;
   display: flex;
   align-items: flex-start;
   gap: 8px;
 }
 
-.trans-form-item {
+.inherit-form-item {
   margin-bottom: 0;
 }
 
-.trans-form-item :deep(.ant-form-item-label) {
+.inherit-form-item :deep(.ant-form-item-label) {
   padding-bottom: 0;
 }
 
-.trans-form-item :deep(.ant-form-item-label > label) {
+.inherit-form-item :deep(.ant-form-item-label > label) {
   font-size: 11px;
   height: auto;
 }
 
-.trans-var-name {
+.inherit-var-name {
   flex: 1;
   min-width: 120px;
 }
 
-.trans-step-id {
+.inherit-step-id {
   flex: 1;
   min-width: 140px;
 }
 
-.trans-path {
+.inherit-path {
   flex: 1.5;
   min-width: 160px;
 }

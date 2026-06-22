@@ -29,7 +29,7 @@
     "RelevanceID": "关联ID",
     "Tag": "级别",
     "StepID": "步骤ID",
-    "Trans": "参数传递",
+    "Inherit": "参数继承",
     "sheetApiDef": "接口定义",
     "sheetSingleCase": "单接口用例",
     "addRow": "新增行",
@@ -87,9 +87,9 @@
   "validator": {
     "relevanceInvalid": "关联ID在接口定义中不存在",
     "stepIdDuplicate": "步骤ID重复",
-    "transFormat": "Trans 格式错误",
-    "transBracket": "括号不匹配",
-    "transChinese": "包含中文字符",
+    "inheritFormat": "Inherit 格式错误",
+    "inheritBracket": "括号不匹配",
+    "inheritChinese": "包含中文字符",
     "unsavedTitle": "未保存的修改",
     "unsavedContent": "当前文件有未保存的修改，是否保存？",
     "urlWarning": "URL 在接口文档中未找到，可能存在 AI 幻觉",
@@ -97,10 +97,10 @@
     "processorInvalidFormat": "处理器格式无效，应为数组，每项包含 name 字段",
     "processorConfigInvalid": "处理器配置格式无效"
   },
-  "transEditor": {
+  "inheritEditor": {
     "editDetails": "编辑详情",
     "modal": {
-      "title": "参数传递编辑",
+      "title": "参数继承编辑",
       "variableName": "变量名",
       "stepId": "来源步骤",
       "path": "响应路径",
@@ -109,7 +109,7 @@
       "pathPlaceholder": "例如 data.token"
     },
     "addVariable": "添加变量",
-    "noVariables": "暂无传递参数"
+    "noVariables": "暂无继承数据"
   },
   "dialog": {
     "yes": "是",

@@ -17,7 +17,7 @@ import {
   moveFileOrDir as moveFileOrDirBackend,
   openInExplorer as openInExplorerBackend,
 } from '../utils/desktop-bridge'
-import { findDuplicateStepIDs, validateTrans } from '../utils/validators'
+import { findDuplicateStepIDs, validateInherit } from '../utils/validators'
 
 export interface FileEntry {
   name: string
@@ -544,7 +544,7 @@ export const useYamlStore = defineStore('yaml', () => {
 
     for (const step of bizCase.steps) {
       ;(step as any)._stepIdDuplicate = dupes.has(step.step_id?.trim())
-      ;(step as any)._transError = validateTrans(step.trans, step.step_id)
+      ;(step as any)._inheritError = validateInherit(step.inherit, step.step_id)
       ;(step as any)._urlWarning = (step.url || '').includes('<URL not exist>')
     }
   }
@@ -553,7 +553,7 @@ export const useYamlStore = defineStore('yaml', () => {
     return {
       StepID: s.step_id,
       RelevanceID: s.relevance_id,
-      Trans: s.trans,
+      Inherit: s.inherit,
       _uid: '',
       TestID: s.step_id,
       Tag: s.tag,

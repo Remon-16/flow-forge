@@ -41,7 +41,7 @@ export interface InterfaceYamlCase {
 export interface YamlBizStep {
   step_id: string
   relevance_id: string
-  trans: Record<string, string>
+  inherit: Record<string, string>
   api_name: string
   app_name: string
   method: string
@@ -100,7 +100,7 @@ export function createDefaultBizStep(): YamlBizStep {
   return {
     step_id: '',
     relevance_id: '',
-    trans: {},
+    inherit: {},
     api_name: '',
     app_name: '',
     method: 'GET',

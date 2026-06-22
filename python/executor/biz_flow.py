@@ -102,11 +102,11 @@ class BizFlowExecutor(BaseExecutor):
 
         try:
             headers, body, url, base_url = self._prepare_step_request(step, app_name, path)
-        except TransResolutionError as e:
+        except InheritResolutionError as e:
             return self._build_step_result(
                 step, step_id, "", path, {}, {},
                 passed=False,
-                error=f"Trans resolution error: {e}",
+                error=f"Inherit resolution error: {e}",
             )
 
         result = self._build_step_result(step, step_id, base_url, path, headers, body)
@@ -116,28 +116,28 @@ class BizFlowExecutor(BaseExecutor):
     def _prepare_step_request(
         self, step: Dict[str, Any], app_name: str, path: str
     ):
-        """Extract headers, body, resolve trans vars, and build URL.
+        """Extract headers, body, resolve inherit vars, and build URL.
 
         Returns ``(headers, body, url, base_url)``.
         """
         headers = dict(step.get("request_head") or {})
         body = dict(step.get("request_body") or {})
-        trans = step.get("trans", "")
+        inherit_data = step.get("inherit", "")
 
         app_config = get_app(app_name) if app_name else {}
         base_url = app_config.get("baseURL", "") if app_config else {}
         url = self._build_url(base_url, path)
         url, body = self._resolve_url_placeholders(url, body)
 
-        if trans:
+        if inherit_data:
             try:
-                trans_mapping = self._parse_trans(trans)
-                body = self._resolve_vars(body, trans_mapping)
-                headers = self._resolve_vars(headers, trans_mapping)
-                url = self._resolve_vars(url, trans_mapping)
+                inherit_mapping = self._parse_inherit(inherit_data)
+                body = self._resolve_vars(body, inherit_mapping)
+                headers = self._resolve_vars(headers, inherit_mapping)
+                url = self._resolve_vars(url, inherit_mapping)
             except Exception as e:
                 # Signal error via a sentinel so caller can build error result
-                raise TransResolutionError(str(e)) from e
+                raise InheritResolutionError(str(e)) from e
 
         return headers, body, url, base_url
 
@@ -224,7 +224,7 @@ class BizFlowExecutor(BaseExecutor):
 
         return result
 
-    def _parse_trans(self, trans) -> Dict[str, tuple]:
+    def _parse_inherit(self, inherit_data) -> Dict[str, tuple]:
         mapping: Dict[str, tuple] = {}
 
         def _store(key: str, value: str) -> None:
@@ -235,8 +235,8 @@ class BizFlowExecutor(BaseExecutor):
                 mapping[key] = (value[:dot_idx], value[dot_idx + 1:])
 
         # 新格式：JSON dict（YAML 原生映射 或 Excel 解析后的 dict）
-        if isinstance(trans, dict):
-            for key, value in trans.items():
+        if isinstance(inherit_data, dict):
+            for key, value in inherit_data.items():
                 key = str(key).strip()
                 val = str(value).strip()
                 if key and val:
@@ -244,8 +244,8 @@ class BizFlowExecutor(BaseExecutor):
             return mapping
 
         # 旧格式回退：逗号分隔字符串
-        if isinstance(trans, str) and trans.strip():
-            pairs = [p.strip() for p in trans.split(",")]
+        if isinstance(inherit_data, str) and inherit_data.strip():
+            pairs = [p.strip() for p in inherit_data.split(",")]
             for pair in pairs:
                 if not pair or "=" not in pair:
                     continue
@@ -258,30 +258,30 @@ class BizFlowExecutor(BaseExecutor):
         return mapping
 
     def _resolve_vars(
-        self, data: Any, trans_mapping: Dict[str, tuple]
+        self, data: Any, inherit_mapping: Dict[str, tuple]
     ) -> Any:
         if isinstance(data, dict):
             result = {}
             for k, v in data.items():
-                result[k] = self._resolve_vars(v, trans_mapping)
+                result[k] = self._resolve_vars(v, inherit_mapping)
             return result
         if isinstance(data, list):
-            return [self._resolve_vars(item, trans_mapping) for item in data]
+            return [self._resolve_vars(item, inherit_mapping) for item in data]
         if isinstance(data, str):
             result = data
             if result.startswith("\\#"):
                 return result[1:]
             def replacer(match):
                 var_name = match.group(1)
-                if var_name in trans_mapping:
-                    step_id, path = trans_mapping[var_name]
+                if var_name in inherit_mapping:
+                    step_id, path = inherit_mapping[var_name]
                     responses = getattr(self._step_data, "responses", {})
                     step_data = responses.get(step_id)
                     if step_data is not None:
                         if path:
                             resolved = resolve_path(step_data, path)
                             if isinstance(resolved, _Missing):
-                                logger.warning("Trans path not found: %s.%s", step_id, path)
+                                logger.warning("Inherit path not found: %s.%s", step_id, path)
                                 return match.group(0)
                             if isinstance(resolved, (dict, list)):
                                 return json.dumps(resolved, ensure_ascii=False)
@@ -315,5 +315,5 @@ class BizFlowExecutor(BaseExecutor):
         )
 
 
-class TransResolutionError(Exception):
-    """Raised when trans variable resolution fails."""
+class InheritResolutionError(Exception):
+    """Raised when inherit variable resolution fails."""

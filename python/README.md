@@ -297,7 +297,7 @@ steps:
     status_code: 200
     assert_dict:
       $.code: 0
-    trans:
+    inherit:
       smsCode: Step01.data.code
   - step_id: Step02
     api_name: 用户注册
@@ -333,7 +333,7 @@ steps:
 | `sheet_name` | str | 业务场景名（业务链路用例必填） |
 | `steps` | list | 业务链路步骤列表（业务链路用例必填） |
 | `step_id` | str | 步骤标识（同一业务链路内不可重复），如 `Step01` |
-| `trans` | dict | 步骤间数据传递定义，JSON 对象格式，语法同 [Trans 字段语法](#trans-字段语法) |
+| `inherit` | dict | 步骤间数据传递定义，JSON 对象格式，语法同 [Inherit 字段语法](#inherit-字段语法) |
 
 ## Excel 用例格式
 
@@ -375,20 +375,20 @@ Excel 文件包含多张 Sheet，结构如下：
 |------|------|------|
 | `StepID` | str | 步骤标识（同一 Sheet 内不可重复），如 `Step01` |
 | `RelevanceID` | str | 关联到 Sheet 1 的 `TestID`（执行器不强制校验，主要用于用例生成智能体的索引和查询） |
-| `Trans` | str | 步骤间数据传递定义，JSON 字符串格式，格式见下文 |
+| `Inherit` | str | 步骤间数据传递定义，JSON 字符串格式，格式见下文 |
 | 其他列 | — | 同 Sheet 1/Sheet 2 |
 
 ### API Definitions 说明
 
 Sheet 1（API Definitions）中定义的接口信息作为 Agent 的参考文档，执行器不读取此页。测试用例行的值**直接使用**，不会与 Sheet 1 的定义进行合并或自动填充。`RelevanceID` 字段用于关联参考，主要用于用例生成智能体的索引和查询。
 
-### Trans 字段语法
+### Inherit 字段语法
 
-`Trans` 用于在业务链路的步骤之间传递数据，格式为 JSON 对象（YAML 中可使用原生映射格式）：
+`Inherit` 用于在业务链路的步骤之间传递数据，格式为 JSON 对象（YAML 中可使用原生映射格式）：
 
 ```yaml
 # YAML 格式（原生映射）
-trans:
+inherit:
   变量名: 来源StepID.响应JSON路径
   变量名2: 来源StepID2.响应JSON路径
 ```
@@ -406,7 +406,7 @@ Excel 单元格中以 JSON 字符串存储：`{"变量名": "来源StepID.响应
 
 URL 路径参数示例：`/api/users/#{userId}/orders/#{orderId}`，其中的 `#{userId}` 和 `#{orderId}` 会从当前步骤的 `RequestBody` 中取值并替换。
 
-**通过 Trans 传递登录 Token 的完整示例：**
+**通过 Inherit 传递登录 Token 的完整示例：**
 
 ```yaml
 case_type: biz
@@ -421,7 +421,7 @@ steps:
       phone: "13800138000"
       password: "123456"
     status_code: 200
-    # 此步骤没有 trans —— 响应自动存储，供后续步骤引用
+    # 此步骤没有 inherit —— 响应自动存储，供后续步骤引用
 
   - step_id: Step_Login
     api_name: 用户登录
@@ -432,10 +432,10 @@ steps:
       phone: "13800138000"
       password: "123456"
     status_code: 200
-    trans:
+    inherit:
       authToken: Step_Login.data.token
       userId: Step_Login.data.id
-    # 将登录响应的 token 和 id 通过 Trans 传递给后续步骤
+    # 将登录响应的 token 和 id 通过 Inherit 传递给后续步骤
 
   - step_id: Step_CreateOrder
     api_name: 创建订单
@@ -444,19 +444,19 @@ steps:
     url: /api/order/create
     request_head:
       Content-Type: application/json
-      Authorization: "Bearer #{authToken}"   # 从 Trans 获取，不走 LoginManager
+      Authorization: "Bearer #{authToken}"   # 从 Inherit 获取，不走 LoginManager
     request_body:
-      userId: "#{userId}"                     # 从 Trans 获取
+      userId: "#{userId}"                     # 从 Inherit 获取
       productId: "PROD_001"
       quantity: 1
     status_code: 200
 ```
 
-在此示例中，Step_CreateOrder 的请求头 `Authorization: "Bearer #{authToken}"` 会从 Step_Login 的响应中取 token，而非从 LoginManager 的预配置凭据中获取。这是因为 Trans 中声明了 `authToken`，执行器识别为 Trans 已提供，跳过 LoginManager。
+在此示例中，Step_CreateOrder 的请求头 `Authorization: "Bearer #{authToken}"` 会从 Step_Login 的响应中取 token，而非从 LoginManager 的预配置凭据中获取。这是因为 Inherit 中声明了 `authToken`，执行器识别为 Inherit 已提供，跳过 LoginManager。
 
 转义：使用 `\#{...}` 表示字面量 `#{...}`，不会被替换。
 
-**Trans 校验规则（JSON 对象格式）：**
+**Inherit 校验规则（JSON 对象格式）：**
 - 不允许包含中文字符
 - 必须是 `key=value` 格式
 - 方括号 `[]` 必须成对出现
@@ -484,7 +484,7 @@ Excel 中的 JSON 字段支持以下格式：
 ### Excel 解析器 (`excel_reader/excel_parser.py`)
 
 - 按 `apiMode` 读取 Sheet 2（单接口）和 Sheet 3+（业务链路）
-- 对业务链路执行 `Trans` 字段校验和 `StepID` 去重检查
+- 对业务链路执行 `Inherit` 字段校验和 `StepID` 去重检查
 - 解析异常时返回 `parse_error`，不阻塞其他用例
 
 ### YAML 解析器 (`yaml_reader/yaml_parser.py`)
@@ -523,10 +523,10 @@ Excel 中的 JSON 字段支持以下格式：
 - 每个业务流（一个 Sheet）在独立线程中执行
 - 流内步骤**串行执行**，任一步骤失败则中止后续步骤
 - 每个步骤执行前先校验 URL 是否包含 `<URL not exist>` 标记，存在时立即失败
-- 先解析 URL 路径中的 `#{}`（从 `request_body` 取值），再通过 `_resolve_vars()` 解析 Trans 依赖的 `#{}`（URL、headers、body 均会解析）
-- 请求头中的 `#{}` 采用 **Trans 优先、LoginManager 回退** 策略：若 Trans 中已声明该变量，则从前往步骤响应中取值，跳过 LoginManager；仅当 Trans 未声明时，才调用 LoginManager 进行登录态注入
+- 先解析 URL 路径中的 `#{}`（从 `request_body` 取值），再通过 `_resolve_vars()` 解析 Inherit 依赖的 `#{}`（URL、headers、body 均会解析）
+- 请求头中的 `#{}` 采用 **Inherit 优先、LoginManager 回退** 策略：若 Inherit 中已声明该变量，则从前往步骤响应中取值，跳过 LoginManager；仅当 Inherit 未声明时，才调用 LoginManager 进行登录态注入
 - 使用 `threading.local()` 存储每线程的步骤响应数据
-- `_parse_trans()` 解析 JSON 对象为 `{key: (StepID, path)}` 映射（兼容旧逗号分隔格式）
+- `_parse_inherit()` 解析 JSON 对象为 `{key: (StepID, path)}` 映射（兼容旧逗号分隔格式）
 - `_resolve_vars()` 将 `#{key}` 替换为前序步骤的实际响应值（支持 URL、请求头、请求体中的占位符）
 - 最终生成"执行链路"字符串（成功用 `→`，失败用 `×` 标记）
 
@@ -730,7 +730,7 @@ sequenceDiagram
 
     Thread->>BizFlow: 执行业务流（每流一线程）
     loop 步骤串行执行
-        BizFlow->>BizFlow: 解析 Trans 变量 (#{key})
+        BizFlow->>BizFlow: 解析 Inherit 变量 (#{key})
         BizFlow->>LoginMgr: 解析 Token
         BizFlow->>API: 发送 HTTP 请求
         API-->>BizFlow: 响应

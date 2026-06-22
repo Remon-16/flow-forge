@@ -5,7 +5,7 @@ import { useYamlStore } from '../../stores/yaml-store'
 import { TAG_LEVELS, HTTP_METHODS } from '../../types/excel'
 import type { YamlBizStep } from '../../types/yaml'
 import ProcessorListEditor from '../editor/ProcessorListEditor.vue'
-import TransEditorModal from '../editor/TransEditorModal.vue'
+import InheritEditorModal from '../editor/InheritEditorModal.vue'
 
 const { t } = useI18n()
 const yamlStore = useYamlStore()
@@ -17,7 +17,7 @@ watch(() => yamlStore.currentCase, () => {
 })
 
 const props = defineProps<{
-  step: YamlBizStep & { _stepIdDuplicate?: boolean; _transError?: string | null }
+  step: YamlBizStep & { _stepIdDuplicate?: boolean; _inheritError?: string | null }
   index: number
   stepIds?: string[]
 }>()
@@ -110,21 +110,21 @@ function onRulesEditBlur() {
   rulesEditText.value = ''
 }
 
-// Trans editing
-const transModalVisible = ref(false)
-const transModalValue = ref<Record<string, string>>({})
+// Inherit editing
+const inheritModalVisible = ref(false)
+const inheritModalValue = ref<Record<string, string>>({})
 
-function openTransEditor() {
-  transModalValue.value = props.step.trans || {}
-  transModalVisible.value = true
+function openInheritEditor() {
+  inheritModalValue.value = props.step.inherit || {}
+  inheritModalVisible.value = true
 }
 
-function onTransConfirm(value: Record<string, string>) {
-  emit('update', props.index, 'trans', value)
-  transModalVisible.value = false
+function onInheritConfirm(value: Record<string, string>) {
+  emit('update', props.index, 'inherit', value)
+  inheritModalVisible.value = false
 }
 
-function formatTransDisplay(val: unknown): string {
+function formatInheritDisplay(val: unknown): string {
   if (!val) return ''
   if (typeof val === 'object') return JSON.stringify(val, null, 2)
   if (typeof val === 'string') {
@@ -137,35 +137,35 @@ function formatTransDisplay(val: unknown): string {
   return String(val)
 }
 
-// Inline Trans editing cache
-const transEditText = ref('')
+// Inline Inherit editing cache
+const inheritEditText = ref('')
 
-function getTransEditText(val: unknown): string {
-  if (transEditText.value) return transEditText.value
-  return formatTransDisplay(val)
+function getInheritEditText(val: unknown): string {
+  if (inheritEditText.value) return inheritEditText.value
+  return formatInheritDisplay(val)
 }
 
-function onTransEditChange(text: string) {
-  transEditText.value = text
+function onInheritEditChange(text: string) {
+  inheritEditText.value = text
 }
 
-function onTransEditBlur() {
-  if (!transEditText.value) {
-    emit('update', props.index, 'trans', {})
-    transEditText.value = ''
+function onInheritEditBlur() {
+  if (!inheritEditText.value) {
+    emit('update', props.index, 'inherit', {})
+    inheritEditText.value = ''
     return
   }
-  const text = transEditText.value.trim()
+  const text = inheritEditText.value.trim()
   if (!text) {
-    emit('update', props.index, 'trans', {})
-    transEditText.value = ''
+    emit('update', props.index, 'inherit', {})
+    inheritEditText.value = ''
     return
   }
   try {
     const parsed = JSON.parse(text)
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      emit('update', props.index, 'trans', parsed)
-      transEditText.value = ''
+      emit('update', props.index, 'inherit', parsed)
+      inheritEditText.value = ''
     }
   } catch {
     // Keep dirty text
@@ -219,7 +219,7 @@ function onTransEditBlur() {
       </a-col>
     </a-row>
 
-    <!-- Row 2: Tag + Trans -->
+    <!-- Row 2: Tag + Inherit -->
     <a-row :gutter="12">
       <a-col :span="12">
         <a-form-item :label="t('table.Tag')" class="compact-item">
@@ -237,24 +237,24 @@ function onTransEditBlur() {
       <a-col :span="12">
         <a-form-item class="compact-item">
           <template #label>
-            <span>{{ t('table.Trans') }}</span>
+            <span>{{ t('table.Inherit') }}</span>
             <a-button
               size="small"
               type="link"
               style="padding: 0 0 0 8px; font-size: 11px;"
-              @click="openTransEditor"
+              @click="openInheritEditor"
             >
-              {{ t('transEditor.editDetails') }}
+              {{ t('inheritEditor.editDetails') }}
             </a-button>
           </template>
           <a-textarea
-            :value="getTransEditText(step.trans)"
+            :value="getInheritEditText(step.inherit)"
             :auto-size="{ minRows: 2, maxRows: 6 }"
             size="small"
-            :status="step._transError ? 'error' : ''"
-            :placeholder="t('transEditor.noVariables')"
-            @change="(e: any) => onTransEditChange(e.target.value)"
-            @blur="onTransEditBlur"
+            :status="step._inheritError ? 'error' : ''"
+            :placeholder="t('inheritEditor.noVariables')"
+            @change="(e: any) => onInheritEditChange(e.target.value)"
+            @blur="onInheritEditBlur"
           />
         </a-form-item>
       </a-col>
@@ -471,13 +471,13 @@ function onTransEditBlur() {
       </a-col>
     </a-row>
 
-    <!-- Trans Editor Modal -->
-    <TransEditorModal
-      :visible="transModalVisible"
-      :trans="transModalValue"
+    <!-- Inherit Editor Modal -->
+    <InheritEditorModal
+      :visible="inheritModalVisible"
+      :inheritData="inheritModalValue"
       :stepIds="props.stepIds || []"
-      @confirm="onTransConfirm"
-      @cancel="transModalVisible = false"
+      @confirm="onInheritConfirm"
+      @cancel="inheritModalVisible = false"
     />
   </div>
 </template>

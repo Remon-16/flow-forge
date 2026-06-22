@@ -46,7 +46,7 @@ const THIN_BORDER: Partial<ExcelJS.Borders> = {
 // --- Helpers ---
 
 const JSON_FIELDS = ['RequestHead', 'RequestBody', 'AssertDict', 'AssertRules']
-const INTERNAL_FIELDS = ['_uid', '_relevanceValid', '_stepIdDuplicate', '_transError']
+const INTERNAL_FIELDS = ['_uid', '_relevanceValid', '_stepIdDuplicate', '_inheritError']
 
 function safeSheetName(name: string): string {
   return name

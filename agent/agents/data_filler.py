@@ -139,7 +139,7 @@ class SingleDataFiller(BaseAgent):
 
 
 class BizDataFiller(BaseAgent):
-    """Fill request data and Trans fields for business flow test case skeletons."""
+    """Fill request data and Inherit fields for business flow test case skeletons."""
 
     def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None):
         super().__init__(
@@ -165,7 +165,7 @@ class BizDataFiller(BaseAgent):
         user_guidance: str = "",
         previous_errors: Optional[List[Dict]] = None,
     ) -> List[Dict]:
-        """Fill request data and Trans for a batch of biz flow skeletons.
+        """Fill request data and Inherit for a batch of biz flow skeletons.
 
         Uses pre-search against API doc text to provide relevant snippets.
         """
@@ -251,7 +251,7 @@ class BizDataFiller(BaseAgent):
         prompt += error_context
 
         if self._knowledge is not None:
-            docs = self._knowledge.search("business flow trans data dependency", n_results=3)
+            docs = self._knowledge.search("business flow inherit data dependency", n_results=3)
             if docs:
                 prompt += f"\n\n## 知识库参考\n" + "\n---\n".join(docs)
 

@@ -56,7 +56,7 @@ export interface BizStep {
   _uid: string
   StepID: string
   RelevanceID: string
-  Trans: string
+  Inherit: string
   APIName: string
   AppName: string
   Method: string
@@ -72,7 +72,7 @@ export interface BizStep {
   Remark: string
   _relevanceValid?: boolean
   _stepIdDuplicate?: boolean
-  _transError?: string | null
+  _inheritError?: string | null
 }
 
 export interface BizFlow {
@@ -101,7 +101,7 @@ export const SINGLE_CASE_COLUMNS = [
 ] as const
 
 export const BIZ_STEP_COLUMNS = [
-  'StepID', 'RelevanceID', 'Trans', 'APIName', 'AppName', 'Method', 'URL',
+  'StepID', 'RelevanceID', 'Inherit', 'APIName', 'AppName', 'Method', 'URL',
   'RequestHead', 'RequestBody', 'StatusCode', 'AssertDict', 'AssertRules',
   'PreProcessors', 'PostProcessors', 'Tag', 'Remark',
 ] as const

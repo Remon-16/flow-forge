@@ -71,7 +71,7 @@ def read_excel(file_path: str) -> dict[str, Any]:
         "PreProcessors", "PostProcessors", "Remark",
     ]
     biz_headers = [
-        "StepID", "RelevanceID", "Trans",
+        "StepID", "RelevanceID", "Inherit",
         "APIName", "AppName", "Method", "URL",
         "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
         "PreProcessors", "PostProcessors", "Tag", "Remark",

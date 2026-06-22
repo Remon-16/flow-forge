@@ -29,7 +29,7 @@
     "RelevanceID": "Relevance ID",
     "Tag": "Tag",
     "StepID": "Step ID",
-    "Trans": "Trans",
+    "Inherit": "Inherit",
     "sheetApiDef": "API Definitions",
     "sheetSingleCase": "Single Cases",
     "addRow": "Add Row",
@@ -87,9 +87,9 @@
   "validator": {
     "relevanceInvalid": "Relevance ID not found in API Definitions",
     "stepIdDuplicate": "Duplicate Step ID",
-    "transFormat": "Trans format error",
-    "transBracket": "Mismatched brackets",
-    "transChinese": "Contains Chinese characters",
+    "inheritFormat": "Inherit format error",
+    "inheritBracket": "Mismatched brackets",
+    "inheritChinese": "Contains Chinese characters",
     "processorNameRequired": "Processor name cannot be empty",
     "processorInvalidFormat": "Invalid processor format, must be an array with name field",
     "processorConfigInvalid": "Invalid processor config format",
@@ -97,10 +97,10 @@
     "unsavedContent": "You have unsaved changes. Save before continuing?",
     "urlWarning": "URL not found in API documentation - possible AI hallucination"
   },
-  "transEditor": {
+  "inheritEditor": {
     "editDetails": "Edit Details",
     "modal": {
-      "title": "Trans Editor",
+      "title": "Inherit Editor",
       "variableName": "Variable Name",
       "stepId": "Source Step",
       "path": "Response Path",
@@ -109,7 +109,7 @@
       "pathPlaceholder": "e.g. data.token"
     },
     "addVariable": "Add Variable",
-    "noVariables": "No variables to pass"
+    "noVariables": "No inherited data"
   },
   "dialog": {
     "yes": "Yes",

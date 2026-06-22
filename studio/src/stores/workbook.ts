@@ -9,7 +9,7 @@ import type {
 } from '../types/excel'
 import { readExcelFromBuffer } from '../utils/excel-reader'
 import { downloadExcel } from '../utils/excel-writer'
-import { validateRelevanceID, findDuplicateStepIDs, validateTrans } from '../utils/validators'
+import { validateRelevanceID, findDuplicateStepIDs, validateInherit } from '../utils/validators'
 import { isDesktop, writeFileBuffer, readFileBuffer, saveFileDialog } from '../utils/desktop-bridge'
 
 let uidCounter = 0
@@ -233,7 +233,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
       _uid: generateUid(),
       StepID: '',
       RelevanceID: '',
-      Trans: '{}',
+      Inherit: '{}',
       APIName: '',
       AppName: '',
       Method: 'GET',
@@ -249,7 +249,7 @@ export const useWorkbookStore = defineStore('workbook', () => {
       Remark: '',
       _relevanceValid: true,
       _stepIdDuplicate: false,
-      _transError: null,
+      _inheritError: null,
     })
     markModified()
   }
@@ -297,9 +297,9 @@ export const useWorkbookStore = defineStore('workbook', () => {
       // StepID duplicate
       step._stepIdDuplicate = dupes.has(step.StepID?.trim())
 
-      // Trans
-      const transErr = validateTrans(step.Trans, step.StepID)
-      step._transError = transErr
+      // Inherit
+      const inheritErr = validateInherit(step.Inherit, step.StepID)
+      step._inheritError = inheritErr
 
       // URL warning
       ;(step as any)._urlWarning = String(step.URL ?? '').includes('<URL not exist>')

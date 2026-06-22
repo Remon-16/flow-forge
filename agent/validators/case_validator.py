@@ -91,9 +91,9 @@ class CaseValidator(BaseAgent):
                 for si, step in enumerate(steps):
                     step_errors = self._validate_one_biz_step(step, si)
                     errors.extend(step_errors)
-                    step_trans = str(_get_field(step, "trans", ""))
-                    if step_trans:
-                        errors.extend(self._check_trans_refs(step_trans, steps))
+                    step_inherit = str(_get_field(step, "inherit", ""))
+                    if step_inherit:
+                        errors.extend(self._check_inherit_refs(step_inherit, steps))
 
         return errors
 
@@ -205,31 +205,31 @@ class CaseValidator(BaseAgent):
         return []
 
     @staticmethod
-    def _check_trans_refs(trans, steps: List[Dict]) -> List[str]:
+    def _check_inherit_refs(inherit, steps: List[Dict]) -> List[str]:
         errors = []
         step_ids = {str(_get_field(s, "step_id", "")) for s in steps}
 
         def _check_entry(key: str, value: str) -> None:
             if not value:
-                errors.append(f"Trans key '{key}' has empty value")
+                errors.append(f"Inherit key '{key}' has empty value")
                 return
             dot_idx = value.find(".")
             if dot_idx > 0:
                 ref_step = value[:dot_idx]
                 if ref_step not in step_ids:
-                    errors.append(f"Trans key '{key}' references unknown StepID '{ref_step}'")
+                    errors.append(f"Inherit key '{key}' references unknown StepID '{ref_step}'")
 
         # 新格式：dict
-        if isinstance(trans, dict):
-            for key, value in trans.items():
+        if isinstance(inherit, dict):
+            for key, value in inherit.items():
                 key = str(key).strip()
                 value_str = str(value).strip() if value else ""
                 _check_entry(key, value_str)
             return errors
 
         # 旧格式回退：逗号分隔字符串
-        if isinstance(trans, str) and trans.strip():
-            for pair in trans.split(","):
+        if isinstance(inherit, str) and inherit.strip():
+            for pair in inherit.split(","):
                 pair = pair.strip()
                 if not pair or "=" not in pair:
                     continue

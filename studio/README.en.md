@@ -46,7 +46,7 @@ Desktop mode launches the Tauri window automatically.
 - Open / edit / save Excel test case files (.xlsx format)
 - API definition editing (table view with add/delete row support)
 - Single-API test case editing (with RelevanceID cross-reference validation)
-- Business flow test case editing (StepID uniqueness check, Trans field format validation)
+- Business flow test case editing (StepID uniqueness check, Inherit field format validation)
 - **Find & Replace**: search and replace cell values within the current sheet — matching rows are highlighted; batch replace supported
 - **Visual JSON Editor**: turns JSON fields (RequestHead, RequestBody, AssertDict, etc.) into an interactive tree editor
   - Paste a JSON string to auto-parse into a tree structure
@@ -57,7 +57,7 @@ Desktop mode launches the Tauri window automatically.
   - Supports 12 operators: `==` `!=` `>` `>=` `<` `<=` `=~` `in` `contains` `not_contains` `is_null` `is_not_null` `typeof`
   - Supports 3 functions: `.length()` `SUM()` `SUM_PRODUCT()`
   - Real-time format error hints (operator validity, path syntax, function names, missing expected values, etc.)
-- Real-time validation (RelevanceID existence, StepID uniqueness, Trans format) — invalid cells highlighted in red
+- Real-time validation (RelevanceID existence, StepID uniqueness, Inherit format) — invalid cells highlighted in red
 
 ### YAML Editor
 - **Form-based editing**: not a text editor — edit YAML cases through structured form fields
@@ -69,7 +69,7 @@ Desktop mode launches the Tauri window automatically.
 - Interface definition form: similar to single-API form but without relevance_id and tag fields
 - Business flow form: sheet_name + step list (draggable sort), each step with full fields
 - Reuses Excel editor's JSON Editor and AssertRules Editor
-- Field validation mirrors Excel editor (StepID duplicate, Trans format)
+- Field validation mirrors Excel editor (StepID duplicate, Inherit format)
 - **Find & Replace**: search and replace within the raw YAML text — auto-expands the right-side panel on activation; matching line numbers and content are clearly displayed
 - **Right-click file operations**: right-click files or folders in the file tree to rename, cut, copy, paste, delete to recycle bin, and open in file explorer. Cross-platform support for Windows, macOS, and Linux
 
@@ -346,9 +346,9 @@ The PreProcessors / PostProcessors columns support the following editing modes:
 |------|-----------|-------------|--------------|
 | RelevanceID | Single-API cases, Business flows | Must exist in the API definition TestID set | Red cell highlight |
 | StepID | Business flows | Must be unique within the same sheet | Red cell highlight |
-| Trans format | Business flows | JSON object format (key: StepID.path) | Red cell + tooltip |
-| Trans brackets | Business flows | `[` and `]` counts must match; `(` and `)` counts must match | Red cell + tooltip |
-| Trans Chinese chars | Business flows | Chinese characters are not allowed | Red cell + tooltip |
+| Inherit format | Business flows | JSON object format (key: StepID.path) | Red cell + tooltip |
+| Inherit brackets | Business flows | `[` and `]` counts must match; `(` and `)` counts must match | Red cell + tooltip |
+| Inherit Chinese chars | Business flows | Chinese characters are not allowed | Red cell + tooltip |
 | AssertRules format | All | Operator validity, path syntax, function names, expected values | Red ✗ icon + tooltip |
 | URL existence | All | URL contains `<URL not exist>` marker (injected by Agent) | Red border + warning icon + Tooltip |
 | JSON format | JSON fields | Must be valid JSON string | Red hint below text area |
@@ -358,7 +358,7 @@ The PreProcessors / PostProcessors columns support the following editing modes:
 | Rule | Applies To | Description | UI Indicator |
 |------|-----------|-------------|--------------|
 | StepID | Business flows | Must be unique within the same file | Red input highlight |
-| Trans format | Business flows | JSON object format, bracket matching, no Chinese chars | Red input + tooltip |
+| Inherit format | Business flows | JSON object format, bracket matching, no Chinese chars | Red input + tooltip |
 | URL existence | All | URL contains `<URL not exist>` marker | Red border on input |
 | AssertRules format | All | Same as Excel editor | Red ✗ icon + tooltip |
 
