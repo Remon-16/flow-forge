@@ -1,6 +1,6 @@
-"""默认插件 — 官方提供的数据填充和断言生成插件。
+"""官方插件 — 提供数据填充和断言生成插件。
 
-Default plugins: data filling and assertion generation.
+Official plugins: data filling and assertion generation.
 """
 
 from .data_filling import DataFillingPlugin

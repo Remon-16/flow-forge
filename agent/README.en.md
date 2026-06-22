@@ -46,9 +46,7 @@ Core workflow (9 steps):
 8. **Case Generation** (skeleton + plugin pipeline):
    - Skeleton generation: One-shot generation of all single/biz case skeletons (test_id, relevance_id, URL metadata)
    - URL validation: Check all skeleton URLs against source document; submit mis-matching URLs for correction
-   - Data filling plugin (default): Batch-fill request_head, request_body, status_code, tag per interface definitions
-   - Assertion generation plugin (default): Batch-generate assert_dict (simple equality) and assert_rules (advanced rules)
-   - User custom plugins (optional): Register via `PLUGIN_MODULES` to add arbitrary case attributes post-assertion
+   - Plugin execution: Run plugins in the order configured in PLUGIN_MODULES (e.g. data filling, assertion generation)
 
 9. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
 
@@ -60,25 +58,23 @@ Core workflow (9 steps):
 
 ## Plugin System
 
-### Default Plugins
+Flow Forge uses a plugin system to enrich test case skeletons with additional attributes after generation. All plugins are configured via `PLUGIN_MODULES` in `.env`:
 
-Two default plugins are provided out of the box:
+```ini
+ENABLE_PLUGINS=true
+PLUGIN_MODULES=plugins.official.data_filling.DataFillingPlugin,plugins.official.assertion_generation.AssertionGenerationPlugin
+```
+
+### Official Plugins
 
 | Plugin | Purpose | Attributes |
 |--------|---------|------------|
 | `data_filling` | Fill request data into skeletons (request_head, request_body, status_code, tag) | Single + Biz |
 | `assertion_generation` | Generate assertions for filled cases (assert_dict, assert_rules) | Single + Biz |
 
-### Custom Plugins
+Users may remove unwanted plugins from `PLUGIN_MODULES` or replace them with custom implementations.
 
-Enable and configure in `.env`:
-
-```
-ENABLE_PLUGINS=true
-PLUGIN_MODULES=my_plugins.pre_processor.PreProcessor,my_plugins.post_processor.PostProcessor
-```
-
-Writing a plugin:
+### Writing a Custom Plugin
 
 1. Subclass `CaseAttributeGenerator` (`plugins/base.py`)
 2. Declare `PluginDeclaration` (name, attributes, scope, etc.)
@@ -105,7 +101,7 @@ class CustomPlugin(CaseAttributeGenerator):
         return cases
 ```
 
-Users can override default plugins by specifying a plugin with the same name in `PLUGIN_MODULES`.
+Then add the plugin path to `PLUGIN_MODULES`.
 
 ### PluginDeclaration Fields
 
@@ -180,11 +176,10 @@ agent/
 │
 ├── plugins/
 │   ├── base.py                  # CaseAttributeGenerator base class
-│   ├── loader.py                # Unified plugin loader (defaults + user)
-│   ├── default/                 # Default plugins
-│   │   ├── data_filling.py      # Data filling plugin
-│   │   └── assertion_generation.py # Assertion generation plugin
-│   └── custom/                  # User custom plugins
+│   ├── loader.py                # Plugin loader
+│   └── official/                # Official plugins
+│       ├── data_filling.py      # Data filling plugin
+│       └── assertion_generation.py # Assertion generation plugin
 │
 ├── agents/
 │   ├── base.py                  # BaseAgent foundation class
@@ -318,8 +313,8 @@ Supported `.env` variables:
 | `CONSECUTIVE_BATCH_FAILURE_LIMIT` | `3` | Consecutive failure limit |
 | `OUTPUT_DIR` | `./output` | Output root directory |
 | `OUTPUT_FORMAT` | `both` | Output format |
-| `ENABLE_PLUGINS` | `false` | Enable custom plugins |
-| `PLUGIN_MODULES` | — | User plugin module paths (comma-separated) |
+| `ENABLE_PLUGINS` | `true` | Enable plugin system |
+| `PLUGIN_MODULES` | (official plugins) | Plugin module paths (comma-separated) |
 | `AGENT_LANG` | `zh_CN` | UI language: `zh_CN` / `en_US` |
 
 ## Knowledge Base
@@ -353,4 +348,4 @@ The pipeline pattern decomposes test case generation into sequential, independen
 
 ### Why plugin architecture
 
-Data filling and assertion generation are provided as default plugins. Users can register custom plugins via `PLUGIN_MODULES` to replace or extend default behavior. Different projects have different testing needs — some require HMAC signing preprocessors, others need database-backed verification — and the plugin architecture allows customizing the generation pipeline without modifying framework code.
+Data filling and assertion generation are provided as official plugins, configured via `PLUGIN_MODULES`. Users can remove unwanted plugins or register custom plugins to extend the default behavior. Different projects have different testing needs — some require HMAC signing preprocessors, others need database-backed verification — and the plugin architecture allows customizing the generation pipeline without modifying framework code.

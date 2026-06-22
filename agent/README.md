@@ -46,9 +46,7 @@ graph TD
 8. **用例生成**（骨架 + 插件流水线）：
    - 骨架生成：一次性生成全部单接口/业务链路用例骨架（含 test_id、relevance_id、URL 等元数据）
    - URL 校验：检查骨架中所有 URL 是否在文档原文中存在，不存在的提交纠错重试
-   - 数据填充插件（默认）：按 batch_size 分批，根据接口定义填充 request_head、request_body、status_code、tag
-   - 断言生成插件（默认）：分批生成 assert_dict（简单等值断言）和 assert_rules（高级断言规则）
-   - 用户自定义插件（可选）：通过 `PLUGIN_MODULES` 注册，可在断言生成后补充任意用例属性
+   - 插件执行：按 PLUGIN_MODULES 配置的插件列表依次执行（如数据填充、断言生成等）
 
 9. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出
 
@@ -60,25 +58,23 @@ graph TD
 
 ## 插件系统
 
-### 默认插件
+Flow Forge 通过插件系统在用例骨架生成后补充用例属性。所有插件通过 `.env` 中的 `PLUGIN_MODULES` 配置：
 
-系统默认提供两个插件，无需配置即可使用：
+```ini
+ENABLE_PLUGINS=true
+PLUGIN_MODULES=plugins.official.data_filling.DataFillingPlugin,plugins.official.assertion_generation.AssertionGenerationPlugin
+```
+
+### 官方插件
 
 | 插件 | 作用 | 属性 |
 |------|------|------|
 | `data_filling` | 为用例骨架填充请求数据（request_head, request_body, status_code, tag） | 单接口 + 业务链路 |
 | `assertion_generation` | 为已填充用例生成断言（assert_dict, assert_rules） | 单接口 + 业务链路 |
 
-### 用户自定义插件
+用户可以在 `PLUGIN_MODULES` 中删减不需要的插件，或用自定义实现替换。
 
-在 `.env` 文件中启用并指定模块路径：
-
-```
-ENABLE_PLUGINS=true
-PLUGIN_MODULES=my_plugins.pre_processor.PreProcessor,my_plugins.post_processor.PostProcessor
-```
-
-编写插件：
+### 编写自定义插件
 
 1. 继承 `CaseAttributeGenerator` 基类（`plugins/base.py`）
 2. 声明 `PluginDeclaration`（插件名称、作用的属性、适用范围等）
@@ -105,7 +101,7 @@ class CustomPlugin(CaseAttributeGenerator):
         return cases
 ```
 
-用户可通过 `PLUGIN_MODULES` 中显式指定与默认插件同名的插件来替换默认插件。
+然后将插件路径加入 `PLUGIN_MODULES` 即可。
 
 ### PluginDeclaration 字段说明
 
@@ -200,12 +196,11 @@ agent/
 ├── plugins/
 │   ├── __init__.py
 │   ├── base.py                  # CaseAttributeGenerator 基类
-│   ├── loader.py                # 统一插件加载（默认 + 用户）
-│   ├── default/                 # 默认插件
-│   │   ├── __init__.py
-│   │   ├── data_filling.py      # 数据填充插件
-│   │   └── assertion_generation.py # 断言生成插件
-│   └── custom/                  # 用户自定义插件
+│   ├── loader.py                # 插件加载器
+│   └── official/                # 官方插件
+│       ├── __init__.py
+│       ├── data_filling.py      # 数据填充插件
+│       └── assertion_generation.py # 断言生成插件
 │
 ├── agents/
 │   ├── __init__.py
@@ -358,8 +353,8 @@ optional arguments:
 | `CONSECUTIVE_BATCH_FAILURE_LIMIT` | `3` | 连续批次失败上限 |
 | `OUTPUT_DIR` | `./output` | 输出根目录 |
 | `OUTPUT_FORMAT` | `both` | 输出格式 |
-| `ENABLE_PLUGINS` | `false` | 启用用户自定义插件 |
-| `PLUGIN_MODULES` | — | 用户插件模块路径（逗号分隔） |
+| `ENABLE_PLUGINS` | `true` | 启用插件系统 |
+| `PLUGIN_MODULES` | (官方插件) | 插件模块路径（逗号分隔） |
 | `AGENT_LANG` | `zh_CN` | 界面语言：`zh_CN` / `en_US` |
 
 ## 知识库
@@ -393,4 +388,4 @@ LangGraph 提供三个关键能力：
 
 ### 为什么用插件架构
 
-数据填充和断言生成作为默认插件提供，用户可以通过 `PLUGIN_MODULES` 注册自定义插件来替换或扩展默认行为。不同项目的测试需求差异很大——某些项目需要 HMAC 签名预处理、某些需要数据库连接验证——插件架构允许用户在不修改框架代码的前提下定制用例生成流程。
+数据填充和断言生成为官方插件，通过 `PLUGIN_MODULES` 自由配置。用户可删减不需要的插件或注册自定义插件来扩展行为。不同项目的测试需求差异很大——某些项目需要 HMAC 签名预处理、某些需要数据库连接验证——插件架构允许用户在不修改框架代码的前提下定制用例生成流程。

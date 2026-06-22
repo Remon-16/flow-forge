@@ -1,6 +1,6 @@
-"""插件加载器 — 统一加载默认插件和用户自定义插件。
+"""插件加载器 — 从 PLUGIN_MODULES 配置加载插件。
 
-Plugin loader: loads default plugins first, then user-configured plugins.
+Plugin loader: loads plugins from module paths configured in PLUGIN_MODULES.
 """
 
 import importlib
@@ -12,31 +12,18 @@ from plugins.base import CaseAttributeGenerator
 logger = logging.getLogger(__name__)
 
 
-def load_default_plugins(
-    settings,
-    knowledge: Optional[object] = None,
-) -> List[CaseAttributeGenerator]:
-    """加载默认插件（数据填充 + 断言生成）。
-
-    Load the two default plugins: data filling and assertion generation.
-    """
-    from plugins.default import AssertionGenerationPlugin, DataFillingPlugin
-
-    data = DataFillingPlugin(settings, knowledge)
-    assertion = AssertionGenerationPlugin(settings, knowledge)
-    logger.info(
-        "Loaded default plugins: data_filling, assertion_generation"
-    )
-    return [data, assertion]
-
-
 def load_user_plugins(
     module_paths: List[str],
+    settings=None,
+    knowledge: Optional[object] = None,
 ) -> List[CaseAttributeGenerator]:
-    """从 PLUGIN_MODULES 加载用户自定义插件。
+    """从 PLUGIN_MODULES 加载插件。
 
     Import and instantiate plugins from dotted module paths.
     Each path: "module.path.ClassName"
+
+    Tries cls(settings, knowledge) first; falls back to cls() if
+    the plugin constructor does not accept these arguments.
 
     Returns plugins in the order they appear in *module_paths*.
     """
@@ -62,7 +49,10 @@ def load_user_plugins(
                     "Class '%s' not found in module '%s'", class_name, module_path
                 )
                 continue
-            instance = cls()
+            try:
+                instance = cls(settings, knowledge)
+            except TypeError:
+                instance = cls()
             if not isinstance(instance, CaseAttributeGenerator):
                 logger.warning(
                     "'%s' is not a CaseAttributeGenerator subclass", path
@@ -87,27 +77,17 @@ def load_all_plugins(
     user_module_paths: Optional[List[str]] = None,
     user_guidance: str = "",
 ) -> List[CaseAttributeGenerator]:
-    """加载全部插件：默认插件 + 用户插件。
+    """加载全部插件：从 PLUGIN_MODULES 配置的模块路径加载。
 
-    Load all plugins: defaults first, then user-specified.
-    用户可通过 PLUGIN_MODULES 覆盖默认插件（同名跳过默认）。
+    Load all plugins from the module paths configured in PLUGIN_MODULES.
+    Inject user_guidance into plugins that support it.
     """
-    default_plugins = load_default_plugins(settings, knowledge)
-    user_plugins = load_user_plugins(user_module_paths or [])
+    plugins = load_user_plugins(user_module_paths or [], settings, knowledge)
 
-    # 用户显式指定的插件取代同功能默认插件
-    # If user specifies a plugin with the same name as a default, skip the default
-    user_names = {p.declaration.plugin_name for p in user_plugins}
-    all_plugins = [
-        p for p in default_plugins if p.declaration.plugin_name not in user_names
-    ] + user_plugins
-
-    # 注入用户指导
-    # Inject user guidance into plugins that support it
-    for p in all_plugins:
+    for p in plugins:
         if hasattr(p, "set_user_guidance"):
             p.set_user_guidance(user_guidance)
 
-    names = [p.declaration.plugin_name for p in all_plugins]
+    names = [p.declaration.plugin_name for p in plugins]
     logger.info("All plugins loaded: %s", names)
-    return all_plugins
+    return plugins

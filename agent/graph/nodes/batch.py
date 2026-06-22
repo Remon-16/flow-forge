@@ -22,7 +22,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
     """运行插件流水线的测试用例生成。
 
     Run plugin-based test case generation pipeline:
-    骨架生成 → 插件执行（数据填充/断言/用户插件）→ 输出
+    骨架生成 → 插件执行 → 输出
     """
     state.setdefault("errors", [])
 
