@@ -70,7 +70,7 @@ def get_language_name() -> str:
     Maps AGENT_LANG env var to a name the LLM understands.
     """
     lang = os.getenv("AGENT_LANG", "zh_CN")
-    return "Simplified Chinese (zh_CN)" if lang == "zh_CN" else "English"
+    return "Simplified Chinese" if lang == "zh_CN" else "English"
 
 
 def _step(step_key: str, msg_key: str, **kwargs) -> str:
