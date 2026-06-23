@@ -6,11 +6,14 @@ from typing import Any, Dict, Optional
 from .base import BaseAgent
 from config.settings import Settings
 from knowledge.search import KnowledgeSearch
+from prompts import KNOWLEDGE_SECTION_HEADER
 from prompts.requirement_analysis import (
+    REQ_CHUNK_NOTICE,
     REQUIREMENT_ANALYSIS_SYSTEM,
     REQUIREMENT_ANALYSIS_USER,
 )
 from prompts.render import render_prompt
+from i18n import get_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +57,7 @@ class RequirementAnalyzer(BaseAgent):
 
         input_tokens = self._estimate_input_tokens(
             REQUIREMENT_ANALYSIS_SYSTEM,
-            render_prompt(REQUIREMENT_ANALYSIS_USER, requirement_text=requirement_text),
+            render_prompt(REQUIREMENT_ANALYSIS_USER, requirement_text=requirement_text, language=get_language_name()),
         )
 
         if input_tokens < self._context_window * self._compression_threshold:
@@ -71,7 +74,7 @@ class RequirementAnalyzer(BaseAgent):
             system_msg=REQUIREMENT_ANALYSIS_SYSTEM,
             chunk_processor=self._analyze_chunk,
             result_merger=self._merge_analyses,
-            chunk_notice="[这是需求文档的一块，后面还有内容。请提取本块的业务流、角色、约束和异常。]",
+            chunk_notice=REQ_CHUNK_NOTICE,
         )
 
     def _analyze_single(self, requirement_text: str) -> Dict[str, Any]:
@@ -79,13 +82,14 @@ class RequirementAnalyzer(BaseAgent):
         prompt = render_prompt(
             REQUIREMENT_ANALYSIS_USER,
             requirement_text=requirement_text,
+            language=get_language_name(),
         )
 
         if self._knowledge is not None:
             docs = self._knowledge.search(requirement_text[:2000], n_results=3)
             if docs:
                 knowledge_context = "\n---\n".join(docs)
-                prompt += f"\n\n## 知识库参考\n{knowledge_context}"
+                prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}{knowledge_context}"
 
         logger.info("Analyzing requirement document (%d chars)...", len(requirement_text))
         result = self.call_llm_json(prompt, REQUIREMENT_ANALYSIS_SYSTEM)
@@ -96,6 +100,7 @@ class RequirementAnalyzer(BaseAgent):
         prompt = render_prompt(
             REQUIREMENT_ANALYSIS_USER,
             requirement_text=chunk,
+            language=get_language_name(),
         )
         return self.call_llm_json(prompt, REQUIREMENT_ANALYSIS_SYSTEM)
 

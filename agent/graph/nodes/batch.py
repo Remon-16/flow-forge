@@ -49,9 +49,9 @@ def batch_controller_node(state: GraphState) -> GraphState:
                 tid = iface.get("test_id", "")
                 if tid:
                     single_tps[tid] = [
-                        PlanStep(test_id=f"{tid}_positive", description="正向场景", tag="P0", scenario_type="positive"),
-                        PlanStep(test_id=f"{tid}_negative", description="负向场景", tag="P1", scenario_type="negative"),
-                        PlanStep(test_id=f"{tid}_boundary", description="边界场景", tag="P2", scenario_type="boundary"),
+                        PlanStep(test_id=f"{tid}_positive", description="Positive scenario", tag="P0", scenario_type="positive"),
+                        PlanStep(test_id=f"{tid}_negative", description="Negative scenario", tag="P1", scenario_type="negative"),
+                        PlanStep(test_id=f"{tid}_boundary", description="Boundary scenario", tag="P2", scenario_type="boundary"),
                     ]
             plan = TestPlan(
                 business_summary="Resume mode — minimal plan from existing interfaces",

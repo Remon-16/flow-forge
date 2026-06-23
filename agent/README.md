@@ -284,7 +284,9 @@ agent/
 
 ## 提示词管理
 
-所有智能体的 system prompt 和 user template 统一存放在 `prompts/` 目录下的 Python 模块中。每个文件导出 `<AGENT>_SYSTEM` 和 `<AGENT>_USER` 常量。
+所有智能体的 system prompt 和 user template 统一存放在 `prompts/` 目录下的 Python 模块中。每个文件导出 `<AGENT>_SYSTEM` 和 `<AGENT>_USER` 常量。所有提示词使用英文编写，以提升弱模型对指令的理解准确度。
+
+对于需要生成用户可见文本的提示词（测试计划、API 分析问题、用例中的 api_name/remark/sheet_name 等字段），模板中通过 `{{language}}` 变量强制要求 LLM 以用户配置的语言输出，确保英文提示词不会导致 LLM 始终用英文回复。
 
 修改提示词只需编辑对应文件，无需修改业务代码。`PromptRegistry` 提供程序化访问接口。
 
@@ -355,7 +357,7 @@ optional arguments:
 | `OUTPUT_FORMAT` | `both` | 输出格式 |
 | `ENABLE_PLUGINS` | `true` | 启用插件系统 |
 | `PLUGIN_MODULES` | (官方插件) | 插件模块路径（逗号分隔） |
-| `AGENT_LANG` | `zh_CN` | 界面语言：`zh_CN` / `en_US` |
+| `AGENT_LANG` | `zh_CN` | 界面语言 + LLM 输出语言：`zh_CN` 为简体中文，`en_US` 为英文 |
 
 ## 知识库
 
@@ -389,3 +391,7 @@ LangGraph 提供三个关键能力：
 ### 为什么用插件架构
 
 数据填充和断言生成为官方插件，通过 `PLUGIN_MODULES` 自由配置。用户可删减不需要的插件或注册自定义插件来扩展行为。不同项目的测试需求差异很大——某些项目需要 HMAC 签名预处理、某些需要数据库连接验证——插件架构允许用户在不修改框架代码的前提下定制用例生成流程。
+
+### 为什么用英文提示词
+
+所有智能体的系统提示词和用户提示词均为英文编写。英文指令结构更简洁、歧义更少，弱模型（如小参数量的开源模型）对英文指令的理解准确度通常优于中文。在生成用户可见内容（测试计划、API 分析问题、用例中的 api_name/remark/sheet_name 等字段）时，通过 `{{language}}` 模板变量强制 LLM 以 `AGENT_LANG` 配置的语言输出，确保英文系统提示词不会导致 LLM 在所有交互环节都用英文回复。

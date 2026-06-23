@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from .base import BaseAgent
 from config.settings import Settings
 from knowledge.search import KnowledgeSearch
+from prompts import KNOWLEDGE_SECTION_HEADER
 from prompts.data_filling import (
     SINGLE_DATA_FILLING_SYSTEM,
     SINGLE_DATA_FILLING_USER,
@@ -14,6 +15,7 @@ from prompts.data_filling import (
     BIZ_DATA_FILLING_USER,
 )
 from prompts.render import render_prompt
+from i18n import get_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -106,14 +108,14 @@ class SingleDataFiller(BaseAgent):
                     )
                 if snippet:
                     snippets_list.append(snippet)
-            doc_snippets = "\n---\n".join(snippets_list) if snippets_list else "(无)"
+            doc_snippets = "\n---\n".join(snippets_list) if snippets_list else "(none)"
 
         error_context = ""
         if previous_errors:
             error_context = (
-                "\n\n## 上次生成校验失败，请修正以下问题\n"
+                "\n\n## Previous generation validation failed, please fix the following issues\n"
                 + json.dumps(previous_errors, ensure_ascii=False, indent=2)
-                + "\n请确保 JSON 格式正确，所有必填字段完整。"
+                + "\nPlease ensure JSON format is correct and all required fields are complete."
             )
 
         prompt = render_prompt(
@@ -122,14 +124,15 @@ class SingleDataFiller(BaseAgent):
             interface_defs=json.dumps(iface_dicts, ensure_ascii=False, indent=2),
             api_summary=api_summary_str,
             api_doc_text=doc_snippets,
-            user_guidance=user_guidance or "(无)",
+            user_guidance=user_guidance or "(none)",
+            language=get_language_name(),
         )
         prompt += error_context
 
         if self._knowledge is not None:
             docs = self._knowledge.search("request data filling test case", n_results=3)
             if docs:
-                prompt += f"\n\n## 知识库参考\n" + "\n---\n".join(docs)
+                prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
         logger.info("Filling data for %d single case skeletons...", len(skeletons))
         result = self.call_llm_json(prompt, SINGLE_DATA_FILLING_SYSTEM)
@@ -230,14 +233,14 @@ class BizDataFiller(BaseAgent):
                         )
                     if snippet:
                         snippets_list.append(snippet)
-            doc_snippets = "\n---\n".join(snippets_list) if snippets_list else "(无)"
+            doc_snippets = "\n---\n".join(snippets_list) if snippets_list else "(none)"
 
         error_context = ""
         if previous_errors:
             error_context = (
-                "\n\n## 上次生成校验失败，请修正以下问题\n"
+                "\n\n## Previous generation validation failed, please fix the following issues\n"
                 + json.dumps(previous_errors, ensure_ascii=False, indent=2)
-                + "\n请确保 JSON 格式正确，所有必填字段完整。"
+                + "\nPlease ensure JSON format is correct and all required fields are complete."
             )
 
         prompt = render_prompt(
@@ -246,14 +249,15 @@ class BizDataFiller(BaseAgent):
             interface_defs=json.dumps(iface_dicts, ensure_ascii=False, indent=2),
             api_summary=api_summary_str,
             api_doc_text=doc_snippets,
-            user_guidance=user_guidance or "(无)",
+            user_guidance=user_guidance or "(none)",
+            language=get_language_name(),
         )
         prompt += error_context
 
         if self._knowledge is not None:
             docs = self._knowledge.search("business flow inherit data dependency", n_results=3)
             if docs:
-                prompt += f"\n\n## 知识库参考\n" + "\n---\n".join(docs)
+                prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
         logger.info("Filling data for %d biz flow skeletons...", len(skeletons))
         result = self.call_llm_json(prompt, BIZ_DATA_FILLING_SYSTEM)

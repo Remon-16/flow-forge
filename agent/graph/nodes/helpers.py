@@ -11,6 +11,15 @@ from typing import Any, Dict, List, Optional
 from config.settings import Settings
 from knowledge.search import KnowledgeSearch
 from models.schema import InterfaceDef
+from prompts.plan_generation import (
+    REFERENCE_DIR_EMPTY,
+    REFERENCE_DIR_GUIDANCE,
+    REFERENCE_DIR_UNREADABLE,
+    REF_SECTION_EXISTING_BIZ_FLOWS,
+    REF_SECTION_EXISTING_INTERFACES,
+    REF_SECTION_EXISTING_PLAN,
+    REF_SECTION_EXISTING_SINGLE_CASES,
+)
 from writers.yaml_writer import YamlWriter
 
 logger = logging.getLogger(__name__)
@@ -91,10 +100,10 @@ def summarize_reference_dir(reference_dir: str) -> str:
     """扫描参考目录获取已有测试资产摘要。
 
     Scan reference directory for existing test assets and return a summary
-    for the plan generation prompt. Returns "(无)" if empty.
+    for the plan generation prompt. Returns "(none)" if empty.
     """
     if not reference_dir:
-        return "(无)"
+        return REFERENCE_DIR_EMPTY
 
     ref_path = Path(reference_dir)
     parts = []
@@ -109,7 +118,7 @@ def summarize_reference_dir(reference_dir: str) -> str:
     if plan_path.exists():
         try:
             plan_text = plan_path.read_text(encoding="utf-8")
-            parts.append(f"### 已有测试计划\n{plan_text[:5000]}")
+            parts.append(f"{REF_SECTION_EXISTING_PLAN}{plan_text[:5000]}")
         except Exception:
             pass
 
@@ -121,7 +130,7 @@ def summarize_reference_dir(reference_dir: str) -> str:
                 f"- {i.get('test_id', '?')}: {i.get('method', 'GET')} {i.get('url', '')}"
                 for i in ifaces
             ]
-            parts.append(f"### 已有接口 ({len(ifaces)} 个)\n" + "\n".join(lines))
+            parts.append(REF_SECTION_EXISTING_INTERFACES.format(count=len(ifaces)) + "\n".join(lines))
     except Exception:
         pass
 
@@ -131,8 +140,9 @@ def summarize_reference_dir(reference_dir: str) -> str:
         if cases:
             ids = [str(c.get("test_id", "?")) for c in cases]
             parts.append(
-                f"### 已生成单接口用例 ({len(cases)} 个)\n"
-                f"覆盖: {', '.join(ids[:50])}"
+                REF_SECTION_EXISTING_SINGLE_CASES.format(
+                    count=len(cases), ids=', '.join(ids[:50])
+                )
             )
     except Exception:
         pass
@@ -143,19 +153,17 @@ def summarize_reference_dir(reference_dir: str) -> str:
         if flows:
             names = [str(f.get("sheet_name", "?")) for f in flows]
             parts.append(
-                f"### 已生成业务链路用例 ({len(flows)} 个)\n"
-                f"{', '.join(names[:20])}"
+                REF_SECTION_EXISTING_BIZ_FLOWS.format(
+                    count=len(flows), names=', '.join(names[:20])
+                )
             )
     except Exception:
         pass
 
     if not parts:
-        return "(参考目录为空或无法读取)"
+        return REFERENCE_DIR_UNREADABLE
 
-    parts.append(
-        "\n请仅对新增或变更的接口和场景进行测试规划。"
-        "已覆盖且未变更的部分无需重复，可在计划中标注'已覆盖'。"
-    )
+    parts.append(REFERENCE_DIR_GUIDANCE)
     return "\n\n".join(parts)
 
 

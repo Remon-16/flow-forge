@@ -81,7 +81,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
     if parse_mode == "raw":
         raw_text = extract_text(api_path)
         if not raw_text.strip():
-            raise Exception(f"API 文档 '{api_path}' 内容为空，无法解析。")
+            raise Exception(f"API document '{api_path}' is empty, cannot parse.")
         state["api_raw_text"] = raw_text
         state["interfaces"] = []
         state["interface_extraction_method"] = "raw"
@@ -93,11 +93,11 @@ def parse_docs_node(state: GraphState) -> GraphState:
         interfaces = _dispatch_rule_parser(api_path, state.get("parser_path", ""))
         if len(interfaces) == 0:
             raise Exception(
-                f"规则解析器未从 '{api_path}' 提取到接口。\n"
-                f"建议：\n"
-                f"  1. 尝试 --parse-mode raw（默认，让 LLM 直接从原文识别接口）\n"
-                f"  2. 尝试 --parse-mode llm（用 LLM 预提取结构化接口）\n"
-                f"  3. 编写自定义解析器: --parser-path /path/to/parser.py"
+                f"Rule parser extracted no interfaces from '{api_path}'.\n"
+                f"Suggestions:\n"
+                f"  1. Try --parse-mode raw (default, let LLM identify interfaces from source)\n"
+                f"  2. Try --parse-mode llm (use LLM to pre-extract structured interfaces)\n"
+                f"  3. Write a custom parser: --parser-path /path/to/parser.py"
             )
         state["interfaces"] = [iface_to_dict(i) for i in interfaces]
         state["interface_extraction_method"] = "rule"
@@ -106,7 +106,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
     elif parse_mode == "llm":
         raw_text = extract_text(api_path)
         if not raw_text.strip():
-            raise Exception(f"API 文档 '{api_path}' 内容为空，无法解析。")
+            raise Exception(f"API document '{api_path}' is empty, cannot parse.")
         print(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
         print(_("parse_docs.llm_extracting", model=_settings.llm_model))
         if _sl():
@@ -120,10 +120,10 @@ def parse_docs_node(state: GraphState) -> GraphState:
         )
         if len(interfaces) == 0:
             raise Exception(
-                f"LLM 未从 '{api_path}' 提取到接口。\n"
-                f"建议：\n"
-                f"  1. 尝试 --parse-mode raw（让 ApiAnalyzer 直接从原文分析）\n"
-                f"  2. 检查文件内容是否描述了 API 接口"
+                f"LLM extracted no interfaces from '{api_path}'.\n"
+                f"Suggestions:\n"
+                f"  1. Try --parse-mode raw (let ApiAnalyzer analyze directly from source)\n"
+                f"  2. Check if the file content describes API interfaces"
             )
         state["interfaces"] = [iface_to_dict(i) for i in interfaces]
         state["interfaces_from_llm"] = True
@@ -132,7 +132,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
         print(_("parse_docs.llm_extracted", count=len(interfaces)))
 
     else:
-        raise Exception(f"未知的解析模式: {parse_mode}。支持的模式: raw (默认), rule, llm")
+        raise Exception(f"Unknown parse mode: {parse_mode}. Supported modes: raw (default), rule, llm")
 
     if _sl():
         _sl().log_file_read(api_path, Path(api_path).stat().st_size)

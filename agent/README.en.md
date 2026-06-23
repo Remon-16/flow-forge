@@ -245,7 +245,9 @@ agent/
 
 ## Prompt Management
 
-All agent system prompts and user templates are stored as Python modules under `prompts/`. Each file exports `<AGENT>_SYSTEM` and `<AGENT>_USER` constants.
+All agent system prompts and user templates are stored as Python modules under `prompts/`. Each file exports `<AGENT>_SYSTEM` and `<AGENT>_USER` constants. ALL prompts are written in English — this improves instruction comprehension accuracy, especially for smaller open-source models that handle English better than other languages.
+
+For prompts that generate user-visible text (test plans, API analysis questions, case fields like api_name/remark/sheet_name), the templates include a `{{language}}` variable that FORCES the LLM to output in the user's configured language, ensuring English system prompts do not cause the LLM to reply in English everywhere.
 
 To modify prompts, simply edit the corresponding file — no business code changes needed. `PromptRegistry` provides programmatic access.
 
@@ -315,7 +317,7 @@ Supported `.env` variables:
 | `OUTPUT_FORMAT` | `both` | Output format |
 | `ENABLE_PLUGINS` | `true` | Enable plugin system |
 | `PLUGIN_MODULES` | (official plugins) | Plugin module paths (comma-separated) |
-| `AGENT_LANG` | `zh_CN` | UI language: `zh_CN` / `en_US` |
+| `AGENT_LANG` | `zh_CN` | UI language + LLM output language: `zh_CN` for Simplified Chinese, `en_US` for English |
 
 ## Knowledge Base
 
@@ -349,3 +351,7 @@ The pipeline pattern decomposes test case generation into sequential, independen
 ### Why plugin architecture
 
 Data filling and assertion generation are provided as official plugins, configured via `PLUGIN_MODULES`. Users can remove unwanted plugins or register custom plugins to extend the default behavior. Different projects have different testing needs — some require HMAC signing preprocessors, others need database-backed verification — and the plugin architecture allows customizing the generation pipeline without modifying framework code.
+
+### Why English prompts
+
+All agent system and user prompts are written in English. English instructions are structurally simpler with less ambiguity — smaller open-source models typically achieve higher comprehension accuracy with English prompts than with other languages. When generating user-visible content (test plans, API analysis questions, case fields like api_name/remark/sheet_name), the `{{language}}` template variable forces the LLM to output in the language configured by `AGENT_LANG`, preventing English system prompts from causing the LLM to reply in English throughout all interactive steps.

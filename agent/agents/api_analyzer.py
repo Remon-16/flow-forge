@@ -15,6 +15,7 @@ from prompts.api_analyzer import (
     API_ANALYSIS_USER,
     RAW_API_ANALYSIS_SYSTEM,
     RAW_API_ANALYSIS_USER,
+    RAW_API_CHUNK_NOTICE,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ class ApiAnalyzer(BaseAgent):
             system_msg=RAW_API_ANALYSIS_SYSTEM,
             chunk_processor=lambda chunk, _: self._analyze_raw_chunk(chunk, file_label),
             result_merger=self._merge_raw_results,
-            chunk_notice="[这是API文档的一块，后面还有内容。请识别本块中的接口并生成摘要。]",
+            chunk_notice=RAW_API_CHUNK_NOTICE,
         )
 
     def _analyze_raw_chunk(self, chunk: str, file_name: str) -> List[Dict[str, Any]]:

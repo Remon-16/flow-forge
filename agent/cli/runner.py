@@ -68,11 +68,11 @@ def main() -> int:
                 while Path(f"{base}_v{suffix}").exists():
                     suffix += 1
                 output_dir = f"{base}_v{suffix}"
-                logger.info("输出目录已有内容，自动使用: %s", output_dir)
+                logger.info("Output directory has existing content, auto-using: %s", output_dir)
                 output_path = Path(output_dir)
                 _cases_dir, _memory_dir = ensure_output_structure(output_path)
         else:
-            logger.info("--resume-overwrite 已设置，将覆盖原输出目录")
+            logger.info("--resume-overwrite set, will overwrite output directory")
 
         graph = build_workflow(settings, session_logger=session_logger)
         config = {"configurable": {"thread_id": f"resume_{datetime.now().strftime('%Y%m%d%H%M%S')}"}}

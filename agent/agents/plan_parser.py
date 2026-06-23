@@ -79,10 +79,15 @@ class PlanParser(BaseAgent):
         For large plans, splits by ``##`` section headers and processes
         each section independently, then merges results.
         """
-        from prompts.plan_parser import PLAN_PARSER_SYSTEM as system_msg
+        from prompts.plan_parser import (
+            PLAN_PARSER_SYSTEM as system_msg,
+            PLAN_PARSER_USER,
+            PLAN_CHUNK_NOTICE,
+        )
+        from prompts.render import render_prompt
 
         # Check if plan fits in a single call
-        test_prompt = f"请解析以下测试计划，提取结构化信息：\n\n{plan_md}"
+        test_prompt = render_prompt(PLAN_PARSER_USER, plan_md=plan_md)
         input_tokens = self._estimate_input_tokens(system_msg, test_prompt)
 
         if input_tokens < self._context_window * self._compression_threshold:
@@ -102,7 +107,7 @@ class PlanParser(BaseAgent):
             truncated = plan_md[:int(self._context_window * 0.7 * 4)]
             try:
                 result = self.call_llm_json(
-                    f"请解析以下测试计划（已截断），提取结构化信息：\n\n{truncated}",
+                    render_prompt(PLAN_PARSER_USER, plan_md=truncated),
                     system_msg,
                 )
                 return self._build_testplan(result)
@@ -116,8 +121,8 @@ class PlanParser(BaseAgent):
         for i in range(0, len(sections), 3):
             chunk = "\n".join(sections[i:i + 3])
             chunk_prompt = (
-                f"[这是测试计划的第 {i // 3 + 1} 部分，后面还有内容]\n\n"
-                f"请解析以下测试计划片段，提取结构化信息：\n\n{chunk}"
+                f"{PLAN_CHUNK_NOTICE.format(part=i // 3 + 1)}\n\n"
+                f"{render_prompt(PLAN_PARSER_USER, plan_md=chunk)}"
             )
             try:
                 result = self.call_llm_json(chunk_prompt, system_msg)

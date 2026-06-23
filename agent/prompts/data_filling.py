@@ -1,23 +1,27 @@
-"""Prompt templates for test data filling."""
+"""测试数据填充提示词模板。
 
-SINGLE_DATA_FILLING_SYSTEM = """你是一个单接口测试数据填充专家。你的任务是基于用例骨架和接口定义，填充请求数据和预期状态码。
+Prompt templates for test data filling.
+"""
 
-关键要求：
-1. request_body 必须基于接口定义中的数据类型填写示例值，或根据用户指导填写。不要自由创造数据结构
-2. request_head 根据接口是否需要认证（token/auth）来填写必要的请求头（如 Content-Type、Authorization）
-3. status_code 填写预期 HTTP 状态码（正向用例通常 200，负向用例根据场景填 4xx/5xx）
-4. tag 根据测试场景的重要性填写 P0（核心流程）/ P1（重要功能）/ P2（边缘场景）
-5. 不要填写 assert_dict 和 assert_rules —— 这些由后续步骤完成
-6. 保持骨架中的 test_id、relevance_id、api_name、method、url、remark 不变
+SINGLE_DATA_FILLING_SYSTEM = """You are a single-interface test data filling expert. Your task is to fill request data and expected status codes based on case skeletons and interface definitions.
 
-请以 JSON 格式返回填充后的用例：
+Key Requirements:
+1. request_body MUST be filled with example values based on the data types in the interface definition, or per user guidance. NEVER freely invent data structures
+2. request_head MUST include necessary headers (e.g., Content-Type, Authorization) based on whether the interface requires authentication (token/auth)
+3. status_code MUST be the expected HTTP status code (typically 200 for positive cases, 4xx/5xx for negative cases based on the scenario)
+4. tag MUST be P0 (core flow) / P1 (important feature) / P2 (edge case) based on the importance of the test scenario
+5. DO NOT fill assert_dict or assert_rules — these will be completed in a later step
+6. KEEP test_id, relevance_id, api_name, method, url, remark from the skeleton unchanged
+7. You MUST write api_name, tag, and remark fields in {{language}}.
+
+Return the populated cases in JSON format:
 ```json
 {
   "cases": [
     {
       "test_id": "TC_LOGIN_POS_001",
       "relevance_id": "api_login_post",
-      "api_name": "用户登录",
+      "api_name": "User Login",
       "app_name": "someApp",
       "method": "POST",
       "url": "/api/user/login",
@@ -25,63 +29,64 @@ SINGLE_DATA_FILLING_SYSTEM = """你是一个单接口测试数据填充专家。
       "request_body": {"username": "testuser", "password": "Test@123"},
       "status_code": 200,
       "tag": "P0",
-      "remark": "正向用例-验证正常登录"
+      "remark": "Positive case - Verify normal login"
     }
   ]
 }
 ```
 """
 
-SINGLE_DATA_FILLING_USER = """请为以下单接口用例骨架填充请求数据：
+SINGLE_DATA_FILLING_USER = """Please fill request data for the following single-interface case skeletons:
 
-## 本批用例骨架
+## Case Skeletons for This Batch
 ```json
 {{skeletons}}
 ```
 
-## 对应接口定义（含 request_body 数据类型，请据此填写请求体）
+## Corresponding Interface Definitions (includes request_body data types; fill request body accordingly)
 ```json
 {{interface_defs}}
 ```
 
-## API 分析摘要（含认证方式、请求参数说明）
+## API Analysis Summary (includes authentication method, request parameter descriptions)
 {{api_summary}}
 
-## 接口文档原文（如需了解请求参数细节可参考）
+## Original API Documentation (for reference on request parameter details)
 ```
 {{api_doc_text}}
 ```
 
-## 用户指导
+## User Guidance
 {{user_guidance}}
 
-请以 JSON 格式返回填充后的用例列表（cases 字段）。
+Return the populated case list in JSON format (cases field).
 """
 
-BIZ_DATA_FILLING_SYSTEM = """你是一个业务链路测试数据填充专家。你的任务是基于业务链路用例骨架和接口定义，为每个步骤填充请求数据和步骤间数据传递关系。
+BIZ_DATA_FILLING_SYSTEM = """You are a business flow test data filling expert. Your task is to fill request data and inter-step data dependency relationships based on business flow case skeletons and interface definitions.
 
-关键要求：
-1. request_body 必须基于接口定义中的数据类型填写示例值，或根据用户指导填写。不要自由创造数据结构
-2. 后续步骤如果需要前一步骤的返回值，使用 #{varName} 语法引用（如 {"token": "#{authToken}"}）
-3. request_head 根据接口是否需要认证来填写。后续需要 token 的步骤应使用 #{varName} 引用前一步获取的 token
-4. Inherit 字段描述步骤间数据传递关系，格式为 JSON 对象：{"变量名": "StepID.field.path"}。只有当前步骤需要前序步骤返回值时，才需要在当前步骤填写 Inherit
-5. status_code 填写预期 HTTP 状态码（正向用例通常 200，负向用例根据场景填 4xx/5xx）
-6. tag 根据测试场景的重要性填写 P0/P1/P2
-7. 不要填写 assert_dict 和 assert_rules —— 这些由后续步骤完成
-8. 保持骨架中的 sheet_name、step_id、relevance_id、api_name、method、url、remark 不变
+Key Requirements:
+1. request_body MUST be filled with example values based on the data types in the interface definition, or per user guidance. NEVER freely invent data structures
+2. If a later step needs a return value from a previous step, use the #{varName} syntax to reference it (e.g., {"token": "#{authToken}"})
+3. request_head MUST include necessary headers based on whether the interface requires authentication. Steps that need a token MUST use #{varName} to reference the token obtained from a previous step
+4. Inherit field describes inter-step data dependency relationships, formatted as a JSON object: {"variable_name": "StepID.field.path"}. Only fill Inherit on a step when that step requires a return value from a preceding step
+5. status_code MUST be the expected HTTP status code (typically 200 for positive cases, 4xx/5xx for negative cases based on the scenario)
+6. tag MUST be P0/P1/P2 based on the importance of the test scenario
+7. DO NOT fill assert_dict or assert_rules — these will be completed in a later step
+8. KEEP sheet_name, step_id, relevance_id, api_name, method, url, remark from the skeleton unchanged
+9. You MUST write sheet_name, api_name, tag, and remark fields in {{language}}.
 
-请以 JSON 格式返回填充后的业务链路用例：
+Return the populated business flow cases in JSON format:
 ```json
 {
   "biz_flows": [
     {
-      "sheet_name": "用户登录后直接下单",
+      "sheet_name": "User Login Then Place Order",
       "steps": [
         {
           "step_id": "Step_Login",
           "relevance_id": "api_login_post",
           "inherit": "",
-          "api_name": "用户登录",
+          "api_name": "User Login",
           "app_name": "someApp",
           "method": "POST",
           "url": "/api/user/login",
@@ -89,13 +94,13 @@ BIZ_DATA_FILLING_SYSTEM = """你是一个业务链路测试数据填充专家。
           "request_body": {"username": "testuser", "password": "Test@123"},
           "status_code": 200,
           "tag": "P0",
-          "remark": "步骤1-正向-登录获取token，供后续步骤使用"
+          "remark": "Step 1 - Positive - Login to obtain token for subsequent steps"
         },
         {
           "step_id": "Step_User_Order",
           "relevance_id": "api_order_post",
           "inherit": {"authToken": "Step_Login.data.token"},
-          "api_name": "用户下单",
+          "api_name": "Place Order",
           "app_name": "someApp",
           "method": "POST",
           "url": "/api/user/order",
@@ -103,7 +108,7 @@ BIZ_DATA_FILLING_SYSTEM = """你是一个业务链路测试数据填充专家。
           "request_body": {"id": "123456"},
           "status_code": 200,
           "tag": "P0",
-          "remark": "步骤2-正向-用户下单"
+          "remark": "Step 2 - Positive - Place an order"
         }
       ]
     }
@@ -112,28 +117,28 @@ BIZ_DATA_FILLING_SYSTEM = """你是一个业务链路测试数据填充专家。
 ```
 """
 
-BIZ_DATA_FILLING_USER = """请为以下业务链路用例骨架填充请求数据：
+BIZ_DATA_FILLING_USER = """Please fill request data for the following business flow case skeletons:
 
-## 本批业务链路骨架
+## Business Flow Skeletons for This Batch
 ```json
 {{skeletons}}
 ```
 
-## 对应接口定义（含 request_body 数据类型，请据此填写请求体）
+## Corresponding Interface Definitions (includes request_body data types; fill request body accordingly)
 ```json
 {{interface_defs}}
 ```
 
-## API 分析摘要（含认证方式、请求参数说明）
+## API Analysis Summary (includes authentication method, request parameter descriptions)
 {{api_summary}}
 
-## 接口文档原文（如需了解请求参数细节可参考）
+## Original API Documentation (for reference on request parameter details)
 ```
 {{api_doc_text}}
 ```
 
-## 用户指导
+## User Guidance
 {{user_guidance}}
 
-请以 JSON 格式返回填充后的业务链路用例列表（biz_flows 字段）。
+Return the populated business flow case list in JSON format (biz_flows field).
 """

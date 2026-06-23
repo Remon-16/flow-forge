@@ -63,6 +63,16 @@ def _(key: str, **kwargs) -> str:
     return text
 
 
+def get_language_name() -> str:
+    """返回当前语言的人可读名称，用于注入提示词。
+
+    Return a human-readable language name for prompt injection.
+    Maps AGENT_LANG env var to a name the LLM understands.
+    """
+    lang = os.getenv("AGENT_LANG", "zh_CN")
+    return "Simplified Chinese (zh_CN)" if lang == "zh_CN" else "English"
+
+
 def _step(step_key: str, msg_key: str, **kwargs) -> str:
     """带步骤编号的翻译。Translate with step number prefix.
 

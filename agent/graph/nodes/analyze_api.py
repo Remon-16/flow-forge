@@ -141,7 +141,7 @@ def _load_custom_parser(parser_path: str):
     """
     path = Path(parser_path).resolve()
     if not path.exists():
-        raise FileNotFoundError(f"自定义解析器未找到: {path}")
+        raise FileNotFoundError(f"Custom parser not found: {path}")
 
     spec = importlib.util.spec_from_file_location("custom_parser", path)
     module = importlib.util.module_from_spec(spec)
@@ -149,7 +149,7 @@ def _load_custom_parser(parser_path: str):
 
     if not hasattr(module, "parse"):
         raise AttributeError(
-            f"自定义解析器 {path} 必须实现 parse(file_path: str) -> List[InterfaceDef] 函数"
+            f"Custom parser {path} must implement parse(file_path: str) -> List[InterfaceDef]"
         )
 
     print(_("analyze_api.custom_parser", path=path))
@@ -162,11 +162,11 @@ def _has_critical_uncertainties(summary: List[Dict]) -> bool:
     Check if the summary has critical unknowns warranting user input.
     """
     for item in summary:
-        if item.get("auth_type") == "不确定":
+        if item.get("auth_type") == "UNKNOWN":
             return True
         if item.get("need_token") is None:
             return True
-        if not item.get("description") or item.get("description") == "未知":
+        if not item.get("description") or item.get("description") == "UNKNOWN":
             return True
     return False
 

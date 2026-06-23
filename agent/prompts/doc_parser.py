@@ -3,33 +3,34 @@
 Doc parser prompts for extracting interface definitions from unstructured text.
 """
 
-DOC_PARSER_SYSTEM = """你是一个 API 文档解析专家。你的任务是从非结构化的文档文本中提取 API 接口定义。
+DOC_PARSER_SYSTEM = """You are an API documentation parsing expert. Your task is to extract API interface definitions from unstructured document text.
 
-提取规则：
-1. 识别所有 API 端点（HTTP 方法 + URL 路径）
-2. 对每个端点，提取以下信息：
-   - test_id: 自动生成，格式为 api_{path}_{method}，例如 api_user_login_post
-   - api_name: 接口名称/描述
-   - app_name: 所属应用/模块名，若无法判断填 "default"
-   - method: HTTP 方法 (GET/POST/PUT/DELETE/PATCH)
-   - url: URL 路径
-   - request_head: 请求头，JSON 对象，如 {"Content-Type": "application/json"}
-   - request_body: 请求体参数，JSON 对象，列出字段名和示例值
-   - status_code: 预期成功状态码，默认 200
-   - assert_dict: 断言检查项，JSON 对象，如 {"status_code": 200}
-   - remark: 备注/补充说明
+Extraction Rules:
+1. Identify ALL API endpoints (HTTP method + URL path)
+2. For each endpoint, extract the following information:
+   - test_id: Auto-generated, format api_{path}_{method}, e.g., api_user_login_post
+   - api_name: Interface name / description
+   - app_name: Owning application / module name; use "default" if unknown
+   - method: HTTP method (GET/POST/PUT/DELETE/PATCH)
+   - url: URL path
+   - request_head: Request headers, JSON object, e.g., {"Content-Type": "application/json"}
+   - request_body: Request body parameters, JSON object, listing field names and example values
+   - status_code: Expected success status code, default 200
+   - assert_dict: Assertion check items, JSON object, e.g., {"status_code": 200}
+   - remark: Remarks / supplementary notes
 
-3. 对于无法确定的字段，使用合理的默认值
-4. 如果文档中描述了请求参数，用 "字段名": "示例值" 的格式填入 request_body
-5. 如果文档中描述了响应字段，将其加入 assert_dict 作为检查项
+3. Use reasonable defaults for fields that cannot be determined
+4. If the document describes request parameters, fill request_body in "field_name": "example_value" format
+5. If the document describes response fields, add them to assert_dict as check items
+6. You MUST write api_name, remark, and all descriptive fields in {{language}}.
 
-请以严格的 JSON 对象格式返回，对象中包含 "interfaces" 字段，其值为接口定义数组：
+Return as a strict JSON object containing an "interfaces" field whose value is an array of interface definitions:
 ```json
 {
   "interfaces": [
     {
       "test_id": "api_user_login_post",
-      "api_name": "用户登录",
+      "api_name": "User Login",
       "app_name": "user_management",
       "method": "POST",
       "url": "/api/user/login",
@@ -37,25 +38,32 @@ DOC_PARSER_SYSTEM = """你是一个 API 文档解析专家。你的任务是从�
       "request_body": {"username": "string", "password": "string"},
       "status_code": 200,
       "assert_dict": {"status_code": 200, "data.token": "not_empty"},
-      "remark": "用户登录接口"
+      "remark": "User login interface"
     }
   ]
 }
 ```
 
-只返回 JSON 对象，不要包含其他文字说明。"""
+Return ONLY the JSON object. Do NOT include any other explanatory text."""
 
-DOC_PARSER_USER = """请从以下 API 文档内容中提取所有接口定义。
+DOC_PARSER_USER = """Please extract all API interface definitions from the following API document content.
 
-## 文件名
-{file_name}
+## File Name
+{{file_name}}
 
-## 文档内容
-{raw_text}
+## Document Content
+{{raw_text}}
 
-## 提示
-- 文件类型提示: {file_type_hint}
-- 请仔细阅读全文，不要遗漏任何接口
-- 如果文档内容看起来不包含 API 定义，请返回空对象 {{"interfaces": []}}
+## Hints
+- File type hint: {{file_type_hint}}
+- Read the full text carefully; do NOT miss any interfaces
+- If the document content does not appear to contain API definitions, return an empty object {{"interfaces": []}}
 
-请返回 JSON 对象，其中 "interfaces" 字段包含接口定义列表。"""
+Return a JSON object with the "interfaces" field containing the list of interface definitions."""
+
+DOC_CHUNK_NOTICE = """[This document has been split into multiple chunks.
+More content follows in subsequent chunks.]
+
+Extract all API interface definitions from this chunk."""
+
+DOC_DEFAULT_FILE_TYPE_HINT = "Unknown format"

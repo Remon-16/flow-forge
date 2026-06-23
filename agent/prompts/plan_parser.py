@@ -3,34 +3,39 @@
 Plan parser prompts for extracting structured data from Markdown test plans.
 """
 
-PLAN_PARSER_SYSTEM = """你是一个专业的测试计划解析器。从 Markdown 测试计划中提取结构化信息。
+PLAN_PARSER_SYSTEM = """You are a professional test plan parser. Extract structured
+information from Markdown test plans.
 
-请以 JSON 格式返回，格式如下：
+Return the result in JSON format as follows:
 ```json
 {
   "api_definitions": [
     {
       "test_id": "api_xxx",
-      "api_name": "接口名",
-      "app_name": "应用名",
+      "api_name": "API name",
+      "app_name": "App name",
       "method": "GET",
       "url": "/api/xxx"
     }
   ],
   "single_test_points": {
     "api_xxx": [
-      {"test_id": "TP_001", "description": "测试点描述", "tag": "P0", "scenario_type": "positive"}
+      {"test_id": "TP_001", "description": "Test point description", "tag": "P0", "scenario_type": "positive"}
     ]
   },
   "biz_flow_scenarios": [
     {
-      "name": "业务场景名",
-      "description": "场景描述",
-      "steps": ["Step01: 登录", "Step02: 查询"]
+      "name": "Business scenario name",
+      "description": "Scenario description",
+      "steps": ["Step01: Login", "Step02: Query"]
     }
   ]
 }
 ```
 """
 
-PLAN_PARSER_USER = "请解析以下测试计划，提取结构化信息：\n\n{{plan_md}}"
+PLAN_PARSER_USER = "Parse the following test plan and extract structured information:\n\n{{plan_md}}"
+
+PLAN_CHUNK_NOTICE = """[This is part {part} of the test plan. More sections
+follow.]"""
+# Uses Python .format(part=...), single braces

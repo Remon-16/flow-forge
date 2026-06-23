@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from .base import BaseAgent
 from config.settings import Settings
 from knowledge.search import KnowledgeSearch
+from prompts import KNOWLEDGE_SECTION_HEADER
 from prompts.skeleton_generation import (
     SINGLE_SKELETON_SYSTEM,
     SINGLE_SKELETON_USER,
@@ -16,6 +17,7 @@ from prompts.skeleton_generation import (
     URL_CORRECTION_USER,
 )
 from prompts.render import render_prompt
+from i18n import get_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +26,9 @@ def _serialize_plan_single(plan) -> str:
     """Serialize single test points from plan for prompt."""
     parts = []
     if hasattr(plan, "business_summary") and plan.business_summary:
-        parts.append(f"## 业务理解\n{plan.business_summary}")
+        parts.append(f"## Business Understanding\n{plan.business_summary}")
     if hasattr(plan, "single_test_points") and plan.single_test_points:
-        parts.append("\n## 单接口测试点")
+        parts.append("\n## Single API Test Points")
         for api_id, points in plan.single_test_points.items():
             parts.append(f"\n### {api_id}")
             for p in points:
@@ -40,15 +42,15 @@ def _serialize_plan_biz(plan) -> str:
     """Serialize biz flow scenarios from plan for prompt."""
     parts = []
     if hasattr(plan, "business_summary") and plan.business_summary:
-        parts.append(f"## 业务理解\n{plan.business_summary}")
+        parts.append(f"## Business Understanding\n{plan.business_summary}")
     if hasattr(plan, "biz_flow_scenarios") and plan.biz_flow_scenarios:
-        parts.append("\n## 业务链路场景")
+        parts.append("\n## Business Flow Scenarios")
         for scenario in plan.biz_flow_scenarios:
             parts.append(
                 f"- {scenario.get('name', '')}: {scenario.get('description', '')}"
             )
     if hasattr(plan, "mermaid_flows") and plan.mermaid_flows:
-        parts.append("\n## 业务流程图")
+        parts.append("\n## Business Flow Diagrams")
         for name, diagram in plan.mermaid_flows.items():
             parts.append(f"\n### {name}\n```mermaid\n{diagram}\n```")
     return "\n".join(parts)
@@ -112,13 +114,14 @@ class SingleSkeletonGenerator(BaseAgent):
             test_plan=plan_str,
             interface_defs=json.dumps(iface_dicts, ensure_ascii=False, indent=2),
             api_summary=api_summary_str,
-            user_guidance=user_guidance or "(无)",
+            user_guidance=user_guidance or "(none)",
+            language=get_language_name(),
         )
 
         if self._knowledge is not None:
             docs = self._knowledge.search("test case skeleton", n_results=3)
             if docs:
-                prompt += f"\n\n## 知识库参考\n" + "\n---\n".join(docs)
+                prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
         # Token check
         input_tokens = self._estimate_input_tokens(SINGLE_SKELETON_SYSTEM, prompt)
@@ -251,13 +254,14 @@ class BizSkeletonGenerator(BaseAgent):
             test_plan=plan_str,
             interface_defs=json.dumps(iface_dicts, ensure_ascii=False, indent=2),
             api_summary=api_summary_str,
-            user_guidance=user_guidance or "(无)",
+            user_guidance=user_guidance or "(none)",
+            language=get_language_name(),
         )
 
         if self._knowledge is not None:
             docs = self._knowledge.search("business flow test case", n_results=3)
             if docs:
-                prompt += f"\n\n## 知识库参考\n" + "\n---\n".join(docs)
+                prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
         # Token check
         input_tokens = self._estimate_input_tokens(BIZ_SKELETON_SYSTEM, prompt)

@@ -15,7 +15,13 @@ from typing import Any, Dict, List
 from agents.base import BaseAgent
 from config.settings import Settings
 from models.schema import InterfaceDef
-from prompts.doc_parser import DOC_PARSER_SYSTEM, DOC_PARSER_USER
+from prompts.doc_parser import (
+    DOC_CHUNK_NOTICE,
+    DOC_DEFAULT_FILE_TYPE_HINT,
+    DOC_PARSER_SYSTEM,
+    DOC_PARSER_USER,
+)
+from prompts.render import render_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -65,10 +71,11 @@ class DocParserAgent:
             logger.warning("DocParserAgent received empty text, returning []")
             return []
 
-        test_prompt = DOC_PARSER_USER.format(
+        test_prompt = render_prompt(
+            DOC_PARSER_USER,
             file_name=file_name or "unknown",
             raw_text=raw_text,
-            file_type_hint=file_type_hint or "未知格式",
+            file_type_hint=file_type_hint or DOC_DEFAULT_FILE_TYPE_HINT,
         )
         input_tokens = self._agent._estimate_input_tokens(DOC_PARSER_SYSTEM, test_prompt)
 
@@ -91,17 +98,18 @@ class DocParserAgent:
             system_msg=DOC_PARSER_SYSTEM,
             chunk_processor=lambda chunk, _: self._parse_chunk(chunk, file_name, file_type_hint),
             result_merger=self._merge_parsed_interfaces,
-            chunk_notice="[这是API文档的一块，后面还有内容。请提取本块中的接口定义。]",
+            chunk_notice=DOC_CHUNK_NOTICE,
         )
 
     def _parse_chunk(
         self, chunk: str, file_name: str, file_type_hint: str
     ) -> list:
         """Parse a single chunk of the document."""
-        prompt = DOC_PARSER_USER.format(
+        prompt = render_prompt(
+            DOC_PARSER_USER,
             file_name=file_name or "unknown",
             raw_text=chunk,
-            file_type_hint=file_type_hint or "未知格式",
+            file_type_hint=file_type_hint or DOC_DEFAULT_FILE_TYPE_HINT,
         )
         try:
             result = self._agent.call_llm_json(prompt, DOC_PARSER_SYSTEM)

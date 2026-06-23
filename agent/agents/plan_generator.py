@@ -10,8 +10,10 @@ from .base import BaseAgent
 from config.settings import Settings
 from knowledge.search import KnowledgeSearch
 from models.schema import InterfaceDef
+from prompts import KNOWLEDGE_SECTION_HEADER
 from prompts.plan_generation import PLAN_GENERATION_SYSTEM, PLAN_GENERATION_USER
 from prompts.render import render_prompt
+from i18n import get_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +76,7 @@ class PlanGenerator(BaseAgent):
 
         requirement_json = json.dumps(requirement_analysis, ensure_ascii=False, indent=2)
         iface_json = json.dumps(iface_dicts, ensure_ascii=False, indent=2)
-        api_summary_json = json.dumps(api_summary, ensure_ascii=False, indent=2) if api_summary else "无接口分析摘要"
+        api_summary_json = json.dumps(api_summary, ensure_ascii=False, indent=2) if api_summary else "No API analysis summary"
 
         prompt = render_prompt(
             PLAN_GENERATION_USER,
@@ -82,7 +84,8 @@ class PlanGenerator(BaseAgent):
             interface_defs=iface_json,
             api_summary=api_summary_json,
             user_guidance=user_guidance,
-            reference_summary=reference_summary or "(无)",
+            reference_summary=reference_summary or "(none)",
+            language=get_language_name(),
         )
 
         # Conditionally append knowledge context
@@ -90,7 +93,7 @@ class PlanGenerator(BaseAgent):
             docs = self._knowledge.search("test plan generation best practices", n_results=3)
             if docs:
                 knowledge_context = "\n---\n".join(docs)
-                prompt += f"\n\n## 知识库参考\n{knowledge_context}"
+                prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}{knowledge_context}"
 
         # Token check
         input_tokens = self._estimate_input_tokens(PLAN_GENERATION_SYSTEM, prompt)

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from .base import BaseAgent
 from config.settings import Settings
 from knowledge.search import KnowledgeSearch
+from prompts import KNOWLEDGE_SECTION_HEADER
 from prompts.assertion_generation import (
     SINGLE_ASSERTION_SYSTEM,
     SINGLE_ASSERTION_USER,
@@ -14,6 +15,7 @@ from prompts.assertion_generation import (
     BIZ_ASSERTION_USER,
 )
 from prompts.render import render_prompt
+from i18n import get_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +82,7 @@ class SingleAssertionGenerator(BaseAgent):
         error_context = ""
         if previous_errors:
             error_context = (
-                "\n\n## 上次生成校验失败，请修正以下问题\n"
+                "\n\n## Previous generation validation failed, please fix the following issues\n"
                 + json.dumps(previous_errors, ensure_ascii=False, indent=2)
             )
 
@@ -89,14 +91,15 @@ class SingleAssertionGenerator(BaseAgent):
             cases=json.dumps(cases, ensure_ascii=False, indent=2),
             interface_defs=json.dumps(iface_dicts, ensure_ascii=False, indent=2),
             api_summary=api_summary_str,
-            user_guidance=user_guidance or "(无)",
+            user_guidance=user_guidance or "(none)",
+            language=get_language_name(),
         )
         prompt += error_context
 
         if self._knowledge is not None:
             docs = self._knowledge.search("assertion test case", n_results=3)
             if docs:
-                prompt += f"\n\n## 知识库参考\n" + "\n---\n".join(docs)
+                prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
         logger.info("Generating assertions for %d single cases...", len(cases))
         result = self.call_llm_json(prompt, SINGLE_ASSERTION_SYSTEM)
@@ -172,7 +175,7 @@ class BizAssertionGenerator(BaseAgent):
         error_context = ""
         if previous_errors:
             error_context = (
-                "\n\n## 上次生成校验失败，请修正以下问题\n"
+                "\n\n## Previous generation validation failed, please fix the following issues\n"
                 + json.dumps(previous_errors, ensure_ascii=False, indent=2)
             )
 
@@ -181,14 +184,15 @@ class BizAssertionGenerator(BaseAgent):
             cases=json.dumps(cases, ensure_ascii=False, indent=2),
             interface_defs=json.dumps(iface_dicts, ensure_ascii=False, indent=2),
             api_summary=api_summary_str,
-            user_guidance=user_guidance or "(无)",
+            user_guidance=user_guidance or "(none)",
+            language=get_language_name(),
         )
         prompt += error_context
 
         if self._knowledge is not None:
             docs = self._knowledge.search("business flow assertion", n_results=3)
             if docs:
-                prompt += f"\n\n## 知识库参考\n" + "\n---\n".join(docs)
+                prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
         logger.info("Generating assertions for %d biz flows...", len(cases))
         result = self.call_llm_json(prompt, BIZ_ASSERTION_SYSTEM)

@@ -7,6 +7,8 @@ import logging
 
 from agents.api_analyzer import ApiAnalyzer
 from graph.state import GraphState
+from prompts.render import render_prompt
+from prompts.url_correction import IFACE_URL_CORRECTION_SYSTEM, IFACE_URL_CORRECTION_USER
 
 from .helpers import _settings, _sl
 
@@ -69,20 +71,15 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
         corrected = False
         for retry in range(max_retries):
             try:
-                correction_prompt = (
-                    f"以下接口的 URL 在 API 文档中未找到匹配。"
-                    f"请根据文档原文中的正确 URL 来纠正它。\n\n"
-                    f"## 需要纠正的接口\n"
-                    f"- test_id: {interface_id}\n"
-                    f"- 当前 URL: {bad_url}\n"
-                    f"- HTTP 方法: {http_method}\n\n"
-                    f"## API 文档相关片段\n{snippets}\n\n"
-                    f"请返回一个 JSON 对象，包含 corrected_url 字段。"
-                    f"只输出 JSON，不要包含其他内容。"
+                correction_prompt = render_prompt(
+                    IFACE_URL_CORRECTION_USER,
+                    test_id=interface_id,
+                    bad_url=bad_url,
+                    http_method=http_method,
+                    snippets=snippets,
                 )
                 result = api_analyzer.call_llm_json(
-                    correction_prompt,
-                    "你是接口文档专家，根据文档原文纠正 URL 错误。",
+                    correction_prompt, IFACE_URL_CORRECTION_SYSTEM
                 )
                 new_url = result.get("corrected_url", "").strip() if isinstance(result, dict) else ""
                 if new_url and new_url in api_raw_text:

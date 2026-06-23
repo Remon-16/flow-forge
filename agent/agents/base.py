@@ -16,6 +16,9 @@ from openai import OpenAI
 
 import httpx
 
+from prompts.compression import COMPRESSION_SYSTEM, DEFAULT_CHUNK_NOTICE
+from prompts.json_fix import JSON_FIX_PROMPT
+
 logger = logging.getLogger(__name__)
 
 
@@ -227,12 +230,7 @@ class BaseAgent:
         if not self._conversation_summary and self._round_count <= 1:
             return ""
 
-        compress_prompt = (
-            "请将以下对话历史和中间结果精简为关键要点摘要，"
-            "保留所有重要的数据、结论和决策。"
-            "丢弃重复内容和不必要的细节。"
-            f"\n\n历史内容:\n{self._conversation_summary}"
-        )
+        compress_prompt = COMPRESSION_SYSTEM.format(history=self._conversation_summary)
         try:
             summary = self.call_llm(compress_prompt, system_msg)
             self._conversation_summary = summary
@@ -340,7 +338,7 @@ class BaseAgent:
         results = []
         accumulated = ""
         for i, chunk in enumerate(chunks):
-            notice = chunk_notice or f"[这是第 {i + 1}/{total} 块，后面还有内容，请继续处理]"
+            notice = chunk_notice or DEFAULT_CHUNK_NOTICE.format(i=i + 1, total=total)
             chunk_with_notice = f"{notice}\n\n{chunk}"
 
             # Check context before each round
@@ -348,7 +346,7 @@ class BaseAgent:
                 self._compress_conversation(system_msg)
                 if self._conversation_summary:
                     chunk_with_notice = (
-                        f"[前文摘要]\n{self._conversation_summary}\n\n"
+                        f"[Previous Summary]\n{self._conversation_summary}\n\n"
                         f"{chunk_with_notice}"
                     )
 
@@ -593,7 +591,7 @@ class BaseAgent:
                     )
                     if attempt < self._max_retries:
                         logger.info(
-                            "第 %d/%d 次 LLM 调用失败 (%s)，%0.1f 秒后重试第 %d 次...",
+                            "LLM call attempt %d/%d failed (%s), retrying in %.1fs (attempt %d)...",
                             attempt, self._max_retries,
                             _short_error(e),
                             self._retry_base_delay, attempt + 1,
@@ -625,10 +623,7 @@ class BaseAgent:
                 "JSON parse failed (len=%d), retrying with fix prompt",
                 len(text),
             )
-            fix_prompt = (
-                "你上一次的回复不是合法的 JSON。请严格只输出一个 JSON 对象，"
-                "不要包含任何 markdown 标记、解释文字或其他非 JSON 内容。"
-            )
+            fix_prompt = JSON_FIX_PROMPT
             retry_text = self.call_llm(
                 fix_prompt, system_msg, response_format="json_object"
             )
