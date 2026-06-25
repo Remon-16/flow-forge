@@ -1,0 +1,49 @@
+name: foli_mall_assertion
+description: Foli Mall test project assertion rules — response structure (Result code/message/data), BizCodeEnum reference, and assertion patterns
+version: "1.0"
+target_agents:
+  - assertion_generator
+prompt_extension: |
+  ## Foli Mall Assertion Rules
+
+  ### Response Structure
+  All API responses follow the structure: `Result(String code, String message, T data)`
+  - `code`: 6-digit business status code (format: ABBCCC)
+  - `message`: Human-readable description
+  - `data`: Response payload (type varies by endpoint)
+
+  ### Business Status Code Format (ABBCCC)
+  - **A** (Error Level): 1 = Success, 2 = Business Exception, 3 = System Error
+  - **BB** (Module): 00=Common, 01=User, 02=Store, 03=Product, 04=Order, 05=Finance, 06=File, 07=Cart, 08=Return/Refund, 09=Complaint, 10=Message, 11=Category
+  - **CCC** (Sequence): Error sequence number within the module
+
+  ### Common Status Codes (Module 00)
+  | Code | Meaning |
+  |------|---------|
+  | 100000 | Success |
+  | 200001 | Bad Request — invalid parameters |
+  | 200002 | Not Found — resource does not exist |
+  | 200003 | Forbidden — no permission |
+  | 300001 | Internal Server Error |
+
+  ### Module-Specific Status Codes
+  - User (01): 201001=Username exists, 201002=Invalid credentials, 201003=Account disabled, 201004=User not found
+  - Store (02): 202001=Store limit exceeded, 202002=Already reviewed, 202003=Store not found, 202004=Invalid review status, 202005=Not seller role, 202006=No store created
+  - Product (03): 203001=Product not found, 203002=Insufficient stock, 203003=Stock deduction failed, 203004=Product off shelf, 203005=Already reviewed
+  - Order (04): 204001=Order not found, 204002=Wrong order status, 204003=Only completed orders can return
+  - Finance (05): 205001=Insufficient balance, 205002=Balance deduction failed, 205003=Recharge failed
+  - File (06): 206001=File empty, 206002=File too large (>10MB), 206003=Not an image, 206004=Upload failed
+  - Cart (07): 207001=No selected items, 207002=Cart item not found
+  - Return/Refund (08): 208001=Return not found, 208002=Wrong return status, 208003=Already processed
+  - Complaint (09): 209001=Complaint not found, 209002=Already handled
+  - Message (10): 210001=Message not found
+  - Category (11): 211001=Category not found, 211002=Has sub-categories, 211003=Parent cannot be self
+
+  ### Assertion Guidelines
+  - For success cases: assert `code` == "100000"
+  - For error cases: match the expected error code from the reference above based on the test scenario
+  - Always assert the `code` field in `assert_dict` for simple success/error checks
+  - Use `assert_rules` with `==` operator for code validation
+  - For data validation: assert key fields in `data` are present and non-null
+  - For error cases: assert `message` contains the expected error description
+tools: []

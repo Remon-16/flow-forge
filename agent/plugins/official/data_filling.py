@@ -4,12 +4,14 @@ Official data filling plugin: fills request data into test case skeletons.
 """
 
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
-from agents.data_filler import BizDataFiller, SingleDataFiller
+from plugins.official.agents.data_filler import BizDataFiller, SingleDataFiller
 from config.settings import Settings
 from knowledge.search import KnowledgeSearch
 from plugins.base import CaseAttributeGenerator, PluginDeclaration
+from plugins.skill_loader import load_skill_extensions
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +24,11 @@ class DataFillingPlugin(CaseAttributeGenerator):
     """
 
     def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None):
-        self._single_filler = SingleDataFiller(settings, knowledge)
-        self._biz_filler = BizDataFiller(settings, knowledge)
+        _skills_dir = os.path.join(os.path.dirname(__file__), 'skills')
+        _exts = load_skill_extensions('data_filler', settings, _skills_dir)
+
+        self._single_filler = SingleDataFiller(settings, knowledge, skill_extensions=_exts)
+        self._biz_filler = BizDataFiller(settings, knowledge, skill_extensions=_exts)
         self._user_guidance = ""
 
     @property

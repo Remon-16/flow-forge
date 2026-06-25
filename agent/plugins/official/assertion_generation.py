@@ -4,12 +4,14 @@ Official assertion generation plugin: generates assert_dict and assert_rules.
 """
 
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
-from agents.assertion_generator import BizAssertionGenerator, SingleAssertionGenerator
+from plugins.official.agents.assertion_generator import BizAssertionGenerator, SingleAssertionGenerator
 from config.settings import Settings
 from knowledge.search import KnowledgeSearch
 from plugins.base import CaseAttributeGenerator, PluginDeclaration
+from plugins.skill_loader import load_skill_extensions
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +24,11 @@ class AssertionGenerationPlugin(CaseAttributeGenerator):
     """
 
     def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None):
-        self._single_gen = SingleAssertionGenerator(settings, knowledge)
-        self._biz_gen = BizAssertionGenerator(settings, knowledge)
+        _skills_dir = os.path.join(os.path.dirname(__file__), 'skills')
+        _exts = load_skill_extensions('assertion_generator', settings, _skills_dir)
+
+        self._single_gen = SingleAssertionGenerator(settings, knowledge, skill_extensions=_exts)
+        self._biz_gen = BizAssertionGenerator(settings, knowledge, skill_extensions=_exts)
         self._user_guidance = ""
 
     @property

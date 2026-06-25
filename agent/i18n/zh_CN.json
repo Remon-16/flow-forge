@@ -23,7 +23,7 @@
   "save.interfaces": "保存 {count} 个接口定义到 {dir}",
   "reload.interfaces": "重新加载 {count} 个接口定义",
 
-  "cli.no_api_key": "错误: LLM_API_KEY 未设置。请在 .env 文件中配置。\n  cp .env.example.cn .env\n  # 编辑 .env 并填入 API 密钥",
+  "cli.no_api_key": "错误: LLM_API_KEY 未设置。请在 env.yaml 中配置。\n  cp env.example.yaml env.yaml\n  # 编辑 env.yaml 并填入 API 密钥",
   "cli.session_log_dir": "[Session] 日志目录: {path}",
   "cli.resume_old_structure": "警告: 检测到旧版目录结构（无 cases/ 子目录）",
   "cli.resume_no_interfaces": "错误: 未在 {dir} 中找到接口 YAML 文件\n  --resume 需要已有接口定义的 output 目录",

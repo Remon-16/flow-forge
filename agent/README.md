@@ -58,11 +58,14 @@ graph TD
 
 ## 插件系统
 
-Flow Forge 通过插件系统在用例骨架生成后补充用例属性。所有插件通过 `.env` 中的 `PLUGIN_MODULES` 配置：
+Flow Forge 通过插件系统在用例骨架生成后补充用例属性。所有插件通过 `env.yaml` 中的 `plugins` 段配置：
 
-```ini
-ENABLE_PLUGINS=true
-PLUGIN_MODULES=plugins.official.data_filling.DataFillingPlugin,plugins.official.assertion_generation.AssertionGenerationPlugin
+```yaml
+plugins:
+  enabled: true
+  modules:
+    - plugins.official.data_filling.DataFillingPlugin
+    - plugins.official.assertion_generation.AssertionGenerationPlugin
 ```
 
 ### 官方插件
@@ -72,7 +75,7 @@ PLUGIN_MODULES=plugins.official.data_filling.DataFillingPlugin,plugins.official.
 | `data_filling` | 为用例骨架填充请求数据（request_head, request_body, status_code, tag） | 单接口 + 业务链路 |
 | `assertion_generation` | 为已填充用例生成断言（assert_dict, assert_rules） | 单接口 + 业务链路 |
 
-用户可以在 `PLUGIN_MODULES` 中删减不需要的插件，或用自定义实现替换。
+用户可以在 `plugins.modules` 列表中删减不需要的插件，或用自定义实现替换。
 
 ### 编写自定义插件
 
@@ -101,7 +104,7 @@ class CustomPlugin(CaseAttributeGenerator):
         return cases
 ```
 
-然后将插件路径加入 `PLUGIN_MODULES` 即可。
+然后将插件路径加入 `env.yaml` 的 `plugins.modules` 列表即可。
 
 ### PluginDeclaration 字段说明
 
@@ -126,7 +129,7 @@ class CustomPlugin(CaseAttributeGenerator):
 | `prance` | OpenAPI 3.0 规范解析 |
 | `pymupdf` | PDF 需求文档文本提取 |
 | `pyyaml` | YAML 配置与 Skill 定义解析 |
-| `python-dotenv` | `.env` 环境变量加载 |
+| `tiktoken` | Token 精确计数（回退到字符估算） |
 
 ## 目录结构
 
@@ -134,8 +137,7 @@ class CustomPlugin(CaseAttributeGenerator):
 agent/
 ├── main.py                      # CLI 入口（薄入口，实际逻辑在 cli/）
 ├── requirements.txt             # Python 依赖
-├── .env.example.cn              # 环境变量模板（中文）
-├── .env.example.en              # 环境变量模板（英文）
+├── env.example.yaml             # YAML 配置模板（双语注释）
 │
 ├── cli/
 │   ├── __init__.py
@@ -176,8 +178,6 @@ agent/
 │   ├── plan_parser.py           # 计划解析提示词
 │   ├── case_generator.py        # 用例生成提示词（旧版）
 │   ├── skeleton_generation.py   # 骨架生成提示词
-│   ├── data_filling.py          # 数据填充提示词
-│   ├── assertion_generation.py  # 断言生成提示词
 │   ├── url_correction.py        # URL 纠错提示词
 │   └── doc_parser.py            # 文档解析提示词
 │
@@ -191,18 +191,30 @@ agent/
 ├── skills/
 │   ├── __init__.py
 │   ├── base.py                  # Skill 数据类
-│   ├── registry.py              # SkillRegistry
-│   ├── builtin/                 # 内置 Skill
-│   └── custom/                  # 用户自定义 Skill
+│   ├── registry.py              # SkillRegistry（加载 YAML 并注入到 Agent）
+│   ├── builtin/                 # 内置 Skill（预留）
+│   └── custom/                  # 用户自定义 Skill（预留）
 │
 ├── plugins/
 │   ├── __init__.py
 │   ├── base.py                  # CaseAttributeGenerator 基类
 │   ├── loader.py                # 插件加载器
+│   ├── skill_loader.py          # Skill 加载辅助（从配置读取 Skill 映射）
 │   └── official/                # 官方插件
 │       ├── __init__.py
-│       ├── data_filling.py      # 数据填充插件
-│       └── assertion_generation.py # 断言生成插件
+│       ├── data_filling.py      # 数据填充插件入口
+│       ├── assertion_generation.py # 断言生成插件入口
+│       ├── agents/              #   内部 Agent 实现
+│       │   ├── __init__.py
+│       │   ├── data_filler.py
+│       │   └── assertion_generator.py
+│       ├── prompts/             #   内部 Prompt 模板
+│       │   ├── __init__.py
+│       │   ├── data_filling.py
+│       │   └── assertion_generation.py
+│       └── skills/              #   插件专属 Skill (YAML)
+│           ├── foli_mall_data_filling.yaml
+│           └── foli_mall_assertion.yaml
 │
 ├── agents/
 │   ├── __init__.py
@@ -213,8 +225,6 @@ agent/
 │   ├── plan_parser.py           # 计划解析
 │   ├── case_generator.py        # 用例生成（旧版）
 │   ├── skeleton_generator.py    # 用例骨架生成
-│   ├── data_filler.py           # 测试数据填充
-│   ├── assertion_generator.py   # 断言生成
 │   ├── batch_controller.py      # 分批控制器（插件流水线编排）
 │   └── excel_writer.py          # Excel 写入
 │
@@ -324,42 +334,74 @@ optional arguments:
   -v, --verbose         启用详细控制台日志
 ```
 
-## 环境变量配置
+## 配置文件
 
-通过复制模板文件创建 `.env`：
-- 中文用户：`cp .env.example.cn .env`
-- 英文用户：`cp .env.example.en .env`
+Flow Forge 使用 `env.yaml` 作为统一配置文件（YAML 格式）。通过复制模板创建：
 
-`.env` 文件支持的环境变量：
+```bash
+cp env.example.yaml env.yaml
+# 编辑 env.yaml 并填入配置
+```
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `LLM_PROVIDER` | `openai` | LLM 供应商 |
-| `LLM_API_KEY` | — | API 密钥（必填） |
-| `LLM_BASE_URL` | — | API Base URL（兼容 OpenAI 的第三方 API） |
-| `LLM_MODEL` | `gpt-4o` | 模型名称 |
-| `LLM_TEMPERATURE` | `0.3` | 生成温度 |
-| `LLM_MAX_OUTPUT_TOKENS` | `4096` | 单次最大输出 token |
-| `LLM_CONTEXT_WINDOW` | `128000` | 上下文窗口大小 |
-| `LLM_CONTEXT_COMPRESSION_THRESHOLD` | `0.9` | 上下文压缩阈值 |
-| `LLM_MAX_CONCURRENCY` | `1` | 最大并发请求数 |
-| `LLM_RATE_LIMIT_DELAY` | `0.0` | 请求间隔（秒） |
-| `LLM_RETRY_BASE_DELAY` | `2.0` | 重试基础延迟（指数退避） |
-| `LLM_REQUEST_TIMEOUT` | `600.0` | HTTP 请求超时（秒） |
-| `ENABLE_KNOWLEDGE` | `false` | 启用知识库搜索 |
-| `KNOWLEDGE_DIR` | `./knowledge` | 知识库目录 |
-| `ENABLE_VALIDATION` | `true` | 启用用例格式校验 |
-| `MAX_VALIDATION_RETRIES` | `3` | 校验失败重试次数 |
-| `MAX_STEPS` | `10` | 最大智能体步数 |
-| `MAX_RETRIES` | `3` | LLM 调用最大重试 |
-| `URL_CORRECTION_MAX_RETRIES` | `3` | URL 纠错最大重试 |
-| `BATCH_SIZE` | `10` | 每批用例数（-1 不分批） |
-| `CONSECUTIVE_BATCH_FAILURE_LIMIT` | `3` | 连续批次失败上限 |
-| `OUTPUT_DIR` | `./output` | 输出根目录 |
-| `OUTPUT_FORMAT` | `both` | 输出格式 |
-| `ENABLE_PLUGINS` | `false` | 启用插件系统（`.env.example` 模板默认为 `true`） |
-| `PLUGIN_MODULES` | (官方插件) | 插件模块路径（逗号分隔） |
-| `AGENT_LANG` | `zh_CN` | 界面语言 + LLM 输出语言：`zh_CN` 为简体中文，`en_US` 为英文 |
+### 配置结构
+
+```yaml
+llm:                # LLM 供应商配置
+  provider: openai
+  api_key: sk-...   # API 密钥（必填）
+  model: gpt-4o
+  temperature: 0.3
+  max_output_tokens: 4096
+  context_window: 128000
+  context_compression_threshold: 0.9
+  base_url: ""      # 第三方 API Base URL
+  max_concurrency: 1
+  rate_limit_delay: 0.0
+  retry_base_delay: 2.0
+  request_timeout: 600.0
+
+pipeline:           # 流水线设置
+  max_steps: 10
+  max_retries: 3
+  max_steps_no_progress: 5
+  consecutive_batch_failure_limit: 3
+  url_correction_max_retries: 3
+
+knowledge:          # 知识库（grep 文本搜索）
+  enabled: false
+  dir: ./knowledge
+
+validation:         # 用例校验
+  enabled: true
+  max_retries: 3
+
+output:             # 输出设置
+  dir: ./output
+  batch_size: 10
+  format: both      # yaml | excel | both
+
+plugins:            # 插件系统
+  enabled: true
+  modules:          # YAML 列表语法，按声明顺序执行
+    - plugins.official.data_filling.DataFillingPlugin
+    - plugins.official.assertion_generation.AssertionGenerationPlugin
+
+skills:             # Skill 系统（插件附属配置）
+  enabled: true     # 全局开关：false 关闭所有 Skill 注入
+  agents:           # 按 Agent 分配 Skill 文件（不含 .yaml 扩展名）
+    data_filler:
+      - foli_mall_data_filling
+    assertion_generator:
+      - foli_mall_assertion
+
+agent:              # 界面语言
+  lang: zh_CN       # zh_CN | en_US
+```
+
+### Skill 开关说明
+
+- **全局关闭**：`skills.enabled: false` → 所有 Skill 注入停止，插件正常运行
+- **精细控制**：编辑 `skills.agents`，删除不需要的 Agent 或 Skill 条目
 
 ## 知识库
 
@@ -393,6 +435,12 @@ LangGraph 提供三个关键能力：
 ### 为什么用插件架构
 
 数据填充和断言生成为官方插件，通过 `PLUGIN_MODULES` 自由配置。用户可删减不需要的插件或注册自定义插件来扩展行为。不同项目的测试需求差异很大——某些项目需要 HMAC 签名预处理、某些需要数据库连接验证——插件架构允许用户在不修改框架代码的前提下定制用例生成流程。
+
+### 为什么用 Skill 系统
+
+Skill 是插件的附属配置，以 YAML 文件形式存放在插件包的 `skills/` 目录下。每个 Skill 通过 `prompt_extension` 字段向 Agent 的系统提示词追加领域知识或业务规则，不修改代码即可定制 Agent 行为。
+
+Skill 注入采用两层控制：`env.yaml` 中 `skills.enabled` 作为全局开关，`skills.agents` 按目标 Agent 列出要加载的 Skill 文件。用户可通过注释/删除条目精细控制单个 Skill，或关闭全局开关一键禁用所有 Skill 注入。Skill 通过 `target_agents` 字段精确控制注入目标，避免无关 Agent 受到干扰。
 
 ### 为什么用英文提示词
 

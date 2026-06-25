@@ -162,11 +162,7 @@ class CheckpointManager:
         Returns a list of missing plugin module paths (empty = all present).
         """
         settings = meta.get("settings", {})
-        plugin_modules_str = settings.get("plugin_modules", "")
-        if not plugin_modules_str:
-            return []
-
-        paths = [p.strip() for p in plugin_modules_str.split(",") if p.strip()]
+        paths = [p.strip() for p in settings.get("plugin_modules", []) if p.strip()]
         missing: List[str] = []
         for path in paths:
             if importlib.util.find_spec(path) is None:

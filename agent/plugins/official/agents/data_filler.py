@@ -4,11 +4,11 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from .base import BaseAgent
+from agents.base import BaseAgent
 from config.settings import Settings
 from knowledge.search import KnowledgeSearch
 from prompts import KNOWLEDGE_SECTION_HEADER
-from prompts.data_filling import (
+from plugins.official.prompts.data_filling import (
     SINGLE_DATA_FILLING_SYSTEM,
     SINGLE_DATA_FILLING_USER,
     BIZ_DATA_FILLING_SYSTEM,
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class SingleDataFiller(BaseAgent):
     """Fill request data for single API test case skeletons."""
 
-    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None):
+    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None, skill_extensions=None):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -35,6 +35,7 @@ class SingleDataFiller(BaseAgent):
             context_window=settings.llm_context_window,
             max_output_tokens=settings.llm_max_output_tokens,
             compression_threshold=settings.llm_context_compression_threshold,
+            skill_extensions=skill_extensions,
         )
         self._knowledge = knowledge
 
@@ -144,7 +145,7 @@ class SingleDataFiller(BaseAgent):
 class BizDataFiller(BaseAgent):
     """Fill request data and Inherit fields for business flow test case skeletons."""
 
-    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None):
+    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None, skill_extensions=None):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -156,6 +157,7 @@ class BizDataFiller(BaseAgent):
             context_window=settings.llm_context_window,
             max_output_tokens=settings.llm_max_output_tokens,
             compression_threshold=settings.llm_context_compression_threshold,
+            skill_extensions=skill_extensions,
         )
         self._knowledge = knowledge
 

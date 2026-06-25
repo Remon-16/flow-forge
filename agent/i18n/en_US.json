@@ -23,7 +23,7 @@
   "save.interfaces": "Saved {count} interfaces to {dir}",
   "reload.interfaces": "Reloaded {count} interface definitions",
 
-  "cli.no_api_key": "Error: LLM_API_KEY not set. Configure it in .env file.\n  cp .env.example.en .env\n  # Edit .env and add your API key",
+  "cli.no_api_key": "Error: LLM_API_KEY not set. Configure it in env.yaml.\n  cp env.example.yaml env.yaml\n  # Edit env.yaml and add your API key",
   "cli.session_log_dir": "[Session] Log directory: {path}",
   "cli.resume_old_structure": "Warning: Old directory structure detected (no cases/ subdirectory)",
   "cli.resume_no_interfaces": "Error: No interface YAML files found in {dir}\n  --resume requires an output directory with existing interface definitions",

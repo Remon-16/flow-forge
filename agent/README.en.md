@@ -58,11 +58,14 @@ Core workflow (9 steps):
 
 ## Plugin System
 
-Flow Forge uses a plugin system to enrich test case skeletons with additional attributes after generation. All plugins are configured via `PLUGIN_MODULES` in `.env`:
+Flow Forge uses a plugin system to enrich test case skeletons with additional attributes after generation. All plugins are configured via the `plugins` section in `env.yaml`:
 
-```ini
-ENABLE_PLUGINS=true
-PLUGIN_MODULES=plugins.official.data_filling.DataFillingPlugin,plugins.official.assertion_generation.AssertionGenerationPlugin
+```yaml
+plugins:
+  enabled: true
+  modules:
+    - plugins.official.data_filling.DataFillingPlugin
+    - plugins.official.assertion_generation.AssertionGenerationPlugin
 ```
 
 ### Official Plugins
@@ -72,7 +75,7 @@ PLUGIN_MODULES=plugins.official.data_filling.DataFillingPlugin,plugins.official.
 | `data_filling` | Fill request data into skeletons (request_head, request_body, status_code, tag) | Single + Biz |
 | `assertion_generation` | Generate assertions for filled cases (assert_dict, assert_rules) | Single + Biz |
 
-Users may remove unwanted plugins from `PLUGIN_MODULES` or replace them with custom implementations.
+Users may remove unwanted plugins from the `plugins.modules` list or replace them with custom implementations.
 
 ### Writing a Custom Plugin
 
@@ -101,7 +104,7 @@ class CustomPlugin(CaseAttributeGenerator):
         return cases
 ```
 
-Then add the plugin path to `PLUGIN_MODULES`.
+Then add the plugin path to the `plugins.modules` list in `env.yaml`.
 
 ### PluginDeclaration Fields
 
@@ -126,7 +129,7 @@ Then add the plugin path to `PLUGIN_MODULES`.
 | `prance` | OpenAPI 3.0 spec parsing |
 | `pymupdf` | PDF text extraction |
 | `pyyaml` | YAML config and skill parsing |
-| `python-dotenv` | `.env` environment variable loading |
+| `tiktoken` | Accurate token counting (falls back to char estimation) |
 
 ## Directory Structure
 
@@ -134,8 +137,7 @@ Then add the plugin path to `PLUGIN_MODULES`.
 agent/
 ├── main.py                      # CLI entry (thin wrapper, logic in cli/)
 ├── requirements.txt             # Python dependencies
-├── .env.example.cn              # Environment variable template (Chinese)
-├── .env.example.en              # Environment variable template (English)
+├── env.example.yaml             # YAML config template (bilingual comments)
 │
 ├── cli/
 │   ├── parser.py                # CLI argument parsing
@@ -172,16 +174,29 @@ agent/
 │   └── custom/                  # User custom tools
 │
 ├── skills/
-│   ├── registry.py              # SkillRegistry
-│   ├── builtin/                 # Built-in skills
-│   └── custom/                  # User custom skills
+│   ├── registry.py              # SkillRegistry (loads YAML, injects into agents)
+│   ├── builtin/                 # Built-in skills (reserved)
+│   └── custom/                  # User custom skills (reserved)
 │
 ├── plugins/
 │   ├── base.py                  # CaseAttributeGenerator base class
 │   ├── loader.py                # Plugin loader
+│   ├── skill_loader.py          # Skill loader (reads skill config from settings)
 │   └── official/                # Official plugins
-│       ├── data_filling.py      # Data filling plugin
-│       └── assertion_generation.py # Assertion generation plugin
+│       ├── __init__.py
+│       ├── data_filling.py      # Data filling plugin entry point
+│       ├── assertion_generation.py # Assertion generation plugin entry point
+│       ├── agents/              #   Internal agent implementations
+│       │   ├── __init__.py
+│       │   ├── data_filler.py
+│       │   └── assertion_generator.py
+│       ├── prompts/             #   Internal prompt templates
+│       │   ├── __init__.py
+│       │   ├── data_filling.py
+│       │   └── assertion_generation.py
+│       └── skills/              #   Plugin-specific skills (YAML data files)
+│           ├── foli_mall_data_filling.yaml
+│           └── foli_mall_assertion.yaml
 │
 ├── agents/
 │   ├── base.py                  # BaseAgent foundation class
@@ -191,8 +206,6 @@ agent/
 │   ├── plan_parser.py           # Plan parsing
 │   ├── case_generator.py        # Case generation (legacy)
 │   ├── skeleton_generator.py    # Skeleton generation (single + biz)
-│   ├── data_filler.py           # Data filling (single + biz)
-│   ├── assertion_generator.py   # Assertion generation (single + biz)
 │   ├── batch_controller.py      # Batch controller (plugin pipeline)
 │   └── excel_writer.py          # Excel writer
 │
@@ -284,42 +297,74 @@ optional arguments:
   -v, --verbose         Enable verbose console logging
 ```
 
-## Environment Variables
+## Configuration File
 
-Create `.env` from a template:
-- Chinese users: `cp .env.example.cn .env`
-- English users: `cp .env.example.en .env`
+Flow Forge uses `env.yaml` as its unified configuration file (YAML format). Create it from the template:
 
-Supported `.env` variables:
+```bash
+cp env.example.yaml env.yaml
+# Edit env.yaml with your settings
+```
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LLM_PROVIDER` | `openai` | LLM provider |
-| `LLM_API_KEY` | — | API key (required) |
-| `LLM_BASE_URL` | — | API base URL (OpenAI-compatible) |
-| `LLM_MODEL` | `gpt-4o` | Model name |
-| `LLM_TEMPERATURE` | `0.3` | Generation temperature |
-| `LLM_MAX_OUTPUT_TOKENS` | `4096` | Max output tokens per call |
-| `LLM_CONTEXT_WINDOW` | `128000` | Context window size |
-| `LLM_CONTEXT_COMPRESSION_THRESHOLD` | `0.9` | Context compression threshold |
-| `LLM_MAX_CONCURRENCY` | `1` | Max concurrent requests |
-| `LLM_RATE_LIMIT_DELAY` | `0.0` | Delay between requests (seconds) |
-| `LLM_RETRY_BASE_DELAY` | `2.0` | Retry base delay (exponential backoff) |
-| `LLM_REQUEST_TIMEOUT` | `600.0` | HTTP request timeout (seconds) |
-| `ENABLE_KNOWLEDGE` | `false` | Enable knowledge base search |
-| `KNOWLEDGE_DIR` | `./knowledge` | Knowledge base directory |
-| `ENABLE_VALIDATION` | `true` | Enable case format validation |
-| `MAX_VALIDATION_RETRIES` | `3` | Validation retry limit |
-| `MAX_STEPS` | `10` | Max agent steps |
-| `MAX_RETRIES` | `3` | Max LLM call retries |
-| `URL_CORRECTION_MAX_RETRIES` | `3` | URL correction retry limit |
-| `BATCH_SIZE` | `10` | Cases per batch (-1 = no batching) |
-| `CONSECUTIVE_BATCH_FAILURE_LIMIT` | `3` | Consecutive failure limit |
-| `OUTPUT_DIR` | `./output` | Output root directory |
-| `OUTPUT_FORMAT` | `both` | Output format |
-| `ENABLE_PLUGINS` | `false` | Enable plugin system (`.env.example` template defaults to `true`) |
-| `PLUGIN_MODULES` | (official plugins) | Plugin module paths (comma-separated) |
-| `AGENT_LANG` | `zh_CN` | UI language + LLM output language: `zh_CN` for Simplified Chinese, `en_US` for English |
+### Configuration Structure
+
+```yaml
+llm:                # LLM provider settings
+  provider: openai
+  api_key: sk-...   # API key (required)
+  model: gpt-4o
+  temperature: 0.3
+  max_output_tokens: 4096
+  context_window: 128000
+  context_compression_threshold: 0.9
+  base_url: ""      # Third-party API base URL
+  max_concurrency: 1
+  rate_limit_delay: 0.0
+  retry_base_delay: 2.0
+  request_timeout: 600.0
+
+pipeline:           # Pipeline settings
+  max_steps: 10
+  max_retries: 3
+  max_steps_no_progress: 5
+  consecutive_batch_failure_limit: 3
+  url_correction_max_retries: 3
+
+knowledge:          # Knowledge base (grep-based text search)
+  enabled: false
+  dir: ./knowledge
+
+validation:         # Case validation
+  enabled: true
+  max_retries: 3
+
+output:             # Output settings
+  dir: ./output
+  batch_size: 10
+  format: both      # yaml | excel | both
+
+plugins:            # Plugin system
+  enabled: true
+  modules:          # YAML list syntax, executed in declaration order
+    - plugins.official.data_filling.DataFillingPlugin
+    - plugins.official.assertion_generation.AssertionGenerationPlugin
+
+skills:             # Skill system (plugin-attached configs)
+  enabled: true     # Global switch: false disables all skill injection
+  agents:           # Assign skill files to agents (without .yaml extension)
+    data_filler:
+      - foli_mall_data_filling
+    assertion_generator:
+      - foli_mall_assertion
+
+agent:              # UI language
+  lang: zh_CN       # zh_CN | en_US
+```
+
+### Skill Toggle
+
+- **Global disable**: `skills.enabled: false` — all skill injection stops; plugins still run normally
+- **Fine-grained control**: edit `skills.agents` to remove unwanted agent entries or individual skills
 
 ## Knowledge Base
 
@@ -353,6 +398,12 @@ The pipeline pattern decomposes test case generation into sequential, independen
 ### Why plugin architecture
 
 Data filling and assertion generation are provided as official plugins, configured via `PLUGIN_MODULES`. Users can remove unwanted plugins or register custom plugins to extend the default behavior. Different projects have different testing needs — some require HMAC signing preprocessors, others need database-backed verification — and the plugin architecture allows customizing the generation pipeline without modifying framework code.
+
+### Why Skill system
+
+Skills are plugin-attached configuration files stored as YAML under each plugin package's `skills/` directory. Each Skill appends domain knowledge or business rules to the agent's system prompt via its `prompt_extension` field, customizing agent behavior without code changes.
+
+Skill injection uses a two-layer control: `skills.enabled` in `env.yaml` acts as a global on/off switch, while `skills.agents` maps target agents to their skill files. Users can comment out or remove individual skill entries for fine-grained control, or disable the global switch to turn off all skill injection at once. The `target_agents` field ensures precise injection targeting, preventing unrelated agents from being affected.
 
 ### Why English prompts
 

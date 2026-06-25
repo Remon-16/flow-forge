@@ -76,6 +76,7 @@ class BaseAgent:
         retry_base_delay: float | None = None,
         max_concurrency: int | None = None,
         request_timeout: float | None = None,
+        skill_extensions: List[str] | None = None,
     ):
         # Use shared client to avoid creating multiple httpx connection pools.
         # Each pool maintains keep-alive connections; with 10+ agent instances,
@@ -137,6 +138,9 @@ class BaseAgent:
         self._conversation_tokens: int = 0
         self._conversation_summary: str = ""
         self._round_count: int = 0
+
+        # Skill extensions — injected by plugin loader, appended to system_msg on each call
+        self._skill_extensions: List[str] = skill_extensions or []
 
     def set_progress_getter(
         self, getter: Callable[[], str], max_no_progress: int = 5
@@ -537,6 +541,10 @@ class BaseAgent:
     ) -> str:
         """Call LLM with retry, global rate limiting, and concurrency control."""
         self.check_step()
+
+        # Append skill extensions to system prompt
+        if self._skill_extensions:
+            system_msg = system_msg + "\n\n" + "\n\n".join(self._skill_extensions)
 
         # Context window check
         if not self._check_context_fit(system_msg, prompt):

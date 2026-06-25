@@ -29,9 +29,7 @@ class PromptRegistry:
         Import all prompt constants from prompts/ modules.
         """
         from . import api_analyzer
-        from . import assertion_generation
         from . import case_generation
-        from . import data_filling
         from . import doc_parser
         from . import plan_generation
         from . import plan_parser as _plan_parser_mod
@@ -75,22 +73,6 @@ class PromptRegistry:
             "biz_skeleton_generator": {
                 "system": skeleton_generation.BIZ_SKELETON_SYSTEM,
                 "user_template": skeleton_generation.BIZ_SKELETON_USER,
-            },
-            "single_data_filler": {
-                "system": data_filling.SINGLE_DATA_FILLING_SYSTEM,
-                "user_template": data_filling.SINGLE_DATA_FILLING_USER,
-            },
-            "biz_data_filler": {
-                "system": data_filling.BIZ_DATA_FILLING_SYSTEM,
-                "user_template": data_filling.BIZ_DATA_FILLING_USER,
-            },
-            "single_assertion_generator": {
-                "system": assertion_generation.SINGLE_ASSERTION_SYSTEM,
-                "user_template": assertion_generation.SINGLE_ASSERTION_USER,
-            },
-            "biz_assertion_generator": {
-                "system": assertion_generation.BIZ_ASSERTION_SYSTEM,
-                "user_template": assertion_generation.BIZ_ASSERTION_USER,
             },
             "doc_parser": {
                 "system": doc_parser.DOC_PARSER_SYSTEM,

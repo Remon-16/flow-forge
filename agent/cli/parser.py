@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--output-format", choices=["yaml", "excel", "both"], default="",
-        help="输出格式: yaml, excel, both (default: both, or from .env).",
+        help="输出格式: yaml, excel, both (default: both, or from env.yaml).",
     )
     p.add_argument(
         "--debug-snapshots", action="store_true",
@@ -38,15 +38,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--batch-size", type=int, default=0,
-        help="每批最大用例数 (default: from .env).",
+        help="每批最大用例数 (default: from env.yaml).",
     )
     p.add_argument(
         "--prompt", "-p", default="",
         help="用户补充指导，注入到计划和用例生成提示词中。User guidance.",
     )
     p.add_argument(
-        "--env", default=".env",
-        help=".env 文件路径。Path to .env file (default: .env).",
+        "--env", default="env.yaml",
+        help="配置文件路径。Path to config YAML file (default: env.yaml).",
     )
     p.add_argument(
         "-v", "--verbose", action="store_true",

@@ -1,0 +1,32 @@
+name: foli_mall_data_filling
+description: Foli Mall test project data filling rules — test accounts, status codes, and role-based parameter selection
+version: "1.0"
+target_agents:
+  - data_filler
+prompt_extension: |
+  ## Foli Mall Data Filling Rules
+
+  ### Response Status Code
+  All test cases and steps MUST use status_code = 200.
+
+  ### Test Accounts
+  Use the following accounts for test data. Choose the appropriate role based on the test scenario:
+
+  | Username | Password | Role | Balance |
+  |----------|----------|------|---------|
+  | admin | admin123 | Administrator | 99999 |
+  | seller01 | seller123 | Seller - Digital Expert | 50000 |
+  | seller02 | seller123 | Seller - Fashion Manager | 50000 |
+  | seller03 | seller123 | Seller - Food Expert | 50000 |
+  | seller04 | seller123 | Seller - Home Buyer | 50000 |
+  | seller05 | seller123 | Seller - Sports Enthusiast | 50000 |
+  | buyer01 | buyer123 | Buyer | 10000 |
+  | buyer02 | buyer123 | Buyer | 10000 |
+
+  ### Data Filling Guidelines
+  - For login/auth requests: use the account credentials from the table above
+  - For seller-specific operations: use one of the seller accounts
+  - For buyer-specific operations: use one of the buyer accounts
+  - For admin operations: use the admin account
+  - Always include the appropriate role context when filling request parameters
+tools: []

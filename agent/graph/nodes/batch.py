@@ -69,7 +69,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
     biz_skel_gen = BizSkeletonGenerator(_settings, _knowledge)
 
     user_module_paths = [
-        p.strip() for p in _settings.plugin_modules.split(",") if p.strip()
+        p.strip() for p in _settings.plugin_modules if p.strip()
     ] if _settings.enable_plugins else []
     plugins = load_all_plugins(_settings, _knowledge, user_module_paths, user_guidance)
     plugin_names = [p.declaration.plugin_name for p in plugins]
