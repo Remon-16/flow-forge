@@ -4,7 +4,7 @@
 
 ![Development Status](https://img.shields.io/badge/status-Alpha-orange)
 ![Version](https://img.shields.io/badge/version-v0.3.0--alpha-blue)
-![Branch](https://img.shields.io/badge/dev_brach-dev-brigAhtgreen)
+![Branch](https://img.shields.io/badge/dev_branch-dev-brightgreen)
 
 An AI agent-based API automation testing framework. Provide requirement documents and API documentation, and the agent automatically generates test case YAML files (with optional Excel export). Feed the cases to the CLI executor, and you get a test report. The executor integrates seamlessly with Jenkins for CI/CD pipelines.
 
@@ -154,7 +154,7 @@ The executor is a pure CLI tool that communicates results via exit codes, allowi
 
 | Component | Technology |
 |-----------|------------|
-| Case Generation Agent | Python 3, OpenAI API, prance (OpenAPI parsing), pymupdf (PDF parsing) |
+| Case Generation Agent | Python 3, OpenAI API, prance (OpenAPI parsing), pymupdf (PDF parsing), LLM context compression |
 | Test Executor | Python 3, requests, openpyxl, pyyaml |
 | Configuration | YAML multi-environment config files |
 | Report Output | Self-contained HTML (no external CSS/JS) |
@@ -167,6 +167,7 @@ The executor is a pure CLI tool that communicates results via exit codes, allowi
 - **CLI-Driven**: The executor is a pure CLI tool with no GUI dependencies, suitable for CI/CD environments.
 - **Self-Contained Reports**: HTML reports embed all styles and scripts inline — open them directly in a browser without a web server.
 - **Extensible Processors**: Pre/post processor extension points allow custom logic such as HMAC signing, SQL cleanup, etc.
+- **Context Compression**: When processing long documents, intermediate results from chunked processing are automatically compressed into concise summaries, freeing context window space. Only accumulated results are compressed — system prompts and skill content remain untouched.
 
 ## Plugin & Processor System
 

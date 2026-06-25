@@ -167,8 +167,10 @@ agent/
 │   ├── __init__.py              # 统一导出所有提示词常量
 │   ├── render.py                # {{variable}} 模板变量替换
 │   ├── registry.py              # PromptRegistry：从 Python 模块加载
+│   ├── compression.py           # 上下文压缩提示词
+│   ├── json_fix.py              # JSON 修复提示词
 │   ├── api_analyzer.py          # 接口分析提示词
-│   ├── requirement_analyzer.py  # 需求分析提示词
+│   ├── requirement_analysis.py  # 需求分析提示词
 │   ├── plan_generator.py        # 计划生成提示词
 │   ├── plan_reviser.py          # 计划修订提示词
 │   ├── plan_parser.py           # 计划解析提示词
@@ -260,7 +262,7 @@ agent/
 │   ├── session_logger.py        # 会话日志记录
 │   └── token_counter.py         # Token 计数
 │
-├── logs/                        # 运行日志（自动生成）
+├── logs/                        # 运行日志（运行时生成）
 │   └── <timestamp>/
 │       ├── session.jsonl
 │       ├── debug.log
@@ -268,7 +270,7 @@ agent/
 │       ├── state.json
 │       └── excel_result.xlsx
 │
-└── <output>/                    # 输出目录
+└── <output>/                    # 输出目录（运行时生成）
     ├── cases/
     │   ├── interfaces/
     │   ├── single_cases/
@@ -355,7 +357,7 @@ optional arguments:
 | `CONSECUTIVE_BATCH_FAILURE_LIMIT` | `3` | 连续批次失败上限 |
 | `OUTPUT_DIR` | `./output` | 输出根目录 |
 | `OUTPUT_FORMAT` | `both` | 输出格式 |
-| `ENABLE_PLUGINS` | `true` | 启用插件系统 |
+| `ENABLE_PLUGINS` | `false` | 启用插件系统（`.env.example` 模板默认为 `true`） |
 | `PLUGIN_MODULES` | (官方插件) | 插件模块路径（逗号分隔） |
 | `AGENT_LANG` | `zh_CN` | 界面语言 + LLM 输出语言：`zh_CN` 为简体中文，`en_US` 为英文 |
 
@@ -395,3 +397,7 @@ LangGraph 提供三个关键能力：
 ### 为什么用英文提示词
 
 所有智能体的系统提示词和用户提示词均为英文编写。英文指令结构更简洁、歧义更少，弱模型（如小参数量的开源模型）对英文指令的理解准确度通常优于中文。在生成用户可见内容（测试计划、API 分析问题、用例中的 api_name/remark/sheet_name 等字段）时，通过 `{{language}}` 模板变量强制 LLM 以 `AGENT_LANG` 配置的语言输出，确保英文系统提示词不会导致 LLM 在所有交互环节都用英文回复。
+
+### 上下文压缩
+
+处理长文档时，系统按段落边界将文本拆分为多个块，逐块调用 LLM 处理。每轮处理前检查 token 使用率：当输入 token 超过 `LLM_CONTEXT_COMPRESSION_THRESHOLD × LLM_CONTEXT_WINDOW`（默认 90%）时，触发 LLM 驱动的上下文压缩——将前几轮的中间结果浓缩为关键要点摘要，释放上下文空间。压缩仅作用于分块处理的累积结果，不触及系统提示词和 Skill 内容；智能体的核心指令在所有处理轮次中始终保持完整。

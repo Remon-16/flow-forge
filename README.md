@@ -154,7 +154,7 @@ AI 智能体输出 Excel 格式（--output-format excel 或 both）
 
 |组件|技术|
 |------|----|
-|用例生成智能体|Python 3, OpenAI API, prance (OpenAPI 解析), pymupdf (PDF 解析)|
+|用例生成智能体|Python 3, OpenAI API, prance (OpenAPI 解析), pymupdf (PDF 解析), LLM 上下文压缩|
 |测试执行器|Python 3, requests, openpyxl, pyyaml|
 |配置管理|YAML 多环境配置文件|
 |报告输出|自包含 HTML（无需外部 CSS/JS）|
@@ -167,6 +167,7 @@ AI 智能体输出 Excel 格式（--output-format excel 或 both）
 - **命令行驱动**：执行器纯 CLI 设计，无 GUI 依赖，适配 CI/CD 环境
 - **自包含报告**：HTML 报告内嵌所有样式和脚本，可直接在浏览器打开，无需 Web 服务器
 - **可扩展处理器**：预留前置/后置处理器扩展点，用户可自定义 HMAC 签名、SQL 清理等定制逻辑
+- **上下文压缩**：处理长文档时自动将分块处理的中间结果压缩为要点摘要，释放上下文窗口空间。仅压缩累积结果，不触及系统提示词和 Skill 内容
 
 ## 插件与处理器系统
 

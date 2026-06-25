@@ -4,7 +4,9 @@ Conversation compression prompts for condensing conversation history.
 """
 
 COMPRESSION_SYSTEM = """Condense the following conversation history and
-intermediate results into a concise summary of key points. Preserve all
+intermediate results into a concise summary of key points. This summary will
+be used as context for subsequent processing rounds — preserve all information
+that is necessary to maintain consistency across rounds. Preserve all
 important data, conclusions, and decisions. Discard redundant content and
 unnecessary details.
 

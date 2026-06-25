@@ -221,11 +221,18 @@ class BaseAgent:
         self._round_count = 0
 
     def _compress_conversation(self, system_msg: str) -> str:
-        """Compress accumulated conversation history into a concise summary.
+        """压缩累积的对话历史为关键要点摘要。
 
-        Calls the LLM to distill prior rounds into key points, replacing
-        verbose history with a compact summary.  Updates _conversation_summary
-        and resets _conversation_tokens.
+        Compress accumulated conversation history into a concise summary.
+
+        仅压缩 _conversation_summary（累积的块处理结果）。system_msg 参数
+        仅作为压缩 LLM 调用的上下文传入 —— 它不会被存储、累积或压缩。
+        系统提示词和 Skill 内容在所有轮次中保持完整。
+
+        Only compresses _conversation_summary (accumulated chunk results).
+        The system_msg parameter is used solely as context for the compression
+        LLM call — it is NEVER stored, accumulated, or compressed. System
+        prompts and skill content remain intact across all rounds.
         """
         if not self._conversation_summary and self._round_count <= 1:
             return ""
@@ -540,7 +547,11 @@ class BaseAgent:
                     f"{self._estimate_input_tokens(system_msg, prompt)} / "
                     f"{self._context_window} tokens"
                 )
-            # Near limit — try compression for multi-round scenarios
+            # 接近上下文限制 — 压缩累积历史以释放空间给后续轮次。
+            # 不会修改当前请求的 system_msg 或用户指导（prompt 参数）。
+            # Near limit — compress accumulated history to free space for
+            # subsequent rounds. Does NOT modify the current request's
+            # system_msg or user guidance (the prompt parameter).
             if self._round_count > 0:
                 self._compress_conversation(system_msg)
 

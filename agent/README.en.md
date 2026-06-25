@@ -162,6 +162,8 @@ agent/
 │   ├── __init__.py              # Unified prompt exports
 │   ├── render.py                # {{variable}} template substitution
 │   ├── registry.py              # PromptRegistry — Python module loader
+│   ├── compression.py           # Context compression prompts
+│   ├── json_fix.py              # JSON fix prompt
 │   └── *.py                     # One module per agent (SYSTEM + USER constants)
 │
 ├── tools/
@@ -231,8 +233,8 @@ agent/
 │   ├── session_logger.py        # Session event logging
 │   └── token_counter.py         # Token counting
 │
-├── logs/                        # Session logs (auto-generated)
-└── <output>/                    # Output directory
+├── logs/                        # Session logs (runtime-generated)
+└── <output>/                    # Output directory (runtime-generated)
     ├── cases/
     │   ├── interfaces/
     │   ├── single_cases/
@@ -315,7 +317,7 @@ Supported `.env` variables:
 | `CONSECUTIVE_BATCH_FAILURE_LIMIT` | `3` | Consecutive failure limit |
 | `OUTPUT_DIR` | `./output` | Output root directory |
 | `OUTPUT_FORMAT` | `both` | Output format |
-| `ENABLE_PLUGINS` | `true` | Enable plugin system |
+| `ENABLE_PLUGINS` | `false` | Enable plugin system (`.env.example` template defaults to `true`) |
 | `PLUGIN_MODULES` | (official plugins) | Plugin module paths (comma-separated) |
 | `AGENT_LANG` | `zh_CN` | UI language + LLM output language: `zh_CN` for Simplified Chinese, `en_US` for English |
 
@@ -355,3 +357,7 @@ Data filling and assertion generation are provided as official plugins, configur
 ### Why English prompts
 
 All agent system and user prompts are written in English. English instructions are structurally simpler with less ambiguity — smaller open-source models typically achieve higher comprehension accuracy with English prompts than with other languages. When generating user-visible content (test plans, API analysis questions, case fields like api_name/remark/sheet_name), the `{{language}}` template variable forces the LLM to output in the language configured by `AGENT_LANG`, preventing English system prompts from causing the LLM to reply in English throughout all interactive steps.
+
+### Context Compression
+
+When processing long documents, the system splits text into chunks at paragraph boundaries and processes each chunk sequentially. Before each round, token usage is checked: when input tokens exceed `LLM_CONTEXT_COMPRESSION_THRESHOLD × LLM_CONTEXT_WINDOW` (default 90%), an LLM-driven compression is triggered — distilling intermediate results from prior rounds into a concise summary of key points, freeing up context window space. Compression only applies to accumulated chunk processing results; system prompts and skill content remain untouched. The agent's core instructions stay intact across all processing rounds.
