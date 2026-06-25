@@ -43,6 +43,7 @@ __pycache__
 
 env-local.yml
 .env
+env.yaml
 logs/
 report/
 node_modules/
