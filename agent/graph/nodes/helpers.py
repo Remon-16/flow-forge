@@ -82,6 +82,47 @@ def save_snapshot(memory_dir: str, filename: str, data: Any) -> None:
         logger.warning("Failed to save snapshot %s: %s", filename, e)
 
 
+def save_pipeline_artifact(memory_dir: str, filename: str, data: Any) -> None:
+    """保存流水线中间结果到 memory/ 目录（可靠工件，供 resume 使用）。
+
+    Save pipeline intermediate result as a reliable artifact for resume.
+    Unlike snapshots, these are always saved regardless of debug_snapshots flag.
+    """
+    if not memory_dir:
+        return
+    try:
+        path = Path(memory_dir) / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        logger.warning("Failed to save pipeline artifact %s: %s", filename, e)
+
+
+def save_pipeline_state(memory_dir: str, stage: str) -> None:
+    """更新流水线进度标记文件。
+
+    Update pipeline progress marker file for resume routing.
+    """
+    if not memory_dir:
+        return
+    try:
+        path = Path(memory_dir) / "pipeline_state.json"
+        state: Dict[str, Any] = {"completed_stage": stage, "stages": []}
+        if path.exists():
+            with open(path, "r", encoding="utf-8") as f:
+                state = json.load(f)
+        if stage not in state.get("stages", []):
+            state.setdefault("stages", []).append(stage)
+        state["completed_stage"] = stage
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.warning("Failed to save pipeline state: %s", e)
+
+
 def fmt_size(path: str) -> str:
     """格式化文件大小以供显示。
 

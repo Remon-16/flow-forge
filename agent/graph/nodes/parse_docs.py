@@ -12,7 +12,7 @@ from doc_parser.pdf_parser import PdfParser
 from doc_parser.text_extractor import extract_text
 from graph.state import GraphState
 
-from .helpers import _settings, _sl, fmt_size, iface_to_dict, save_snapshot
+from .helpers import _settings, _sl, fmt_size, iface_to_dict, save_pipeline_artifact, save_pipeline_state, save_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -144,5 +144,16 @@ def parse_docs_node(state: GraphState) -> GraphState:
             "requirement_files": state.get("requirement_paths", []),
             "api_file": state.get("api_path", ""),
         })
+
+    # Save pipeline artifact for resume
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        save_pipeline_artifact(memory_dir, "parsed_docs.json", {
+            "requirement_text": state.get("requirement_text", ""),
+            "api_raw_text": state.get("api_raw_text", ""),
+            "interfaces": state.get("interfaces", []),
+            "parse_mode": state.get("parse_mode", ""),
+        })
+        save_pipeline_state(memory_dir, "parse_docs")
 
     return state

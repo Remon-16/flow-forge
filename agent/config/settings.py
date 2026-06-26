@@ -38,6 +38,7 @@ class Settings:
     agent_lang: str = "zh_CN"
     enable_skills: bool = True
     skill_agents: Dict[str, List[str]] = field(default_factory=dict)
+    auto_mode: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -70,6 +71,7 @@ class Settings:
             "llm_request_timeout": self.llm_request_timeout,
             "enable_skills": self.enable_skills,
             "skill_agents": self.skill_agents,
+            "auto_mode": self.auto_mode,
         }
 
 
@@ -122,6 +124,7 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         enable_skills=skills_cfg.get("enabled", True),
         skill_agents=skills_cfg.get("agents", {}),
         agent_lang=agent_cfg.get("lang", "zh_CN"),
+        auto_mode=pipeline.get("auto", False),
     )
 
     # 为 i18n 设置语言（i18n 懒加载时通过 os.environ 读取）

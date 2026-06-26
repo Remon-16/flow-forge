@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class PlanParser(BaseAgent):
     """Parse a confirmed Markdown test plan into structured TestPlan."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, skill_extensions: List[str] = None):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -31,6 +31,7 @@ class PlanParser(BaseAgent):
             context_window=settings.llm_context_window,
             max_output_tokens=settings.llm_max_output_tokens,
             compression_threshold=settings.llm_context_compression_threshold,
+            skill_extensions=skill_extensions,
         )
 
     def parse(

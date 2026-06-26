@@ -56,7 +56,8 @@ class GraphState(TypedDict, total=False):
     # === 接口 URL 校验 / Interface URL validation ===
     url_validation_errors: List[Dict[str, Any]]
 
-    # === 人工审核 / Human review ===
+    # === 自动与审核 / Auto & review ===
+    auto_mode: bool  # 自动模式：跳过所有人工审核 / Auto mode: skip all human review
     plan_confirmed: bool
     plan_feedback: str
     plan_feedback_type: str          # "text" | "annotations"

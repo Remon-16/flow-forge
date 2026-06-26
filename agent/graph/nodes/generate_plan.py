@@ -4,12 +4,14 @@ generate_plan node: generates test plan from requirement analysis + interfaces.
 """
 
 import logging
+import os
 from pathlib import Path
 
 from agents.plan_generator import PlanGenerator
 from graph.state import GraphState
+from plugins.skill_loader import load_skill_extensions
 
-from .helpers import _settings, _knowledge, _sl, summarize_reference_dir
+from .helpers import _settings, _knowledge, _sl, save_pipeline_state, summarize_reference_dir
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,9 @@ def generate_plan_node(state: GraphState) -> GraphState:
     reference_dir = state.get("reference_dir", "")
     reference_summary = summarize_reference_dir(reference_dir)
 
-    agent = PlanGenerator(_settings, _knowledge)
+    _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
+    _exts = load_skill_extensions('plan_generator', _settings, _skills_dir)
+    agent = PlanGenerator(_settings, _knowledge, skill_extensions=_exts)
 
     analysis = state.get("requirement_analysis", {})
     interfaces = state.get("interfaces", [])
@@ -65,6 +69,10 @@ def generate_plan_node(state: GraphState) -> GraphState:
         print(_("plan.generated_saved", len=plan_len, path=plan_path))
     else:
         print(_("plan.generated", len=plan_len))
+
+    # Save pipeline state for resume (plan.md already saved above)
+    if memory_dir:
+        save_pipeline_state(memory_dir, "generate_plan")
 
     if _sl():
         _sl().log_node_end("generate_plan")

@@ -22,6 +22,8 @@
   "resume.skip_skeleton": "Skeleton generation — SKIPPED (already completed)",
   "save.interfaces": "Saved {count} interfaces to {dir}",
   "reload.interfaces": "Reloaded {count} interface definitions",
+  "resume.from_stage": "[Resume] Resuming from stage '{stage}'",
+  "resume.loading_state": "[Resume] Loading intermediate results from {dir}...",
 
   "cli.no_api_key": "Error: LLM_API_KEY not set. Configure it in env.yaml.\n  cp env.example.yaml env.yaml\n  # Edit env.yaml and add your API key",
   "cli.session_log_dir": "[Session] Log directory: {path}",
@@ -51,6 +53,9 @@
   "analyze_api.auto_pass": "No critical missing information — auto-pass.",
   "analyze_api.uncertainties_title": "\n  [API Analysis] Uncertainties found:",
   "analyze_api.uncertainty_item": "    ? {question}",
+  "auto.pipeline_start": "[Auto Mode] Pipeline starting (all manual review steps will be skipped)...",
+  "auto.skipping_uncertainties": "[Auto Mode] Skipping {count} critical uncertainty items and continuing",
+  "auto.plan_approved": "[Auto Mode] Test plan auto-approved",
   "analyze_api.openapi_parsing": "Using OpenApiParser...",
   "analyze_api.markdown_parsing": "Using MarkdownParser...",
   "analyze_api.trying_openapi": "Trying OpenApiParser...",

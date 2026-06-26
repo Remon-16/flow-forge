@@ -82,7 +82,7 @@ def _normalize_interfaces(items: List[Any]) -> List[Dict[str, Any]]:
 class SingleSkeletonGenerator(BaseAgent):
     """Generate single API test case skeletons in one shot."""
 
-    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None):
+    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None, skill_extensions: List[str] = None):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -94,6 +94,7 @@ class SingleSkeletonGenerator(BaseAgent):
             context_window=settings.llm_context_window,
             max_output_tokens=settings.llm_max_output_tokens,
             compression_threshold=settings.llm_context_compression_threshold,
+            skill_extensions=skill_extensions,
         )
         self._knowledge = knowledge
 
@@ -217,7 +218,7 @@ class SingleSkeletonGenerator(BaseAgent):
 class BizSkeletonGenerator(BaseAgent):
     """Generate business flow test case skeletons in one shot."""
 
-    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None):
+    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None, skill_extensions: List[str] = None):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -229,6 +230,7 @@ class BizSkeletonGenerator(BaseAgent):
             context_window=settings.llm_context_window,
             max_output_tokens=settings.llm_max_output_tokens,
             compression_threshold=settings.llm_context_compression_threshold,
+            skill_extensions=skill_extensions,
         )
         self._knowledge = knowledge
 

@@ -291,6 +291,7 @@ optional arguments:
   --reference-dir PATH  Reference directory for incremental updates
   --resume              Resume from existing output directory
   --resume-overwrite    Overwrite existing output when resuming
+  --auto                Auto mode: skip all human review, ideal for nightly batch
   --debug-snapshots     Save debug snapshots
   --debug               Enable debug logging (full LLM I/O)
   --env PATH            Path to .env file (default: .env)
@@ -329,6 +330,7 @@ pipeline:           # Pipeline settings
   max_steps_no_progress: 5
   consecutive_batch_failure_limit: 3
   url_correction_max_retries: 3
+  auto: false        # Auto mode: skip human review (enable for nightly batch)
 
 knowledge:          # Knowledge base (grep-based text search)
   enabled: false
@@ -352,10 +354,17 @@ plugins:            # Plugin system
 skills:             # Skill system (plugin-attached configs)
   enabled: true     # Global switch: false disables all skill injection
   agents:           # Assign skill files to agents (without .yaml extension)
+    # Plugin agents
     data_filler:
       - foli_mall_data_filling
     assertion_generator:
       - foli_mall_assertion
+    # Main pipeline agents (uncomment as needed)
+    # requirement_analyzer: []
+    # api_analyzer: []
+    # plan_generator: []
+    # case_generator:
+    #   - boundary_test
 
 agent:              # UI language
   lang: zh_CN       # zh_CN | en_US
@@ -373,6 +382,53 @@ The knowledge base (`knowledge/search.py`) provides grep-based keyword search �
 Controlled by `ENABLE_KNOWLEDGE` in `.env`. When enabled, agents search `.md` files during prompt construction and append relevant knowledge snippets to provide domain-specific guidance.
 
 Users can extend the knowledge base by adding `.md` files to the `knowledge/` directory.
+
+## Auto Mode
+
+Auto mode runs the full pipeline while skipping all human review checkpoints. It is ideal for nightly batch generation after Skills and plugins have been thoroughly tested.
+
+### Enabling
+
+- **CLI**: `--auto` flag
+- **Config**: set `pipeline.auto: true` in `env.yaml`
+- When both are present, the CLI flag takes precedence
+
+### Behavior
+
+| Checkpoint | Auto Mode Behavior |
+|------------|-------------------|
+| API analysis uncertainties | Log warning and skip, continue execution |
+| Test plan review | Auto-approve, proceed to case generation |
+
+### Use Cases
+
+- **Nightly batch generation**: Once Skills and plugins are configured correctly, use `--auto` for unattended runs:
+  ```bash
+  python main.py --requirement docs/req.md --api docs/api.yaml --auto
+  ```
+- **Combined with --resume**: Resume after power loss without manual intervention:
+  ```bash
+  python main.py --resume --output output_20240101_120000 --auto
+  ```
+
+### Prerequisites
+
+Before using auto mode, ensure the following are properly configured to maintain test case quality:
+
+- **Skills**: Encode project-specific business rules into Skills, such as:
+  - Expected HTTP status code conventions (200 OK vs 201 Created)
+  - Authentication method (JWT, API Key, Session Cookie)
+  - Baseline test credentials and data field formats
+- **Plugins**: Verify that data filling and assertion generation plugins are correctly configured
+- **--prompt guidance**: Use `--prompt` to pass additional business guidance for better generation quality
+
+### Comparison with --resume
+
+| Flag | Purpose | When to Use |
+|------|---------|-------------|
+| `--auto` | Skip human interaction, run full pipeline | First-time nightly batch run |
+| `--resume` | Continue from last completed stage (full pipeline) | Recovery after power loss / crash |
+| `--resume --auto` | Resume + auto-approve remaining reviews | Unattended recovery after power loss |
 
 ## Design Rationale
 
@@ -401,9 +457,13 @@ Data filling and assertion generation are provided as official plugins, configur
 
 ### Why Skill system
 
-Skills are plugin-attached configuration files stored as YAML under each plugin package's `skills/` directory. Each Skill appends domain knowledge or business rules to the agent's system prompt via its `prompt_extension` field, customizing agent behavior without code changes.
+Skills are YAML files that append domain knowledge or business rules to agent system prompts via the `prompt_extension` field, customizing agent behavior without code changes.
 
-Skill injection uses a two-layer control: `skills.enabled` in `env.yaml` acts as a global on/off switch, while `skills.agents` maps target agents to their skill files. Users can comment out or remove individual skill entries for fine-grained control, or disable the global switch to turn off all skill injection at once. The `target_agents` field ensures precise injection targeting, preventing unrelated agents from being affected.
+Skills can be injected into **all** agents — both main pipeline agents and plugin-internal agents:
+- **Main pipeline agents**: `requirement_analyzer`, `api_analyzer`, `plan_generator`, `plan_parser`, `case_generator`, `skeleton_generator` — skills stored in `skills/builtin/`
+- **Plugin agents**: `data_filler`, `assertion_generator` — skills stored in `plugins/official/skills/`
+
+Skill injection uses a two-layer control: `skills.enabled` in `env.yaml` acts as a global on/off switch, while `skills.agents` maps target agents to their skill files. Users can comment out or remove individual skill entries for fine-grained control, or disable the global switch to turn off all skill injection at once.
 
 ### Why English prompts
 

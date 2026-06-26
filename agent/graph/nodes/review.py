@@ -11,7 +11,7 @@ from agents.base import BaseAgent
 from graph.state import GraphState
 from prompts.render import render_prompt
 
-from .helpers import _settings, _sl
+from .helpers import _settings, _sl, save_pipeline_artifact, save_pipeline_state
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,18 @@ def human_confirm_node(state: GraphState) -> GraphState:
     if _sl():
         _sl().log_node_start("human_confirm", "5/9")
 
+    if state.get("auto_mode"):
+        print(_("auto.plan_approved"))
+        state["plan_confirmed"] = True
+        state["plan_feedback"] = ""
+        memory_dir = state.get("memory_dir", "")
+        if memory_dir:
+            save_pipeline_artifact(memory_dir, "review_state.json", {"plan_confirmed": True})
+            save_pipeline_state(memory_dir, "human_confirm")
+        if _sl():
+            _sl().log_node_end("human_confirm")
+        return state
+
     decision = interrupt(_("review.interrupt_title"))
 
     if decision == "approved":
@@ -47,6 +59,12 @@ def human_confirm_node(state: GraphState) -> GraphState:
     else:
         state["plan_confirmed"] = False
         state["plan_feedback"] = decision
+
+    # Save review state for resume
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir and state["plan_confirmed"]:
+        save_pipeline_artifact(memory_dir, "review_state.json", {"plan_confirmed": True, "plan_feedback": ""})
+        save_pipeline_state(memory_dir, "human_confirm")
 
     if _sl():
         _sl().log_node_end("human_confirm")

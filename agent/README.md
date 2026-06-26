@@ -328,6 +328,7 @@ optional arguments:
   --reference-dir PATH  增量更新参考目录
   --resume              从已有 output 目录恢复执行
   --resume-overwrite    恢复时覆盖已有输出
+  --auto                自动模式，跳过所有人工审核，适合夜间批量生成
   --debug-snapshots     保存调试快照
   --debug               启用调试日志（完整 LLM I/O）
   --env PATH            .env 文件路径（默认 .env）
@@ -366,6 +367,7 @@ pipeline:           # 流水线设置
   max_steps_no_progress: 5
   consecutive_batch_failure_limit: 3
   url_correction_max_retries: 3
+  auto: false        # 自动模式：跳过人工审核（夜间批量生成时建议开启）
 
 knowledge:          # 知识库（grep 文本搜索）
   enabled: false
@@ -388,11 +390,18 @@ plugins:            # 插件系统
 
 skills:             # Skill 系统（插件附属配置）
   enabled: true     # 全局开关：false 关闭所有 Skill 注入
-  agents:           # 按 Agent 分配 Skill 文件（不含 .yaml 扩展名）
+  agents:           # 按目标 Agent 分配 Skill 文件（不含 .yaml 扩展名）
+    # 插件 Agent
     data_filler:
       - foli_mall_data_filling
     assertion_generator:
       - foli_mall_assertion
+    # 主流水线 Agent（按需取消注释）
+    # requirement_analyzer: []
+    # api_analyzer: []
+    # plan_generator: []
+    # case_generator:
+    #   - boundary_test
 
 agent:              # 界面语言
   lang: zh_CN       # zh_CN | en_US
@@ -410,6 +419,53 @@ agent:              # 界面语言
 通过 `.env` 中的 `ENABLE_KNOWLEDGE` 开关控制。启用后，各智能体在生成 prompt 时通过 grep 搜索 `.md` 文件，将匹配的知识片段追加到 prompt 末尾，提供领域知识和最佳实践参考。
 
 用户可以自行在 `knowledge/` 目录下添加 `.md` 文件来扩展知识库。
+
+## 自动模式（Auto Mode）
+
+自动模式允许流水线跳过所有人工审核环节，完整运行整个用例生成流程。适用于 Skill 和插件已调试完毕后的批量生成场景。
+
+### 启用方式
+
+- **命令行**：`--auto` 标志
+- **配置文件**：`env.yaml` 中设置 `pipeline.auto: true`
+- 两者同时使用时，CLI 标志优先
+
+### 行为说明
+
+| 审核点 | 自动模式行为 |
+|--------|-------------|
+| API 分析不确定项询问 | 打印警告并跳过，继续执行 |
+| 测试计划审核 | 自动批准，直接进入用例生成 |
+
+### 使用场景
+
+- **夜间批量生成**：配置好 Skill 和插件后，通过 `--auto` 模式无需值守。例如：
+  ```bash
+  python main.py --requirement docs/req.md --api docs/api.yaml --auto
+  ```
+- **与 --resume 组合**：断电恢复后无需人工交互
+  ```bash
+  python main.py --resume --output output_20240101_120000 --auto
+  ```
+
+### 使用前提
+
+在使用自动模式之前，建议确保以下配置已调试完毕，以保证自动生成的测试用例质量：
+
+- **Skill**：将待测项目的业务规则写入 Skill，例如：
+  - 接口约定的 HTTP 状态码（成功返回 200 vs 201）
+  - 认证方式（JWT Token、API Key、Session Cookie）
+  - 基础登录账号、测试数据字段格式
+- **插件**：确认数据填充和断言生成插件配置正确
+- **--prompt 指导**：可通过 `--prompt` 传入补充业务指导，提升生成质量
+
+### 与 --resume 的区别
+
+| 标志 | 作用 | 适用场景 |
+|------|------|---------|
+| `--auto` | 跳过人工交互，运行完整流水线 | 夜间首次批量生成 |
+| `--resume` | 从上次中断处恢复（支持全流程） | 断电/异常后继续 |
+| `--resume --auto` | 恢复 + 自动通过剩余审核 | 断电后无人值守恢复 |
 
 ## 设计理念
 
@@ -438,9 +494,13 @@ LangGraph 提供三个关键能力：
 
 ### 为什么用 Skill 系统
 
-Skill 是插件的附属配置，以 YAML 文件形式存放在插件包的 `skills/` 目录下。每个 Skill 通过 `prompt_extension` 字段向 Agent 的系统提示词追加领域知识或业务规则，不修改代码即可定制 Agent 行为。
+Skill 以 YAML 文件形式存放，通过 `prompt_extension` 字段向 Agent 的系统提示词追加领域知识或业务规则，不修改代码即可定制 Agent 行为。
 
-Skill 注入采用两层控制：`env.yaml` 中 `skills.enabled` 作为全局开关，`skills.agents` 按目标 Agent 列出要加载的 Skill 文件。用户可通过注释/删除条目精细控制单个 Skill，或关闭全局开关一键禁用所有 Skill 注入。Skill 通过 `target_agents` 字段精确控制注入目标，避免无关 Agent 受到干扰。
+Skill 可注入到**所有** Agent（包括主流水线 Agent 和插件内部 Agent）：
+- **主流水线 Agent**：`requirement_analyzer`、`api_analyzer`、`plan_generator`、`plan_parser`、`case_generator`、`skeleton_generator`，Skill 存放于 `skills/builtin/`
+- **插件 Agent**：`data_filler`、`assertion_generator`，Skill 存放于 `plugins/official/skills/`
+
+Skill 注入采用两层控制：`env.yaml` 中 `skills.enabled` 作为全局开关，`skills.agents` 按目标 Agent 列出要加载的 Skill 文件。用户可通过注释/删除条目精细控制单个 Skill，或关闭全局开关一键禁用所有 Skill 注入。
 
 ### 为什么用英文提示词
 

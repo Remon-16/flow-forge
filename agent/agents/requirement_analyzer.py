@@ -1,7 +1,7 @@
 """RequirementAnalyzer: extracts business flows, roles, constraints from text."""
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent
 from config.settings import Settings
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class RequirementAnalyzer(BaseAgent):
     """Analyze requirement documents to extract structured test-relevant info."""
 
-    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None):
+    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None, skill_extensions: List[str] = None):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -33,6 +33,7 @@ class RequirementAnalyzer(BaseAgent):
             context_window=settings.llm_context_window,
             max_output_tokens=settings.llm_max_output_tokens,
             compression_threshold=settings.llm_context_compression_threshold,
+            skill_extensions=skill_extensions,
         )
         self._knowledge = knowledge
 

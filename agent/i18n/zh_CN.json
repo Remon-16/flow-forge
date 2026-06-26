@@ -22,6 +22,8 @@
   "resume.skip_skeleton": "骨架生成 — SKIPPED（已完成）",
   "save.interfaces": "保存 {count} 个接口定义到 {dir}",
   "reload.interfaces": "重新加载 {count} 个接口定义",
+  "resume.from_stage": "[Resume] 从阶段 '{stage}' 恢复执行",
+  "resume.loading_state": "[Resume] 从 {dir} 加载中间结果...",
 
   "cli.no_api_key": "错误: LLM_API_KEY 未设置。请在 env.yaml 中配置。\n  cp env.example.yaml env.yaml\n  # 编辑 env.yaml 并填入 API 密钥",
   "cli.session_log_dir": "[Session] 日志目录: {path}",
@@ -51,6 +53,9 @@
   "analyze_api.auto_pass": "未发现关键信息缺失，自动通过。",
   "analyze_api.uncertainties_title": "\n  [接口分析] 发现以下不确定信息：",
   "analyze_api.uncertainty_item": "    ? {question}",
+  "auto.pipeline_start": "[自动模式] 流水线启动（跳过所有人工审核）...",
+  "auto.skipping_uncertainties": "[自动模式] 跳过 {count} 个关键不确定项，继续执行",
+  "auto.plan_approved": "[自动模式] 测试计划已自动批准",
   "analyze_api.openapi_parsing": "使用 OpenApiParser 解析...",
   "analyze_api.markdown_parsing": "使用 MarkdownParser 解析...",
   "analyze_api.trying_openapi": "尝试 OpenApiParser...",

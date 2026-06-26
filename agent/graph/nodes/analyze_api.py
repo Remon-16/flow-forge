@@ -5,6 +5,7 @@ analyze_api node: analyzes API docs and generates structured summaries.
 
 import importlib.util
 import logging
+import os
 from pathlib import Path
 from typing import Dict, List
 
@@ -13,7 +14,8 @@ from doc_parser.openapi_parser import OpenApiParser
 from graph.state import GraphState
 from models.schema import InterfaceDef
 
-from .helpers import _settings, _sl, save_snapshot, summary_to_interfaces
+from plugins.skill_loader import load_skill_extensions
+from .helpers import _settings, _sl, save_pipeline_artifact, save_pipeline_state, save_snapshot, summary_to_interfaces
 from i18n import _
 
 logger = logging.getLogger(__name__)
@@ -38,7 +40,9 @@ def analyze_api_node(state: GraphState) -> GraphState:
     api_summary = state.get("api_summary", [])
     feedback = state.get("api_summary_feedback", "")
 
-    agent = ApiAnalyzer(_settings)
+    _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
+    _exts = load_skill_extensions('api_analyzer', _settings, _skills_dir)
+    agent = ApiAnalyzer(_settings, skill_extensions=_exts)
 
     print(_step("analyze_api", "pipeline.analyze_api"))
 
@@ -71,6 +75,7 @@ def analyze_api_node(state: GraphState) -> GraphState:
     memory_dir = state.get("memory_dir", "")
     if memory_dir:
         save_snapshot(memory_dir, "api_summary.json", summary)
+        save_pipeline_artifact(memory_dir, "api_summary.json", summary)
 
     if api_raw_text and not interfaces:
         state["interfaces"] = summary_to_interfaces(summary)
@@ -82,10 +87,25 @@ def analyze_api_node(state: GraphState) -> GraphState:
         print(_("analyze_api.auto_pass"))
         _print_api_summary_brief(summary)
         state["api_summary_confirmed"] = True
+        if memory_dir:
+            save_pipeline_state(memory_dir, "analyze_api")
         return state
 
     print(_("analyze_api.uncertainties_title"))
     _print_uncertainties(summary)
+
+    if state.get("auto_mode"):
+        critical_count = sum(
+            1 for item in summary
+            if item.get("auth_type") == "UNKNOWN"
+            or item.get("need_token") is None
+            or not item.get("description") or item.get("description") == "UNKNOWN"
+        )
+        print(_("auto.skipping_uncertainties", count=critical_count))
+        state["api_summary_confirmed"] = True
+        if memory_dir:
+            save_pipeline_state(memory_dir, "analyze_api")
+        return state
 
     choice = interrupt(_("review.prompt_clarify"))
 
@@ -93,6 +113,9 @@ def analyze_api_node(state: GraphState) -> GraphState:
         state["api_summary_confirmed"] = True
     else:
         state["api_summary_feedback"] = choice
+
+    if state["api_summary_confirmed"] and memory_dir:
+        save_pipeline_state(memory_dir, "analyze_api")
 
     return state
 

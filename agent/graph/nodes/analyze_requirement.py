@@ -4,11 +4,13 @@ analyze_requirement node: extracts structured info from requirement documents.
 """
 
 import logging
+import os
 
 from agents.requirement_analyzer import RequirementAnalyzer
 from graph.state import GraphState
+from plugins.skill_loader import load_skill_extensions
 
-from .helpers import _settings, _knowledge, _sl, save_snapshot
+from .helpers import _settings, _knowledge, _sl, save_pipeline_artifact, save_pipeline_state, save_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +34,17 @@ def analyze_requirement_node(state: GraphState) -> GraphState:
     if _sl():
         _sl().log_node_start("analyze_requirement", "3/9")
 
-    agent = RequirementAnalyzer(_settings, _knowledge)
+    _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
+    _exts = load_skill_extensions('requirement_analyzer', _settings, _skills_dir)
+    agent = RequirementAnalyzer(_settings, _knowledge, skill_extensions=_exts)
     result = agent.analyze(text)
     state["requirement_analysis"] = result
 
     memory_dir = state.get("memory_dir", "")
     if memory_dir:
         save_snapshot(memory_dir, "requirement_analysis.json", result)
+        save_pipeline_artifact(memory_dir, "requirement_analysis.json", result)
+        save_pipeline_state(memory_dir, "analyze_requirement")
 
     flows = len(result.get("business_flows", []))
     roles = len(result.get("roles", []))

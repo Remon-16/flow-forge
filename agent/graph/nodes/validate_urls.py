@@ -10,7 +10,7 @@ from graph.state import GraphState
 from prompts.render import render_prompt
 from prompts.url_correction import IFACE_URL_CORRECTION_SYSTEM, IFACE_URL_CORRECTION_USER
 
-from .helpers import _settings, _sl
+from .helpers import _settings, _sl, save_pipeline_artifact, save_pipeline_state
 
 logger = logging.getLogger(__name__)
 
@@ -125,5 +125,14 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
             corrected=corrected_count, failed=len(url_errors),
         )
         _sl().log_node_end("validate_interface_urls")
+
+    # Save pipeline artifact for resume
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        save_pipeline_artifact(memory_dir, "url_validation.json", {
+            "url_errors": url_errors,
+            "corrected_count": corrected_count,
+        })
+        save_pipeline_state(memory_dir, "validate_urls")
 
     return state

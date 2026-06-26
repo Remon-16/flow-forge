@@ -4,6 +4,7 @@ batch_controller node: runs the plugin-based test case generation pipeline.
 """
 
 import logging
+import os
 from pathlib import Path
 
 from agents.batch_controller import BatchController
@@ -11,9 +12,10 @@ from agents.skeleton_generator import SingleSkeletonGenerator, BizSkeletonGenera
 from graph.state import GraphState
 from models.schema import PlanStep, TestPlan
 from plugins.loader import load_all_plugins
+from plugins.skill_loader import load_skill_extensions
 from writers.yaml_writer import YamlWriter
 
-from .helpers import _settings, _knowledge, _sl
+from .helpers import _settings, _knowledge, _sl, save_pipeline_state
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +67,11 @@ def batch_controller_node(state: GraphState) -> GraphState:
     if _sl():
         _sl().log_node_start("batch_controller", "8/10")
 
-    single_skel_gen = SingleSkeletonGenerator(_settings, _knowledge)
-    biz_skel_gen = BizSkeletonGenerator(_settings, _knowledge)
+    _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
+    _single_exts = load_skill_extensions('skeleton_generator', _settings, _skills_dir)
+    _biz_exts = load_skill_extensions('skeleton_generator', _settings, _skills_dir)
+    single_skel_gen = SingleSkeletonGenerator(_settings, _knowledge, skill_extensions=_single_exts)
+    biz_skel_gen = BizSkeletonGenerator(_settings, _knowledge, skill_extensions=_biz_exts)
 
     user_module_paths = [
         p.strip() for p in _settings.plugin_modules if p.strip()
@@ -124,6 +129,11 @@ def batch_controller_node(state: GraphState) -> GraphState:
     print(_("batch.result", single=len(single_cases), biz=len(biz_flows)))
     if failures:
         print(_("batch.failures_note", count=len(failures), dir=cases_dir))
+
+    # Save pipeline state for resume
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        save_pipeline_state(memory_dir, "batch_controller")
 
     if _sl():
         _sl().log_node_end("batch_controller")

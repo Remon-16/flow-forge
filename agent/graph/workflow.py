@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
@@ -31,6 +33,49 @@ from graph.state import GraphState
 from knowledge.search import KnowledgeSearch
 
 logger = logging.getLogger(__name__)
+
+# 阶段名到下一节点的映射 / Stage name to next node mapping
+STAGE_TO_NEXT_NODE = {
+    "": "parse_docs",
+    "parse_docs": "analyze_api",
+    "analyze_api": "validate_interface_urls",
+    "validate_urls": "save_interfaces",
+    "save_interfaces": "analyze_requirement",
+    "analyze_requirement": "generate_plan",
+    "generate_plan": "human_confirm",
+    "human_confirm": "reload_interfaces",
+    "reload_interfaces": "parse_plan",
+    "parse_plan": "batch_controller",
+    "batch_controller": "write_output",
+    "write_output": "write_output",
+}
+
+
+def _route_resume(state: GraphState) -> str:
+    """根据 pipeline_state.json 决定从哪个节点恢复。
+
+    Reads the pipeline progress marker to determine the next node.
+    Falls back to batch_controller (legacy resume) if no marker found.
+    """
+    memory_dir = state.get("memory_dir", "")
+    if not memory_dir:
+        return "batch_controller"
+
+    state_path = Path(memory_dir) / "pipeline_state.json"
+    if not state_path.exists():
+        return "batch_controller"
+
+    try:
+        with open(state_path, "r", encoding="utf-8") as f:
+            ps = json.load(f)
+    except Exception:
+        logger.warning("Failed to read pipeline_state.json, falling back to batch_controller")
+        return "batch_controller"
+
+    stage = ps.get("completed_stage", "")
+    next_node = STAGE_TO_NEXT_NODE.get(stage, "parse_docs")
+    logger.info("Resume: stage=%s → next_node=%s", stage, next_node)
+    return next_node
 
 
 def build_workflow(
@@ -74,13 +119,25 @@ def build_workflow(
     graph.add_node("generate_cases", generate_cases_node)
     graph.add_node("write_excel", write_excel_node)
 
-    # --- Entry routing (supports resume mode) ---
+    # --- Entry routing (supports full-pipeline resume mode) ---
     graph.add_node("entry", lambda s: s)
     graph.set_entry_point("entry")
     graph.add_conditional_edges(
         "entry",
-        lambda s: "batch_controller" if s.get("resume") else "parse_docs",
-        {"parse_docs": "parse_docs", "batch_controller": "batch_controller"},
+        lambda s: _route_resume(s) if s.get("resume") else "parse_docs",
+        {
+            "parse_docs": "parse_docs",
+            "analyze_api": "analyze_api",
+            "validate_interface_urls": "validate_interface_urls",
+            "save_interfaces": "save_interfaces",
+            "analyze_requirement": "analyze_requirement",
+            "generate_plan": "generate_plan",
+            "human_confirm": "human_confirm",
+            "reload_interfaces": "reload_interfaces",
+            "parse_plan": "parse_plan",
+            "batch_controller": "batch_controller",
+            "write_output": "write_output",
+        },
     )
 
     # --- Edges ---

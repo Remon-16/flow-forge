@@ -9,7 +9,7 @@ from pathlib import Path
 from graph.state import GraphState
 from writers.yaml_writer import YamlWriter
 
-from .helpers import _sl, save_snapshot
+from .helpers import _sl, save_pipeline_state, save_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,10 @@ def save_interfaces_node(state: GraphState) -> GraphState:
         _sl().log_event("save_interfaces", count=count, dir=str(interfaces_dir),
                          url_issues=len(url_issues))
         _sl().log_node_end("save_interfaces")
+
+    # Save pipeline state for resume
+    if memory_dir:
+        save_pipeline_state(memory_dir, "save_interfaces")
 
     return state
 

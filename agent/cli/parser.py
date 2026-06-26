@@ -76,4 +76,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--resume-overwrite", action="store_true",
         help="恢复时覆盖已有输出。Overwrite existing output when resuming.",
     )
+    p.add_argument(
+        "--auto", action="store_true",
+        help="自动模式：跳过所有人工审核，适合夜间批量生成。Auto mode: skip all human review.",
+    )
     return p

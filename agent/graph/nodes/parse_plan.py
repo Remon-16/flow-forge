@@ -4,11 +4,13 @@ parse_plan node: parses confirmed plan.md into a structured TestPlan.
 """
 
 import logging
+import os
 
 from agents.plan_parser import PlanParser
 from graph.state import GraphState
+from plugins.skill_loader import load_skill_extensions
 
-from .helpers import _settings, _sl, save_snapshot
+from .helpers import _settings, _sl, save_pipeline_artifact, save_pipeline_state, save_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,9 @@ def parse_plan_node(state: GraphState) -> GraphState:
     if _sl():
         _sl().log_node_start("parse_plan", "6/9")
 
-    agent = PlanParser(_settings)
+    _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
+    _exts = load_skill_extensions('plan_parser', _settings, _skills_dir)
+    agent = PlanParser(_settings, skill_extensions=_exts)
     plan = agent.parse(plan_md, interfaces=state.get("interfaces", []))
 
     state["plan_parsed"] = plan
@@ -39,6 +43,8 @@ def parse_plan_node(state: GraphState) -> GraphState:
         except Exception:
             plan_dict = {"business_summary": plan.business_summary}
         save_snapshot(memory_dir, "plan_parsed.json", plan_dict)
+        save_pipeline_artifact(memory_dir, "plan_parsed.json", plan_dict)
+        save_pipeline_state(memory_dir, "parse_plan")
 
     api_count = len(plan.api_definitions)
     tp_count = sum(len(v) for v in plan.single_test_points.values())
