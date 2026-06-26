@@ -124,6 +124,13 @@ class SingleSkeletonGenerator(BaseAgent):
             if docs:
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
+        # Compute expected skeleton count from plan
+        expected_count = sum(len(points) for points in plan.single_test_points.values()) \
+            if hasattr(plan, "single_test_points") and plan.single_test_points else 0
+        if expected_count == 0:
+            logger.info("No single test points in plan, skipping")
+            return []
+
         # Token check
         input_tokens = self._estimate_input_tokens(SINGLE_SKELETON_SYSTEM, prompt)
         if input_tokens > self._context_window:
@@ -132,11 +139,21 @@ class SingleSkeletonGenerator(BaseAgent):
                 f"{input_tokens} / {self._context_window} tokens"
             )
 
-        logger.info("Generating single case skeletons (~%d tokens)...", input_tokens)
-        result = self.call_llm_json(prompt, SINGLE_SKELETON_SYSTEM)
-        skeletons = result.get("single_skeletons", [])
-        logger.info("Generated %d single case skeletons", len(skeletons))
-        return skeletons
+        logger.info("Generating %d single case skeletons (~%d tokens)...", expected_count, input_tokens)
+        for attempt in range(self._max_retries + 1):
+            result = self.call_llm_json(prompt, SINGLE_SKELETON_SYSTEM)
+            skeletons = result.get("single_skeletons", [])
+            if len(skeletons) == expected_count:
+                logger.info("Generated %d single case skeletons", len(skeletons))
+                return skeletons
+            logger.warning(
+                "Single skeleton count mismatch attempt %d/%d: expected %d, got %d",
+                attempt + 1, self._max_retries + 1, expected_count, len(skeletons),
+            )
+        raise ValueError(
+            f"Single skeleton count validation failed after {self._max_retries + 1} "
+            f"attempts: expected {expected_count}, got {len(skeletons)}"
+        )
 
     def correct_urls(
         self,
@@ -207,12 +224,26 @@ class SingleSkeletonGenerator(BaseAgent):
         )
 
         logger.info("Correcting URLs for %d cases...", len(bad_cases))
-        result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)
-        corrected = result.get("cases") or result.get("single_skeletons") or []
-        if not corrected:
-            if isinstance(result, list):
-                corrected = result
-        return corrected if corrected else bad_cases
+        expected_count = len(bad_cases)
+        for attempt in range(self._max_retries + 1):
+            result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)
+            corrected = result.get("cases") or result.get("single_skeletons") or []
+            if not corrected:
+                if isinstance(result, list):
+                    corrected = result
+            if not corrected:
+                logger.warning("URL correction returned empty result, attempt %d/%d",
+                               attempt + 1, self._max_retries + 1)
+                continue
+            if len(corrected) == expected_count:
+                return corrected
+            logger.warning(
+                "URL correction count mismatch attempt %d/%d: expected %d, got %d",
+                attempt + 1, self._max_retries + 1, expected_count, len(corrected),
+            )
+        logger.warning("URL correction count validation failed after %d attempts, "
+                       "falling back to original bad_cases", self._max_retries + 1)
+        return bad_cases
 
 
 class BizSkeletonGenerator(BaseAgent):
@@ -265,6 +296,8 @@ class BizSkeletonGenerator(BaseAgent):
             if docs:
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
+        expected_count = len(plan.biz_flow_scenarios)
+
         # Token check
         input_tokens = self._estimate_input_tokens(BIZ_SKELETON_SYSTEM, prompt)
         if input_tokens > self._context_window:
@@ -273,11 +306,21 @@ class BizSkeletonGenerator(BaseAgent):
                 f"{input_tokens} / {self._context_window} tokens"
             )
 
-        logger.info("Generating biz flow skeletons (~%d tokens)...", input_tokens)
-        result = self.call_llm_json(prompt, BIZ_SKELETON_SYSTEM)
-        skeletons = result.get("biz_skeletons", [])
-        logger.info("Generated %d biz flow skeletons", len(skeletons))
-        return skeletons
+        logger.info("Generating %d biz flow skeletons (~%d tokens)...", expected_count, input_tokens)
+        for attempt in range(self._max_retries + 1):
+            result = self.call_llm_json(prompt, BIZ_SKELETON_SYSTEM)
+            skeletons = result.get("biz_skeletons", [])
+            if len(skeletons) == expected_count:
+                logger.info("Generated %d biz flow skeletons", len(skeletons))
+                return skeletons
+            logger.warning(
+                "Biz skeleton count mismatch attempt %d/%d: expected %d, got %d",
+                attempt + 1, self._max_retries + 1, expected_count, len(skeletons),
+            )
+        raise ValueError(
+            f"Biz skeleton count validation failed after {self._max_retries + 1} "
+            f"attempts: expected {expected_count}, got {len(skeletons)}"
+        )
 
     def correct_urls(
         self,
@@ -345,9 +388,23 @@ class BizSkeletonGenerator(BaseAgent):
         )
 
         logger.info("Correcting URLs for %d biz flow cases...", len(bad_cases))
-        result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)
-        corrected = result.get("cases") or result.get("biz_skeletons") or result.get("biz_flows") or []
-        if not corrected:
-            if isinstance(result, list):
-                corrected = result
-        return corrected if corrected else bad_cases
+        expected_count = len(bad_cases)
+        for attempt in range(self._max_retries + 1):
+            result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)
+            corrected = result.get("cases") or result.get("biz_skeletons") or result.get("biz_flows") or []
+            if not corrected:
+                if isinstance(result, list):
+                    corrected = result
+            if not corrected:
+                logger.warning("Biz URL correction returned empty result, attempt %d/%d",
+                               attempt + 1, self._max_retries + 1)
+                continue
+            if len(corrected) == expected_count:
+                return corrected
+            logger.warning(
+                "Biz URL correction count mismatch attempt %d/%d: expected %d, got %d",
+                attempt + 1, self._max_retries + 1, expected_count, len(corrected),
+            )
+        logger.warning("Biz URL correction count validation failed after %d attempts, "
+                       "falling back to original bad_cases", self._max_retries + 1)
+        return bad_cases

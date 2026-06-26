@@ -430,6 +430,20 @@ Before using auto mode, ensure the following are properly configured to maintain
 | `--resume` | Continue from last completed stage (full pipeline) | Recovery after power loss / crash |
 | `--resume --auto` | Resume + auto-approve remaining reviews | Unattended recovery after power loss |
 
+## Anti-Hallucination & Error Handling
+
+- **Text-Only Limitation**: The agent only processes text. Image/scanned content in PDFs will NOT be extracted — provide PDFs with extractable text layers or plain-text documents. Binary files (.png, .jpg) are explicitly rejected.
+- **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, output item count is automatically validated against input. Mismatches trigger automatic retries (using temperature > 0 for varied outputs); exhausted retries raise a `ValueError`.
+- **Plugin Error Handling**: Supports `skip`/`warn`/`fail` error strategies. The `fail` strategy aborts the pipeline; resume can restart from the failed stage (requires the checkpoint phase name fix).
+
+## Running Tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+Tests incur zero LLM API costs (all LLM calls are mocked).
+
 ## Design Rationale
 
 ### Why LangGraph

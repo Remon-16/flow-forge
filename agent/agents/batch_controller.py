@@ -77,6 +77,7 @@ class BatchController:
         # Build phase list: skeleton → one phase per plugin
         plugin_names = [p.declaration.plugin_name for p in plugins]
         phases = [_SKELETON_PHASE] + [f"plugin_{n}" for n in plugin_names]
+        self._phases = phases
 
         # ------------------------------------------------------------------
         # Resume: load checkpoint and restore state
@@ -177,7 +178,7 @@ class BatchController:
                     "reason": "URL correction exhausted",
                 })
 
-            self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE, single_cases, biz_cases, all_failures, output_dir)
+            self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE, single_cases, biz_cases, all_failures, output_dir, phases=phases)
         else:
             logger.info("Step 1: Skeleton generation — SKIPPED (already completed)")
 
@@ -210,7 +211,7 @@ class BatchController:
                     plugin, biz_cases, interfaces, api_summary, api_doc_text
                 )
 
-            self._save_checkpoint(ckpt_mgr, phase_name, single_cases, biz_cases, all_failures, output_dir)
+            self._save_checkpoint(ckpt_mgr, phase_name, single_cases, biz_cases, all_failures, output_dir, phases=phases)
 
         # ================================================================
         # Final: URL safety-net check + YAML output
@@ -390,7 +391,7 @@ class BatchController:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _save_checkpoint(self, ckpt_mgr, phase: str, single: List, biz: List, failures: List, output_dir: str):
+    def _save_checkpoint(self, ckpt_mgr, phase: str, single: List, biz: List, failures: List, output_dir: str, phases: List[str] = None):
         """Save checkpoint data and metadata."""
         if not ckpt_mgr:
             return
@@ -403,6 +404,7 @@ class BatchController:
             phase, self._collect_settings(),
             {"single_cases": len(single), "biz_cases": len(biz)},
             output_dir,
+            phases=phases,
         )
 
     def _check_consecutive_failures(self, consecutive: int, label: str) -> bool:

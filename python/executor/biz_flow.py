@@ -46,6 +46,9 @@ class BizFlowExecutor(BaseExecutor):
                 "parse_error": parse_error,
             }
 
+        if not steps:
+            return self._build_result(biz_flow, error="Biz flow has no steps to execute")
+
         try:
             self._step_data.responses = {}
 

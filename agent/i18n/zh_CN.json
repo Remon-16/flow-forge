@@ -45,6 +45,7 @@
   "parse_docs.rule_done": "规则解析完成 ({count} 个接口)",
   "parse_docs.llm_extracting": "DocParserAgent 正在调用 LLM ({model}) 提取接口...",
   "parse_docs.llm_extracted": "LLM 成功提取 {count} 个接口",
+  "parse_docs.short_text_warning": "⚠ 警告：文档提取的文本非常少（{chars} 字符），如果文档中包含图片或扫描件，其内容将无法被处理（仅支持文本模态）。",
 
   "analyze_api.parsing_raw": "ApiAnalyzer 正在从原文识别并分析接口 ({model})...",
   "analyze_api.llm_calling": "ApiAnalyzer 正在调用 LLM ({model})...",

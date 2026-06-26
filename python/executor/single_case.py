@@ -18,7 +18,7 @@ class SingleCaseExecutor(BaseExecutor):
         test_id = case.get("test_id", "unknown")
         app_name = case.get("app_name") or ""
         method = (case.get("method") or "GET").upper()
-        path = case.get("url", "")
+        path = case.get("url") or ""
 
         if "<URL not exist>" in path:
             return self._build_result(case, error=f"URL not found in API documentation: {path}")

@@ -136,10 +136,21 @@ class SingleDataFiller(BaseAgent):
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
         logger.info("Filling data for %d single case skeletons...", len(skeletons))
-        result = self.call_llm_json(prompt, SINGLE_DATA_FILLING_SYSTEM)
-        cases = result.get("cases", [])
-        logger.info("Filled %d single cases", len(cases))
-        return cases
+        expected_count = len(skeletons)
+        for attempt in range(self._max_retries + 1):
+            result = self.call_llm_json(prompt, SINGLE_DATA_FILLING_SYSTEM)
+            cases = result.get("cases", [])
+            if len(cases) == expected_count:
+                logger.info("Filled %d single cases", len(cases))
+                return cases
+            logger.warning(
+                "Single data fill count mismatch attempt %d/%d: expected %d, got %d",
+                attempt + 1, self._max_retries + 1, expected_count, len(cases),
+            )
+        raise ValueError(
+            f"Single data fill count validation failed after {self._max_retries + 1} "
+            f"attempts: expected {expected_count}, got {len(cases)}"
+        )
 
 
 class BizDataFiller(BaseAgent):
@@ -262,7 +273,18 @@ class BizDataFiller(BaseAgent):
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
         logger.info("Filling data for %d biz flow skeletons...", len(skeletons))
-        result = self.call_llm_json(prompt, BIZ_DATA_FILLING_SYSTEM)
-        flows = result.get("biz_flows", [])
-        logger.info("Filled %d biz flows", len(flows))
-        return flows
+        expected_count = len(skeletons)
+        for attempt in range(self._max_retries + 1):
+            result = self.call_llm_json(prompt, BIZ_DATA_FILLING_SYSTEM)
+            flows = result.get("biz_flows", [])
+            if len(flows) == expected_count:
+                logger.info("Filled %d biz flows", len(flows))
+                return flows
+            logger.warning(
+                "Biz data fill count mismatch attempt %d/%d: expected %d, got %d",
+                attempt + 1, self._max_retries + 1, expected_count, len(flows),
+            )
+        raise ValueError(
+            f"Biz data fill count validation failed after {self._max_retries + 1} "
+            f"attempts: expected {expected_count}, got {len(flows)}"
+        )

@@ -54,6 +54,7 @@ class CheckpointManager:
         settings: Dict[str, Any],
         counts: Dict[str, Any],
         output_dir: str,
+        phases: List[str] = None,
     ) -> None:
         """Write checkpoint.json (lightweight metadata)."""
         self.meta_path.parent.mkdir(parents=True, exist_ok=True)
@@ -66,6 +67,8 @@ class CheckpointManager:
             "counts": counts,
             "output_dir": output_dir,
         }
+        if phases is not None:
+            payload["phases"] = phases
         self.meta_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2, default=str),
             encoding="utf-8",
@@ -142,18 +145,25 @@ class CheckpointManager:
 
         If meta says phase X is completed, restart_phase is the *next* phase.
         Users can hand-edit meta["phase"] to roll back to an earlier phase.
+
+        Prefers *phases* list from meta (for dynamic phase names from
+        BatchController). Falls back to static _PHASES for backward
+        compatibility with checkpoints saved before this fix.
         """
         current = meta.get("phase", "")
+        phases = meta.get("phases")
+        if phases is None:
+            phases = _PHASES
         try:
-            idx = _PHASES.index(current)
+            idx = phases.index(current)
         except ValueError:
             logger.warning("Unknown phase in checkpoint: %r", current)
-            return _PHASES[0]
+            return phases[0]
 
         next_idx = idx + 1
-        if next_idx >= len(_PHASES):
+        if next_idx >= len(phases):
             return "all_complete"
-        return _PHASES[next_idx]
+        return phases[next_idx]
 
     @staticmethod
     def validate_plugins(meta: Dict[str, Any]) -> List[str]:

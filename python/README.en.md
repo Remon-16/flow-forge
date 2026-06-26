@@ -742,6 +742,20 @@ sequenceDiagram
     end
 ```
 
+## Input Validation & Error Handling
+
+- **YAML Required Field Validation**: Single cases require `test_id`, `method`, `url`; biz flows require `sheet_name` and `steps` (non-empty list). Missing fields trigger a warning and the case is skipped — not counted in the total.
+- **Empty Biz Flow Rejection**: Biz flows with empty `steps` lists are no longer treated as "passed"; they return a failure result instead.
+- **URL Null Safety**: A `url` value of `None` no longer crashes the executor; it is handled gracefully and reported as an error.
+- **Excel Column Validation**: Single case sheets require a `TestID` column; biz flow sheets require a `StepID` column. Missing columns raise a `ValueError` with exit code 2.
+- **Processor Error Handling**: PreProcessor failure halts the current case immediately (no HTTP request is sent). PostProcessor failure records the error and continues reporting. All errors appear in the HTML report.
+
+## Running Tests
+
+```bash
+python -m pytest tests/ -v
+```
+
 ## Exit Codes
 
 | Code | Meaning |

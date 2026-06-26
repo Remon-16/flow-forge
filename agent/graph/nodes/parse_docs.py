@@ -82,6 +82,10 @@ def parse_docs_node(state: GraphState) -> GraphState:
         raw_text = extract_text(api_path)
         if not raw_text.strip():
             raise Exception(f"API document '{api_path}' is empty, cannot parse.")
+        if len(raw_text.strip()) < 50:
+            print(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
+            logger.warning("API document '%s' contains very little text (%d chars). "
+                           "Image-based content will NOT be processed.", api_path, len(raw_text))
         state["api_raw_text"] = raw_text
         state["interfaces"] = []
         state["interface_extraction_method"] = "raw"
@@ -107,6 +111,10 @@ def parse_docs_node(state: GraphState) -> GraphState:
         raw_text = extract_text(api_path)
         if not raw_text.strip():
             raise Exception(f"API document '{api_path}' is empty, cannot parse.")
+        if len(raw_text.strip()) < 50:
+            print(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
+            logger.warning("API document '%s' contains very little text (%d chars). "
+                           "Image-based content will NOT be processed.", api_path, len(raw_text))
         print(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
         print(_("parse_docs.llm_extracting", model=_settings.llm_model))
         if _sl():

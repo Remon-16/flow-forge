@@ -742,6 +742,20 @@ sequenceDiagram
     end
 ```
 
+## 输入校验与错误处理
+
+- **YAML 必填字段校验**：单接口用例需具备 `test_id`、`method`、`url`；业务链路用例需具备 `sheet_name` 和 `steps`（非空列表）。缺失字段时警告并跳过，不会计入测试总数。
+- **空业务链路拒绝**：`steps` 为空列表的业务链路不再被当作"通过"，而是返回失败结果。
+- **URL 空值安全处理**：`url` 字段为 `None` 时不会崩溃，会正常报错。
+- **Excel 列校验**：单接口 sheet 需包含 `TestID` 列，业务链路 sheet 需包含 `StepID` 列，缺失时抛出 `ValueError` 并以退出码 2 终止。
+- **处理器错误处理**：PreProcessor 失败立即终止当前用例（不发送 HTTP 请求）；PostProcessor 失败记录错误并继续报告。错误信息均写入 HTML 报告。
+
+## 运行测试
+
+```bash
+python -m pytest tests/ -v
+```
+
 ## 退出码
 
 | 退出码 | 含义 |

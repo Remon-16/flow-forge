@@ -32,7 +32,7 @@ class YamlParser:
             logger.warning("YAML directory not found: %s", dir_path)
             return {"single_cases": [], "biz_flows": []}
 
-        yaml_files = sorted(root.rglob("*.[yY][aA][mM][lL]"))
+        yaml_files = sorted([p for p in root.rglob("*") if p.suffix.lower() in (".yaml", ".yml")])
         logger.info("Found %d YAML files under %s", len(yaml_files), dir_path)
         return YamlParser._load_and_sort(yaml_files, api_mode)
 
@@ -86,15 +86,37 @@ class YamlParser:
                 case_type = item.get("case_type", "")
 
                 if case_type == "single" and api_mode in ("single", "all"):
+                    if not item.get("test_id") or not item.get("method") or not item.get("url"):
+                        logger.warning("Skipping single case with missing required fields "
+                                       "(test_id, method, url) in: %s", p)
+                        continue
                     singles.append(item)
                 elif case_type == "biz" and api_mode in ("biz", "all"):
+                    if not item.get("sheet_name"):
+                        logger.warning("Skipping biz flow with missing sheet_name in: %s", p)
+                        continue
+                    steps = item.get("steps")
+                    if not steps or not isinstance(steps, list):
+                        logger.warning("Skipping biz flow with missing or empty steps in: %s", p)
+                        continue
                     biz_flows.append(item)
                 elif not case_type:
                     # Infer from structure
                     if "steps" in item and api_mode in ("biz", "all"):
+                        if not item.get("sheet_name"):
+                            logger.warning("Skipping biz flow with missing sheet_name in: %s", p)
+                            continue
+                        steps = item.get("steps")
+                        if not steps or not isinstance(steps, list):
+                            logger.warning("Skipping biz flow with missing or empty steps in: %s", p)
+                            continue
                         item["case_type"] = "biz"
                         biz_flows.append(item)
                     elif "test_id" in item and api_mode in ("single", "all"):
+                        if not item.get("method") or not item.get("url"):
+                            logger.warning("Skipping single case with missing required fields "
+                                           "(method, url) in: %s", p)
+                            continue
                         item["case_type"] = "single"
                         singles.append(item)
                     else:

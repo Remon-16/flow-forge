@@ -103,10 +103,21 @@ class SingleAssertionGenerator(BaseAgent):
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
         logger.info("Generating assertions for %d single cases...", len(cases))
-        result = self.call_llm_json(prompt, SINGLE_ASSERTION_SYSTEM)
-        filled = result.get("cases", [])
-        logger.info("Generated assertions for %d single cases", len(filled))
-        return filled
+        expected_count = len(cases)
+        for attempt in range(self._max_retries + 1):
+            result = self.call_llm_json(prompt, SINGLE_ASSERTION_SYSTEM)
+            filled = result.get("cases", [])
+            if len(filled) == expected_count:
+                logger.info("Generated assertions for %d single cases", len(filled))
+                return filled
+            logger.warning(
+                "Single assertion count mismatch attempt %d/%d: expected %d, got %d",
+                attempt + 1, self._max_retries + 1, expected_count, len(filled),
+            )
+        raise ValueError(
+            f"Single assertion count validation failed after {self._max_retries + 1} "
+            f"attempts: expected {expected_count}, got {len(filled)}"
+        )
 
 
 class BizAssertionGenerator(BaseAgent):
@@ -197,7 +208,18 @@ class BizAssertionGenerator(BaseAgent):
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
         logger.info("Generating assertions for %d biz flows...", len(cases))
-        result = self.call_llm_json(prompt, BIZ_ASSERTION_SYSTEM)
-        flows = result.get("biz_flows", [])
-        logger.info("Generated assertions for %d biz flows", len(flows))
-        return flows
+        expected_count = len(cases)
+        for attempt in range(self._max_retries + 1):
+            result = self.call_llm_json(prompt, BIZ_ASSERTION_SYSTEM)
+            flows = result.get("biz_flows", [])
+            if len(flows) == expected_count:
+                logger.info("Generated assertions for %d biz flows", len(flows))
+                return flows
+            logger.warning(
+                "Biz assertion count mismatch attempt %d/%d: expected %d, got %d",
+                attempt + 1, self._max_retries + 1, expected_count, len(flows),
+            )
+        raise ValueError(
+            f"Biz assertion count validation failed after {self._max_retries + 1} "
+            f"attempts: expected {expected_count}, got {len(flows)}"
+        )

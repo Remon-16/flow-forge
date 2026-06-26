@@ -150,6 +150,22 @@ AI Agent outputs Excel format (--output-format excel or both)
 
 The executor is a pure CLI tool that communicates results via exit codes, allowing direct integration into Jenkins pipelines.
 
+## Anti-Hallucination & Error Handling
+
+- **Text-Only Limitation**: The AI agent only processes text. Image/scanned content in PDFs will NOT be extracted — provide PDFs with extractable text layers or plain-text documents. Binary files (.png, .jpg) are explicitly rejected with an error.
+- **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, the number of output items is automatically validated against the input count. Mismatches trigger automatic retries; exhausted retries raise a clear error, preventing missing or extra cases from AI hallucinations.
+- **Plugin Error Handling**: The agent/ plugin system supports three error strategies — `skip`, `warn`, `fail`. The `fail` strategy aborts the pipeline and enables resumption from the failed stage via checkpoints. The python/ processor system halts the current case immediately on failure and records the error in the test report.
+
+## Running Tests
+
+```bash
+# agent/ tests
+cd agent && python -m pytest tests/ -v
+
+# python/ tests
+cd python && python -m pytest tests/ -v
+```
+
 ## Technology Stack
 
 | Component | Technology |

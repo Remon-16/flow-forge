@@ -4,6 +4,8 @@ import importlib
 import logging
 import sys
 from pathlib import Path
+from typing import Optional
+
 from processors.base import (
     _PRE_PROCESSOR_REGISTRY,
     _POST_PROCESSOR_REGISTRY,
