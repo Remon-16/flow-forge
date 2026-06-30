@@ -39,12 +39,20 @@ python/
 │
 ├── converter/                    # 用例格式转换工具
 │   ├── __init__.py
-│   ├── field_mapping.py          # snake_case ↔ PascalCase 字段映射
-│   ├── excel_reader.py           # Excel 读取 → 结构化数据
-│   ├── excel_writer.py           # 结构化数据 → Excel 多 Sheet 写入
-│   ├── yaml_writer.py            # 结构化数据 → YAML 文件写入
-│   ├── pytest_writer.py          # 结构化数据 → 独立 pytest 测试文件
-│   └── converter.py              # 编排：excel_to_yaml() / yaml_to_excel()
+│   ├── common/                     #   公共常量与工具
+│   │   ├── columns.py              #     Excel 列头定义
+│   │   ├── utils.py                #     read_yaml_dir 等共享工具
+│   │   └── export_utils.py         #     公共导出基础设施
+│   ├── field_mapping.py           #   snake_case ↔ PascalCase 字段映射
+│   ├── excel_reader.py            #   Excel 读取 → 结构化数据
+│   ├── excel_writer.py            #   结构化数据 → Excel 多 Sheet 写入
+│   ├── yaml_writer.py             #   结构化数据 → YAML 文件写入
+│   ├── pytest_writer.py           #   结构化数据 → 独立 pytest 文件（入口）
+│   ├── pytest/                    #   pytest 专属代码生成
+│   │   ├── templates.py           #     conftest 及测试文件模板
+│   │   ├── generators.py          #     测试函数/类代码生成
+│   │   └── writers.py             #     测试文件写入
+│   └── converter.py               #   编排：excel_to_yaml() / yaml_to_excel()
 │
 ├── i18n/
 │   ├── __init__.py

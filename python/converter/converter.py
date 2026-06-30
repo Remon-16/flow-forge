@@ -11,37 +11,9 @@ import yaml
 from .excel_reader import read_excel
 from .yaml_writer import write_biz_flows, write_interfaces, write_single_cases
 from .excel_writer import write_excel as _write_excel
+from .common.utils import read_yaml_dir
 
 logger = logging.getLogger(__name__)
-
-
-def _read_yaml_dir(
-    dir_path: str | None,
-    *,
-    validator: Callable[[dict[str, object]], bool] | None = None,
-) -> list[dict[str, object]]:
-    """Read all YAML files from a directory, returning parsed dicts.
-
-    If *validator* is provided, only dicts passing the validator are kept.
-    """
-    if not dir_path:
-        return []
-    p = Path(dir_path)
-    if not p.is_dir():
-        logger.warning("Directory not found, skipping: %s", dir_path)
-        return []
-    results: list[dict[str, object]] = []
-    for f in sorted(p.glob("*.yaml")):
-        try:
-            with open(f, "r", encoding="utf-8") as fh:
-                data = yaml.safe_load(fh)
-            if isinstance(data, dict):
-                data.pop("case_type", None)
-                if validator is None or validator(data):
-                    results.append(data)
-        except Exception:
-            logger.warning("Failed to read YAML file: %s", f, exc_info=True)
-    return results
 
 
 def excel_to_yaml(input_path: str, output_dir: str) -> dict[str, int]:
@@ -85,10 +57,10 @@ def yaml_to_excel(
             "At least one of --interfaces, --single-cases, or --biz-flows must be provided."
         )
 
-    interfaces = _read_yaml_dir(interfaces_dir) if interfaces_dir else []
-    single_cases = _read_yaml_dir(single_cases_dir) if single_cases_dir else []
+    interfaces = read_yaml_dir(interfaces_dir) if interfaces_dir else []
+    single_cases = read_yaml_dir(single_cases_dir) if single_cases_dir else []
     biz_flows = (
-        _read_yaml_dir(
+        read_yaml_dir(
             biz_flows_dir,
             validator=lambda d: "steps" in d and isinstance(d["steps"], list),
         )

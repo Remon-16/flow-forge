@@ -22,5 +22,18 @@
     "cli.summary_total": "  合计: {total} 总计 | {passed} 通过 | {failed} 失败",
     "cli.converted_count": "已转换 {interfaces} 个接口定义, {single} 个单接口用例, {biz} 个业务链路用例 → {output}/",
     "cli.excel_written": "Excel 已写入: {path}",
-    "cli.pytest_generated": "已生成 {single} 个单接口测试, {biz} 个业务链路测试, {custom} 个自定义处理器 → {output}/"
+    "cli.pytest_generated": "已生成 {single} 个单接口测试, {biz} 个业务链路测试, {custom} 个自定义处理器 → {output}/",
+
+    "converter.wrote_conftest": "已写入 conftest.py → {path}",
+    "converter.wrote_ff_compat": "已写入 _ff_compat.py → {path}",
+    "converter.wrote_env_config": "已写入 _env_{name}.py → {path}",
+    "converter.wrote_config_py": "已写入 _config.py → {path}",
+    "converter.wrote_single_tests": "已写入 test_single_cases.py（{count} 个测试）→ {path}",
+    "converter.wrote_biz_flow_tests": "已写入 test_biz_flows.py（{count} 个流程, {steps} 个步骤）→ {path}",
+    "converter.bundled_processor": "已打包自定义处理器: {name}",
+    "converter.dir_not_found": "目录不存在，跳过: {path}",
+    "converter.yaml_read_error": "读取 YAML 文件失败: {path}",
+    "converter.env_read_error": "读取环境配置文件失败: {path}",
+    "converter.converting_excel": "正在转换 Excel → pytest: {input} → {output}",
+    "converter.no_env_files": "未找到 env-*.yml 文件: {dir}"
 }

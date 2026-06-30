@@ -9,76 +9,74 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
-from converter.pytest_writer import (
-    _generate_single_test,
-    _generate_biz_flow_class,
-    _generate_preprocessor_calls,
-    _generate_postprocessor_calls,
-    _sanitize_name,
-    _indent_lines,
-    yaml_to_pytest,
-    excel_to_pytest,
+from converter.pytest_writer import yaml_to_pytest, excel_to_pytest
+from converter.pytest.generators import (
+    generate_single_test,
+    generate_biz_flow_class,
+    generate_preprocessor_calls,
+    generate_postprocessor_calls,
 )
+from converter.common.utils import sanitize_name, indent_lines
 
 
 class TestSanitizeName:
     def should_replace_special_chars(self):
-        assert _sanitize_name("test/case:one") == "test_case_one"
+        assert sanitize_name("test/case:one") == "test_case_one"
 
     def should_keep_alphanumeric(self):
-        assert _sanitize_name("valid_name_123") == "valid_name_123"
+        assert sanitize_name("valid_name_123") == "valid_name_123"
 
 
 class TestIndentLines:
     def should_indent_non_empty_lines(self):
         text = "line1\n\nline2\n"
-        result = _indent_lines(text, 4)
+        result = indent_lines(text, 4)
         lines = result.splitlines(True)
         assert lines[0] == "    line1\n"
         assert lines[1] == "\n"  # empty stays empty
         assert lines[2] == "    line2\n"
 
     def should_return_empty_for_empty_input(self):
-        assert _indent_lines("", 4) == ""
+        assert indent_lines("", 4) == ""
 
 
 class TestPreprocessorCalls:
     def should_return_empty_for_no_preprocessors(self):
-        assert _generate_preprocessor_calls([]) == ""
+        assert generate_preprocessor_calls([]) == ""
 
     def should_generate_timestamp_call(self):
-        result = _generate_preprocessor_calls([{"name": "timestamp", "config": {}}])
+        result = generate_preprocessor_calls([{"name": "timestamp", "config": {}}])
         assert "_apply_timestamp" in result
 
     def should_generate_hmac_sign_call(self):
-        result = _generate_preprocessor_calls([{"name": "hmac-sign", "config": {"secret_env": "KEY"}}])
+        result = generate_preprocessor_calls([{"name": "hmac-sign", "config": {"secret_env": "KEY"}}])
         assert "_apply_hmac_sign" in result
         assert '"secret_env"' in result
 
     def should_generate_print_demo_call(self):
-        result = _generate_preprocessor_calls([{"name": "print-demo", "config": {"prefix": "[DEBUG]"}}])
+        result = generate_preprocessor_calls([{"name": "print-demo", "config": {"prefix": "[DEBUG]"}}])
         assert "_print_request" in result
         assert "[DEBUG]" in result
 
     def should_comment_unknown_processor(self):
-        result = _generate_preprocessor_calls([{"name": "custom-auth", "config": {}}])
+        result = generate_preprocessor_calls([{"name": "custom-auth", "config": {}}])
         assert "Custom processor" in result
 
 
 class TestPostprocessorCalls:
     def should_return_empty_for_no_postprocessors(self):
-        assert _generate_postprocessor_calls([]) == ""
+        assert generate_postprocessor_calls([]) == ""
 
     def should_generate_response_time_call(self):
-        result = _generate_postprocessor_calls([{"name": "response-time", "config": {}}])
+        result = generate_postprocessor_calls([{"name": "response-time", "config": {}}])
         assert "_log_response_metrics" in result
 
     def should_generate_hmac_verify_call(self):
-        result = _generate_postprocessor_calls([{"name": "hmac-verify", "config": {"secret_env": "KEY"}}])
+        result = generate_postprocessor_calls([{"name": "hmac-verify", "config": {"secret_env": "KEY"}}])
         assert "_verify_hmac" in result
 
     def should_generate_print_demo_post_call(self):
-        result = _generate_postprocessor_calls([{"name": "print-demo-post", "config": {"prefix": "[POST]"}}])
+        result = generate_postprocessor_calls([{"name": "print-demo-post", "config": {"prefix": "[POST]"}}])
         assert "_print_response" in result
         assert "[POST]" in result
 
@@ -91,7 +89,7 @@ class TestGenerateSingleTest:
             "assert_dict": {"status": "ok"}, "assert_rules": [],
             "preprocessors": [], "postprocessors": [],
         }
-        src = _generate_single_test(case, 0)
+        src = generate_single_test(case, 0)
         assert "CASE_demo_001" in src
         assert "def test_demo_001(base_url)" in src
         assert "requests.request" in src
@@ -104,7 +102,7 @@ class TestGenerateSingleTest:
             "preprocessors": [], "postprocessors": [],
             "app_name": "myApp",
         }
-        src = _generate_single_test(case, 0)
+        src = generate_single_test(case, 0)
         assert "_resolve_token" in src
         assert '"myApp"' in src
 
@@ -115,7 +113,7 @@ class TestGenerateSingleTest:
             "assert_dict": {}, "assert_rules": [],
             "preprocessors": [], "postprocessors": [],
         }
-        src = _generate_single_test(case, 0)
+        src = generate_single_test(case, 0)
         assert "CASE_bad_name_test" in src
         assert "def test_bad_name_test" in src
 
@@ -127,7 +125,7 @@ class TestGenerateSingleTest:
             "assert_rules": ["items.length() > 0", "total == 100"],
             "preprocessors": [], "postprocessors": [],
         }
-        src = _generate_single_test(case, 0)
+        src = generate_single_test(case, 0)
         assert r'"items.length() > 0"' in src or "'items.length() > 0'" in src
 
     def should_generate_valid_python_syntax(self):
@@ -142,7 +140,7 @@ class TestGenerateSingleTest:
             "preprocessors": [{"name": "timestamp", "config": {}}],
             "postprocessors": [{"name": "response-time", "config": {}}],
         }
-        src = _generate_single_test(case, 0)
+        src = generate_single_test(case, 0)
         # Write to temp file and try to compile
         d = tempfile.mkdtemp()
         fp = os.path.join(d, "test_gen.py")
@@ -172,7 +170,7 @@ class TestGenerateBizFlowClass:
                  "assert_dict": {}, "assert_rules": [], "preprocessors": [], "postprocessors": []},
             ],
         }
-        src = _generate_biz_flow_class(flow, 0)
+        src = generate_biz_flow_class(flow, 0)
         assert "class TestBizFlow_test_flow" in src
         assert "def setup_method(self)" in src
         assert "STEP_s1" in src
@@ -189,7 +187,7 @@ class TestGenerateBizFlowClass:
                  "assert_dict": {}, "assert_rules": [], "preprocessors": [], "postprocessors": []},
             ],
         }
-        src = _generate_biz_flow_class(flow, 0)
+        src = generate_biz_flow_class(flow, 0)
         assert "STEP_login" in src
         assert "STEP_action" in src
         assert "def test_step_00_login" in src
@@ -208,14 +206,14 @@ class TestGenerateBizFlowClass:
                  "inherit": {"token": "data.token"}},
             ],
         }
-        src = _generate_biz_flow_class(flow, 0)
+        src = generate_biz_flow_class(flow, 0)
         assert "Inherit" in src
         assert "_resolve_path(self._flow_data" in src
         assert "data.token" in src
 
     def should_return_empty_for_no_steps(self):
         flow = {"sheet_name": "empty", "steps": []}
-        assert _generate_biz_flow_class(flow, 0) == ""
+        assert generate_biz_flow_class(flow, 0) == ""
 
 
 class TestYamlToPytest:
@@ -329,17 +327,18 @@ class TestExcelToPytest:
     def should_generate_from_mock_excel(self):
         """Generate pytest from a mocked Excel with single cases."""
         from converter.excel_reader import read_excel
-        from converter.pytest_writer import _write_single_tests, _write_conftest, _write_ff_compat, _write_env_configs
+        from converter.pytest.writers import write_single_tests, write_conftest
+        from converter.common.export_utils import write_ff_compat, write_env_configs
 
         d = tempfile.mkdtemp()
         out = os.path.join(d, "output")
         os.makedirs(out)
 
         # Write support files first
-        _write_conftest(out)
-        _write_ff_compat(out)
-        _write_env_configs(out, ".")
-        _write_single_tests([{
+        write_conftest(out)
+        write_ff_compat(out)
+        write_env_configs(out, ".")
+        write_single_tests([{
             "test_id": "excel_test", "method": "POST", "url": "/api/data",
             "request_head": {}, "request_body": {"k": "v"},
             "status_code": 200,
@@ -356,7 +355,7 @@ class TestExcelToPytest:
 
 class TestCompatModule:
     def should_contain_minimal_stubs(self):
-        from converter.pytest_writer import _FF_COMPAT_TEMPLATE
-        assert "class PreProcessor" in _FF_COMPAT_TEMPLATE
-        assert "class PostProcessor" in _FF_COMPAT_TEMPLATE
-        assert "class ProcessorError" in _FF_COMPAT_TEMPLATE
+        from converter.common.export_utils import FF_COMPAT_TEMPLATE
+        assert "class PreProcessor" in FF_COMPAT_TEMPLATE
+        assert "class PostProcessor" in FF_COMPAT_TEMPLATE
+        assert "class ProcessorError" in FF_COMPAT_TEMPLATE

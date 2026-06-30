@@ -12,6 +12,7 @@ from typing import Any
 import openpyxl
 
 from .field_mapping import convert_row_to_snake
+from .common.columns import API_COLUMNS, CASE_COLUMNS, BIZ_COLUMNS
 
 logger = logging.getLogger(__name__)
 
@@ -58,32 +59,13 @@ def read_excel(file_path: str) -> dict[str, Any]:
     single_cases: list[dict[str, object]] = []
     biz_flows: list[dict[str, object]] = []
 
-    # Column headers in order (PascalCase, matching the Excel format)
-    api_headers = [
-        "TestID", "APIName", "AppName", "Method", "URL",
-        "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-        "PreProcessors", "PostProcessors", "Remark",
-    ]
-    case_headers = [
-        "TestID", "RelevanceID", "Tag",
-        "APIName", "AppName", "Method", "URL",
-        "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-        "PreProcessors", "PostProcessors", "Remark",
-    ]
-    biz_headers = [
-        "StepID", "RelevanceID", "Inherit",
-        "APIName", "AppName", "Method", "URL",
-        "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-        "PreProcessors", "PostProcessors", "Tag", "Remark",
-    ]
-
     for sheet_name in wb.sheetnames:
         ws = wb[sheet_name]
         if not ws or ws.max_row < 2:
             continue
 
         if sheet_name == _API_SHEET:
-            raw_rows = _parse_excel_sheet(ws, api_headers)
+            raw_rows = _parse_excel_sheet(ws, API_COLUMNS)
             for row in raw_rows:
                 converted = convert_row_to_snake(row, parse_json=True)
                 if converted:
@@ -91,7 +73,7 @@ def read_excel(file_path: str) -> dict[str, Any]:
             logger.info("Read %d interface definitions from sheet '%s'", len(interfaces), sheet_name)
 
         elif sheet_name == _CASE_SHEET:
-            raw_rows = _parse_excel_sheet(ws, case_headers)
+            raw_rows = _parse_excel_sheet(ws, CASE_COLUMNS)
             for row in raw_rows:
                 converted = convert_row_to_snake(row, parse_json=True)
                 if converted:
@@ -100,7 +82,7 @@ def read_excel(file_path: str) -> dict[str, Any]:
 
         else:
             # Any other sheet is treated as a biz flow
-            raw_rows = _parse_excel_sheet(ws, biz_headers)
+            raw_rows = _parse_excel_sheet(ws, BIZ_COLUMNS)
             steps: list[dict[str, object]] = []
             for row in raw_rows:
                 converted = convert_row_to_snake(row, parse_json=True)

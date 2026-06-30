@@ -20,12 +20,12 @@ import pytest
 @pytest.fixture(scope="module")
 def helpers():
     """Write the generated conftest.py to a temp dir and return its module."""
-    from converter.pytest_writer import _CONFTEST_TEMPLATE
+    from converter.pytest.templates import CONFTEST_TEMPLATE
 
     d = tempfile.mkdtemp()
     conftest_path = os.path.join(d, "conftest.py")
     with open(conftest_path, "w", encoding="utf-8") as f:
-        f.write(_CONFTEST_TEMPLATE)
+        f.write(CONFTEST_TEMPLATE)
 
     # Create _config.py with test app (token helpers import from it)
     config_path = os.path.join(d, "_config.py")

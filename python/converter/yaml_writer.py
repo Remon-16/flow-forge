@@ -15,18 +15,30 @@ from typing import Any
 
 import yaml
 
+from .common.utils import safe_filename
+
 logger = logging.getLogger(__name__)
-
-
-def _safe_filename(name: str) -> str:
-    """Replace path-unsafe characters in a filename stem."""
-    for ch in "/\\:*?\"<>|":
-        name = name.replace(ch, "_")
-    return name
 
 
 def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
+
+
+def _resolve_path_conflict(dir_path: Path, name: str) -> tuple[Path, str]:
+    """解决文件名冲突 — 依次尝试 name.yaml, name_v2.yaml, name_v3.yaml...
+       Resolve filename conflict — try name.yaml, name_v2.yaml, name_v3.yaml...
+
+       返回 (最终路径, 更新后的名称)。Return (resolved path, updated name).
+    """
+    stem = safe_filename(name)
+    file_path = dir_path / f"{stem}.yaml"
+    if not file_path.exists():
+        return file_path, name
+    i = 2
+    while file_path.exists():
+        file_path = dir_path / f"{stem}_v{i}.yaml"
+        i += 1
+    return file_path, f"{name}_v{i - 1}"
 
 
 def write_interfaces(
@@ -42,8 +54,7 @@ def write_interfaces(
         d = dict(iface)
         d["case_type"] = "interfaces"
         test_id = str(d.get("test_id", "unknown"))
-        stem = _safe_filename(test_id)
-        file_path = dir_path / f"{stem}.yaml"
+        file_path = dir_path / f"{safe_filename(test_id)}.yaml"
         with open(file_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(d, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
         count += 1
@@ -67,16 +78,8 @@ def write_single_cases(
         d = dict(case)
         d["case_type"] = "single"
         test_id = str(d.get("test_id", "unknown"))
-        stem = _safe_filename(test_id)
-        file_path = dir_path / f"{stem}.yaml"
-
-        if file_path.exists():
-            i = 2
-            while file_path.exists():
-                file_path = dir_path / f"{stem}_v{i}.yaml"
-                i += 1
-            d["test_id"] = f"{test_id}_v{i - 1}"
-
+        file_path, new_id = _resolve_path_conflict(dir_path, test_id)
+        d["test_id"] = new_id
         with open(file_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(d, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
         count += 1
@@ -100,16 +103,8 @@ def write_biz_flows(
         d = dict(flow)
         d["case_type"] = "biz"
         sheet_name = str(d.get("sheet_name", "unknown"))
-        stem = _safe_filename(sheet_name)
-        file_path = dir_path / f"{stem}.yaml"
-
-        if file_path.exists():
-            i = 2
-            while file_path.exists():
-                file_path = dir_path / f"{stem}_v{i}.yaml"
-                i += 1
-            d["sheet_name"] = f"{sheet_name}_v{i - 1}"
-
+        file_path, new_name = _resolve_path_conflict(dir_path, sheet_name)
+        d["sheet_name"] = new_name
         with open(file_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(d, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
         count += 1

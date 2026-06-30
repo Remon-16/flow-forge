@@ -39,12 +39,20 @@ python/
 │
 ├── converter/                    # Case format conversion tool
 │   ├── __init__.py
-│   ├── field_mapping.py          # snake_case ↔ PascalCase field name mapping
-│   ├── excel_reader.py           # Excel reading → structured data
-│   ├── excel_writer.py           # Structured data → multi-sheet Excel writing
-│   ├── yaml_writer.py            # Structured data → YAML file writing
-│   ├── pytest_writer.py          # Structured data → standalone pytest test files
-│   └── converter.py              # Orchestration: excel_to_yaml() / yaml_to_excel()
+│   ├── common/                     #   Shared constants & utilities
+│   │   ├── columns.py              #     Excel column header definitions
+│   │   ├── utils.py                #     read_yaml_dir and shared utilities
+│   │   └── export_utils.py         #     Shared export infrastructure
+│   ├── field_mapping.py           #   snake_case ↔ PascalCase field name mapping
+│   ├── excel_reader.py            #   Excel reading → structured data
+│   ├── excel_writer.py            #   Structured data → multi-sheet Excel writing
+│   ├── yaml_writer.py             #   Structured data → YAML file writing
+│   ├── pytest_writer.py           #   Structured data → standalone pytest files (entry)
+│   ├── pytest/                    #   pytest-specific code generation
+│   │   ├── templates.py           #     conftest and test file templates
+│   │   ├── generators.py          #     Test function/class code generators
+│   │   └── writers.py             #     Test file writers
+│   └── converter.py               #   Orchestration: excel_to_yaml() / yaml_to_excel()
 │
 ├── i18n/
 │   ├── __init__.py

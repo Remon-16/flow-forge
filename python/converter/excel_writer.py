@@ -15,6 +15,9 @@ from typing import Any
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
+from .common.columns import API_COLUMNS, CASE_COLUMNS, BIZ_COLUMNS
+from .common.utils import safe_sheet_name
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,26 +38,6 @@ def _get_font_name() -> str:
         pass
     return "微软雅黑"
 
-_API_COLUMNS = [
-    "TestID", "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-    "PreProcessors", "PostProcessors", "Remark",
-]
-
-_CASE_COLUMNS = [
-    "TestID", "RelevanceID", "Tag",
-    "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-    "PreProcessors", "PostProcessors", "Remark",
-]
-
-_BIZ_COLUMNS = [
-    "StepID", "RelevanceID", "Inherit",
-    "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-    "PreProcessors", "PostProcessors", "Tag", "Remark",
-]
-
 _HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
 _THIN_BORDER = Border(
     left=Side(style="thin"),
@@ -62,13 +45,6 @@ _THIN_BORDER = Border(
     top=Side(style="thin"),
     bottom=Side(style="thin"),
 )
-
-
-def _safe_sheet_name(name: str) -> str:
-    """Sanitize a sheet name to Excel's 31-character limit."""
-    safe = name.replace(":", "-").replace("\\", "-").replace("/", "-")
-    safe = safe.replace("*", "-").replace("?", "-").replace("[", "").replace("]", "")
-    return safe[:31]
 
 
 def _write_headers(ws: Any, columns: list[str]) -> None:
@@ -127,7 +103,7 @@ def write_excel(
     # Sheet 1: API Definitions
     ws1 = wb.active
     ws1.title = "API Definitions"
-    _write_headers(ws1, _API_COLUMNS)
+    _write_headers(ws1, API_COLUMNS)
     if interfaces:
         for row_idx, iface in enumerate(interfaces, start=2):
             _write_row(ws1, row_idx, [
@@ -148,7 +124,7 @@ def write_excel(
 
     # Sheet 2: Single Cases
     ws2 = wb.create_sheet("Single Cases")
-    _write_headers(ws2, _CASE_COLUMNS)
+    _write_headers(ws2, CASE_COLUMNS)
     if single_cases:
         for row_idx, case in enumerate(single_cases, start=2):
             _write_row(ws2, row_idx, [
@@ -173,9 +149,9 @@ def write_excel(
     if biz_flows:
         for flow in biz_flows:
             sheet_name = str(_get(flow, "sheet_name", "BizFlow"))
-            safe_name = _safe_sheet_name(sheet_name)
+            safe_name = safe_sheet_name(sheet_name)
             ws = wb.create_sheet(safe_name)
-            _write_headers(ws, _BIZ_COLUMNS)
+            _write_headers(ws, BIZ_COLUMNS)
             steps = _get(flow, "steps", [])
             if isinstance(steps, list):
                 for row_idx, step in enumerate(steps, start=2):

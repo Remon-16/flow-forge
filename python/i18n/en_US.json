@@ -22,5 +22,18 @@
     "cli.summary_total": "  Total: {total} total | {passed} passed | {failed} failed",
     "cli.converted_count": "Converted {interfaces} interfaces, {single} single cases, {biz} biz flows → {output}/",
     "cli.excel_written": "Excel written to: {path}",
-    "cli.pytest_generated": "Generated {single} single tests, {biz} biz flows, {custom} custom processors → {output}/"
+    "cli.pytest_generated": "Generated {single} single tests, {biz} biz flows, {custom} custom processors → {output}/",
+
+    "converter.wrote_conftest": "Wrote conftest.py → {path}",
+    "converter.wrote_ff_compat": "Wrote _ff_compat.py → {path}",
+    "converter.wrote_env_config": "Wrote _env_{name}.py → {path}",
+    "converter.wrote_config_py": "Wrote _config.py → {path}",
+    "converter.wrote_single_tests": "Wrote test_single_cases.py ({count} tests) → {path}",
+    "converter.wrote_biz_flow_tests": "Wrote test_biz_flows.py ({count} flows, {steps} steps) → {path}",
+    "converter.bundled_processor": "Bundled custom processor: {name}",
+    "converter.dir_not_found": "Directory not found, skipping: {path}",
+    "converter.yaml_read_error": "Failed to read YAML file: {path}",
+    "converter.env_read_error": "Failed to read env file: {path}",
+    "converter.converting_excel": "Converting Excel → pytest: {input} → {output}",
+    "converter.no_env_files": "No env-*.yml files found in {dir}"
 }
