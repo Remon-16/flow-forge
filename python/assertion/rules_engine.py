@@ -3,7 +3,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.path_resolver import (
+from resolvers.path_resolver import (
     resolve_path,
     resolve_length,
     resolve_path_wildcard,

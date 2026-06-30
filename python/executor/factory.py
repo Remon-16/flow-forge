@@ -1,7 +1,7 @@
 import importlib
 from typing import Any, Dict
 
-from core.script_type import get_executor_class, get_biz_executor_class
+from executor.script_type import get_executor_class, get_biz_executor_class
 from executor.base import BaseExecutor
 
 

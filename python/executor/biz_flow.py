@@ -8,8 +8,8 @@ import requests
 
 from auth.login_manager import LoginManager
 from config.config_manager import get_app
-from core.path_resolver import resolve_path, _Missing
-from core.var_resolver import has_placeholders
+from resolvers.path_resolver import resolve_path, _Missing
+from resolvers.var_resolver import has_placeholders
 from executor.base import BaseExecutor
 from processors.base import ProcessorError
 

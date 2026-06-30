@@ -43,6 +43,7 @@ python/
 │   ├── excel_reader.py           # Excel 读取 → 结构化数据
 │   ├── excel_writer.py           # 结构化数据 → Excel 多 Sheet 写入
 │   ├── yaml_writer.py            # 结构化数据 → YAML 文件写入
+│   ├── pytest_writer.py          # 结构化数据 → 独立 pytest 测试文件
 │   └── converter.py              # 编排：excel_to_yaml() / yaml_to_excel()
 │
 ├── i18n/
@@ -55,11 +56,10 @@ python/
 │   ├── __init__.py
 │   └── config_manager.py        # 配置加载、合并、CLI 覆盖
 │
-├── core/
+├── resolvers/
 │   ├── __init__.py
 │   ├── path_resolver.py         # 点号/括号 JSON 路径解析器
-│   ├── script_type.py           # 脚本类型枚举与执行器注册表
-│   └── var_resolver.py          # #{varName} 占位符通用解析工具
+│   └── var_resolver.py          # #{varName}/{varName} 占位符通用解析工具
 │
 ├── excel_reader/
 │   ├── __init__.py
@@ -74,7 +74,8 @@ python/
 │   ├── base.py                  # BaseExecutor 抽象基类（线程池 + 线程安全）
 │   ├── single_case.py           # SingleCaseExecutor：单接口测试
 │   ├── biz_flow.py              # BizFlowExecutor：多步骤业务链路测试
-│   └── factory.py               # 执行器工厂，动态导入
+│   ├── factory.py               # 执行器工厂，动态导入
+│   └── script_type.py           # 脚本类型枚举与执行器注册表
 │
 ├── auth/
 │   ├── __init__.py
@@ -90,6 +91,8 @@ python/
 │   ├── loader.py                # 处理器自动发现与加载器
 │   ├── runner.py                # 处理器运行器
 │   └── builtin/                 # 内置处理器
+│       ├── pre/                  #   前置处理器（hmac-sign / timestamp / print-demo / path-param-restore）
+│       └── post/                 #   后置处理器（hmac-verify / response-time / print-demo-post）
 │
 └── reporter/
     ├── __init__.py
@@ -543,7 +546,7 @@ Excel 中的 JSON 字段支持以下格式：
                                                        → 失败：加黑名单，返回错误
 ```
 
-支持嵌入式占位符：`"#{normalUser}"` 和 `"Bearer #{normalUser}"` 均可正确解析。使用通用 `#{}` 解析器（`core/var_resolver.py`）逐占位符替换，一个 header 值中可包含多个占位符。
+支持嵌入式占位符：`"#{normalUser}"` 和 `"Bearer #{normalUser}"` 均可正确解析。使用通用 `#{}` 解析器（`resolvers/var_resolver.py`）逐占位符替换，一个 header 值中可包含多个占位符。
 
 关键设计：
 - **细粒度锁**：按 `appName:userParamName` 粒度锁定，不同用户可并发登录
@@ -608,9 +611,51 @@ python converter_main.py yaml2excel \
 
 三个目录均为可选参数——不提供的目录在生成 Excel 中对应 Sheet 留空（仅写表头）。YAML 文件需符合 Flow Forge 的用例格式（包含 `case_type` 字段，或通过结构自动推断类型）。
 
+### YAML/Excel → pytest 代码（新增）
+
+将测试用例转换为原生、独立的 pytest 代码，**零 Flow Forge 依赖**，仅需 `pytest` + `requests`。生成的代码可复制到任意项目直接运行。
+
+```bash
+# YAML → pytest（三个目录均可选，至少提供一个）
+python converter_main.py yaml2pytest \
+    --interfaces ./cases/interfaces/ \
+    --single-cases ./cases/single_cases/ \
+    --biz-flows ./cases/biz_flows/ \
+    --output ./tests/generated/
+
+# Excel → pytest（自动检测 Sheet 类型）
+python converter_main.py excel2pytest \
+    --input cases.xlsx \
+    --output ./tests/generated/
+
+# 可选参数
+python converter_main.py yaml2pytest ... --config-dir .     # env-*.yml 所在目录
+python converter_main.py yaml2pytest ... --processors-dir ./processors/  # 自定义处理器目录
+```
+
+**生成的文件结构**：
+
+```
+output_dir/
+    conftest.py                  # fixtures + 所有辅助函数 + 内置处理器独立实现
+    _config.py                   # 环境选择器（ENV = "local" → 导入对应 _env_*.py）
+    _env_local.py                # 每个环境独立的 app 配置（从 env-*.yml 解析）
+    _ff_compat.py                # 轻量兼容层（PreProcessor/PostProcessor/ProcessorError 桩）
+    _custom_processors/          # 用户自定义处理器原样复制（自动替换 import 路径）
+    test_single_cases.py         # 单接口用例
+    test_biz_flows.py            # 业务流用例
+```
+
+**生成代码特点**：
+- 请求头/请求体提取为文件顶部的 Python 常量，方便直接修改调试
+- 完整的内置断言规则引擎（13 种操作符 + SUM/SUM_PRODUCT/长度聚合函数）
+- 内置处理器全部转为独立函数（`_apply_timestamp()`、`_apply_hmac_sign()` 等），零框架依赖
+- 登录/Token 管理自动转换为 `_resolve_token()` + `_do_login()` 辅助函数，保持 Token 缓存
+- 自定义处理器通过 `_ff_compat.py` 兼容层实现零修改打包
+
 ### 推荐工作流
 
-在实际项目中，建议先使用 AI Agent 生成 Excel 格式的用例（`--output-format excel`），在 Flow Forge Studio 中进行批量编辑（调整 Tag、补全参数、修改断言），然后用 converter 将 Excel 转为 YAML 格式纳入 Git 版本控制。YAML 每个用例一个文件，git diff 可清晰展示每次变更，方便代码评审。
+在实际项目中，建议先使用 AI Agent 生成 Excel 格式的用例（`--output-format excel`），在 Flow Forge Studio 中进行批量编辑（调整 Tag、补全参数、修改断言），然后用 converter 将 Excel 转为 YAML 格式纳入 Git 版本控制。YAML 每个用例一个文件，git diff 可清晰展示每次变更，方便代码评审。需要分享给其他团队或集成到 CI/CD 时，使用 `yaml2pytest` 或 `excel2pytest` 生成独立的 pytest 测试文件。
 
 ## 前置处理器 / 后置处理器
 

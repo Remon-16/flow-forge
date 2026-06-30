@@ -5,8 +5,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import requests
 
-from core.path_resolver import resolve_path, _Missing
-from core.var_resolver import resolve_placeholders, has_placeholders
+from resolvers.path_resolver import resolve_path, _Missing
+from resolvers.var_resolver import resolve_placeholders, has_placeholders
 
 logger = logging.getLogger(__name__)
 

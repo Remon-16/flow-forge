@@ -20,6 +20,7 @@ import logging
 import sys
 
 from converter.converter import excel_to_yaml, yaml_to_excel
+from converter.pytest_writer import yaml_to_pytest, excel_to_pytest
 from i18n import _
 
 logger = logging.getLogger("converter")
@@ -60,6 +61,40 @@ def _cmd_yaml2excel(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_yaml2pytest(args: argparse.Namespace) -> int:
+    counts = yaml_to_pytest(
+        args.output,
+        interfaces_dir=args.interfaces,
+        single_cases_dir=args.single_cases,
+        biz_flows_dir=args.biz_flows,
+        config_dir=args.config_dir,
+        processors_dir=args.processors_dir,
+    )
+    logger.info(
+        _("cli.pytest_generated",
+           single=counts['single_cases'],
+           biz=counts['biz_flows'],
+           custom=counts['custom_processors'],
+           output=args.output))
+    return 0
+
+
+def _cmd_excel2pytest(args: argparse.Namespace) -> int:
+    counts = excel_to_pytest(
+        args.input,
+        args.output,
+        config_dir=args.config_dir,
+        processors_dir=args.processors_dir,
+    )
+    logger.info(
+        _("cli.pytest_generated",
+           single=counts['single_cases'],
+           biz=counts['biz_flows'],
+           custom=counts['custom_processors'],
+           output=args.output))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="converter",
@@ -81,6 +116,24 @@ def main(argv: list[str] | None = None) -> int:
     p_y2e.add_argument("--output", "-o", required=True, help="Output .xlsx file path")
     p_y2e.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
 
+    # yaml2pytest
+    p_y2p = sub.add_parser("yaml2pytest", help="Convert YAML directories → pytest test files")
+    p_y2p.add_argument("--interfaces", help="Directory containing interface YAML files")
+    p_y2p.add_argument("--single-cases", help="Directory containing single case YAML files")
+    p_y2p.add_argument("--biz-flows", help="Directory containing biz flow YAML files")
+    p_y2p.add_argument("--output", "-o", required=True, help="Output directory for pytest files")
+    p_y2p.add_argument("--config-dir", help="Directory containing env-*.yml files (default: python/)")
+    p_y2p.add_argument("--processors-dir", help="Directory containing custom processors")
+    p_y2p.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
+
+    # excel2pytest
+    p_e2p = sub.add_parser("excel2pytest", help="Convert Excel (.xlsx) → pytest test files")
+    p_e2p.add_argument("--input", "-i", required=True, help="Input .xlsx file path")
+    p_e2p.add_argument("--output", "-o", required=True, help="Output directory for pytest files")
+    p_e2p.add_argument("--config-dir", help="Directory containing env-*.yml files (default: python/)")
+    p_e2p.add_argument("--processors-dir", help="Directory containing custom processors")
+    p_e2p.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
+
     args = parser.parse_args(argv)
     _setup_logging(args.verbose)
 
@@ -89,6 +142,10 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_excel2yaml(args)
         elif args.command == "yaml2excel":
             return _cmd_yaml2excel(args)
+        elif args.command == "yaml2pytest":
+            return _cmd_yaml2pytest(args)
+        elif args.command == "excel2pytest":
+            return _cmd_excel2pytest(args)
     except (FileNotFoundError, ValueError) as e:
         logger.error("%s", e)
         return 2

@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from core.var_resolver import (
+from resolvers.var_resolver import (
     find_all_placeholders,
     has_curly_placeholders,
     has_placeholders,

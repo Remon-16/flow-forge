@@ -43,6 +43,7 @@ python/
 │   ├── excel_reader.py           # Excel reading → structured data
 │   ├── excel_writer.py           # Structured data → multi-sheet Excel writing
 │   ├── yaml_writer.py            # Structured data → YAML file writing
+│   ├── pytest_writer.py          # Structured data → standalone pytest test files
 │   └── converter.py              # Orchestration: excel_to_yaml() / yaml_to_excel()
 │
 ├── i18n/
@@ -55,11 +56,10 @@ python/
 │   ├── __init__.py
 │   └── config_manager.py        # Config loading, merging, CLI override
 │
-├── core/
+├── resolvers/
 │   ├── __init__.py
 │   ├── path_resolver.py         # Dot/bracket JSON path resolver
-│   ├── script_type.py           # Script type enum & executor registry
-│   └── var_resolver.py          # #{varName} placeholder resolution utility
+│   └── var_resolver.py          # #{varName}/{varName} placeholder resolution utility
 │
 ├── excel_reader/
 │   ├── __init__.py
@@ -74,7 +74,8 @@ python/
 │   ├── base.py                  # BaseExecutor abstract base (thread pool + thread safety)
 │   ├── single_case.py           # SingleCaseExecutor: single API testing
 │   ├── biz_flow.py              # BizFlowExecutor: multi-step business flow testing
-│   └── factory.py               # Executor factory with dynamic import
+│   ├── factory.py               # Executor factory with dynamic import
+│   └── script_type.py           # Script type enum & executor registry
 │
 ├── auth/
 │   ├── __init__.py
@@ -90,6 +91,8 @@ python/
 │   ├── loader.py                # Processor auto-discovery and loader
 │   ├── runner.py                # Processor runner
 │   └── builtin/                 # Built-in processors
+│       ├── pre/                  #   PreProcessors (hmac-sign / timestamp / print-demo / path-param-restore)
+│       └── post/                 #   PostProcessors (hmac-verify / response-time / print-demo-post)
 │
 └── reporter/
     ├── __init__.py
@@ -543,7 +546,7 @@ Detect #{userParamName} → Check cache → Cache hit: return token
                                                                                  → Failure: add to blacklist, return error
 ```
 
-Supports embedded placeholders: both `"#{normalUser}"` and `"Bearer #{normalUser}"` are resolved correctly. Uses the generic `#{}` resolver (`core/var_resolver.py`) for per-placeholder substitution; multiple placeholders in a single header value are supported.
+Supports embedded placeholders: both `"#{normalUser}"` and `"Bearer #{normalUser}"` are resolved correctly. Uses the generic `#{}` resolver (`resolvers/var_resolver.py`) for per-placeholder substitution; multiple placeholders in a single header value are supported.
 
 Key design choices:
 - **Fine-grained locks**: locking at `appName:userParamName` granularity; different users can log in concurrently
@@ -608,9 +611,51 @@ python converter_main.py yaml2excel \
 
 All three directory arguments are optional — sheets for omitted directories are left blank (headers only) in the resulting Excel file. YAML files must follow the Flow Forge case format (with `case_type` field, or the converter auto-infers the type by structure).
 
+### YAML/Excel → pytest Code (new)
+
+Convert test cases to native, standalone pytest code with **zero Flow Forge dependencies** — only `pytest` + `requests` needed. The generated code can be copied to any project and run directly.
+
+```bash
+# YAML → pytest (all three directories optional; at least one required)
+python converter_main.py yaml2pytest \
+    --interfaces ./cases/interfaces/ \
+    --single-cases ./cases/single_cases/ \
+    --biz-flows ./cases/biz_flows/ \
+    --output ./tests/generated/
+
+# Excel → pytest (auto-detects sheet types)
+python converter_main.py excel2pytest \
+    --input cases.xlsx \
+    --output ./tests/generated/
+
+# Optional parameters
+python converter_main.py yaml2pytest ... --config-dir .     # env-*.yml directory
+python converter_main.py yaml2pytest ... --processors-dir ./processors/  # custom processors dir
+```
+
+**Generated file structure**:
+
+```
+output_dir/
+    conftest.py                  # fixtures + all helpers + built-in processor standalone impls
+    _config.py                   # env selector (ENV = "local" → imports corresponding _env_*.py)
+    _env_local.py                # per-environment app config (parsed from env-*.yml)
+    _ff_compat.py                # lightweight compat layer (PreProcessor/PostProcessor/ProcessorError stubs)
+    _custom_processors/          # user-defined processors copied verbatim (import paths auto-fixed)
+    test_single_cases.py         # single API test cases
+    test_biz_flows.py            # business flow test cases
+```
+
+**Generated code features**:
+- Request headers/body extracted as Python constants at the top of the file for easy editing
+- Complete built-in assertion rule engine (13 operators + SUM/SUM_PRODUCT/length aggregation)
+- All built-in processors converted to standalone functions (`_apply_timestamp()`, `_apply_hmac_sign()`, etc.) with zero framework dependency
+- Login/token management automatically converted to `_resolve_token()` + `_do_login()` helpers with token caching
+- Custom processors bundled via `_ff_compat.py` compatibility layer with near-zero modification
+
 ### Recommended Workflow
 
-For real projects, we recommend generating cases in Excel format from the AI Agent (`--output-format excel`), batch-editing in Flow Forge Studio (adjust tags, fill in parameters, modify assertions), then converting Excel to YAML with the converter for Git version control. With one YAML file per case, git diff clearly shows every change, making code review straightforward.
+For real projects, we recommend generating cases in Excel format from the AI Agent (`--output-format excel`), batch-editing in Flow Forge Studio (adjust tags, fill in parameters, modify assertions), then converting Excel to YAML with the converter for Git version control. With one YAML file per case, git diff clearly shows every change, making code review straightforward. When sharing with other teams or integrating into CI/CD, use `yaml2pytest` or `excel2pytest` to generate standalone pytest test files.
 
 ## Pre-Processors / Post-Processors
 

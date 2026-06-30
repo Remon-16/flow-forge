@@ -65,7 +65,7 @@ The manual review step supports two modes: (1) typing `y`/`n` with text feedback
 The framework consists of two core components:
 
 - **[agent/](./agent/)** — AI Case Generation Agent: reads requirement documents + API documentation, passes through a two-phase pipeline of "Plan Generation → Manual Review → Case Orchestration", and outputs test case YAML files (with optional Excel export).
-- **[python/](./python/)** — API Test Executor + Case Format Converter: reads YAML case directories/files or Excel case files, automatically manages login state, executes HTTP requests with multi-threading, runs assertions, and generates self-contained HTML test reports. Also provides Excel ↔ YAML bidirectional format conversion.
+- **[python/](./python/)** — API Test Executor + Case Format Converter: reads YAML case directories/files or Excel case files, automatically manages login state, executes HTTP requests with multi-threading, runs assertions, and generates self-contained HTML test reports. Provides Excel ↔ YAML bidirectional conversion and YAML/Excel → standalone pytest code generation.
 - **[studio/](./studio/)** — Flow Forge Studio desktop application: provides visual editing of test cases (Excel + YAML) and interactive Markdown annotation of test plans.
 
 The two components are decoupled via **YAML files** as the primary contract (Excel remains compatible) — the agent generates a specific format, and the executor parses that format. Users are free to choose: use the agent to auto-generate cases, manually write YAML/Excel cases and run them directly with the executor, or use the Excel editor for editing.
@@ -133,6 +133,7 @@ AI Agent outputs Excel format (--output-format excel or both)
        │
        ▼
   Convert Excel to YAML with converter (python converter_main.py excel2yaml)
+  When standalone pytest tests are needed, use yaml2pytest / excel2pytest
        │
        ▼
   Commit YAML to Git for version control; review changes file-by-file with git diff

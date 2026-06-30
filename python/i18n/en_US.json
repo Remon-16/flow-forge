@@ -21,5 +21,6 @@
     "cli.summary_biz": "  Biz: {total} total | {passed} passed | {failed} failed",
     "cli.summary_total": "  Total: {total} total | {passed} passed | {failed} failed",
     "cli.converted_count": "Converted {interfaces} interfaces, {single} single cases, {biz} biz flows → {output}/",
-    "cli.excel_written": "Excel written to: {path}"
+    "cli.excel_written": "Excel written to: {path}",
+    "cli.pytest_generated": "Generated {single} single tests, {biz} biz flows, {custom} custom processors → {output}/"
 }

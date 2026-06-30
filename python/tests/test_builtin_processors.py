@@ -21,7 +21,7 @@ from processors.base import ProcessorError
 class TestTimestampPreProcessorTest:
 
     def should_add_timestamp_and_request_id_headers(self):
-        from processors.builtin.timestamp_sign import TimestampPreProcessor
+        from processors.builtin.pre.timestamp_sign_pre import TimestampPreProcessor
 
         proc = TimestampPreProcessor()
         headers, body = proc.process({}, {}, {}, {})
@@ -31,7 +31,7 @@ class TestTimestampPreProcessorTest:
         assert body == {}
 
     def should_use_custom_header_names(self):
-        from processors.builtin.timestamp_sign import TimestampPreProcessor
+        from processors.builtin.pre.timestamp_sign_pre import TimestampPreProcessor
 
         proc = TimestampPreProcessor()
         headers, body = proc.process(
@@ -46,7 +46,7 @@ class TestTimestampPreProcessorTest:
         assert "X-Request-Id" not in headers
 
     def should_pass_through_body_unchanged(self):
-        from processors.builtin.timestamp_sign import TimestampPreProcessor
+        from processors.builtin.pre.timestamp_sign_pre import TimestampPreProcessor
 
         proc = TimestampPreProcessor()
         original_body = {"key": "value", "nested": {"deep": True}}
@@ -55,7 +55,7 @@ class TestTimestampPreProcessorTest:
         assert body == original_body
 
     def should_produce_valid_iso8601_timestamp(self):
-        from processors.builtin.timestamp_sign import TimestampPreProcessor
+        from processors.builtin.pre.timestamp_sign_pre import TimestampPreProcessor
 
         proc = TimestampPreProcessor()
         headers, _ = proc.process({}, {}, {}, {})
@@ -67,7 +67,7 @@ class TestTimestampPreProcessorTest:
         assert "T" in ts
 
     def should_produce_valid_uuid4_request_id(self):
-        from processors.builtin.timestamp_sign import TimestampPreProcessor
+        from processors.builtin.pre.timestamp_sign_pre import TimestampPreProcessor
 
         proc = TimestampPreProcessor()
         headers, _ = proc.process({}, {}, {}, {})
@@ -86,7 +86,7 @@ class TestTimestampPreProcessorTest:
 class TestPrintDemoPreProcessorTest:
 
     def should_log_request_summary_at_info_level(self, caplog):
-        from processors.builtin.print_demo import PrintDemoPreProcessor
+        from processors.builtin.pre.print_demo_pre import PrintDemoPreProcessor
 
         proc = PrintDemoPreProcessor()
         with caplog.at_level(logging.INFO):
@@ -101,7 +101,7 @@ class TestPrintDemoPreProcessorTest:
         assert any("name" in m for m in caplog.messages)
 
     def should_pass_through_headers_and_body_unchanged(self):
-        from processors.builtin.print_demo import PrintDemoPreProcessor
+        from processors.builtin.pre.print_demo_pre import PrintDemoPreProcessor
 
         proc = PrintDemoPreProcessor()
         original_headers = {"Auth": "secret"}
@@ -115,7 +115,7 @@ class TestPrintDemoPreProcessorTest:
         assert body == original_body
 
     def should_use_custom_log_prefix(self, caplog):
-        from processors.builtin.print_demo import PrintDemoPreProcessor
+        from processors.builtin.pre.print_demo_pre import PrintDemoPreProcessor
 
         proc = PrintDemoPreProcessor()
         with caplog.at_level(logging.INFO):
@@ -131,7 +131,7 @@ class TestPrintDemoPreProcessorTest:
 class TestPrintDemoPostProcessorTest:
 
     def should_log_response_summary_at_info_level(self, caplog):
-        from processors.builtin.print_demo import PrintDemoPostProcessor
+        from processors.builtin.post.print_demo_post import PrintDemoPostProcessor
 
         proc = PrintDemoPostProcessor()
         with caplog.at_level(logging.INFO):
@@ -145,7 +145,7 @@ class TestPrintDemoPostProcessorTest:
         assert any("Content-Type" in m for m in caplog.messages)
 
     def should_use_custom_log_prefix(self, caplog):
-        from processors.builtin.print_demo import PrintDemoPostProcessor
+        from processors.builtin.post.print_demo_post import PrintDemoPostProcessor
 
         proc = PrintDemoPostProcessor()
         with caplog.at_level(logging.INFO):
@@ -154,7 +154,7 @@ class TestPrintDemoPostProcessorTest:
         assert any("[PostCustom]" in m for m in caplog.messages)
 
     def should_handle_none_response_body(self, caplog):
-        from processors.builtin.print_demo import PrintDemoPostProcessor
+        from processors.builtin.post.print_demo_post import PrintDemoPostProcessor
 
         proc = PrintDemoPostProcessor()
         with caplog.at_level(logging.INFO):
@@ -171,7 +171,7 @@ class TestPrintDemoPostProcessorTest:
 class TestResponseTimePostProcessorTest:
 
     def should_log_content_length(self, caplog):
-        from processors.builtin.response_time import ResponseTimePostProcessor
+        from processors.builtin.post.response_time_post import ResponseTimePostProcessor
 
         proc = ResponseTimePostProcessor()
         with caplog.at_level(logging.INFO):
@@ -185,7 +185,7 @@ class TestResponseTimePostProcessorTest:
         assert any("512" in m for m in caplog.messages)
 
     def should_warn_when_body_exceeds_threshold(self, caplog):
-        from processors.builtin.response_time import ResponseTimePostProcessor
+        from processors.builtin.post.response_time_post import ResponseTimePostProcessor
 
         proc = ResponseTimePostProcessor()
         with caplog.at_level(logging.WARNING):
@@ -198,7 +198,7 @@ class TestResponseTimePostProcessorTest:
         assert any("exceeds threshold" in m for m in caplog.messages)
 
     def should_compute_length_from_body_when_no_header(self, caplog):
-        from processors.builtin.response_time import ResponseTimePostProcessor
+        from processors.builtin.post.response_time_post import ResponseTimePostProcessor
 
         proc = ResponseTimePostProcessor()
         body = {"data": "x" * 100}
@@ -208,7 +208,7 @@ class TestResponseTimePostProcessorTest:
         assert any("bytes" in m for m in caplog.messages)
 
     def should_handle_non_json_response(self, caplog):
-        from processors.builtin.response_time import ResponseTimePostProcessor
+        from processors.builtin.post.response_time_post import ResponseTimePostProcessor
 
         proc = ResponseTimePostProcessor()
         with caplog.at_level(logging.INFO):
@@ -218,7 +218,7 @@ class TestResponseTimePostProcessorTest:
         assert any("bytes" in m for m in caplog.messages)
 
     def should_handle_missing_content_type_header(self, caplog):
-        from processors.builtin.response_time import ResponseTimePostProcessor
+        from processors.builtin.post.response_time_post import ResponseTimePostProcessor
 
         proc = ResponseTimePostProcessor()
         with caplog.at_level(logging.INFO):
@@ -242,7 +242,7 @@ class TestHmacVerifyPostProcessorTest:
         ).hexdigest()
 
     def should_pass_when_signature_matches(self):
-        from processors.builtin.hmac_verify import HmacVerifyPostProcessor
+        from processors.builtin.post.hmac_verify_post import HmacVerifyPostProcessor
 
         secret = "test-secret"
         body = {"result": "success"}
@@ -261,7 +261,7 @@ class TestHmacVerifyPostProcessorTest:
             )
 
     def should_raise_processor_error_when_signature_mismatch(self):
-        from processors.builtin.hmac_verify import HmacVerifyPostProcessor
+        from processors.builtin.post.hmac_verify_post import HmacVerifyPostProcessor
 
         secret = "test-secret"
         body = {"result": "success"}
@@ -281,7 +281,7 @@ class TestHmacVerifyPostProcessorTest:
                 )
 
     def should_raise_processor_error_when_header_missing(self):
-        from processors.builtin.hmac_verify import HmacVerifyPostProcessor
+        from processors.builtin.post.hmac_verify_post import HmacVerifyPostProcessor
 
         proc = HmacVerifyPostProcessor()
         with patch.dict(os.environ, {"MY_SECRET": "secret"}):
@@ -295,7 +295,7 @@ class TestHmacVerifyPostProcessorTest:
                 )
 
     def should_warn_when_secret_env_empty(self, caplog):
-        from processors.builtin.hmac_verify import HmacVerifyPostProcessor
+        from processors.builtin.post.hmac_verify_post import HmacVerifyPostProcessor
 
         proc = HmacVerifyPostProcessor()
         with caplog.at_level(logging.WARNING):
@@ -308,7 +308,7 @@ class TestHmacVerifyPostProcessorTest:
         assert any("empty" in m.lower() for m in caplog.messages)
 
     def should_use_custom_header_name(self):
-        from processors.builtin.hmac_verify import HmacVerifyPostProcessor
+        from processors.builtin.post.hmac_verify_post import HmacVerifyPostProcessor
 
         secret = "test-secret"
         body_str = ""
@@ -325,7 +325,7 @@ class TestHmacVerifyPostProcessorTest:
             )
 
     def should_use_global_processor_config(self):
-        from processors.builtin.hmac_verify import HmacVerifyPostProcessor
+        from processors.builtin.post.hmac_verify_post import HmacVerifyPostProcessor
 
         secret = "test-secret"
         body_str = ""
@@ -350,7 +350,7 @@ class TestHmacVerifyPostProcessorTest:
             )
 
     def should_handle_plain_text_response_body(self):
-        from processors.builtin.hmac_verify import HmacVerifyPostProcessor
+        from processors.builtin.post.hmac_verify_post import HmacVerifyPostProcessor
 
         secret = "test-secret"
         body_str = "plain text body"
@@ -374,7 +374,7 @@ class TestHmacVerifyPostProcessorTest:
 class TestPathParamRestorePreProcessorTest:
 
     def should_restore_all_cleared_fields_to_body(self):
-        from processors.builtin.path_param_restore import PathParamRestorePreProcessor
+        from processors.builtin.pre.path_param_restore_pre import PathParamRestorePreProcessor
 
         proc = PathParamRestorePreProcessor()
         headers, body = proc.process(
@@ -389,7 +389,7 @@ class TestPathParamRestorePreProcessorTest:
         assert headers == {"Content-Type": "application/json"}
 
     def should_restore_specific_fields_to_body(self):
-        from processors.builtin.path_param_restore import PathParamRestorePreProcessor
+        from processors.builtin.pre.path_param_restore_pre import PathParamRestorePreProcessor
 
         proc = PathParamRestorePreProcessor()
         headers, body = proc.process(
@@ -403,7 +403,7 @@ class TestPathParamRestorePreProcessorTest:
         assert "uid" not in body
 
     def should_do_nothing_when_no_cleared_params(self):
-        from processors.builtin.path_param_restore import PathParamRestorePreProcessor
+        from processors.builtin.pre.path_param_restore_pre import PathParamRestorePreProcessor
 
         proc = PathParamRestorePreProcessor()
         headers, body = proc.process(
@@ -413,7 +413,7 @@ class TestPathParamRestorePreProcessorTest:
         assert body == {"original": True}
 
     def should_do_nothing_when_cleared_params_is_empty_dict(self):
-        from processors.builtin.path_param_restore import PathParamRestorePreProcessor
+        from processors.builtin.pre.path_param_restore_pre import PathParamRestorePreProcessor
 
         proc = PathParamRestorePreProcessor()
         headers, body = proc.process(
@@ -424,7 +424,7 @@ class TestPathParamRestorePreProcessorTest:
         assert body == {"original": True}
 
     def should_pass_through_headers_unchanged(self):
-        from processors.builtin.path_param_restore import PathParamRestorePreProcessor
+        from processors.builtin.pre.path_param_restore_pre import PathParamRestorePreProcessor
 
         proc = PathParamRestorePreProcessor()
         original_headers = {"X-Custom": "val", "Authorization": "Bearer token"}
@@ -437,7 +437,7 @@ class TestPathParamRestorePreProcessorTest:
         assert headers == original_headers
 
     def should_handle_non_list_fields_config(self, caplog):
-        from processors.builtin.path_param_restore import PathParamRestorePreProcessor
+        from processors.builtin.pre.path_param_restore_pre import PathParamRestorePreProcessor
 
         proc = PathParamRestorePreProcessor()
         with caplog.at_level(logging.WARNING):

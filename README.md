@@ -65,7 +65,7 @@ graph TD
 整个框架由两个核心组件构成：
 
 - **[agent/](./agent/)** — AI 用例生成智能体：读取需求文档 + 接口文档，经过"计划生成 → 人工审核 → 用例编排"两阶段流水线，输出测试用例 YAML 文件（可选导出 Excel）。
-- **[python/](./python/)** — 接口测试执行器 + 用例格式转换器：读取 YAML 用例目录/文件或 Excel 用例文件，自动管理登录态，多线程执行 HTTP 请求，运行断言，生成自包含 HTML 测试报告。同时提供 Excel ↔ YAML 用例格式双向转换工具。
+- **[python/](./python/)** — 接口测试执行器 + 用例格式转换器：读取 YAML 用例目录/文件或 Excel 用例文件，自动管理登录态，多线程执行 HTTP 请求，运行断言，生成自包含 HTML 测试报告。提供 Excel ↔ YAML 用例格式双向转换工具，以及 YAML/Excel → 独立 pytest 代码生成器。
 - **[studio/](./studio/)** — Flow Forge Studio 桌面应用：提供测试用例的可视化编辑（Excel + YAML）、测试计划的 Markdown 交互式批注。
 
 两个组件之间通过 **YAML 文件** 作为主要契约（Excel 仍兼容）——智能体生成什么格式，执行器就解析什么格式。用户可以自由选择：用智能体自动生成用例，手动编写 YAML/Excel 用例后直接用执行器运行，或使用 Excel 编辑器编辑用例。
@@ -133,6 +133,7 @@ AI 智能体输出 Excel 格式（--output-format excel 或 both）
        │
        ▼
   用 converter 将 Excel 转为 YAML 格式（python converter_main.py excel2yaml）
+  需要独立 pytest 测试时，使用 yaml2pytest / excel2pytest 生成独立测试文件
        │
        ▼
   YAML 纳入 Git 版本控制，逐文件 diff 审查变更

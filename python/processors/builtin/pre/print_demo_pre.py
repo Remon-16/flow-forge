@@ -1,6 +1,5 @@
-"""Debug/demo processors that print request and response summaries.
+"""Debug/demo pre-processor that prints request summaries.
 
-Pre-processor logs the outgoing request; post-processor logs the response.
 Both are no-ops that pass data through unchanged. Useful for verifying
 multi-processor execution order.
 
@@ -12,16 +11,12 @@ Usage in test case YAML:
       - name: print-demo
         config:
           prefix: "[PreDebug]"   # optional log prefix
-    postprocessors:
-      - name: print-demo-post
-        config:
-          prefix: "[PostDebug]"  # optional log prefix
 """
 
 import logging
 from typing import Any, Dict, Tuple
 
-from processors.base import PostProcessor, PreProcessor
+from processors.base import PreProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -47,30 +42,6 @@ class PrintDemoPreProcessor(PreProcessor):
             prefix, header_keys, body_preview,
         )
         return headers, body
-
-
-class PrintDemoPostProcessor(PostProcessor):
-    """Log the response summary at INFO level."""
-
-    name = "print-demo-post"
-
-    def process(
-        self,
-        request_headers: Dict[str, Any],
-        request_body: Dict[str, Any],
-        response_headers: Dict[str, Any],
-        response_body: Any,
-        case_config: Dict[str, Any],
-        global_config: Dict[str, Any],
-    ) -> None:
-        prefix = case_config.get("prefix", "[PostDemo]")
-
-        resp_header_keys = list(response_headers.keys())
-        body_preview = _truncate(str(response_body), 200)
-        logger.info(
-            "%s Response — Headers: %s | Body: %s",
-            prefix, resp_header_keys, body_preview,
-        )
 
 
 def _truncate(text: str, max_len: int) -> str:
