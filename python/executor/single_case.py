@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import requests
 
@@ -23,7 +23,7 @@ class SingleCaseExecutor(BaseExecutor):
         if "<URL not exist>" in path:
             return self._build_result(case, error=f"URL not found in API documentation: {path}")
 
-        headers, body, url, base_url = self._prepare_request(case, app_name, method, path)
+        headers, body, url, base_url, cleared_params = self._prepare_request(case, app_name, method, path)
 
         result = self._build_result(
             case,
@@ -35,14 +35,14 @@ class SingleCaseExecutor(BaseExecutor):
 
         logger.info("[%s] %s %s (app=%s)", test_id, method, url, app_name)
 
-        return self._execute_request(result, case, test_id, url, headers, body, app_name)
+        return self._execute_request(result, case, test_id, url, headers, body, app_name, cleared_params)
 
     def _prepare_request(
         self, case: Dict[str, Any], app_name: str, method: str, path: str
     ):
         """Extract headers, body and build URL from case and app config.
 
-        Returns ``(headers, body, url, base_url)``.
+        Returns ``(headers, body, url, base_url, cleared_params)``.
         """
         headers = dict(case.get("request_head") or {})
         body = dict(case.get("request_body") or {})
@@ -50,8 +50,8 @@ class SingleCaseExecutor(BaseExecutor):
         app_config = get_app(app_name) if app_name else {}
         base_url = app_config.get("baseURL", "") if app_config else ""
         url = self._build_url(base_url, path)
-        url, body = self._resolve_url_placeholders(url, body)
-        return headers, body, url, base_url
+        url, body, cleared_params = self._resolve_url_placeholders(url, body)
+        return headers, body, url, base_url, cleared_params
 
     def _execute_request(
         self,
@@ -62,6 +62,7 @@ class SingleCaseExecutor(BaseExecutor):
         headers: Dict,
         body: Dict,
         app_name: str,
+        cleared_params: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Token resolution → preprocessors → HTTP request → assertions → postprocessors."""
 
@@ -83,8 +84,13 @@ class SingleCaseExecutor(BaseExecutor):
 
         if preprocessors:
             try:
+                if global_config is not None and cleared_params:
+                    config_for_proc = dict(global_config)
+                    config_for_proc["_cleared_path_params"] = cleared_params
+                else:
+                    config_for_proc = global_config
                 headers, body, preprocessor_results = self._run_preprocessors(
-                    preprocessors, headers, body, global_config)
+                    preprocessors, headers, body, config_for_proc)
                 result["request_headers"] = dict(headers)
                 result["request_body"] = dict(body)
                 result["preprocessor_results"] = preprocessor_results

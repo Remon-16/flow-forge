@@ -8,7 +8,13 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from core.var_resolver import resolve_placeholders, has_placeholders
+from core.var_resolver import (
+    find_all_placeholders,
+    has_curly_placeholders,
+    has_placeholders,
+    resolve_curly_placeholders,
+    resolve_placeholders,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,25 +72,45 @@ class BaseExecutor(ABC):
 
     @staticmethod
     def _resolve_url_placeholders(url: str, body: Dict[str, Any]):
-        """Resolve #{varName} placeholders in the URL path from request body.
+        """Resolve #{varName} and {varName} placeholders in the URL from the request body.
 
         Values found in the body are consumed (removed) so they are not also
-        sent as query parameters or JSON fields.
+        sent as query parameters or JSON fields.  The removed fields are
+        recorded in ``cleared_params`` so that a pre-processor can restore
+        them if needed.
 
-        Returns ``(resolved_url, remaining_body)``.
+        Returns ``(resolved_url, remaining_body, cleared_params)``.
         """
-        if not has_placeholders(url):
-            return url, body
+        has_hash = has_placeholders(url)
+        has_curly = has_curly_placeholders(url)
 
-        body = dict(body)
+        if not has_hash and not has_curly:
+            return url, body, {}
 
-        def body_resolver(var_name: str) -> Optional[str]:
+        body = dict(body)  # shallow copy so we can pop without mutating caller
+        cleared: Dict[str, str] = {}
+
+        # Step 1: find all matches and collect values (don't pop yet)
+        consumed: Dict[str, str] = {}
+        for var_name in find_all_placeholders(url):
             if var_name in body:
-                return str(body.pop(var_name))
-            return None
+                consumed[var_name] = str(body[var_name])
 
-        resolved_url = resolve_placeholders(url, body_resolver)
-        return resolved_url, body
+        # Step 2: substitute all placeholders (hash and curly)
+        def resolver(var_name: str) -> Optional[str]:
+            return consumed.get(var_name)
+
+        if has_hash:
+            url = resolve_placeholders(url, resolver)
+        if has_curly:
+            url = resolve_curly_placeholders(url, resolver)
+
+        # Step 3: remove consumed keys from body
+        cleared = dict(consumed)
+        for key in consumed:
+            body.pop(key, None)
+
+        return url, body, cleared
 
     @staticmethod
     def _build_url(base_url: str, path: str) -> str:

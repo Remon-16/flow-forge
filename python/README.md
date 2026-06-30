@@ -650,7 +650,40 @@ processor_configs:
 
 ### 内置处理器
 
-- **hmac-sign** — HMAC-SHA256 签名处理器（示例），向请求头添加 `X-Signature`
+| 处理器 | 类型 | 说明 |
+|--------|------|------|
+| `hmac-sign` | Pre | HMAC-SHA256 请求签名，向请求头添加 `X-Signature` |
+| `timestamp` | Pre | 注入 `X-Timestamp`（ISO 8601 UTC）和 `X-Request-Id`（UUIDv4）请求头 |
+| `print-demo` | Pre | 调试用，INFO 级别打印请求摘要 |
+| `path-param-restore` | Pre | 将 URL 路径参数替换时清除的字段恢复到请求体中 |
+| `hmac-verify` | Post | HMAC-SHA256 响应签名校验，与 `hmac-sign` 配对 |
+| `response-time` | Post | 记录响应状态码和内容长度，超过阈值时 WARNING |
+| `print-demo-post` | Post | 调试用，INFO 级别打印响应摘要 |
+
+### URL 路径参数解析
+
+URL 支持两种路径参数占位符格式：
+
+- **`#{varName}`** — 从请求体中取 `varName` 字段的值替换，替换后默认从 body 中移除该字段
+- **`{varName}`** — 同上，适用于 RESTful 风格的路径参数格式（如 `/api/stores/{id}`）
+
+```yaml
+# PUT /api/stores/{id}
+request_body:
+  id: 12345
+  name: 测试门店
+# → 请求 URL: PUT /api/stores/12345
+# → 请求体: {"name": "测试门店"}（id 已移除并替换到 URL）
+```
+
+被移除的字段会自动记录在 `global_config["_cleared_path_params"]` 中（如 `{"id": "12345"}`），可通过 `path-param-restore` 前置处理器恢复到请求体中，满足后端同时需要路径参数和 body 字段的场景：
+
+```yaml
+preprocessors:
+  - name: path-param-restore
+    config:
+      fields: all            # "all"（恢复全部）或 ["id"] 指定字段名
+```
 
 ### 自定义处理器
 

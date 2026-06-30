@@ -650,7 +650,40 @@ processor_configs:
 
 ### Built-in Processors
 
-- **hmac-sign** — HMAC-SHA256 signing processor (example); adds the `X-Signature` header to requests
+| Processor | Type | Description |
+|-----------|------|-------------|
+| `hmac-sign` | Pre | HMAC-SHA256 request signing; adds the `X-Signature` header |
+| `timestamp` | Pre | Injects `X-Timestamp` (ISO 8601 UTC) and `X-Request-Id` (UUIDv4) headers |
+| `print-demo` | Pre | Debug helper; logs the request summary at INFO level |
+| `path-param-restore` | Pre | Restores fields that were consumed from the request body during URL path parameter substitution |
+| `hmac-verify` | Post | HMAC-SHA256 response signature verification; counterpart to `hmac-sign` |
+| `response-time` | Post | Logs response status code and content length; warns when a threshold is exceeded |
+| `print-demo-post` | Post | Debug helper; logs the response summary at INFO level |
+
+### URL Path Parameter Resolution
+
+Two placeholder formats are supported in URLs:
+
+- **`#{varName}`** — The value of `varName` is taken from the request body and substituted into the URL. The field is then removed from the body by default.
+- **`{varName}`** — Same semantics, suitable for REST-style path parameters (e.g., `/api/stores/{id}`).
+
+```yaml
+# PUT /api/stores/{id}
+request_body:
+  id: 12345
+  name: "Example Store"
+# → Request URL: PUT /api/stores/12345
+# → Request body: {"name": "Example Store"}  (id was consumed and placed in the URL)
+```
+
+Consumed fields are recorded in `global_config["_cleared_path_params"]` (e.g., `{"id": "12345"}`). The `path-param-restore` pre-processor can restore them to the body if the backend requires the same field in both the URL and the body:
+
+```yaml
+preprocessors:
+  - name: path-param-restore
+    config:
+      fields: all            # "all" to restore everything, or ["id"] for specific fields
+```
 
 ### Custom Processors
 

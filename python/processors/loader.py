@@ -22,6 +22,9 @@ def discover_processors(processors_dir: Optional[str] = None) -> None:
     Modules are imported so that ``PreProcessor`` / ``PostProcessor``
     subclasses register themselves via ``__init_subclass__``.
 
+    Also loads the ``processors.builtin`` package which contains the
+    official built-in processors.
+
     Idempotent — subsequent calls are no-ops.
     """
     global _DISCOVERED
@@ -57,11 +60,15 @@ def discover_processors(processors_dir: Optional[str] = None) -> None:
         except Exception:
             logger.warning("Failed to import processor module %s", dotted, exc_info=True)
 
+    # Load built-in processors shipped with the framework
+    try:
+        importlib.import_module("processors.builtin")
+    except Exception:
+        logger.debug("Built-in processors not available", exc_info=True)
+
     _DISCOVERED = True
     logger.info(
         "Processors discovered: %d pre, %d post",
         len(_PRE_PROCESSOR_REGISTRY),
         len(_POST_PROCESSOR_REGISTRY),
     )
-
-

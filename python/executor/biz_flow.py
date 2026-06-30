@@ -104,7 +104,7 @@ class BizFlowExecutor(BaseExecutor):
             )
 
         try:
-            headers, body, url, base_url = self._prepare_step_request(step, app_name, path)
+            headers, body, url, base_url, cleared_params = self._prepare_step_request(step, app_name, path)
         except InheritResolutionError as e:
             return self._build_step_result(
                 step, step_id, "", path, {}, {},
@@ -114,14 +114,14 @@ class BizFlowExecutor(BaseExecutor):
 
         result = self._build_step_result(step, step_id, base_url, path, headers, body)
 
-        return self._execute_step_request(result, step, step_id, url, headers, body, app_name, method)
+        return self._execute_step_request(result, step, step_id, url, headers, body, app_name, method, cleared_params)
 
     def _prepare_step_request(
         self, step: Dict[str, Any], app_name: str, path: str
     ):
         """Extract headers, body, resolve inherit vars, and build URL.
 
-        Returns ``(headers, body, url, base_url)``.
+        Returns ``(headers, body, url, base_url, cleared_params)``.
         """
         headers = dict(step.get("request_head") or {})
         body = dict(step.get("request_body") or {})
@@ -130,7 +130,7 @@ class BizFlowExecutor(BaseExecutor):
         app_config = get_app(app_name) if app_name else {}
         base_url = app_config.get("baseURL", "") if app_config else {}
         url = self._build_url(base_url, path)
-        url, body = self._resolve_url_placeholders(url, body)
+        url, body, cleared_params = self._resolve_url_placeholders(url, body)
 
         if inherit_data:
             try:
@@ -142,7 +142,7 @@ class BizFlowExecutor(BaseExecutor):
                 # Signal error via a sentinel so caller can build error result
                 raise InheritResolutionError(str(e)) from e
 
-        return headers, body, url, base_url
+        return headers, body, url, base_url, cleared_params
 
     def _execute_step_request(
         self,
@@ -154,6 +154,7 @@ class BizFlowExecutor(BaseExecutor):
         body: Dict,
         app_name: str,
         method: str,
+        cleared_params: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Token resolution → preprocessors → HTTP request → assertions → postprocessors."""
 
@@ -176,8 +177,13 @@ class BizFlowExecutor(BaseExecutor):
 
         if preprocessors:
             try:
+                if global_config is not None and cleared_params:
+                    config_for_proc = dict(global_config)
+                    config_for_proc["_cleared_path_params"] = cleared_params
+                else:
+                    config_for_proc = global_config
                 headers, body, preprocessor_results = self._run_preprocessors(
-                    preprocessors, headers, body, global_config)
+                    preprocessors, headers, body, config_for_proc)
                 result["request_headers"] = dict(headers)
                 result["request_body"] = dict(body)
                 result["preprocessor_results"] = preprocessor_results
