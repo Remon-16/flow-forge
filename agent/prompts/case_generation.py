@@ -12,7 +12,7 @@ Key Requirements:
 4. **Assertion design**:
    - **Simple assertions (assert_dict, REQUIRED)**: For equality checks, format `{{"field_path": expected_value}}`, e.g., `{{"status_code": 200, "data.token": "<not_empty>"}}`
    - **Advanced assertions (assert_rules, OPTIONAL)**: For complex scenarios (numeric comparison, regex matching, list aggregation, etc.). Only use when simple equality comparison is insufficient; most cases do NOT need this.
-{render_operators_guide()}
+{render_operators_guide(lang="en")}
 5. **Priority tags**: P0 = Core flow, P1 = Important feature, P2 = Edge case
 
 Return cases in JSON format as follows:

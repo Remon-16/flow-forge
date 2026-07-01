@@ -8,7 +8,7 @@ DOC_PARSER_SYSTEM = f"""You are an API documentation parsing expert. Your task i
 Extraction Rules:
 1. Identify ALL API endpoints (HTTP method + URL path)
 2. For each endpoint, extract the following information:
-{render_field_list('interface_def')}
+{render_field_list('interface_def', lang="en")}
 
 3. Use reasonable defaults for fields that cannot be determined
 4. If the document describes request parameters, fill request_body in "field_name": "example_value" format

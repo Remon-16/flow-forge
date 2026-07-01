@@ -16,7 +16,7 @@ _ASSERTION_ENGINE_CAPABILITIES = f"""
 ### assert_rules (Advanced Assertion Rules)
 Each rule is a string: "<left_expression> <operator> [<right_expression>]"
 
-{render_operators_guide()}
+{render_operators_guide(lang="en")}
 """
 
 SINGLE_ASSERTION_SYSTEM = f"""You are a single-interface test assertion design expert. Your task is to generate precise assertions based on data-filled cases and interface definitions.

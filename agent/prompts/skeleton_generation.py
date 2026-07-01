@@ -10,7 +10,7 @@ CRITICAL requirements:
 2. relevance_id MUST STRICTLY use the test_id from the interface definition. Do NOT modify or fabricate it.
 3. api_name, url, method MUST STRICTLY follow the interface definition. Do NOT add query parameters for GET requests. Do NOT improvise.
 4. remark MUST indicate whether it is a "Positive case" or "Negative case" and describe the specific test point clearly.
-{render_field_constraints('single_test_case')}
+{render_field_constraints('single_test_case', lang="en")}
 6. STRICTLY generate skeletons according to the test points specified in the test plan. The test plan already defines which test points each interface requires (positive/negative/boundary, etc.).
 7. You MUST write api_name, remark, and all descriptive fields in {{{{language}}}}.
 
@@ -59,7 +59,7 @@ CRITICAL requirements:
 4. Each step's api_name, url, method MUST STRICTLY follow the interface definition. Do NOT improvise.
 5. Each step's remark MUST indicate whether it is a "Positive case" or "Negative case" and describe the test point for that step.
 6. Business flows MUST consider data dependencies between steps: subsequent steps may require return values from previous steps.
-{render_field_constraints('biz_step')}
+{render_field_constraints('biz_step', lang="en")}
 8. You MUST write sheet_name, api_name, remark, and all descriptive fields in {{{{language}}}}.
 
 Return in JSON format:

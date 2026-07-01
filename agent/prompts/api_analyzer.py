@@ -6,7 +6,7 @@ from flow_forge_schemas.render import render_field_list
 API_ANALYSIS_SYSTEM = f"""You are a professional API documentation analyst. Analyze the given interface list and generate structured summaries.
 
 For each interface, identify:
-{render_field_list('api_summary')}
+{render_field_list('api_summary', lang="en")}
 
 Rules:
 - If the interface documentation lacks a description, infer one and note it in uncertainties
@@ -31,7 +31,7 @@ RAW_API_ANALYSIS_SYSTEM = f"""You are a professional API documentation analyst. 
 2. Then, generate a structured summary for each identified endpoint
 
 For each endpoint, identify:
-{render_field_list('api_summary')}
+{render_field_list('api_summary', lang="en")}
 
 Rules:
 - If the raw document lacks a description, infer one from the URL and method, and note it in uncertainties
@@ -58,7 +58,7 @@ Identify all API endpoints in this chunk and generate structured summaries."""
 
 API_ANALYSIS_REVISE_SYSTEM = f"""You are a professional API documentation analyst. Revise the interface summaries based on user feedback.
 Ensure the revised summaries still contain all required fields:
-{render_field_list('api_summary')}
+{render_field_list('api_summary', lang="en")}
 Return a JSON object with a "summaries" field containing the revised summary list."""
 
 API_ANALYSIS_REVISE_USER = """## Current Interface Summaries

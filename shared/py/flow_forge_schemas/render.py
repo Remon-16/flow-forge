@@ -65,7 +65,7 @@ def _resolve_fields(entity_type: str) -> list[dict]:
 # ============================================================================
 
 
-def render_field_list(entity_type: str, lang: str = "zh") -> str:
+def render_field_list(entity_type: str, lang: str = "en") -> str:
     """生成字段列表描述文本（含类型和说明），供 LLM prompt 使用。
        Generate a field list description (with types and descriptions) for LLM prompts.
 
@@ -155,7 +155,7 @@ def render_json_example(
     return json.dumps(obj, ensure_ascii=False, indent=indent)
 
 
-def render_operators_guide(lang: str = "zh") -> str:
+def render_operators_guide(lang: str = "en") -> str:
     """生成断言运算符说明文本，供 assertion prompt 使用。
        Generate an assertion operators guide for assertion prompts.
 
@@ -249,7 +249,7 @@ def render_operators_guide(lang: str = "zh") -> str:
     return "\n".join(lines)
 
 
-def render_field_constraints(entity_type: str, lang: str = "zh") -> str:
+def render_field_constraints(entity_type: str, lang: str = "en") -> str:
     """生成字段约束说明 — 哪些字段由 LLM 填写，哪些不需要碰。
        Generate field constraint notes — which fields LLM should fill, which to skip.
 
