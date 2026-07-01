@@ -10,7 +10,8 @@ from graph.state import GraphState
 from prompts.render import render_prompt
 from prompts.url_correction import IFACE_URL_CORRECTION_SYSTEM, IFACE_URL_CORRECTION_USER
 
-from .helpers import _settings, _sl, save_pipeline_artifact, save_pipeline_state
+from . import helpers as _h
+from .helpers import _, _sl, save_pipeline_artifact, save_pipeline_state
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
     if _sl():
         _sl().log_node_start("validate_interface_urls", "url_check")
 
-    max_retries = _settings.url_correction_max_retries
+    max_retries = _h._settings.url_correction_max_retries
     bad_interfaces = []
     url_errors = []
 
@@ -55,7 +56,7 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
 
     print(_("url_check.found_bad", count=len(bad_interfaces)))
 
-    api_analyzer = ApiAnalyzer(_settings)
+    api_analyzer = ApiAnalyzer(_h._settings)
     corrected_count = 0
 
     for iface in bad_interfaces:

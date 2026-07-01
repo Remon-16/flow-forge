@@ -12,7 +12,8 @@ from doc_parser.pdf_parser import PdfParser
 from doc_parser.text_extractor import extract_text
 from graph.state import GraphState
 
-from .helpers import _settings, _sl, fmt_size, iface_to_dict, save_pipeline_artifact, save_pipeline_state, save_snapshot
+from . import helpers as _h
+from .helpers import _, _step, _sl, fmt_size, iface_to_dict, save_pipeline_artifact, save_pipeline_state, save_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -116,11 +117,11 @@ def parse_docs_node(state: GraphState) -> GraphState:
             logger.warning("API document '%s' contains very little text (%d chars). "
                            "Image-based content will NOT be processed.", api_path, len(raw_text))
         print(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
-        print(_("parse_docs.llm_extracting", model=_settings.llm_model))
+        print(_("parse_docs.llm_extracting", model=_h._settings.llm_model))
         if _sl():
-            _sl().log_event("llm_call", agent="DocParserAgent", model=_settings.llm_model,
+            _sl().log_event("llm_call", agent="DocParserAgent", model=_h._settings.llm_model,
                             text_length=len(raw_text))
-        parser = DocParserAgent(_settings)
+        parser = DocParserAgent(_h._settings)
         interfaces = parser.parse(
             raw_text=raw_text,
             file_name=Path(api_path).name,

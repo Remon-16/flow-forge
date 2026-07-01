@@ -15,7 +15,8 @@ from graph.state import GraphState
 from models.schema import InterfaceDef
 
 from plugins.skill_loader import load_skill_extensions
-from .helpers import _settings, _sl, save_pipeline_artifact, save_pipeline_state, save_snapshot, summary_to_interfaces
+from . import helpers as _h
+from .helpers import _step, _sl, save_pipeline_artifact, save_pipeline_state, save_snapshot, summary_to_interfaces
 from i18n import _
 
 logger = logging.getLogger(__name__)
@@ -41,23 +42,23 @@ def analyze_api_node(state: GraphState) -> GraphState:
     feedback = state.get("api_summary_feedback", "")
 
     _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
-    _exts = load_skill_extensions('api_analyzer', _settings, _skills_dir)
-    agent = ApiAnalyzer(_settings, skill_extensions=_exts)
+    _exts = load_skill_extensions('api_analyzer', _h._settings, _skills_dir)
+    agent = ApiAnalyzer(_h._settings, skill_extensions=_exts)
 
     print(_step("analyze_api", "pipeline.analyze_api"))
 
     if api_raw_text and not interfaces:
-        print(_("analyze_api.parsing_raw", model=_settings.llm_model))
+        print(_("analyze_api.parsing_raw", model=_h._settings.llm_model))
         if _sl():
             _sl().log_node_start("analyze_api", "2/9")
             _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
-                            model=_settings.llm_model, text_length=len(api_raw_text))
+                            model=_h._settings.llm_model, text_length=len(api_raw_text))
         if feedback:
             summary = agent.revise([], api_summary, feedback)
         else:
             summary = agent.analyze_raw_text(api_raw_text, Path(state.get("api_path", "")).name)
     else:
-        print(_("analyze_api.llm_calling", model=_settings.llm_model))
+        print(_("analyze_api.llm_calling", model=_h._settings.llm_model))
         if _sl():
             _sl().log_node_start("analyze_api", "2/9")
         if feedback:

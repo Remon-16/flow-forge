@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from config.settings import Settings
+from i18n import _, _step
 from knowledge.search import KnowledgeSearch
 from models.schema import InterfaceDef
 from flow_forge_schemas import SNAKE_TO_PASCAL, PASCAL_TO_SNAKE

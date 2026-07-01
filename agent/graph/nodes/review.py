@@ -11,7 +11,8 @@ from agents.base import BaseAgent
 from graph.state import GraphState
 from prompts.render import render_prompt
 
-from .helpers import _settings, _sl, save_pipeline_artifact, save_pipeline_state
+from . import helpers as _h
+from .helpers import _, _step, _sl, save_pipeline_artifact, save_pipeline_state
 
 logger = logging.getLogger(__name__)
 
@@ -94,14 +95,14 @@ def revise_plan_node(state: GraphState) -> GraphState:
             return state
 
     agent = BaseAgent(
-        api_key=_settings.llm_api_key,
-        model=_settings.llm_model,
+        api_key=_h._settings.llm_api_key,
+        model=_h._settings.llm_model,
         temperature=0.3,
-        max_tokens=_settings.llm_max_tokens,
-        base_url=_settings.llm_base_url,
-        rate_limit_delay=_settings.llm_rate_limit_delay,
-        retry_base_delay=_settings.llm_retry_base_delay,
-        max_concurrency=_settings.llm_max_concurrency,
+        max_tokens=_h._settings.llm_max_tokens,
+        base_url=_h._settings.llm_base_url,
+        rate_limit_delay=_h._settings.llm_rate_limit_delay,
+        retry_base_delay=_h._settings.llm_retry_base_delay,
+        max_concurrency=_h._settings.llm_max_concurrency,
     )
 
     if feedback_type == "annotations":
@@ -129,7 +130,7 @@ def revise_plan_node(state: GraphState) -> GraphState:
             requirement_analysis=str(analysis),
             api_summary=str(api_summary),
         )
-        print(_("review.revising_text_progress", model=_settings.llm_model))
+        print(_("review.revising_text_progress", model=_h._settings.llm_model))
 
     revised = agent.call_llm(prompt, system)
     state["plan_md"] = revised

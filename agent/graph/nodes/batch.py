@@ -15,7 +15,8 @@ from plugins.loader import load_all_plugins
 from plugins.skill_loader import load_skill_extensions
 from writers.yaml_writer import YamlWriter
 
-from .helpers import _settings, _knowledge, _sl, save_pipeline_state
+from . import helpers as _h
+from .helpers import _, _step, _sl, save_pipeline_state
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
     output_dir = state.get("output_dir", "./output")
     cases_dir = state.get("cases_dir") or state.get("output_dir", "./output")
     user_guidance = state.get("user_guidance", "")
-    batch_size = state.get("batch_size", _settings.batch_size)
+    batch_size = state.get("batch_size", _h._settings.batch_size)
     reference_dir = state.get("reference_dir", "")
     api_summary = state.get("api_summary", [])
 
@@ -68,19 +69,19 @@ def batch_controller_node(state: GraphState) -> GraphState:
         _sl().log_node_start("batch_controller", "8/10")
 
     _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
-    _single_exts = load_skill_extensions('skeleton_generator', _settings, _skills_dir)
-    _biz_exts = load_skill_extensions('skeleton_generator', _settings, _skills_dir)
-    single_skel_gen = SingleSkeletonGenerator(_settings, _knowledge, skill_extensions=_single_exts)
-    biz_skel_gen = BizSkeletonGenerator(_settings, _knowledge, skill_extensions=_biz_exts)
+    _single_exts = load_skill_extensions('skeleton_generator', _h._settings, _skills_dir)
+    _biz_exts = load_skill_extensions('skeleton_generator', _h._settings, _skills_dir)
+    single_skel_gen = SingleSkeletonGenerator(_h._settings, _h._knowledge, skill_extensions=_single_exts)
+    biz_skel_gen = BizSkeletonGenerator(_h._settings, _h._knowledge, skill_extensions=_biz_exts)
 
     user_module_paths = [
-        p.strip() for p in _settings.plugin_modules if p.strip()
-    ] if _settings.enable_plugins else []
-    plugins = load_all_plugins(_settings, _knowledge, user_module_paths, user_guidance)
+        p.strip() for p in _h._settings.plugin_modules if p.strip()
+    ] if _h._settings.enable_plugins else []
+    plugins = load_all_plugins(_h._settings, _h._knowledge, user_module_paths, user_guidance)
     plugin_names = [p.declaration.plugin_name for p in plugins]
     print(_("batch.plugins_loaded", names=plugin_names))
 
-    controller = BatchController(_settings)
+    controller = BatchController(_h._settings)
     controller._batch_size = batch_size
 
     api_path = state.get("api_path", "")

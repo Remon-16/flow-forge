@@ -11,7 +11,8 @@ from agents.plan_generator import PlanGenerator
 from graph.state import GraphState
 from plugins.skill_loader import load_skill_extensions
 
-from .helpers import _settings, _knowledge, _sl, save_pipeline_state, summarize_reference_dir
+from . import helpers as _h
+from .helpers import _, _step, _sl, save_pipeline_state, summarize_reference_dir
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +29,8 @@ def generate_plan_node(state: GraphState) -> GraphState:
     reference_summary = summarize_reference_dir(reference_dir)
 
     _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
-    _exts = load_skill_extensions('plan_generator', _settings, _skills_dir)
-    agent = PlanGenerator(_settings, _knowledge, skill_extensions=_exts)
+    _exts = load_skill_extensions('plan_generator', _h._settings, _skills_dir)
+    agent = PlanGenerator(_h._settings, _h._knowledge, skill_extensions=_exts)
 
     analysis = state.get("requirement_analysis", {})
     interfaces = state.get("interfaces", [])
@@ -38,10 +39,10 @@ def generate_plan_node(state: GraphState) -> GraphState:
 
     if reference_dir:
         print(_step("generate_plan", "pipeline.generate_plan_incremental"))
-        print(_("plan.generating_incremental", model=_settings.llm_model, reference_dir=reference_dir))
+        print(_("plan.generating_incremental", model=_h._settings.llm_model, reference_dir=reference_dir))
     else:
         print(_step("generate_plan", "pipeline.generate_plan"))
-    print(_("plan.generating", model=_settings.llm_model))
+    print(_("plan.generating", model=_h._settings.llm_model))
     if _sl():
         _sl().log_node_start("generate_plan", "4/9")
 
