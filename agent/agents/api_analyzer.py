@@ -17,6 +17,7 @@ from prompts.api_analyzer import (
     RAW_API_ANALYSIS_USER,
     RAW_API_CHUNK_NOTICE,
 )
+from prompts.render import render_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,6 @@ class ApiAnalyzer(BaseAgent):
             api_path, method, description, need_token, auth_type,
             request_summary, response_summary, notes, uncertainties
         """
-        from prompts.render import render_prompt
-
         iface_json = json.dumps(interfaces, ensure_ascii=False, indent=2)
         prompt = render_prompt(
             API_ANALYSIS_USER,
@@ -77,7 +76,8 @@ class ApiAnalyzer(BaseAgent):
         Returns same format as :meth:`analyze`.
         """
         file_label = file_name or "unknown"
-        test_prompt = RAW_API_ANALYSIS_USER.format(
+        test_prompt = render_prompt(
+            RAW_API_ANALYSIS_USER,
             file_name=file_label, raw_text=raw_text,
         )
         input_tokens = self._estimate_input_tokens(RAW_API_ANALYSIS_SYSTEM, test_prompt)
@@ -103,7 +103,8 @@ class ApiAnalyzer(BaseAgent):
 
     def _analyze_raw_chunk(self, chunk: str, file_name: str) -> List[Dict[str, Any]]:
         """Process a single chunk of the raw API document."""
-        prompt = RAW_API_ANALYSIS_USER.format(
+        prompt = render_prompt(
+            RAW_API_ANALYSIS_USER,
             file_name=file_name, raw_text=chunk,
         )
         result = self.call_llm_json(prompt, RAW_API_ANALYSIS_SYSTEM)
@@ -139,8 +140,6 @@ class ApiAnalyzer(BaseAgent):
         feedback: str,
     ) -> List[Dict[str, Any]]:
         """Revise the API summary based on user feedback."""
-        from prompts.render import render_prompt
-        from prompts.api_analyzer import API_ANALYSIS_REVISE_SYSTEM, API_ANALYSIS_REVISE_USER
 
         iface_json = json.dumps(interfaces, ensure_ascii=False, indent=2)
         summary_json = json.dumps(current_summary, ensure_ascii=False, indent=2)
