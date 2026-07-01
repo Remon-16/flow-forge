@@ -48,3 +48,4 @@ logs/
 report/
 node_modules/
 .claude/
+flow_forge_schemas.egg-info/
