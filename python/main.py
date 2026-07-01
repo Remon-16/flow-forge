@@ -13,6 +13,12 @@ import os
 import sys
 from typing import Any
 
+# 注入 shared 包路径 — 使 flow_forge_schemas 可导入
+# Inject shared package path — makes flow_forge_schemas importable
+_SHARED = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "shared", "py"))
+if os.path.isdir(_SHARED) and _SHARED not in sys.path:
+    sys.path.insert(0, _SHARED)
+
 from config.config_manager import initialize, get_all, ConfigError
 from excel_reader.excel_parser import ExcelParser
 from executor.factory import ExecutorFactory

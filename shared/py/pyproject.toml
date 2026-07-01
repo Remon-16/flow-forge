@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "flow-forge-schemas"
+version = "1.0.0"
+description = "公共测试用例 Schema 定义 — 跨 python/agent/studio 共享。 / Shared test case schema definitions for python, agent, and studio."
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["."]

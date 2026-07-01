@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from config.settings import Settings
 from knowledge.search import KnowledgeSearch
 from models.schema import InterfaceDef
+from flow_forge_schemas import SNAKE_TO_PASCAL, PASCAL_TO_SNAKE
 from prompts.plan_generation import (
     REFERENCE_DIR_EMPTY,
     REFERENCE_DIR_GUIDANCE,

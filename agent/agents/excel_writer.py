@@ -11,29 +11,9 @@ from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
 from models.schema import BizFlow, InterfaceDef, SingleTestCase
+from flow_forge_schemas import API_COLUMNS as _API_COLUMNS, CASE_COLUMNS as _CASE_COLUMNS, BIZ_COLUMNS as _BIZ_COLUMNS
 
 logger = logging.getLogger(__name__)
-
-# Column headers matching executor's ExcelParser expectations
-_API_COLUMNS = [
-    "TestID", "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-    "PreProcessors", "PostProcessors", "Remark",
-]
-
-_CASE_COLUMNS = [
-    "TestID", "RelevanceID", "Tag",
-    "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-    "PreProcessors", "PostProcessors", "Remark",
-]
-
-_BIZ_COLUMNS = [
-    "StepID", "RelevanceID", "Inherit",
-    "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-    "PreProcessors", "PostProcessors", "Tag", "Remark",
-]
 
 _HEADER_FONT = Font(name="微软雅黑", bold=True, size=11)
 _HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")

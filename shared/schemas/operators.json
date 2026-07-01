@@ -1,0 +1,19 @@
+{
+  "operators": [
+    {"name": "is_not_null",    "pattern": "\\s+is_not_null\\s*$"},
+    {"name": "is_null",        "pattern": "\\s+is_null\\s*$"},
+    {"name": "typeof",         "pattern": "\\s+typeof\\s+(.+)$"},
+    {"name": "not_contains",   "pattern": "\\s+not_contains\\s+(.+)$"},
+    {"name": "contains",       "pattern": "\\s+contains\\s+(.+)$"},
+    {"name": "in",             "pattern": "\\s+\\bin\\b\\s+(.+)$"},
+    {"name": "!=",             "pattern": "\\s+!=\\s*(.+)$"},
+    {"name": "==",             "pattern": "\\s+==\\s*(.+)$"},
+    {"name": ">=",             "pattern": "\\s+>=\\s*(.+)$"},
+    {"name": "<=",             "pattern": "\\s+<=\\s*(.+)$"},
+    {"name": "=~",             "pattern": "\\s+=~\\s*(.+)$"},
+    {"name": ">",              "pattern": "\\s+>\\s*(.+)$"},
+    {"name": "<",              "pattern": "\\s+<\\s*(.+)$"}
+  ],
+  "valid_functions": ["SUM", "SUM_PRODUCT", ".length()"],
+  "valid_types": ["int", "float", "str", "bool", "list", "dict", "int_or_float"]
+}

@@ -1,21 +1,24 @@
-"""Prompt templates for test case skeleton generation."""
+# 测试用例骨架生成提示词模板。
+# Prompt templates for test case skeleton generation.
 
-SINGLE_SKELETON_SYSTEM = """You are a single-interface test case skeleton design expert. Your task is to generate skeleton structures for single-interface test cases based on the test plan and interface definitions.
+from flow_forge_schemas.render import render_field_constraints
+
+SINGLE_SKELETON_SYSTEM = f"""You are a single-interface test case skeleton design expert. Your task is to generate skeleton structures for single-interface test cases based on the test plan and interface definitions.
 
 CRITICAL requirements:
 1. test_id MUST be a meaningful identifier (e.g., TC_LOGIN_POS_001) that reflects the test content (API name abbreviation) and direction (POS/NEG). It MUST NOT be a plain sequential number.
 2. relevance_id MUST STRICTLY use the test_id from the interface definition. Do NOT modify or fabricate it.
 3. api_name, url, method MUST STRICTLY follow the interface definition. Do NOT add query parameters for GET requests. Do NOT improvise.
 4. remark MUST indicate whether it is a "Positive case" or "Negative case" and describe the specific test point clearly.
-5. Do NOT fill in request_head, request_body, status_code, tag, assert_dict, assert_rules — these will be populated in subsequent steps.
+{render_field_constraints('single_test_case')}
 6. STRICTLY generate skeletons according to the test points specified in the test plan. The test plan already defines which test points each interface requires (positive/negative/boundary, etc.).
-7. You MUST write api_name, remark, and all descriptive fields in {{language}}.
+7. You MUST write api_name, remark, and all descriptive fields in {{{{language}}}}.
 
 Return in JSON format:
 ```json
-{
+{{
   "single_skeletons": [
-    {
+    {{
       "test_id": "TC_LOGIN_POS_001",
       "relevance_id": "api_login_post",
       "api_name": "User Login",
@@ -23,10 +26,9 @@ Return in JSON format:
       "method": "POST",
       "url": "/api/user/login",
       "remark": "Positive case - Verify normal login"
-    }
+    }}
   ]
-}
-```
+}}
 """
 
 SINGLE_SKELETON_USER = """Generate single-interface test case skeletons based on the following information:
@@ -48,26 +50,26 @@ SINGLE_SKELETON_USER = """Generate single-interface test case skeletons based on
 Return the single-interface test case skeleton list in JSON format (single_skeletons field).
 """
 
-BIZ_SKELETON_SYSTEM = """You are a business flow test case skeleton design expert. Your task is to generate skeleton structures for business flow test cases based on the test plan and interface definitions.
+BIZ_SKELETON_SYSTEM = f"""You are a business flow test case skeleton design expert. Your task is to generate skeleton structures for business flow test cases based on the test plan and interface definitions.
 
 CRITICAL requirements:
-1. sheet_name MUST be a descriptive business scenario name in {{language}} that clearly describes the flow purpose.
+1. sheet_name MUST be a descriptive business scenario name in {{{{language}}}} that clearly describes the flow purpose.
 2. step_id MUST be a meaningful identifier (e.g., Step_Login, Step_CreateOrder) that reflects the step's purpose. It MUST NOT be a plain sequential number.
 3. Each step's relevance_id MUST STRICTLY use the test_id from the interface definition. Do NOT modify or fabricate it.
 4. Each step's api_name, url, method MUST STRICTLY follow the interface definition. Do NOT improvise.
 5. Each step's remark MUST indicate whether it is a "Positive case" or "Negative case" and describe the test point for that step.
 6. Business flows MUST consider data dependencies between steps: subsequent steps may require return values from previous steps.
-7. Do NOT fill in request_head, request_body, status_code, tag, Inherit, assert_dict, assert_rules.
-8. You MUST write sheet_name, api_name, remark, and all descriptive fields in {{language}}.
+{render_field_constraints('biz_step')}
+8. You MUST write sheet_name, api_name, remark, and all descriptive fields in {{{{language}}}}.
 
 Return in JSON format:
 ```json
-{
+{{
   "biz_skeletons": [
-    {
+    {{
       "sheet_name": "User Coupon Claim and Order Flow",
       "steps": [
-        {
+        {{
           "step_id": "Step_Login",
           "relevance_id": "api_login_post",
           "api_name": "User Login",
@@ -75,12 +77,11 @@ Return in JSON format:
           "method": "POST",
           "url": "/api/user/login",
           "remark": "Step 1 - Positive - Login to obtain token for subsequent steps"
-        }
+        }}
       ]
-    }
+    }}
   ]
-}
-```
+}}
 """
 
 BIZ_SKELETON_USER = """Generate business flow test case skeletons based on the following information:

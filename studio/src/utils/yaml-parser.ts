@@ -2,6 +2,7 @@ import yaml from 'js-yaml'
 import { toRaw } from 'vue'
 import type { YamlCase, SingleYamlCase, BizYamlCase, InterfaceYamlCase } from '../types/yaml'
 import type { PreProcessorItem, PostProcessorItem } from '../types/excel'
+import { PASCAL_TO_SNAKE } from '@flow-forge-schemas'
 
 /**
  * Parse a YAML string into a YamlCase object.

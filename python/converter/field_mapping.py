@@ -1,44 +1,18 @@
-"""Field name mapping between snake_case (YAML / Agent dataclass) and PascalCase (Excel column headers)."""
+"""字段名映射 — 从共享 schema 包重导出。
+   Field name mapping — re-exported from the shared schema package."""
 
-# Columns whose values are JSON objects/arrays in memory but JSON strings in Excel
-JSON_COLUMNS = frozenset({
-    "request_head", "request_body", "assert_dict", "assert_rules",
-    "preprocessors", "postprocessors",
-})
+from flow_forge_schemas import (
+    JSON_FIELDS as JSON_COLUMNS,
+    SNAKE_TO_PASCAL,
+    PASCAL_TO_SNAKE,
+    snake_to_pascal,
+    pascal_to_snake,
+)
 
-# snake_case → PascalCase
-SNAKE_TO_PASCAL: dict[str, str] = {
-    "test_id": "TestID",
-    "api_name": "APIName",
-    "app_name": "AppName",
-    "method": "Method",
-    "url": "URL",
-    "request_head": "RequestHead",
-    "request_body": "RequestBody",
-    "status_code": "StatusCode",
-    "assert_dict": "AssertDict",
-    "assert_rules": "AssertRules",
-    "preprocessors": "PreProcessors",
-    "postprocessors": "PostProcessors",
-    "remark": "Remark",
-    "relevance_id": "RelevanceID",
-    "tag": "Tag",
-    "step_id": "StepID",
-    "inherit": "Inherit",
-}
-
-# PascalCase → snake_case
-PASCAL_TO_SNAKE: dict[str, str] = {v: k for k, v in SNAKE_TO_PASCAL.items()}
-
-
-def snake_to_pascal(snake_name: str) -> str:
-    """Convert a single snake_case field name to PascalCase."""
-    return SNAKE_TO_PASCAL.get(snake_name, snake_name)
-
-
-def pascal_to_snake(pascal_name: str) -> str:
-    """Convert a single PascalCase field name to snake_case."""
-    return PASCAL_TO_SNAKE.get(pascal_name, pascal_name)
+__all__ = [
+    "JSON_COLUMNS", "SNAKE_TO_PASCAL", "PASCAL_TO_SNAKE",
+    "snake_to_pascal", "pascal_to_snake", "convert_row_to_snake",
+]
 
 
 def convert_row_to_snake(

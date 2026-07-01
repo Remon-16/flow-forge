@@ -16,6 +16,8 @@ _BIZ_START_SHEET_INDEX = 2
 
 _SIMPLE_FIELDS = ("APIName", "AppName", "Method", "URL", "StatusCode")
 _JSON_FIELDS = ("RequestHead", "RequestBody")
+# Excel header names (PascalCase) — derived from shared schema
+# Excel 列头名称 (PascalCase) — 从共享 schema 推导
 _SHEET2_REQUIRED = ("TestID", "RelevanceID")
 _BIZ_REQUIRED = ("StepID", "RelevanceID")
 

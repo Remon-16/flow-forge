@@ -16,20 +16,13 @@ logger = logging.getLogger(__name__)
 
 _FUNC_RE = re.compile(r"^(SUM_PRODUCT|SUM)\((.+)\)$")
 
+# 运算符模式 — 从共享 schema 包导入
+# Operator patterns — imported from shared schema package
+from flow_forge_schemas import OPERATOR_LIST
+
 _OPERATOR_PATTERNS = [
-    (re.compile(r"\s+is_not_null\s*$"), "is_not_null", False),
-    (re.compile(r"\s+is_null\s*$"), "is_null", False),
-    (re.compile(r"\s+typeof\s+(.+)$"), "typeof", True),
-    (re.compile(r"\s+not_contains\s+(.+)$"), "not_contains", True),
-    (re.compile(r"\s+contains\s+(.+)$"), "contains", True),
-    (re.compile(r"\s+\bin\b\s+(.+)$"), "in", True),
-    (re.compile(r"\s+!=\s*(.+)$"), "!=", True),
-    (re.compile(r"\s+==\s*(.+)$"), "==", True),
-    (re.compile(r"\s+>=\s*(.+)$"), ">=", True),
-    (re.compile(r"\s+<=\s*(.+)$"), "<=", True),
-    (re.compile(r"\s+=~\s*(.+)$"), "=~", True),
-    (re.compile(r"\s+>\s*(.+)$"), ">", True),
-    (re.compile(r"\s+<\s*(.+)$"), "<", True),
+    (re.compile(op["pattern"]), op["name"], op["name"] not in ("is_not_null", "is_null"))
+    for op in OPERATOR_LIST
 ]
 
 

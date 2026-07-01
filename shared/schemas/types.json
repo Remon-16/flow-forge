@@ -1,0 +1,88 @@
+{
+  "interface_def": {
+    "description": "API接口定义 / API interface definition",
+    "fields": [
+      {"name": "test_id", "type": "string", "required": true,
+       "description": "用例唯一标识 / Unique test case identifier", "example": "API_001"},
+      {"name": "api_name", "type": "string", "required": true,
+       "description": "接口名称 / API name", "example": "用户登录"},
+      {"name": "app_name", "type": "string", "required": false, "default": "",
+       "description": "应用名称 / Application name", "example": "UserService"},
+      {"name": "method", "type": "string", "required": false, "default": "GET",
+       "description": "HTTP方法 / HTTP method", "example": "POST"},
+      {"name": "url", "type": "string", "required": true,
+       "description": "接口路径 / API endpoint path", "example": "/api/v1/login"},
+      {"name": "request_head", "type": "dict", "required": false, "default": "{}",
+       "description": "请求头 / Request headers", "is_json": true},
+      {"name": "request_body", "type": "dict", "required": false, "default": "{}",
+       "description": "请求体 / Request body", "is_json": true},
+      {"name": "status_code", "type": "int", "required": false, "default": "200",
+       "description": "期望HTTP状态码 / Expected HTTP status code"},
+      {"name": "assert_dict", "type": "dict", "required": false, "default": "{}",
+       "description": "断言字典 / Assertion dictionary (field_path: expected_value)", "is_json": true},
+      {"name": "assert_rules", "type": "list", "required": false, "default": "[]",
+       "description": "断言规则列表 / Assertion rules list", "is_json": true},
+      {"name": "preprocessors", "type": "list", "required": false, "default": "[]",
+       "description": "前置处理器 / Pre-processors", "is_json": true},
+      {"name": "postprocessors", "type": "list", "required": false, "default": "[]",
+       "description": "后置处理器 / Post-processors", "is_json": true},
+      {"name": "remark", "type": "string", "required": false, "default": "",
+       "description": "备注 / Remark"}
+    ]
+  },
+  "single_test_case": {
+    "description": "单接口测试用例 / Single API test case",
+    "extends": "interface_def",
+    "extra_fields": [
+      {"name": "relevance_id", "type": "string", "required": true,
+       "description": "关联接口TestID / Referenced interface TestID"},
+      {"name": "tag", "type": "string", "required": false, "default": "P1",
+       "description": "用例等级 / Test case priority (P0-P4)"}
+    ]
+  },
+  "biz_step": {
+    "description": "业务链路步骤 / Business flow step",
+    "extends": "single_test_case",
+    "replace_fields": [
+      {"name": "test_id", "remove": true},
+      {"name": "step_id", "type": "string", "required": true,
+       "description": "步骤唯一标识 / Unique step identifier", "example": "S001"}
+    ],
+    "extra_fields": [
+      {"name": "inherit", "type": "dict", "required": false, "default": "{}",
+       "description": "跨步骤数据依赖 / Cross-step data dependency (key: StepID.response.path)", "is_json": true}
+    ]
+  },
+  "biz_flow": {
+    "description": "业务链路 / Business flow (one Excel sheet)",
+    "fields": [
+      {"name": "sheet_name", "type": "string", "required": true,
+       "description": "链路名称 / Flow name", "example": "用户注册流程"},
+      {"name": "steps", "type": "list", "required": true,
+       "description": "步骤列表 / List of biz steps", "item_type": "biz_step"}
+    ]
+  },
+  "api_summary": {
+    "description": "API摘要信息 / API summary information",
+    "fields": [
+      {"name": "api_path", "type": "string", "required": true,
+       "description": "接口路径 / API path"},
+      {"name": "method", "type": "string", "required": true,
+       "description": "HTTP方法 / HTTP method"},
+      {"name": "description", "type": "string", "required": true,
+       "description": "接口功能描述 / API function description"},
+      {"name": "need_token", "type": "bool", "required": false, "default": "true",
+       "description": "是否需要认证令牌 / Whether authentication token is required"},
+      {"name": "auth_type", "type": "string", "required": false, "default": "Bearer",
+       "description": "认证方式 / Authentication type"},
+      {"name": "request_summary", "type": "string", "required": false, "default": "",
+       "description": "请求参数摘要 / Request parameters summary"},
+      {"name": "response_summary", "type": "string", "required": false, "default": "",
+       "description": "响应结构摘要 / Response structure summary"},
+      {"name": "notes", "type": "string", "required": false, "default": "",
+       "description": "补充说明 / Additional notes"},
+      {"name": "uncertainties", "type": "string", "required": false, "default": "",
+       "description": "不确定项 / Uncertainties"}
+    ]
+  }
+}

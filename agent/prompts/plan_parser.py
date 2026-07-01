@@ -1,7 +1,5 @@
-"""计划解析提示词 — 从 Markdown 测试计划中提取结构化信息。
-
-Plan parser prompts for extracting structured data from Markdown test plans.
-"""
+# 计划解析提示词 — 从 Markdown 测试计划中提取结构化信息。
+# Plan parser prompts for extracting structured data from Markdown test plans.
 
 PLAN_PARSER_SYSTEM = """You are a professional test plan parser. Extract structured
 information from Markdown test plans.
@@ -31,7 +29,6 @@ Return the result in JSON format as follows:
     }
   ]
 }
-```
 """
 
 PLAN_PARSER_USER = "Parse the following test plan and extract structured information:\n\n{{plan_md}}"

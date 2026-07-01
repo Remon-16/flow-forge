@@ -86,27 +86,14 @@ export interface WorkbookData {
   bizFlows: BizFlow[]
 }
 
-// --- Column definitions ---
+// --- Column definitions — re-exported from shared schema package ---
 
-export const API_DEF_COLUMNS = [
-  'TestID', 'APIName', 'AppName', 'Method', 'URL',
-  'RequestHead', 'RequestBody', 'StatusCode', 'AssertDict', 'AssertRules',
-  'PreProcessors', 'PostProcessors', 'Remark',
-] as const
-
-export const SINGLE_CASE_COLUMNS = [
-  'TestID', 'RelevanceID', 'Tag', 'APIName', 'AppName', 'Method', 'URL',
-  'RequestHead', 'RequestBody', 'StatusCode', 'AssertDict', 'AssertRules',
-  'PreProcessors', 'PostProcessors', 'Remark',
-] as const
-
-export const BIZ_STEP_COLUMNS = [
-  'StepID', 'RelevanceID', 'Inherit', 'APIName', 'AppName', 'Method', 'URL',
-  'RequestHead', 'RequestBody', 'StatusCode', 'AssertDict', 'AssertRules',
-  'PreProcessors', 'PostProcessors', 'Tag', 'Remark',
-] as const
-
-export const JSON_COLUMNS = ['RequestHead', 'RequestBody', 'AssertDict', 'PreProcessors', 'PostProcessors'] as const
+export {
+  API_COLUMNS as API_DEF_COLUMNS,
+  CASE_COLUMNS as SINGLE_CASE_COLUMNS,
+  BIZ_COLUMNS as BIZ_STEP_COLUMNS,
+  JSON_FIELDS as JSON_COLUMNS,
+} from '@flow-forge-schemas'
 
 // --- Processor types ---
 

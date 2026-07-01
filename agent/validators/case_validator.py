@@ -20,11 +20,13 @@ def _get_field(obj, field, default=None):
 
 _VAR_REF_RE = re.compile(r"#\{([^}]+)\}")
 
-_REQUIRED_SINGLE = ["test_id", "relevance_id", "api_name", "method", "url"]
-_REQUIRED_BIZ_STEP = ["step_id", "relevance_id", "api_name", "method", "url"]
-_REQUIRED_BIZ_FLOW = ["sheet_name", "steps"]
-_VALID_HTTP_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH"}
-_VALID_TAGS = {"P0", "P1", "P2", "P3"}
+from flow_forge_schemas import (
+    REQUIRED_SINGLE as _REQUIRED_SINGLE,
+    REQUIRED_BIZ_STEP as _REQUIRED_BIZ_STEP,
+    REQUIRED_BIZ_FLOW as _REQUIRED_BIZ_FLOW,
+    VALID_HTTP_METHODS as _VALID_HTTP_METHODS,
+    VALID_TAGS as _VALID_TAGS,
+)
 
 
 class CaseValidator(BaseAgent):

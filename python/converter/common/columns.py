@@ -1,28 +1,6 @@
-"""Excel 列头定义 — excel_reader 和 excel_writer 共享。
-   Excel column header definitions — shared by excel_reader and excel_writer."""
+"""Excel 列头定义 — 从共享 schema 包重导出。
+   Excel column header definitions — re-exported from the shared schema package."""
 
-# 接口定义列（13 列）
-# Interface definition columns (13 columns)
-API_COLUMNS = [
-    "TestID", "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-    "PreProcessors", "PostProcessors", "Remark",
-]
+from flow_forge_schemas import API_COLUMNS, CASE_COLUMNS, BIZ_COLUMNS
 
-# 单接口用例列（15 列）
-# Single case columns (15 columns)
-CASE_COLUMNS = [
-    "TestID", "RelevanceID", "Tag",
-    "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-    "PreProcessors", "PostProcessors", "Remark",
-]
-
-# 业务链路步骤列（16 列）
-# Business flow step columns (16 columns)
-BIZ_COLUMNS = [
-    "StepID", "RelevanceID", "Inherit",
-    "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules",
-    "PreProcessors", "PostProcessors", "Tag", "Remark",
-]
+__all__ = ["API_COLUMNS", "CASE_COLUMNS", "BIZ_COLUMNS"]

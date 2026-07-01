@@ -1,4 +1,7 @@
-// Operators in priority order — longest/longer patterns first to avoid ambiguity
+// 运算符模式 — 按优先级排序（最长模式优先以避免歧义）。
+// Operator patterns — priority-ordered (longest first to avoid ambiguity).
+// 注意: 正则表达式是 TypeScript 特定的，与 Python 版本语法不同。
+// Note: regex patterns are TypeScript-specific, syntax differs from Python version.
 const OPERATOR_PATTERNS: { op: string; regex: RegExp; needsExpected: boolean }[] = [
   { op: 'is_not_null',  regex: /\s+is_not_null\s*$/i,       needsExpected: false },
   { op: 'is_null',      regex: /\s+is_null\s*$/i,           needsExpected: false },
@@ -15,8 +18,7 @@ const OPERATOR_PATTERNS: { op: string; regex: RegExp; needsExpected: boolean }[]
   { op: '<',            regex: /\s*<\s*/,                   needsExpected: true },
 ]
 
-const VALID_FUNCTIONS = ['.length()', 'SUM', 'SUM_PRODUCT']
-const VALID_TYPES = ['int', 'float', 'str', 'bool', 'list', 'dict', 'int_or_float']
+import { VALID_FUNCTIONS, VALID_TYPES } from '@flow-forge-schemas'
 
 export interface AssertRuleParsed {
   raw: string
