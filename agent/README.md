@@ -44,8 +44,8 @@ graph TD
 7. **人工审核**（强制中断点）：展示计划，用户可批准、提出文字修改意见或按批注文件修改。支持反馈循环直至批准
 
 8. **用例生成**（骨架 + 插件流水线）：
-   - 骨架生成：一次性生成全部单接口/业务链路用例骨架（含 test_id、relevance_id、URL 等元数据）
-   - URL 校验：检查骨架中所有 URL 是否在文档原文中存在，不存在的提交纠错重试
+   - 骨架生成：按 `skeleton_batch_size`（默认 30）分批生成单接口/业务链路用例骨架。测试点超过分批大小时自动拆分为多批，每批独立调用 LLM 后合并结果
+   - URL 校验：检查骨架中所有 URL 是否在文档原文中存在，不存在的提交纠错重试。校验策略（fail/warn/skip）可通过 `validation.rules` 中的 `url_check` 配置
    - 插件执行：按 PLUGIN_MODULES 配置的插件列表依次执行（如数据填充、断言生成等）
 
 9. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出
@@ -367,6 +367,7 @@ pipeline:           # 流水线设置
   max_steps_no_progress: 5
   consecutive_batch_failure_limit: 3
   url_correction_max_retries: 3
+  skeleton_batch_size: 30   # 骨架生成分批大小（每个批次包含的测试点数量）
   auto: false        # 自动模式：跳过人工审核（夜间批量生成时建议开启）
 
 knowledge:          # 知识库（grep 文本搜索）
@@ -376,6 +377,15 @@ knowledge:          # 知识库（grep 文本搜索）
 validation:         # 用例校验
   enabled: true
   max_retries: 3
+  rules:            # 校验规则列表（每项: check + strategy）
+    - check: skeleton_count     # 骨架数量校验
+      strategy: fail            # fail | warn | skip
+    - check: url_check          # URL 存在性校验
+      strategy: warn            # fail | warn | skip
+    - check: data_fill_count    # 数据填充数量校验
+      strategy: fail            # fail | warn | skip
+    - check: assertion_count    # 断言生成数量校验
+      strategy: fail            # fail | warn | skip
 
 output:             # 输出设置
   dir: ./output
@@ -470,7 +480,7 @@ agent:              # 界面语言
 ## 反幻觉与错误处理
 
 - **纯文本模态限制**：智能体仅支持文本输入。PDF 中的图片/扫描件内容不会被提取，请提供文本层可提取的 PDF 或纯文本格式文档。传入二进制文件（如 .png、.jpg）会明确报错。
-- **LLM 输出数量校验（反幻觉）**：骨架生成、数据填充、断言生成和 URL 纠错后，自动校验 LLM 输出条目数与输入是否一致。数量不匹配时自动重试（利用 temperature > 0 产生不同输出），重试耗尽后抛出 `ValueError`。
+- **LLM 输出数量校验（反幻觉）**：骨架生成、数据填充、断言生成和 URL 纠错后，自动校验 LLM 输出条目数与输入是否一致。数量不匹配时自动重试（利用 temperature > 0 产生不同输出）。每个校验项在 `validation.rules` 中支持三级策略（`fail` 终止 / `warn` 警告继续 / `skip` 跳过）。骨架生成采用分批机制（默认每批 30 个测试点），提高大批量测试计划的计数精度。
 - **插件错误处理**：支持 `skip`/`warn`/`fail` 三种错误策略。`fail` 策略下流水线终止，断点续写可从失败阶段恢复（需先修复 checkpoint 阶段名不匹配的 bug）。
 
 ## 运行测试

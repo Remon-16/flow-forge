@@ -27,8 +27,14 @@ class AssertionGenerationPlugin(CaseAttributeGenerator):
         _skills_dir = os.path.join(os.path.dirname(__file__), 'skills')
         _exts = load_skill_extensions('assertion_generator', settings, _skills_dir)
 
-        self._single_gen = SingleAssertionGenerator(settings, knowledge, skill_extensions=_exts)
-        self._biz_gen = BizAssertionGenerator(settings, knowledge, skill_extensions=_exts)
+        self._single_gen = SingleAssertionGenerator(
+            settings, knowledge, skill_extensions=_exts,
+            validation_rules=settings.validation_rules,
+        )
+        self._biz_gen = BizAssertionGenerator(
+            settings, knowledge, skill_extensions=_exts,
+            validation_rules=settings.validation_rules,
+        )
         self._user_guidance = ""
 
     @property

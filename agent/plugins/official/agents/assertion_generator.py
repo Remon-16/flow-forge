@@ -1,11 +1,14 @@
-"""Assertion generators: generate assert_dict and assert_rules for test cases."""
+"""Assertion generators: generate assert_dict and assert_rules for test cases.
+断言生成器：为测试用例生成断言字典和断言规则。
+"""
 
 import json
 import logging
 from typing import Any, Dict, List, Optional
 
 from agents.base import BaseAgent
-from config.settings import Settings
+from agents.skeleton_generator import _count_validate
+from config.settings import Settings, get_strategy
 from knowledge.search import KnowledgeSearch
 from prompts import KNOWLEDGE_SECTION_HEADER
 from plugins.official.prompts.assertion_generation import (
@@ -21,9 +24,15 @@ logger = logging.getLogger(__name__)
 
 
 class SingleAssertionGenerator(BaseAgent):
-    """Generate assertions for single API test cases."""
+    """为单接口测试用例生成断言 / Generate assertions for single API test cases."""
 
-    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None, skill_extensions=None):
+    def __init__(
+        self,
+        settings: Settings,
+        knowledge: Optional[KnowledgeSearch] = None,
+        skill_extensions=None,
+        validation_rules: Optional[List[Dict]] = None,
+    ):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -38,6 +47,12 @@ class SingleAssertionGenerator(BaseAgent):
             skill_extensions=skill_extensions,
         )
         self._knowledge = knowledge
+        # 校验规则列表（优先用传入参数，否则从 settings 取）
+        # Validation rules list (use explicit param first, fallback to settings)
+        self._validation_rules = (
+            validation_rules if validation_rules is not None
+            else getattr(settings, "validation_rules", [])
+        )
 
     def fill_batch(
         self,
@@ -104,26 +119,23 @@ class SingleAssertionGenerator(BaseAgent):
 
         logger.info("Generating assertions for %d single cases...", len(cases))
         expected_count = len(cases)
-        for attempt in range(self._max_retries + 1):
-            result = self.call_llm_json(prompt, SINGLE_ASSERTION_SYSTEM)
-            filled = result.get("cases", [])
-            if len(filled) == expected_count:
-                logger.info("Generated assertions for %d single cases", len(filled))
-                return filled
-            logger.warning(
-                "Single assertion count mismatch attempt %d/%d: expected %d, got %d",
-                attempt + 1, self._max_retries + 1, expected_count, len(filled),
-            )
-        raise ValueError(
-            f"Single assertion count validation failed after {self._max_retries + 1} "
-            f"attempts: expected {expected_count}, got {len(filled)}"
+        return _count_validate(
+            self, prompt, SINGLE_ASSERTION_SYSTEM,
+            "cases", expected_count, "single assertion",
+            get_strategy(self._validation_rules, "assertion_count"),
         )
 
 
 class BizAssertionGenerator(BaseAgent):
-    """Generate assertions for business flow test cases."""
+    """为业务链路测试用例生成断言 / Generate assertions for business flow test cases."""
 
-    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None, skill_extensions=None):
+    def __init__(
+        self,
+        settings: Settings,
+        knowledge: Optional[KnowledgeSearch] = None,
+        skill_extensions=None,
+        validation_rules: Optional[List[Dict]] = None,
+    ):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -138,6 +150,12 @@ class BizAssertionGenerator(BaseAgent):
             skill_extensions=skill_extensions,
         )
         self._knowledge = knowledge
+        # 校验规则列表（优先用传入参数，否则从 settings 取）
+        # Validation rules list (use explicit param first, fallback to settings)
+        self._validation_rules = (
+            validation_rules if validation_rules is not None
+            else getattr(settings, "validation_rules", [])
+        )
 
     def fill_batch(
         self,
@@ -209,17 +227,8 @@ class BizAssertionGenerator(BaseAgent):
 
         logger.info("Generating assertions for %d biz flows...", len(cases))
         expected_count = len(cases)
-        for attempt in range(self._max_retries + 1):
-            result = self.call_llm_json(prompt, BIZ_ASSERTION_SYSTEM)
-            flows = result.get("biz_flows", [])
-            if len(flows) == expected_count:
-                logger.info("Generated assertions for %d biz flows", len(flows))
-                return flows
-            logger.warning(
-                "Biz assertion count mismatch attempt %d/%d: expected %d, got %d",
-                attempt + 1, self._max_retries + 1, expected_count, len(flows),
-            )
-        raise ValueError(
-            f"Biz assertion count validation failed after {self._max_retries + 1} "
-            f"attempts: expected {expected_count}, got {len(flows)}"
+        return _count_validate(
+            self, prompt, BIZ_ASSERTION_SYSTEM,
+            "biz_flows", expected_count, "biz assertion",
+            get_strategy(self._validation_rules, "assertion_count"),
         )

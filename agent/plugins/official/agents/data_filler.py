@@ -1,11 +1,14 @@
-"""Data fillers: fill request data into test case skeletons."""
+"""Data fillers: fill request data into test case skeletons.
+数据填充器：为测试用例骨架填充请求数据。
+"""
 
 import json
 import logging
 from typing import Any, Dict, List, Optional
 
 from agents.base import BaseAgent
-from config.settings import Settings
+from agents.skeleton_generator import _count_validate
+from config.settings import Settings, get_strategy
 from knowledge.search import KnowledgeSearch
 from prompts import KNOWLEDGE_SECTION_HEADER
 from plugins.official.prompts.data_filling import (
@@ -21,9 +24,15 @@ logger = logging.getLogger(__name__)
 
 
 class SingleDataFiller(BaseAgent):
-    """Fill request data for single API test case skeletons."""
+    """为单接口测试用例骨架填充请求数据 / Fill request data for single API test case skeletons."""
 
-    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None, skill_extensions=None):
+    def __init__(
+        self,
+        settings: Settings,
+        knowledge: Optional[KnowledgeSearch] = None,
+        skill_extensions=None,
+        validation_rules: Optional[List[Dict]] = None,
+    ):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -38,6 +47,12 @@ class SingleDataFiller(BaseAgent):
             skill_extensions=skill_extensions,
         )
         self._knowledge = knowledge
+        # 校验规则列表（优先用传入参数，否则从 settings 取）
+        # Validation rules list (use explicit param first, fallback to settings)
+        self._validation_rules = (
+            validation_rules if validation_rules is not None
+            else getattr(settings, "validation_rules", [])
+        )
 
     def fill_batch(
         self,
@@ -137,26 +152,25 @@ class SingleDataFiller(BaseAgent):
 
         logger.info("Filling data for %d single case skeletons...", len(skeletons))
         expected_count = len(skeletons)
-        for attempt in range(self._max_retries + 1):
-            result = self.call_llm_json(prompt, SINGLE_DATA_FILLING_SYSTEM)
-            cases = result.get("cases", [])
-            if len(cases) == expected_count:
-                logger.info("Filled %d single cases", len(cases))
-                return cases
-            logger.warning(
-                "Single data fill count mismatch attempt %d/%d: expected %d, got %d",
-                attempt + 1, self._max_retries + 1, expected_count, len(cases),
-            )
-        raise ValueError(
-            f"Single data fill count validation failed after {self._max_retries + 1} "
-            f"attempts: expected {expected_count}, got {len(cases)}"
+        return _count_validate(
+            self, prompt, SINGLE_DATA_FILLING_SYSTEM,
+            "cases", expected_count, "single data fill",
+            get_strategy(self._validation_rules, "data_fill_count"),
         )
 
 
 class BizDataFiller(BaseAgent):
-    """Fill request data and Inherit fields for business flow test case skeletons."""
+    """为业务链路测试用例骨架填充请求数据和继承字段。
+    Fill request data and Inherit fields for business flow test case skeletons.
+    """
 
-    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None, skill_extensions=None):
+    def __init__(
+        self,
+        settings: Settings,
+        knowledge: Optional[KnowledgeSearch] = None,
+        skill_extensions=None,
+        validation_rules: Optional[List[Dict]] = None,
+    ):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -171,6 +185,12 @@ class BizDataFiller(BaseAgent):
             skill_extensions=skill_extensions,
         )
         self._knowledge = knowledge
+        # 校验规则列表（优先用传入参数，否则从 settings 取）
+        # Validation rules list (use explicit param first, fallback to settings)
+        self._validation_rules = (
+            validation_rules if validation_rules is not None
+            else getattr(settings, "validation_rules", [])
+        )
 
     def fill_batch(
         self,
@@ -274,17 +294,8 @@ class BizDataFiller(BaseAgent):
 
         logger.info("Filling data for %d biz flow skeletons...", len(skeletons))
         expected_count = len(skeletons)
-        for attempt in range(self._max_retries + 1):
-            result = self.call_llm_json(prompt, BIZ_DATA_FILLING_SYSTEM)
-            flows = result.get("biz_flows", [])
-            if len(flows) == expected_count:
-                logger.info("Filled %d biz flows", len(flows))
-                return flows
-            logger.warning(
-                "Biz data fill count mismatch attempt %d/%d: expected %d, got %d",
-                attempt + 1, self._max_retries + 1, expected_count, len(flows),
-            )
-        raise ValueError(
-            f"Biz data fill count validation failed after {self._max_retries + 1} "
-            f"attempts: expected {expected_count}, got {len(flows)}"
+        return _count_validate(
+            self, prompt, BIZ_DATA_FILLING_SYSTEM,
+            "biz_flows", expected_count, "biz data fill",
+            get_strategy(self._validation_rules, "data_fill_count"),
         )

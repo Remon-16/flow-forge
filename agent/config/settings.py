@@ -6,6 +6,35 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 
+def get_strategy(rules: List[Dict], check: str, default: str = "fail") -> str:
+    """从校验规则列表中查找指定校验的策略。
+    Find the strategy for a given check from the validation rules list.
+
+    Args:
+        rules: 校验规则列表 / List of {"check": str, "strategy": str} dicts.
+        check: 校验名 / Check name to look up.
+        default: 未找到时的默认策略 / Default strategy if not found.
+
+    Returns:
+        策略值 / Strategy value: "fail", "warn", or "skip".
+    """
+    for rule in rules:
+        if rule.get("check") == check:
+            return rule.get("strategy", default)
+    return default
+
+
+def _parse_validation_rules(rules_raw) -> List[Dict[str, str]]:
+    """解析校验规则，兼容 dict 和 list 两种 YAML 写法。
+    Parse validation rules, supports both dict and list YAML formats.
+    """
+    if isinstance(rules_raw, list):
+        return rules_raw
+    if isinstance(rules_raw, dict):
+        return [{"check": k, "strategy": v} for k, v in rules_raw.items()]
+    return []
+
+
 @dataclass
 class Settings:
     llm_provider: str = "openai"
@@ -40,6 +69,19 @@ class Settings:
     skill_agents: Dict[str, List[str]] = field(default_factory=dict)
     auto_mode: bool = False
 
+    # 骨架生成分批大小 / Skeleton generation batch size
+    skeleton_batch_size: int = 30
+
+    # 校验规则列表 / Validation rules list
+    # 每项为 {"check": "<校验名>", "strategy": "fail|warn|skip"}
+    # Each entry: {"check": "<check_name>", "strategy": "fail|warn|skip"}
+    validation_rules: List[Dict[str, str]] = field(default_factory=lambda: [
+        {"check": "skeleton_count", "strategy": "fail"},
+        {"check": "url_check", "strategy": "warn"},
+        {"check": "data_fill_count", "strategy": "fail"},
+        {"check": "assertion_count", "strategy": "fail"},
+    ])
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "llm_provider": self.llm_provider,
@@ -72,6 +114,8 @@ class Settings:
             "enable_skills": self.enable_skills,
             "skill_agents": self.skill_agents,
             "auto_mode": self.auto_mode,
+            "skeleton_batch_size": self.skeleton_batch_size,
+            "validation_rules": self.validation_rules,
         }
 
 
@@ -114,6 +158,8 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         max_steps_no_progress=int(pipeline.get("max_steps_no_progress", 5)),
         consecutive_batch_failure_limit=int(pipeline.get("consecutive_batch_failure_limit", 3)),
         url_correction_max_retries=int(pipeline.get("url_correction_max_retries", 3)),
+        skeleton_batch_size=int(pipeline.get("skeleton_batch_size", 30)),
+        validation_rules=_parse_validation_rules(validation.get("rules", {})),
         enable_validation=validation.get("enabled", True),
         max_validation_retries=int(validation.get("max_retries", 3)),
         output_dir=output.get("dir", "./output"),

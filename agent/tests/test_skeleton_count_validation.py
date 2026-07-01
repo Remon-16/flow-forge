@@ -357,3 +357,110 @@ class UrlCorrectionCountValidationTest:
 
             # Should fall back to original bad_cases, not raise
             assert result is bad_cases
+
+
+# ---------------------------------------------------------------------------
+# Skeleton count validation — warn/skip strategy integration tests
+# 骨架数量校验 — warn/skip 策略集成测试
+# ---------------------------------------------------------------------------
+
+class SingleSkeletonCountWarnSkipTest:
+    """Count validation with warn/skip strategies for SingleSkeletonGenerator."""
+
+    def should_return_partial_results_on_warn_strategy(self):
+        """warn 策略下数量不匹配返回不完整结果 / Returns partial results on warn."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            settings = _make_settings()
+            settings.validation_rules = [
+                {"check": "skeleton_count", "strategy": "warn"},
+            ]
+            agent = _make_agent(SingleSkeletonGenerator, settings=settings)
+            plan = _mock_plan_single(3)
+            # 始终返回错误数量 / always return wrong count
+            _mock_call_llm_json(agent, [
+                {"single_skeletons": [{"test_id": "x"}]}
+                for _ in range(Settings().max_retries + 1)
+            ])
+
+            result = agent.generate(plan, interfaces=[])
+            # warn 策略：不抛异常，返回不完整结果 / accepts partial
+            assert len(result) == 1
+
+    def should_skip_count_check_on_skip_strategy(self):
+        """skip 策略下不重试直接返回 / No retries on skip strategy."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            settings = _make_settings()
+            settings.validation_rules = [
+                {"check": "skeleton_count", "strategy": "skip"},
+            ]
+            agent = _make_agent(SingleSkeletonGenerator, settings=settings)
+            plan = _mock_plan_single(3)
+            _mock_call_llm_json(agent, [
+                {"single_skeletons": [{"test_id": "x"}]},
+            ])
+
+            result = agent.generate(plan, interfaces=[])
+            # skip 策略：不做校验，直接返回 / bypasses check
+            assert len(result) == 1
+            # 只调一次 LLM（不重试）/ only one LLM call (no retries)
+            assert agent.call_llm_json.call_count == 1
+
+
+class BizSkeletonCountWarnSkipTest:
+    """Count validation with warn/skip strategies for BizSkeletonGenerator."""
+
+    def should_return_partial_results_on_warn_strategy(self):
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            settings = _make_settings()
+            settings.validation_rules = [
+                {"check": "skeleton_count", "strategy": "warn"},
+            ]
+            agent = _make_agent(BizSkeletonGenerator, settings=settings)
+            plan = _mock_plan_biz(2)
+            _mock_call_llm_json(agent, [
+                {"biz_skeletons": []}
+                for _ in range(Settings().max_retries + 1)
+            ])
+
+            result = agent.generate(plan, interfaces=[])
+            assert len(result) == 0  # 接受不完整 / accepts empty
+
+
+class DataFillerCountWarnTest:
+    """Count validation with warn strategy for data fillers."""
+
+    def should_return_partial_results_on_warn_strategy(self):
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            settings = _make_settings()
+            settings.validation_rules = [
+                {"check": "data_fill_count", "strategy": "warn"},
+            ]
+            agent = _make_agent(SingleDataFiller, settings=settings)
+            skeletons = [{"test_id": "t1"}, {"test_id": "t2"}]
+            _mock_call_llm_json(agent, [
+                {"cases": [{"test_id": "x"}]}
+                for _ in range(Settings().max_retries + 1)
+            ])
+
+            result = agent.fill_batch(skeletons, interfaces=[])
+            assert len(result) == 1  # 接受不完整 / accepts partial
+
+
+class AssertionGeneratorCountWarnTest:
+    """Count validation with warn strategy for assertion generators."""
+
+    def should_return_partial_results_on_warn_strategy(self):
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            settings = _make_settings()
+            settings.validation_rules = [
+                {"check": "assertion_count", "strategy": "warn"},
+            ]
+            agent = _make_agent(SingleAssertionGenerator, settings=settings)
+            cases = [{"test_id": "t1"}, {"test_id": "t2"}, {"test_id": "t3"}]
+            _mock_call_llm_json(agent, [
+                {"cases": []}
+                for _ in range(Settings().max_retries + 1)
+            ])
+
+            result = agent.fill_batch(cases, interfaces=[])
+            assert len(result) == 0  # 接受不完整 / accepts empty

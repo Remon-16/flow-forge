@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from plugins.base import CaseAttributeGenerator
 
-from config.settings import Settings
+from config.settings import Settings, get_strategy
 from writers.yaml_writer import YamlWriter
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,8 @@ class BatchController:
             settings, "consecutive_batch_failure_limit", 3
         )
         self._rate_limit_delay = getattr(settings, "llm_rate_limit_delay", 0.0)
+        # 校验规则列表 / Validation rules list
+        self._validation_rules = getattr(settings, "validation_rules", [])
         self._reference_dir = ""
         self._memory_dir = ""
 
@@ -249,10 +251,20 @@ class BatchController:
         agent: Any,
         batch_type: str,
     ) -> Tuple[List[Dict], List[Dict]]:
-        """Validate skeleton URLs and retry correction via LLM.
+        """校验骨架 URL 并尝试 LLM 修正 / Validate skeleton URLs and retry correction via LLM.
 
         Returns (valid_cases, failed_cases).
         """
+        # 查询 URL 校验策略 / Query URL check strategy
+        url_strategy = get_strategy(self._validation_rules, "url_check")
+
+        # skip 策略：完全跳过 URL 校验 / Skip strategy: bypass entirely
+        if url_strategy == "skip":
+            logger.info("URL check skipped (strategy=skip) for %d %s skeletons",
+                        len(skeletons), batch_type)
+            return skeletons, []
+
+        # 无 API 文档文本时跳过 / Skip when no API doc text
         if not api_doc_text:
             return skeletons, []
 
@@ -277,6 +289,14 @@ class BatchController:
                 return current, []
 
             if retry >= max_retries:
+                # fail 策略：抛异常终止 / Fail strategy: raise error
+                if url_strategy == "fail":
+                    raise ValueError(
+                        f"URL check failed for {len(bad_cases)} {batch_type} cases "
+                        f"after {max_retries} retries"
+                    )
+                # warn 策略：拆分为 valid/failed，failed 添加前缀
+                # Warn strategy: split valid/failed, prefix failed URLs
                 bad_ids = set()
                 for c in bad_cases:
                     key = c.get("test_id") if batch_type == "single" else c.get("sheet_name", "")
@@ -432,4 +452,5 @@ class BatchController:
             "enable_validation": self._enable_validation,
             "max_validation_retries": self._max_validation_retries,
             "url_correction_max_retries": self._url_correction_max_retries,
+            "validation_rules": self._validation_rules,
         }

@@ -44,8 +44,8 @@ Core workflow (9 steps):
 7. **Manual Review** (Mandatory interrupt): Display the plan; user can approve, provide text feedback, or use annotation-based revision. Feedback loop until approval
 
 8. **Case Generation** (skeleton + plugin pipeline):
-   - Skeleton generation: One-shot generation of all single/biz case skeletons (test_id, relevance_id, URL metadata)
-   - URL validation: Check all skeleton URLs against source document; submit mis-matching URLs for correction
+   - Skeleton generation: Generates single/biz case skeletons in batches of `skeleton_batch_size` (default 30). When test points exceed the batch size, they are automatically split into multiple batches, each calling the LLM independently, then merged
+   - URL validation: Check all skeleton URLs against source document; submit mis-matching URLs for correction. Validation strategy (fail/warn/skip) is configurable via `validation.rules` → `url_check`
    - Plugin execution: Run plugins in the order configured in PLUGIN_MODULES (e.g. data filling, assertion generation)
 
 9. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
@@ -330,6 +330,7 @@ pipeline:           # Pipeline settings
   max_steps_no_progress: 5
   consecutive_batch_failure_limit: 3
   url_correction_max_retries: 3
+  skeleton_batch_size: 30   # Skeleton generation batch size (test points per batch)
   auto: false        # Auto mode: skip human review (enable for nightly batch)
 
 knowledge:          # Knowledge base (grep-based text search)
@@ -339,6 +340,15 @@ knowledge:          # Knowledge base (grep-based text search)
 validation:         # Case validation
   enabled: true
   max_retries: 3
+  rules:            # Validation rules (each entry: check + strategy)
+    - check: skeleton_count     # Skeleton count validation
+      strategy: fail            # fail | warn | skip
+    - check: url_check          # URL existence check
+      strategy: warn            # fail | warn | skip
+    - check: data_fill_count    # Data fill count validation
+      strategy: fail            # fail | warn | skip
+    - check: assertion_count    # Assertion count validation
+      strategy: fail            # fail | warn | skip
 
 output:             # Output settings
   dir: ./output
@@ -433,7 +443,7 @@ Before using auto mode, ensure the following are properly configured to maintain
 ## Anti-Hallucination & Error Handling
 
 - **Text-Only Limitation**: The agent only processes text. Image/scanned content in PDFs will NOT be extracted — provide PDFs with extractable text layers or plain-text documents. Binary files (.png, .jpg) are explicitly rejected.
-- **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, output item count is automatically validated against input. Mismatches trigger automatic retries (using temperature > 0 for varied outputs); exhausted retries raise a `ValueError`.
+- **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, output item count is automatically validated against input. Mismatches trigger automatic retries (using temperature > 0 for varied outputs). Each validation check supports configurable strategies (`fail` to abort, `warn` to log and continue, `skip` to bypass) via `validation.rules` in `env.yaml`. Skeleton generation uses batched LLM calls (default batch size: 30) to improve count accuracy for large test plans.
 - **Plugin Error Handling**: Supports `skip`/`warn`/`fail` error strategies. The `fail` strategy aborts the pipeline; resume can restart from the failed stage (requires the checkpoint phase name fix).
 
 ## Running Tests
