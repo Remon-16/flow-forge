@@ -45,10 +45,10 @@ def analyze_api_node(state: GraphState) -> GraphState:
     _exts = load_skill_extensions('api_analyzer', _h._settings, _skills_dir)
     agent = ApiAnalyzer(_h._settings, skill_extensions=_exts)
 
-    print(_step("analyze_api", "pipeline.analyze_api"))
+    logger.info(_step("analyze_api", "pipeline.analyze_api"))
 
     if api_raw_text and not interfaces:
-        print(_("analyze_api.parsing_raw", model=_h._settings.llm_model))
+        logger.info(_("analyze_api.parsing_raw", model=_h._settings.llm_model))
         if _sl():
             _sl().log_node_start("analyze_api", "2/9")
             _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
@@ -58,7 +58,7 @@ def analyze_api_node(state: GraphState) -> GraphState:
         else:
             summary = agent.analyze_raw_text(api_raw_text, Path(state.get("api_path", "")).name)
     else:
-        print(_("analyze_api.llm_calling", model=_h._settings.llm_model))
+        logger.info(_("analyze_api.llm_calling", model=_h._settings.llm_model))
         if _sl():
             _sl().log_node_start("analyze_api", "2/9")
         if feedback:
@@ -66,7 +66,7 @@ def analyze_api_node(state: GraphState) -> GraphState:
         else:
             summary = agent.analyze(interfaces)
 
-    print(_("analyze_api.generated_summaries", count=len(summary)))
+    logger.info(_("analyze_api.generated_summaries", count=len(summary)))
     if _sl():
         _sl().log_node_end("analyze_api")
 
@@ -80,19 +80,19 @@ def analyze_api_node(state: GraphState) -> GraphState:
 
     if api_raw_text and not interfaces:
         state["interfaces"] = summary_to_interfaces(summary)
-        print(_("analyze_api.rebuilt_interfaces", count=len(state["interfaces"])))
+        logger.info(_("analyze_api.rebuilt_interfaces", count=len(state["interfaces"])))
 
     critical = _has_critical_uncertainties(summary)
 
     if not critical:
-        print(_("analyze_api.auto_pass"))
+        logger.info(_("analyze_api.auto_pass"))
         _print_api_summary_brief(summary)
         state["api_summary_confirmed"] = True
         if memory_dir:
             save_pipeline_state(memory_dir, "analyze_api")
         return state
 
-    print(_("analyze_api.uncertainties_title"))
+    logger.info(_("analyze_api.uncertainties_title"))
     _print_uncertainties(summary)
 
     if state.get("auto_mode"):
@@ -102,7 +102,7 @@ def analyze_api_node(state: GraphState) -> GraphState:
             or item.get("need_token") is None
             or not item.get("description") or item.get("description") == "UNKNOWN"
         )
-        print(_("auto.skipping_uncertainties", count=critical_count))
+        logger.info(_("auto.skipping_uncertainties", count=critical_count))
         state["api_summary_confirmed"] = True
         if memory_dir:
             save_pipeline_state(memory_dir, "analyze_api")
@@ -132,15 +132,15 @@ def _dispatch_rule_parser(api_path: str, parser_path: str = "") -> List[Interfac
     ext = Path(api_path).suffix.lower()
 
     if ext in (".yaml", ".yml", ".json"):
-        print(_("analyze_api.openapi_parsing"))
+        logger.info(_("analyze_api.openapi_parsing"))
         return OpenApiParser.parse(api_path)
 
     if ext in (".md", ".markdown"):
-        print(_("analyze_api.markdown_parsing"))
+        logger.info(_("analyze_api.markdown_parsing"))
         return MarkdownParser.parse(api_path)
 
     try:
-        print(_("analyze_api.trying_openapi"))
+        logger.info(_("analyze_api.trying_openapi"))
         interfaces = OpenApiParser.parse(api_path)
         if interfaces:
             return interfaces
@@ -148,7 +148,7 @@ def _dispatch_rule_parser(api_path: str, parser_path: str = "") -> List[Interfac
         pass
 
     try:
-        print(_("analyze_api.trying_markdown"))
+        logger.info(_("analyze_api.trying_markdown"))
         interfaces = MarkdownParser.parse(api_path)
         if interfaces:
             return interfaces
@@ -176,7 +176,7 @@ def _load_custom_parser(parser_path: str):
             f"Custom parser {path} must implement parse(file_path: str) -> List[InterfaceDef]"
         )
 
-    print(_("analyze_api.custom_parser", path=path))
+    logger.info(_("analyze_api.custom_parser", path=path))
     return module.parse
 
 
@@ -198,16 +198,16 @@ def _has_critical_uncertainties(summary: List[Dict]) -> bool:
 def _print_api_summary_brief(summary: List[Dict]) -> None:
     """打印紧凑的摘要表格。Print a compact summary table."""
     sep = "-" * 60
-    print(sep)
-    print(f"{'Endpoint':<30} {'Auth':<15} {'Need Token':<10}")
-    print(sep)
+    logger.info(sep)
+    logger.info(f"{'Endpoint':<30} {'Auth':<15} {'Need Token':<10}")
+    logger.info(sep)
     for item in summary:
         path = item.get("api_path", "")[:28]
         method = item.get("method", "")
         auth = item.get("auth_type", "none")
         need_token = "Yes" if item.get("need_token") else "No"
-        print(f"{method} {path:<27} {auth:<15} {need_token:<10}")
-    print(sep)
+        logger.info(f"{method} {path:<27} {auth:<15} {need_token:<10}")
+    logger.info(sep)
 
 
 def _print_uncertainties(summary: List[Dict]) -> None:
@@ -219,6 +219,6 @@ def _print_uncertainties(summary: List[Dict]) -> None:
         uncertainties = item.get("uncertainties", [])
         if uncertainties:
             path = f"{item.get('method', '?')} {item.get('api_path', '?')}"
-            print(_("analyze_api.endpoint_header", path=path))
+            logger.info(_("analyze_api.endpoint_header", path=path))
             for u in uncertainties:
-                print(_("analyze_api.uncertainty_item", question=u))
+                logger.info(_("analyze_api.uncertainty_item", question=u))

@@ -72,6 +72,13 @@ class Settings:
     # 骨架生成分批大小 / Skeleton generation batch size
     skeleton_batch_size: int = 30
 
+    # 计划生成分块大小（每个分块包含的接口数）/ Plan chunk size (interfaces per chunk)
+    plan_chunk_size: int = 8
+
+    # 是否将日志持久化到 output_dir/logs/agent.log / Persist logs to output_dir
+    # 默认关闭，输出文件已较多，有需要的用户自行开启 / Default off, enable on demand
+    logging_log_to_output: bool = False
+
     # 校验规则列表 / Validation rules list
     # 每项为 {"check": "<校验名>", "strategy": "fail|warn|skip"}
     # Each entry: {"check": "<check_name>", "strategy": "fail|warn|skip"}
@@ -115,6 +122,8 @@ class Settings:
             "skill_agents": self.skill_agents,
             "auto_mode": self.auto_mode,
             "skeleton_batch_size": self.skeleton_batch_size,
+            "plan_chunk_size": self.plan_chunk_size,
+            "logging_log_to_output": self.logging_log_to_output,
             "validation_rules": self.validation_rules,
         }
 
@@ -137,6 +146,7 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
     plugins = config.get("plugins", {})
     skills_cfg = config.get("skills", {})
     agent_cfg = config.get("agent", {})
+    logging_cfg = config.get("logging", {})
 
     settings = Settings(
         llm_provider=llm.get("provider", "openai"),
@@ -159,6 +169,7 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         consecutive_batch_failure_limit=int(pipeline.get("consecutive_batch_failure_limit", 3)),
         url_correction_max_retries=int(pipeline.get("url_correction_max_retries", 3)),
         skeleton_batch_size=int(pipeline.get("skeleton_batch_size", 30)),
+        plan_chunk_size=int(pipeline.get("plan_chunk_size", 8)),
         validation_rules=_parse_validation_rules(validation.get("rules", {})),
         enable_validation=validation.get("enabled", True),
         max_validation_retries=int(validation.get("max_retries", 3)),
@@ -171,6 +182,7 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         skill_agents=skills_cfg.get("agents", {}),
         agent_lang=agent_cfg.get("lang", "zh_CN"),
         auto_mode=pipeline.get("auto", False),
+        logging_log_to_output=logging_cfg.get("log_to_output", False),
     )
 
     # 为 i18n 设置语言（i18n 懒加载时通过 os.environ 读取）

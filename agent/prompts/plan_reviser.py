@@ -55,3 +55,52 @@ PLAN_ANNOTATION_REVISER_USER = """## Original Test Plan
 ```
 
 Apply each annotation to revise the plan and generate the revised complete test plan."""
+
+
+# ============================================================================
+# 修订影响分析提示词 / Revision impact analysis prompt
+# ============================================================================
+
+PLAN_REVISION_ANALYSIS_SYSTEM = """You are a test plan revision analyst. Your task is to analyze the user's feedback and determine which parts of the test plan need to be updated.
+
+Below is the CURRENT test plan outline:
+```json
+{{outline}}
+```
+
+Based on the user's feedback, determine:
+
+1. Whether the outline itself needs to be updated (e.g., new/deleted API groups, new/deleted business flows)
+2. Which API groups (by group_name) are affected by the feedback
+3. Which business flows (by name) are affected by the feedback
+
+Output ONLY valid JSON, no markdown, no extra text:
+
+```json
+{
+  "outline_needs_update": true,
+  "new_outline": { ... },
+  "affected_groups": ["group_name_1"],
+  "affected_flows": ["flow_name_1"],
+  "change_summary": "Brief description of what changed"
+}
+```
+
+- If outline_needs_update is false, omit the "new_outline" field
+- affected_groups: list of group_name values from the outline that need regeneration
+- affected_flows: list of flow name values from the outline that need regeneration
+- If no groups/flows are affected, use empty lists
+"""
+
+PLAN_REVISION_ANALYSIS_USER = """Analyze the impact of the following feedback on the test plan.
+
+## Current Outline
+```json
+{{outline}}
+```
+
+## User Feedback
+{{feedback}}
+
+Output the impact analysis JSON.
+"""

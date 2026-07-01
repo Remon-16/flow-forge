@@ -28,7 +28,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
     """
     state.setdefault("errors", [])
 
-    print(_step("parse_docs", "pipeline.reading_docs"))
+    logger.info(_step("parse_docs", "pipeline.reading_docs"))
 
     # --- Requirements ---
     requirement_text_parts: List[str] = []
@@ -40,27 +40,27 @@ def parse_docs_node(state: GraphState) -> GraphState:
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
                     requirement_text_parts.append(content)
-                print(_("parse_docs.read_file", path=path, size=size_str))
+                logger.info(_("parse_docs.read_file", path=path, size=size_str))
                 if _sl():
                     _sl().log_file_read(path, len(content))
             elif ext == ".pdf":
                 content = PdfParser.parse(path)
                 requirement_text_parts.append(content)
-                print(_("parse_docs.pdf_parsing", path=path, size=size_str))
+                logger.info(_("parse_docs.pdf_parsing", path=path, size=size_str))
                 if _sl():
                     _sl().log_file_read(path, len(content))
             else:
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
                     requirement_text_parts.append(content)
-                print(_("parse_docs.read_file", path=path, size=size_str))
+                logger.info(_("parse_docs.read_file", path=path, size=size_str))
                 if _sl():
                     _sl().log_file_read(path, len(content))
         except Exception as e:
             msg = f"Failed to read requirement file '{path}': {e}"
             logger.error(msg)
             state["errors"].append(msg)
-            print(_("batch.error", msg=msg))
+            logger.info(_("batch.error", msg=msg))
 
     state["requirement_text"] = "\n\n".join(requirement_text_parts)
 
@@ -77,21 +77,21 @@ def parse_docs_node(state: GraphState) -> GraphState:
     size_str = fmt_size(api_path)
     ext = Path(api_path).suffix.lower()
 
-    print(_("parse_docs.parse_mode", mode=parse_mode))
+    logger.info(_("parse_docs.parse_mode", mode=parse_mode))
 
     if parse_mode == "raw":
         raw_text = extract_text(api_path)
         if not raw_text.strip():
             raise Exception(f"API document '{api_path}' is empty, cannot parse.")
         if len(raw_text.strip()) < 50:
-            print(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
+            logger.info(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
             logger.warning("API document '%s' contains very little text (%d chars). "
                            "Image-based content will NOT be processed.", api_path, len(raw_text))
         state["api_raw_text"] = raw_text
         state["interfaces"] = []
         state["interface_extraction_method"] = "raw"
-        print(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
-        print(_("parse_docs.api_identify_next"))
+        logger.info(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
+        logger.info(_("parse_docs.api_identify_next"))
 
     elif parse_mode == "rule":
         from .analyze_api import _dispatch_rule_parser
@@ -106,18 +106,18 @@ def parse_docs_node(state: GraphState) -> GraphState:
             )
         state["interfaces"] = [iface_to_dict(i) for i in interfaces]
         state["interface_extraction_method"] = "rule"
-        print(_("parse_docs.rule_done", count=len(interfaces)))
+        logger.info(_("parse_docs.rule_done", count=len(interfaces)))
 
     elif parse_mode == "llm":
         raw_text = extract_text(api_path)
         if not raw_text.strip():
             raise Exception(f"API document '{api_path}' is empty, cannot parse.")
         if len(raw_text.strip()) < 50:
-            print(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
+            logger.info(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
             logger.warning("API document '%s' contains very little text (%d chars). "
                            "Image-based content will NOT be processed.", api_path, len(raw_text))
-        print(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
-        print(_("parse_docs.llm_extracting", model=_h._settings.llm_model))
+        logger.info(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
+        logger.info(_("parse_docs.llm_extracting", model=_h._settings.llm_model))
         if _sl():
             _sl().log_event("llm_call", agent="DocParserAgent", model=_h._settings.llm_model,
                             text_length=len(raw_text))
@@ -138,7 +138,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
         state["interfaces_from_llm"] = True
         state["api_raw_text"] = raw_text
         state["interface_extraction_method"] = "llm"
-        print(_("parse_docs.llm_extracted", count=len(interfaces)))
+        logger.info(_("parse_docs.llm_extracted", count=len(interfaces)))
 
     else:
         raise Exception(f"Unknown parse mode: {parse_mode}. Supported modes: raw (default), rule, llm")

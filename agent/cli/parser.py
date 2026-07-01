@@ -80,4 +80,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--auto", action="store_true",
         help="自动模式：跳过所有人工审核，适合夜间批量生成。Auto mode: skip all human review.",
     )
+    p.add_argument(
+        "--log-to-output", action="store_true", default=None,
+        help="将日志持久化到输出目录 ({output_dir}/logs/agent.log)。Persist logs to output dir.",
+    )
     return p

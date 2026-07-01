@@ -151,10 +151,20 @@ AI Agent outputs Excel format (--output-format excel or both)
 
 The executor is a pure CLI tool that communicates results via exit codes, allowing direct integration into Jenkins pipelines.
 
+## Usage Recommendations
+
+- **Document splitting**: When using weaker models with small output windows (e.g., `max_output_tokens` ≤ 4096), split requirement and API documents by module and limit each batch to about 8 interfaces to avoid truncation. Stronger models (GPT-4o, DeepSeek V4 Pro, etc.) typically have large enough output windows and don't need deliberate splitting.
+- **Batch size guidelines**:
+  - Strong models: skeleton batch size ~30 (`skeleton_batch_size`), plan chunk size ~8-12 (`plan_chunk_size`)
+  - Weak models: skeleton batch size ~5-10, plan chunk size ~3-5
+  - Configure in `env.yaml` under the `pipeline` section.
+- **Auto mode**: After tuning skills and plugins, use `--auto` to skip human review and speed up batch generation.
+
 ## Anti-Hallucination & Error Handling
 
 - **Text-Only Limitation**: The AI agent only processes text. Image/scanned content in PDFs will NOT be extracted — provide PDFs with extractable text layers or plain-text documents. Binary files (.png, .jpg) are explicitly rejected with an error.
-- **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, the number of output items is automatically validated against the input count. Mismatches trigger automatic retries. Each validation check supports a configurable strategy (fail / warn / skip) via `validation.rules` in `env.yaml`. Skeleton generation uses batched LLM calls (default 30 test points per batch) to improve count accuracy for large test plans.
+- **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, the number of output items is automatically validated against the input count. Mismatches trigger automatic retries. Each validation check supports a configurable strategy (fail / warn / skip) via `validation.rules` in `env.yaml`.
+- **Skeleton Batching & Plan Chunking**: Skeleton generation uses batched LLM calls (default 30 test points per batch) for improved count accuracy. Test plan generation uses a two-step "outline + chunks" approach — first generating a lightweight JSON outline, then chunked generation of the full plan (default 8 interfaces per chunk) — to prevent output truncation on large projects.
 - **Plugin Error Handling**: The agent/ plugin system supports three error strategies — `skip`, `warn`, `fail`. The `fail` strategy aborts the pipeline and enables resumption from the failed stage via checkpoints. The python/ processor system halts the current case immediately on failure and records the error in the test report.
 
 ## Running Tests

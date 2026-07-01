@@ -34,7 +34,7 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
         logger.info("Skipping URL validation: no interfaces or api_raw_text")
         return state
 
-    print(_("url_check.checking"))
+    logger.info(_("url_check.checking"))
     if _sl():
         _sl().log_node_start("validate_interface_urls", "url_check")
 
@@ -48,13 +48,13 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
             bad_interfaces.append(iface)
 
     if not bad_interfaces:
-        print(_("url_check.all_passed", count=len(interfaces)))
+        logger.info(_("url_check.all_passed", count=len(interfaces)))
         if _sl():
             _sl().log_event("validate_interface_urls", status="all_passed", count=len(interfaces))
             _sl().log_node_end("validate_interface_urls")
         return state
 
-    print(_("url_check.found_bad", count=len(bad_interfaces)))
+    logger.info(_("url_check.found_bad", count=len(bad_interfaces)))
 
     api_analyzer = ApiAnalyzer(_h._settings)
     corrected_count = 0
@@ -112,12 +112,12 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
             })
 
     if url_errors:
-        print(_("url_check.cannot_correct", count=len(url_errors)))
+        logger.info(_("url_check.cannot_correct", count=len(url_errors)))
         for err in url_errors:
-            print(_("url_check.cannot_correct_item", test_id=err["test_id"], method=err["method"], url=err["url"]))
+            logger.info(_("url_check.cannot_correct_item", test_id=err["test_id"], method=err["method"], url=err["url"]))
         state["url_validation_errors"] = url_errors
     else:
-        print(_("url_check.corrected_count", count=corrected_count))
+        logger.info(_("url_check.corrected_count", count=corrected_count))
 
     if _sl():
         _sl().log_event(

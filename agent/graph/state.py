@@ -43,6 +43,7 @@ class GraphState(TypedDict, total=False):
     requirement_analysis: Dict[str, Any]
 
     # === 计划生成 / Plan generation ===
+    plan_outline: Dict[str, Any]   # 测试计划轮廓 JSON / Test plan outline JSON
     plan_md: str
     plan_md_path: str
     plan_parsed: Any  # 从 plan.md 解析的结构化计划 / Structured TestPlan

@@ -4,6 +4,7 @@
   "pipeline.reading_docs": "读取文档...",
   "pipeline.analyze_api": "分析接口文档...",
   "pipeline.analyze_req": "分析需求文档...",
+  "pipeline.generate_outline": "生成测试计划轮廓...",
   "pipeline.generate_plan": "生成测试计划...",
   "pipeline.generate_plan_incremental": "生成测试计划 (增量模式)...",
   "pipeline.review_plan": "审核测试计划...",
@@ -85,6 +86,12 @@
 
   "plan.generating": "PlanGenerator 正在调用 LLM ({model})...",
   "plan.generating_incremental": "PlanGenerator 正在调用 LLM ({model})...\n  参考目录: {reference_dir}",
+  "plan.generating_outline": "正在生成测试计划轮廓...",
+  "plan.outline_generated": "测试计划轮廓已生成（{groups} 个接口分组, {flows} 个业务流程）",
+  "plan.generating_chunk": "正在生成计划分块 {current}/{total}（{name}）...",
+  "plan.chunk_assembled": "计划分块已合并（共 {chunks} 个分块, {len} 字符）",
+  "plan.chunk_resume": "从分块 {current}/{total} 恢复计划生成",
+  "plan.outline_missing": "错误: 测试计划轮廓 (plan_outline.json) 不存在，无法继续生成计划。",
   "plan.generated_saved": "计划已生成 ({len} 字符)，已保存至 {path}",
   "plan.generated": "计划已生成 ({len} 字符)",
 

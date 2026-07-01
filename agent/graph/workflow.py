@@ -17,6 +17,7 @@ from graph.nodes import (
     check_confirmed,
     configure,
     generate_cases_node,
+    generate_outline_node,
     generate_plan_node,
     human_confirm_node,
     parse_docs_node,
@@ -41,7 +42,8 @@ STAGE_TO_NEXT_NODE = {
     "analyze_api": "validate_interface_urls",
     "validate_urls": "save_interfaces",
     "save_interfaces": "analyze_requirement",
-    "analyze_requirement": "generate_plan",
+    "analyze_requirement": "generate_outline",
+    "generate_outline": "generate_plan",
     "generate_plan": "human_confirm",
     "human_confirm": "reload_interfaces",
     "reload_interfaces": "parse_plan",
@@ -108,6 +110,7 @@ def build_workflow(
     graph.add_node("validate_interface_urls", validate_interface_urls_node)
     graph.add_node("save_interfaces", save_interfaces_node)
     graph.add_node("analyze_requirement", analyze_requirement_node)
+    graph.add_node("generate_outline", generate_outline_node)
     graph.add_node("generate_plan", generate_plan_node)
     graph.add_node("human_confirm", human_confirm_node)
     graph.add_node("revise_plan", revise_plan_node)
@@ -131,6 +134,7 @@ def build_workflow(
             "validate_interface_urls": "validate_interface_urls",
             "save_interfaces": "save_interfaces",
             "analyze_requirement": "analyze_requirement",
+            "generate_outline": "generate_outline",
             "generate_plan": "generate_plan",
             "human_confirm": "human_confirm",
             "reload_interfaces": "reload_interfaces",
@@ -148,7 +152,8 @@ def build_workflow(
     })
     graph.add_edge("validate_interface_urls", "save_interfaces")
     graph.add_edge("save_interfaces", "analyze_requirement")
-    graph.add_edge("analyze_requirement", "generate_plan")
+    graph.add_edge("analyze_requirement", "generate_outline")
+    graph.add_edge("generate_outline", "generate_plan")
     graph.add_edge("generate_plan", "human_confirm")
     graph.add_conditional_edges("human_confirm", check_confirmed, {
         "confirmed": "reload_interfaces",

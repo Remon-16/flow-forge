@@ -30,8 +30,8 @@ def analyze_requirement_node(state: GraphState) -> GraphState:
         }
         return state
 
-    print(_step("analyze_requirement", "pipeline.analyze_req"))
-    print(_("req.analyzing", model=_h._settings.llm_model))
+    logger.info(_step("analyze_requirement", "pipeline.analyze_req"))
+    logger.info(_("req.analyzing", model=_h._settings.llm_model))
     if _sl():
         _sl().log_node_start("analyze_requirement", "3/9")
 
@@ -49,7 +49,7 @@ def analyze_requirement_node(state: GraphState) -> GraphState:
 
     flows = len(result.get("business_flows", []))
     roles = len(result.get("roles", []))
-    print(_("req.result", flows=flows, roles=roles))
+    logger.info(_("req.result", flows=flows, roles=roles))
     if _sl():
         _sl().log_node_end("analyze_requirement")
 

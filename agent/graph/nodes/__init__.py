@@ -8,6 +8,7 @@ from .helpers import configure, dicts_to_interfaces, iface_to_dict, save_snapsho
 from .parse_docs import parse_docs_node
 from .analyze_api import analyze_api_node
 from .analyze_requirement import analyze_requirement_node
+from .generate_outline import generate_outline_node
 from .generate_plan import generate_plan_node
 from .review import human_confirm_node, revise_plan_node
 from .parse_plan import parse_plan_node
@@ -20,6 +21,7 @@ from .routing import check_confirmed, route_after_api_confirm
 
 __all__ = [
     "configure",
+    "generate_outline_node",
     "parse_docs_node",
     "analyze_api_node",
     "analyze_requirement_node",

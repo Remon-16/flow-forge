@@ -39,7 +39,7 @@ def _handle_text_revision(graph, config, feedback: str) -> None:
     Handle text feedback: set plan_feedback state, call revise_plan_node,
     and update graph checkpoint.
     """
-    print(_("review.revising"))
+    logger.info(_("review.revising"))
 
     snapshot = graph.get_state(config)
     state = dict(snapshot.values)
@@ -48,7 +48,7 @@ def _handle_text_revision(graph, config, feedback: str) -> None:
     state["plan_confirmed"] = False
     revised_state = revise_plan_node(state)
     graph.update_state(config, revised_state, as_node="revise_plan")
-    print(_("review.revised"))
+    logger.info(_("review.revised"))
 
 
 def _handle_annotation_revision(graph, config) -> bool:
@@ -63,28 +63,28 @@ def _handle_annotation_revision(graph, config) -> bool:
     comments_path = Path(memory_dir) / "plan_comments.json"
 
     if not comments_path.exists():
-        print(_("review.annotations_not_found", path=comments_path.resolve()))
+        logger.info(_("review.annotations_not_found", path=comments_path.resolve()))
         return False
 
     try:
         annotations = _json.loads(comments_path.read_text("utf-8"))
     except Exception as e:
-        print(_("review.annotations_parse_error", error=e))
+        logger.info(_("review.annotations_parse_error", error=e))
         return False
 
     if not annotations:
-        print(_("review.annotations_empty"))
+        logger.info(_("review.annotations_empty"))
         return False
 
-    print(_("review.annotations_read", count=len(annotations)))
+    logger.info(_("review.annotations_read", count=len(annotations)))
     for i, ann in enumerate(annotations[:5], 1):
-        print(_("review.annotations_read_item", i=i,
+        logger.info(_("review.annotations_read_item", i=i,
                  line=ann.get("line_number", "?"),
                  comment=ann.get("review_comment", "")[:60]))
     if len(annotations) > 5:
-        print(_("review.annotations_read_more", count=len(annotations)))
+        logger.info(_("review.annotations_read_more", count=len(annotations)))
 
-    print(_("review.revising_annotations"))
+    logger.info(_("review.revising_annotations"))
 
     state["plan_feedback_type"] = "annotations"
     state["plan_annotations"] = annotations
@@ -98,8 +98,8 @@ def _handle_annotation_revision(graph, config) -> bool:
     history_dir.mkdir(parents=True, exist_ok=True)
     archive_name = f"plan_comments_{ts}.json"
     comments_path.rename(history_dir / archive_name)
-    print(_("review.annotations_archived", path=f"history-comments/{archive_name}"))
-    print(_("review.revised"))
+    logger.info(_("review.annotations_archived", path=f"history-comments/{archive_name}"))
+    logger.info(_("review.revised"))
     return True
 
 
@@ -126,7 +126,7 @@ def run_interactive(
         except GraphInterrupt:
             return None
 
-    print(_("pipeline.start"))
+    logger.info(_("pipeline.start"))
     if session_logger:
         session_logger.log_event("pipeline_start", stage="interactive")
 
@@ -148,19 +148,19 @@ def run_interactive(
         elif pending == "human_confirm":
             choice = input(_("review.prompt_approve")).strip().lower()
             if choice == "y":
-                print(_("review.approved"))
+                logger.info(_("review.approved"))
                 result = _resume("approved")
             elif choice == "n":
                 feedback = input(_("review.describe_changes")).strip()
                 if not feedback:
-                    print(_("review.feedback_empty"))
+                    logger.info(_("review.feedback_empty"))
                     continue
                 _handle_text_revision(graph, config, feedback)
             elif choice == "r":
                 if not _handle_annotation_revision(graph, config):
                     continue
             else:
-                print(_("review.invalid_input"))
+                logger.info(_("review.invalid_input"))
         else:
             break
 

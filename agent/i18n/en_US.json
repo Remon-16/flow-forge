@@ -4,6 +4,7 @@
   "pipeline.reading_docs": "Reading documents...",
   "pipeline.analyze_api": "Analyzing API documentation...",
   "pipeline.analyze_req": "Analyzing requirement documents...",
+  "pipeline.generate_outline": "Generating test plan outline...",
   "pipeline.generate_plan": "Generating test plan...",
   "pipeline.generate_plan_incremental": "Generating test plan (incremental mode)...",
   "pipeline.review_plan": "Reviewing test plan...",
@@ -85,6 +86,12 @@
 
   "plan.generating": "PlanGenerator calling LLM ({model})...",
   "plan.generating_incremental": "PlanGenerator calling LLM ({model})...\n  Reference directory: {reference_dir}",
+  "plan.generating_outline": "Generating test plan outline...",
+  "plan.outline_generated": "Test plan outline generated ({groups} API groups, {flows} business flows)",
+  "plan.generating_chunk": "Generating plan chunk {current}/{total} ({name})...",
+  "plan.chunk_assembled": "Plan chunks assembled ({chunks} chunks, {len} chars)",
+  "plan.chunk_resume": "Resuming plan generation from chunk {current}/{total}",
+  "plan.outline_missing": "Error: Test plan outline (plan_outline.json) not found, cannot continue plan generation.",
   "plan.generated_saved": "Plan generated ({len} chars), saved to {path}",
   "plan.generated": "Plan generated ({len} chars)",
 

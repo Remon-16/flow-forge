@@ -16,7 +16,7 @@ graph TD
     API_ASK -.->|User feedback| ANALYZE_API
     VALIDATE_URLS --> SAVE_IFACES[save_interfaces Save YAMLs]
     SAVE_IFACES --> ANALYZE_REQ[analyze_requirement Requirements Analysis]
-    ANALYZE_REQ --> GEN_PLAN[generate_plan Plan Generation]
+    ANALYZE_REQ --> GEN_OUTLINE[generate_outline Outline Generation] --> GEN_PLAN[generate_plan Plan Generation]
     GEN_PLAN --> CONFIRM{human_confirm Review Interrupt}
     CONFIRM -->|Approved| RELOAD_IFACES[reload_interfaces Reload YAMLs]
     CONFIRM -->|Rejected| REVISE[revise_plan Revise from Feedback]
@@ -27,7 +27,7 @@ graph TD
     WRITE --> END((End))
 ```
 
-Core workflow (9 steps):
+Core workflow (11 steps):
 
 1. **Document Parsing**: Read requirement documents (Markdown / PDF / plain text) and API documentation (OpenAPI 3.0 / Markdown tables), with token-aware chunking for long texts
 
@@ -39,16 +39,20 @@ Core workflow (9 steps):
 
 5. **Requirements Analysis**: LLM extracts business flows, user roles, constraints, and exception scenarios
 
-6. **Plan Generation**: Generate a Markdown test plan from analysis results and interface definitions
+6. **Outline Generation (generate_outline)**: Generates a lightweight JSON outline from requirement analysis and interface list (names/URLs only), grouping interfaces by business domain and listing business flows. The outline is very small (< 1000 tokens), guaranteeing no truncation.
 
-7. **Manual Review** (Mandatory interrupt): Display the plan; user can approve, provide text feedback, or use annotation-based revision. Feedback loop until approval
+7. **Plan Generation**: Generate a Markdown test plan in chunks from the outline (default 8 interfaces per chunk), preventing LLM output truncation for large projects
 
-8. **Case Generation** (skeleton + plugin pipeline):
+8. **Manual Review** (Mandatory interrupt): Display the plan; user can approve, provide text feedback, or use annotation-based revision. Feedback loop until approval
+
+9. **Plan Parsing**: Parse the approved Markdown test plan into structured data, extracting test point lists for downstream case generation
+
+10. **Case Generation** (skeleton + plugin pipeline):
    - Skeleton generation: Generates single/biz case skeletons in batches of `skeleton_batch_size` (default 30). When test points exceed the batch size, they are automatically split into multiple batches, each calling the LLM independently, then merged
    - URL validation: Check all skeleton URLs against source document; submit mis-matching URLs for correction. Validation strategy (fail/warn/skip) is configurable via `validation.rules` → `url_check`
    - Plugin execution: Run plugins in the order configured in PLUGIN_MODULES (e.g. data filling, assertion generation)
 
-9. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
+11. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
 
 ### Recommended Workflow: Excel for Editing + YAML for Version Control
 
@@ -296,6 +300,7 @@ optional arguments:
   --debug               Enable debug logging (full LLM I/O)
   --env PATH            Path to .env file (default: .env)
   -v, --verbose         Enable verbose console logging
+  --log-to-output       Persist logs to output directory ({output_dir}/logs/agent.log)
 ```
 
 ## Configuration File
@@ -332,6 +337,7 @@ pipeline:           # Pipeline settings
   url_correction_max_retries: 3
   skeleton_batch_size: 30   # Skeleton generation batch size (test points per batch)
   auto: false        # Auto mode: skip human review (enable for nightly batch)
+  plan_chunk_size: 8         # Plan chunk size (interfaces per chunk)
 
 knowledge:          # Knowledge base (grep-based text search)
   enabled: false
@@ -378,6 +384,11 @@ skills:             # Skill system (plugin-attached configs)
 
 agent:              # UI language
   lang: zh_CN       # zh_CN | en_US
+
+# --- Logging Settings ---
+logging:
+  # Persist logs to output_dir/logs/agent.log
+  log_to_output: false
 ```
 
 ### Skill Toggle
@@ -443,7 +454,7 @@ Before using auto mode, ensure the following are properly configured to maintain
 ## Anti-Hallucination & Error Handling
 
 - **Text-Only Limitation**: The agent only processes text. Image/scanned content in PDFs will NOT be extracted — provide PDFs with extractable text layers or plain-text documents. Binary files (.png, .jpg) are explicitly rejected.
-- **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, output item count is automatically validated against input. Mismatches trigger automatic retries (using temperature > 0 for varied outputs). Each validation check supports configurable strategies (`fail` to abort, `warn` to log and continue, `skip` to bypass) via `validation.rules` in `env.yaml`. Skeleton generation uses batched LLM calls (default batch size: 30) to improve count accuracy for large test plans.
+- **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, output item count is automatically validated against input. Mismatches trigger automatic retries (using temperature > 0 for varied outputs). Each validation check supports configurable strategies (`fail` to abort, `warn` to log and continue, `skip` to bypass) via `validation.rules` in `env.yaml`. Skeleton generation uses batched LLM calls (default batch size: 30) to improve count accuracy for large test plans. Plan generation uses an "outline + chunking" two-step approach — first generating a lightweight JSON outline, then chunking the full plan from the outline (default 8 interfaces per chunk), preventing output truncation for large projects.
 - **Plugin Error Handling**: Supports `skip`/`warn`/`fail` error strategies. The `fail` strategy aborts the pipeline; resume can restart from the failed stage (requires the checkpoint phase name fix).
 
 ## Running Tests

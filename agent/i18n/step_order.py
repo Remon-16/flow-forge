@@ -9,11 +9,12 @@ STEP_ORDER: dict[str, int] = {
     "analyze_api": 2,
     "save_interfaces": 3,
     "analyze_requirement": 4,
-    "generate_plan": 5,
-    "review_plan": 6,
-    "parse_plan": 7,
-    "case_generation": 8,
-    "write_output": 9,
+    "generate_outline": 5,
+    "generate_plan": 6,
+    "review_plan": 7,
+    "parse_plan": 8,
+    "case_generation": 9,
+    "write_output": 10,
 }
 
 

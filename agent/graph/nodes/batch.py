@@ -63,8 +63,8 @@ def batch_controller_node(state: GraphState) -> GraphState:
         state["plan_parsed"] = plan
         state["interfaces"] = interfaces_raw
 
-    print(_step("case_generation", "pipeline.case_generation"))
-    print(_("batch.batch_size", size=batch_size))
+    logger.info(_step("case_generation", "pipeline.case_generation"))
+    logger.info(_("batch.batch_size", size=batch_size))
     if _sl():
         _sl().log_node_start("batch_controller", "8/10")
 
@@ -79,7 +79,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
     ] if _h._settings.enable_plugins else []
     plugins = load_all_plugins(_h._settings, _h._knowledge, user_module_paths, user_guidance)
     plugin_names = [p.declaration.plugin_name for p in plugins]
-    print(_("batch.plugins_loaded", names=plugin_names))
+    logger.info(_("batch.plugins_loaded", names=plugin_names))
 
     controller = BatchController(_h._settings)
     controller._batch_size = batch_size
@@ -113,7 +113,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
         msg = f"BatchController failed: {e}"
         logger.exception(msg)
         state["errors"].append(msg)
-        print(_("batch.error", msg=msg))
+        logger.info(_("batch.error", msg=msg))
         state["single_cases"] = []
         state["biz_flows"] = []
         state["validation_failures"] = []
@@ -127,9 +127,9 @@ def batch_controller_node(state: GraphState) -> GraphState:
     state["biz_flows"] = biz_flows
     state["validation_failures"] = failures
 
-    print(_("batch.result", single=len(single_cases), biz=len(biz_flows)))
+    logger.info(_("batch.result", single=len(single_cases), biz=len(biz_flows)))
     if failures:
-        print(_("batch.failures_note", count=len(failures), dir=cases_dir))
+        logger.info(_("batch.failures_note", count=len(failures), dir=cases_dir))
 
     # Save pipeline state for resume
     memory_dir = state.get("memory_dir", "")

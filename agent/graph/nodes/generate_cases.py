@@ -26,8 +26,8 @@ def generate_cases_node(state: GraphState) -> GraphState:
     interfaces_raw = state.get("interfaces", [])
     user_guidance = state.get("user_guidance", "")
 
-    print(_step("case_generation", "pipeline.case_generation"))
-    print(_("gen_cases.generating", model=_h._settings.llm_model))
+    logger.info(_step("case_generation", "pipeline.case_generation"))
+    logger.info(_("gen_cases.generating", model=_h._settings.llm_model))
     if _sl():
         _sl().log_node_start("generate_cases", "7/8")
 
@@ -39,7 +39,7 @@ def generate_cases_node(state: GraphState) -> GraphState:
     state["single_cases"] = single_cases
     state["biz_flows"] = biz_flows
 
-    print(_("gen_cases.result", single=len(single_cases), biz=len(biz_flows)))
+    logger.info(_("gen_cases.result", single=len(single_cases), biz=len(biz_flows)))
     if _sl():
         _sl().log_node_end("generate_cases")
 

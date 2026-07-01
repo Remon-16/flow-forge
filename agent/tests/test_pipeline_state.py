@@ -87,3 +87,35 @@ class SavePipelineStateTest:
             state = json.loads(path.read_text(encoding="utf-8"))
             assert state["completed_stage"] == "new_stage"
             assert state["stages"] == ["new_stage"]
+
+
+# ---------------------------------------------------------------------------
+# PipelineResumeOutlineTest / 轮廓恢复测试
+# ---------------------------------------------------------------------------
+
+class TestPipelineResumeOutline:
+    """Tests for _load_pipeline_state() with outline support."""
+
+    def should_load_outline_from_memory_dir(self):
+        """从 memory_dir 加载 outline / Load outline from memory_dir."""
+        from cli.runner import _load_pipeline_state
+
+        with tempfile.TemporaryDirectory() as tmp:
+            memory_dir = Path(tmp) / "memory"
+            memory_dir.mkdir()
+            cases_dir = Path(tmp) / "cases"
+            cases_dir.mkdir()
+
+            # 保存 outline / Save outline
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [{"group_name": "G1", "api_ids": ["api_1"], "test_focus": "F1"}],
+                "biz_flows": [],
+            }
+            save_pipeline_artifact(str(memory_dir), "plan_outline.json", outline)
+            save_pipeline_state(str(memory_dir), "generate_outline")
+
+            loaded = _load_pipeline_state(str(memory_dir))
+            assert "plan_outline" in loaded
+            assert loaded["plan_outline"]["business_summary"] == "Test"
+            assert len(loaded["plan_outline"]["api_groups"]) == 1

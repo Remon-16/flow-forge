@@ -16,7 +16,7 @@ graph TD
     API_ASK -.->|用户提供反馈| ANALYZE_API
     VALIDATE_URLS --> SAVE_IFACES[save_interfaces 保存接口 YAML]
     SAVE_IFACES --> ANALYZE_REQ[analyze_requirement 需求分析]
-    ANALYZE_REQ --> GEN_PLAN[generate_plan 测试计划生成]
+    ANALYZE_REQ --> GEN_OUTLINE[generate_outline 轮廓生成 / Outline Generation] --> GEN_PLAN[generate_plan 测试计划生成]
     GEN_PLAN --> CONFIRM{human_confirm 人工审核中断点}
     CONFIRM -->|批准| RELOAD_IFACES[reload_interfaces 重载接口 YAML]
     CONFIRM -->|拒绝| REVISE[revise_plan 根据反馈修改]
@@ -27,7 +27,7 @@ graph TD
     WRITE --> END((结束))
 ```
 
-核心流程（共 9 步）：
+核心流程（共 11 步）：
 
 1. **文档解析**：读取需求文档（Markdown / PDF / 纯文本）和接口文档（OpenAPI 3.0 / Markdown 表格）。支持 Token 感知的长文本分块处理
 
@@ -39,16 +39,20 @@ graph TD
 
 5. **需求分析**：LLM 从需求中提取业务流程、用户角色、约束条件、异常场景
 
-6. **计划生成**：基于分析结果和接口定义生成 Markdown 测试计划
+6. **轮廓生成（generate_outline）**：基于需求分析和接口列表（仅名称/URL），生成轻量级 JSON 轮廓，将接口按业务领域分组、列出业务流程。轮廓数据量很小（< 1000 token），确保不会被截断。
 
-7. **人工审核**（强制中断点）：展示计划，用户可批准、提出文字修改意见或按批注文件修改。支持反馈循环直至批准
+7. **计划生成**：基于轮廓和接口定义分块生成 Markdown 测试计划（默认每块 8 个接口），防止大项目下 LLM 输出截断
 
-8. **用例生成**（骨架 + 插件流水线）：
+8. **人工审核**（强制中断点）：展示计划，用户可批准、提出文字修改意见或按批注文件修改。支持反馈循环直至批准
+
+9. **计划解析**：将审核通过后的 Markdown 测试计划解析为结构化数据，提取测试点列表供后续用例生成使用
+
+10. **用例生成**（骨架 + 插件流水线）：
    - 骨架生成：按 `skeleton_batch_size`（默认 30）分批生成单接口/业务链路用例骨架。测试点超过分批大小时自动拆分为多批，每批独立调用 LLM 后合并结果
    - URL 校验：检查骨架中所有 URL 是否在文档原文中存在，不存在的提交纠错重试。校验策略（fail/warn/skip）可通过 `validation.rules` 中的 `url_check` 配置
    - 插件执行：按 PLUGIN_MODULES 配置的插件列表依次执行（如数据填充、断言生成等）
 
-9. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出
+11. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出
 
 ### 推荐工作流：Excel 编辑 + YAML 版本控制
 
@@ -333,6 +337,7 @@ optional arguments:
   --debug               启用调试日志（完整 LLM I/O）
   --env PATH            .env 文件路径（默认 .env）
   -v, --verbose         启用详细控制台日志
+  --log-to-output       将日志持久化到输出目录 ({output_dir}/logs/agent.log)
 ```
 
 ## 配置文件
@@ -369,6 +374,7 @@ pipeline:           # 流水线设置
   url_correction_max_retries: 3
   skeleton_batch_size: 30   # 骨架生成分批大小（每个批次包含的测试点数量）
   auto: false        # 自动模式：跳过人工审核（夜间批量生成时建议开启）
+  plan_chunk_size: 8         # 计划生成分块大小（每个分块包含的接口数）/ Plan chunk size (interfaces per chunk)
 
 knowledge:          # 知识库（grep 文本搜索）
   enabled: false
@@ -415,6 +421,11 @@ skills:             # Skill 系统（插件附属配置）
 
 agent:              # 界面语言
   lang: zh_CN       # zh_CN | en_US
+
+# --- 日志设置 / Logging Settings ---
+logging:
+  # 是否将日志持久化到 output_dir/logs/agent.log / Persist logs to output_dir
+  log_to_output: false
 ```
 
 ### Skill 开关说明
@@ -480,7 +491,7 @@ agent:              # 界面语言
 ## 反幻觉与错误处理
 
 - **纯文本模态限制**：智能体仅支持文本输入。PDF 中的图片/扫描件内容不会被提取，请提供文本层可提取的 PDF 或纯文本格式文档。传入二进制文件（如 .png、.jpg）会明确报错。
-- **LLM 输出数量校验（反幻觉）**：骨架生成、数据填充、断言生成和 URL 纠错后，自动校验 LLM 输出条目数与输入是否一致。数量不匹配时自动重试（利用 temperature > 0 产生不同输出）。每个校验项在 `validation.rules` 中支持三级策略（`fail` 终止 / `warn` 警告继续 / `skip` 跳过）。骨架生成采用分批机制（默认每批 30 个测试点），提高大批量测试计划的计数精度。
+- **LLM 输出数量校验（反幻觉）**：骨架生成、数据填充、断言生成和 URL 纠错后，自动校验 LLM 输出条目数与输入是否一致。数量不匹配时自动重试（利用 temperature > 0 产生不同输出）。每个校验项在 `validation.rules` 中支持三级策略（`fail` 终止 / `warn` 警告继续 / `skip` 跳过）。骨架生成采用分批机制（默认每批 30 个测试点），提高大批量测试计划的计数精度。测试计划生成采用"轮廓 + 分块"两步法——先生成轻量 JSON 轮廓，再基于轮廓分块生成完整计划（默认每块 8 个接口），防止大项目下输出截断。
 - **插件错误处理**：支持 `skip`/`warn`/`fail` 三种错误策略。`fail` 策略下流水线终止，断点续写可从失败阶段恢复（需先修复 checkpoint 阶段名不匹配的 bug）。
 
 ## 运行测试

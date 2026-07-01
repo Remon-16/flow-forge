@@ -77,6 +77,11 @@ def _load_pipeline_state(memory_dir: str) -> dict:
         if data:
             state["requirement_analysis"] = data
 
+    if "generate_outline" in completed_stages:
+        data = _load_json("plan_outline.json")
+        if data:
+            state["plan_outline"] = data
+
     # plan.md is read by generate_plan_node itself; we set plan_md path
     plan_path = memory_path / "plan.md"
     if plan_path.exists() and "generate_plan" in completed_stages:
@@ -120,12 +125,12 @@ def main() -> int:
 
     settings = load_settings(args.env)
     if not settings.llm_api_key:
-        print(_("cli.no_api_key"))
+        logger.info(_("cli.no_api_key"))
         return 2
 
     session_dir = make_session_dir()
     session_logger = SessionLogger(session_dir, debug=args.debug)
-    print(_("cli.session_log_dir", path=session_dir.resolve()))
+    logger.info(_("cli.session_log_dir", path=session_dir.resolve()))
 
     # ------------------------------------------------------------------
     # Resume mode: reconstruct state from saved artifacts and continue
@@ -135,7 +140,15 @@ def main() -> int:
         output_path = Path(output_dir)
         _cases_dir, _memory_dir = ensure_output_structure(output_path)
 
-        print(_("resume.loading_state", dir=str(_memory_dir)))
+        # 文件日志（Phase 2）/ File logging setup
+        log_to_output = settings.logging_log_to_output
+        if getattr(args, 'log_to_output', None) is not None:
+            log_to_output = args.log_to_output
+        if log_to_output:
+            from cli.bootstrap import setup_file_logging
+            setup_file_logging(str(output_dir))
+
+        logger.info(_("resume.loading_state", dir=str(_memory_dir)))
 
         # Load saved pipeline state
         loaded = _load_pipeline_state(str(_memory_dir))
@@ -148,10 +161,10 @@ def main() -> int:
             if not ifaces_dir.is_dir() or not list(ifaces_dir.glob("*.yaml")):
                 old_ifaces_dir = output_path / "interfaces"
                 if old_ifaces_dir.is_dir() and list(old_ifaces_dir.glob("*.yaml")):
-                    print(_("cli.resume_old_structure"))
+                    logger.info(_("cli.resume_old_structure"))
                     ifaces_dir = old_ifaces_dir
                 else:
-                    print(_("cli.resume_no_interfaces", dir=ifaces_dir))
+                    logger.info(_("cli.resume_no_interfaces", dir=ifaces_dir))
                     return 2
 
         resume_overwrite = args.resume_overwrite
@@ -184,7 +197,7 @@ def main() -> int:
                 next_stage = STAGE_TO_NEXT_NODE.get(ps.get("completed_stage", ""), "parse_docs")
             except Exception:
                 pass
-        print(_("resume.from_stage", stage=next_stage))
+        logger.info(_("resume.from_stage", stage=next_stage))
 
         graph = build_workflow(settings, session_logger=session_logger)
         config = {"configurable": {"thread_id": f"resume_{datetime.now().strftime('%Y%m%d%H%M%S')}"}}
@@ -223,12 +236,12 @@ def main() -> int:
 
         if result.get("errors"):
             for err in result["errors"]:
-                print(_("cli.resume_error", error=err))
+                logger.info(_("cli.resume_error", error=err))
             session_logger.save_state(dict(result))
             session_logger.log_session_end("failed")
             return 2
 
-        print(_("cli.resume_complete", dir=output_dir, single=len(result.get("single_cases", [])), biz=len(result.get("biz_flows", []))))
+        logger.info(_("cli.resume_complete", dir=output_dir, single=len(result.get("single_cases", [])), biz=len(result.get("biz_flows", []))))
         session_logger.save_state(dict(result))
         session_logger.log_session_end("completed")
         return 0
@@ -237,21 +250,29 @@ def main() -> int:
     # Full pipeline
     # ------------------------------------------------------------------
     if not args.requirement or not args.api:
-        print(_("cli.requirement_required"))
+        logger.info(_("cli.requirement_required"))
         return 2
 
     auto_mode = args.auto or settings.auto_mode
     if auto_mode:
-        print(_("auto.pipeline_start"))
+        logger.info(_("auto.pipeline_start"))
 
     graph = build_workflow(settings, session_logger=session_logger)
     thread_id = f"flow_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
     if args.prompt:
-        print(_("cli.user_guidance", guidance=args.prompt))
+        logger.info(_("cli.user_guidance", guidance=args.prompt))
 
     output_dir = args.output or settings.output_dir
     cases_dir, memory_dir = ensure_output_structure(Path(output_dir))
+
+    # 文件日志（Phase 2）/ File logging setup
+    log_to_output = settings.logging_log_to_output
+    if getattr(args, 'log_to_output', None) is not None:
+        log_to_output = args.log_to_output
+    if log_to_output:
+        from cli.bootstrap import setup_file_logging
+        setup_file_logging(str(output_dir))
 
     initial: GraphState = {
         "requirement_paths": list(args.requirement),
@@ -281,7 +302,7 @@ def main() -> int:
 
     if result.get("errors"):
         for err in result["errors"]:
-            print(_("cli.pipeline_error", error=err))
+            logger.info(_("cli.pipeline_error", error=err))
         session_logger.save_state(dict(result))
         session_logger.log_session_end("failed")
         return 2
@@ -293,5 +314,5 @@ def main() -> int:
     session_logger.save_state(dict(result))
     session_logger.log_session_end("completed")
 
-    print(_("cli.output_summary", cases_dir=cases_dir, memory_dir=memory_dir, interfaces=len(result.get("interfaces", [])), single=len(result.get("single_cases", [])), biz=len(result.get("biz_flows", [])), session_log=session_dir.resolve() / "session.jsonl"))
+    logger.info(_("cli.output_summary", cases_dir=cases_dir, memory_dir=memory_dir, interfaces=len(result.get("interfaces", [])), single=len(result.get("single_cases", [])), biz=len(result.get("biz_flows", [])), session_log=session_dir.resolve() / "session.jsonl"))
     return 0

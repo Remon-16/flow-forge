@@ -24,8 +24,8 @@ def parse_plan_node(state: GraphState) -> GraphState:
     state.setdefault("errors", [])
     plan_md = state.get("plan_md", "")
 
-    print(_step("parse_plan", "pipeline.parse_plan"))
-    print(_("parse_plan.parsing", model=_h._settings.llm_model))
+    logger.info(_step("parse_plan", "pipeline.parse_plan"))
+    logger.info(_("parse_plan.parsing", model=_h._settings.llm_model))
     if _sl():
         _sl().log_node_start("parse_plan", "6/9")
 
@@ -49,7 +49,7 @@ def parse_plan_node(state: GraphState) -> GraphState:
 
     api_count = len(plan.api_definitions)
     tp_count = sum(len(v) for v in plan.single_test_points.values())
-    print(_("parse_plan.parsed", api_count=api_count, tp_count=tp_count))
+    logger.info(_("parse_plan.parsed", api_count=api_count, tp_count=tp_count))
     if _sl():
         _sl().log_node_end("parse_plan")
 

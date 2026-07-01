@@ -22,7 +22,7 @@ def save_interfaces_node(state: GraphState) -> GraphState:
     """
     state.setdefault("errors", [])
 
-    print(_step("save_interfaces", "pipeline.save_ifaces"))
+    logger.info(_step("save_interfaces", "pipeline.save_ifaces"))
     if _sl():
         _sl().log_node_start("save_interfaces", "6/9")
 
@@ -56,12 +56,12 @@ def save_interfaces_node(state: GraphState) -> GraphState:
     if debug_snapshots and memory_dir:
         save_snapshot(memory_dir, "interfaces.json", interfaces)
 
-    print(_("ifaces.saved", count=count, dir=str(interfaces_dir)))
+    logger.info(_("ifaces.saved", count=count, dir=str(interfaces_dir)))
 
     if url_issues:
-        print(_("ifaces.url_issues"))
+        logger.info(_("ifaces.url_issues"))
         for issue in url_issues:
-            print(_("ifaces.url_issue_item", test_id=issue['test_id'], url=issue['url']))
+            logger.info(_("ifaces.url_issue_item", test_id=issue['test_id'], url=issue['url']))
 
     if _sl():
         _sl().log_event("save_interfaces", count=count, dir=str(interfaces_dir),
@@ -90,7 +90,7 @@ def reload_interfaces_node(state: GraphState) -> GraphState:
         logger.warning("Interfaces directory not found: %s", interfaces_dir)
         return state
 
-    print(_("ifaces.reloading"))
+    logger.info(_("ifaces.reloading"))
     if _sl():
         _sl().log_node_start("reload_interfaces", "reload")
 
@@ -110,12 +110,12 @@ def reload_interfaces_node(state: GraphState) -> GraphState:
             url_issues.append({"test_id": iface.get("test_id", "?"), "url": url})
 
     if url_issues:
-        print(_("ifaces.url_still_issues", count=len(url_issues)))
+        logger.info(_("ifaces.url_still_issues", count=len(url_issues)))
         for issue in url_issues:
-            print(_("ifaces.url_issue_item", test_id=issue['test_id'], url=issue['url']))
+            logger.info(_("ifaces.url_issue_item", test_id=issue['test_id'], url=issue['url']))
 
     state["interfaces"] = reloaded
-    print(_("ifaces.reloaded", count=len(reloaded)))
+    logger.info(_("ifaces.reloaded", count=len(reloaded)))
 
     if _sl():
         _sl().log_event("reload_interfaces", count=len(reloaded), url_issues=len(url_issues))
