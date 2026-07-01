@@ -582,7 +582,7 @@ class BaseAgent:
                     kwargs: dict = {
                         "model": self._model,
                         "temperature": self._temperature,
-                        "max_tokens": self._max_tokens,
+                        "max_tokens": self._max_output_tokens,
                         "messages": [
                             {"role": "system", "content": system_msg},
                             {"role": "user", "content": prompt},
@@ -642,7 +642,11 @@ class BaseAgent:
                 "JSON parse failed (len=%d), retrying with fix prompt",
                 len(text),
             )
-            fix_prompt = JSON_FIX_PROMPT
+            fix_prompt = (
+                f"{JSON_FIX_PROMPT}\n\n"
+                f"Original task:\n{prompt[:2000]}\n\n"
+                f"The invalid JSON (may be truncated):\n{text[:3000]}"
+            )
             retry_text = self.call_llm(
                 fix_prompt, system_msg, response_format="json_object"
             )

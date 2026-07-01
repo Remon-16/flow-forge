@@ -4,6 +4,6 @@ JSON fix prompt for when LLM outputs invalid JSON.
 """
 
 JSON_FIX_PROMPT = """Your previous response was not valid JSON.
-You MUST output ONLY a single JSON object. Do NOT include any markdown
-fences, explanatory text, or any other content besides the JSON object
-itself."""
+Below is the original task and your invalid/truncated response.
+Please complete or fix the JSON and output ONLY a valid JSON object.
+Do NOT include any markdown fences, explanatory text, or any other content."""
