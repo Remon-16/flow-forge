@@ -11,6 +11,7 @@ import pytest
 from agents.base import BaseAgent
 from agents.plan_generator import PlanGenerator
 from config.settings import Settings
+from graph.nodes import helpers as _h
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +171,10 @@ class TestPlanChunking:
         """outline 缺失时 generate_plan_node 报错 / Error when outline is None."""
         from graph.nodes.generate_plan import generate_plan_node
         from graph.state import GraphState
+
+        # 初始化 settings (generate_plan_node 内部需要 _h._settings)
+        # Initialize settings (required internally by generate_plan_node)
+        _h.configure(Settings(llm_api_key="test"), knowledge=None)
 
         state: GraphState = {
             "plan_outline": None,

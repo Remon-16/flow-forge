@@ -197,6 +197,7 @@ class PlanGenerator(BaseAgent):
         user_guidance: str = "",
         reference_summary: str = "",
         chunk_progress: Dict[str, Any] | None = None,
+        memory_dir: str = "",
     ) -> str:
         """基于轮廓分块生成完整测试计划 / Generate full plan from outline in chunks.
 
@@ -408,6 +409,44 @@ class PlanGenerator(BaseAgent):
             completed_chunks += 1
 
         plan_parts["biz_sections"] = biz_sections
+
+        # ====================================================================
+        # 保存分块结构到 plan_sections.json / Save section structure for revision
+        # ====================================================================
+        if memory_dir:
+            from graph.nodes.helpers import save_pipeline_artifact
+            _sections = []
+            # API groups / 接口分组
+            for group in api_groups:
+                key = f"api_{group.get('group_name', '')}"
+                content = api_sections.get(key, "")
+                if content and content.strip():
+                    _sections.append({
+                        "key": key,
+                        "type": "api_group",
+                        "name": group.get("group_name", ""),
+                        "content": content,
+                    })
+            # Biz flows / 业务流 (按 batches 顺序)
+            for j, batch in enumerate(biz_batches):
+                if not batch:
+                    continue
+                if len(batch) == 1:
+                    key = f"biz_{batch[0].get('name', '')}"
+                else:
+                    key = f"biz_batch_{j}"
+                content = biz_sections.get(key, "")
+                if content and content.strip():
+                    _sections.append({
+                        "key": key,
+                        "type": "biz_flow",
+                        "name": ", ".join(f.get("name", "?") for f in batch),
+                        "content": content,
+                    })
+            save_pipeline_artifact(memory_dir, "plan_sections.json", {
+                "global": global_context,
+                "sections": _sections,
+            })
 
         # ====================================================================
         # Phase D: 拼接 / Assemble

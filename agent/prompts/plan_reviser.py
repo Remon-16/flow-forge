@@ -26,35 +26,104 @@ PLAN_REVISER_USER = """## Original Test Plan
 
 Please generate the revised complete test plan."""
 
-PLAN_ANNOTATION_REVISER_SYSTEM = """You are a professional test plan revision expert. The user has provided revision feedback on the test plan through "annotations."
-Each annotation contains three fields:
-- line_number: Approximate line number of the annotation (for location assistance)
-- selected_text: The original text selected by the user (the primary anchor — use this to locate the content to modify)
-- review_comment: The user's revision feedback
+PLAN_ANNOTATION_INTENT_SYSTEM = """\
+You are a test plan revision analyst. You will receive one or more sections of a
+test plan, each paired with user annotations at specific locations within them.
 
-Apply each annotation to the corresponding content in the plan one by one. Do NOT change any parts not covered by annotations.
-The revised plan MUST maintain the complete structure: Business Understanding, Single Interface Test Points, Business Flow Testing, Mermaid Flowchart.
-You MUST write the revised plan entirely in {{language}}. Do NOT use any other language."""
+For each annotation, determine the user's intent:
 
-PLAN_ANNOTATION_REVISER_USER = """## Original Test Plan
-{{original_plan}}
+- "delete": The user wants to remove the selected content entirely.
+- "update": The user wants to modify/replace the selected content while keeping
+  the surrounding structure unchanged.
+- "add": The user wants to insert new content near the selected location.
+- "noop": The annotation is informational, unclear, or requires no change.
 
-## User Annotations
+Output a JSON array — one entry per annotation:
+
 ```json
-{{annotations}}
+[
+  {
+    "section_key": "<key of the section this annotation belongs to>",
+    "action": "delete" | "update" | "add" | "noop",
+    "reasoning": "Brief explanation (1 sentence)"
+  }
+]
 ```
 
-## Requirement Analysis Results (Reference)
-```json
-{{requirement_analysis}}
-```
+Do NOT generate any content in this step. Only classify the intent.
+Output MUST be a valid JSON array. No extra text outside the array.
+You MUST write all reasoning text in {{language}}.
+"""
 
-## Interface Analysis Summaries
-```json
-{{api_summary}}
-```
+PLAN_ANNOTATION_INTENT_USER = """\
+Analyze the following annotations and output the intent JSON array.
 
-Apply each annotation to revise the plan and generate the revised complete test plan."""
+## Sections and Annotations
+
+{{sections_with_annotations}}
+
+Output the JSON array now.
+"""
+
+
+# ============================================================================
+# 内容生成: 修改现有区块 / Content generation: modify existing section
+# ============================================================================
+
+PLAN_ANNOTATION_UPDATE_SYSTEM = """\
+You are a test plan revision expert. Revise the given section based on user
+annotations. Apply ONLY the modifications described — keep ALL unmentioned
+content exactly as-is (same wording, same structure, same order).
+
+The annotations describe what to MODIFY or REPLACE within this section.
+Do NOT add new sections or test scenarios unless explicitly asked.
+
+Output ONLY the complete revised section as Markdown. Do NOT wrap in JSON.
+Do NOT add explanatory text before or after the Markdown.
+You MUST write all content in {{language}}.
+"""
+
+PLAN_ANNOTATION_UPDATE_USER = """\
+Modify the following section according to the annotations.
+
+## Current Section Content
+{{section_content}}
+
+## Annotations
+{{annotations_list}}
+
+Output the complete revised section (Markdown only).
+"""
+
+
+# ============================================================================
+# 内容生成: 新增内容到区块 / Content generation: add content to section
+# ============================================================================
+
+PLAN_ANNOTATION_ADD_SYSTEM = """\
+You are a test plan revision expert. Insert new content into the given section
+based on user annotations. Keep ALL existing content exactly as-is — only ADD
+the requested new test points, scenarios, or subsections.
+
+Place the new content at an appropriate location within the section (near the
+annotated position). Preserve the existing heading hierarchy.
+
+Output ONLY the complete section with the new content inserted, as Markdown.
+Do NOT wrap in JSON. Do NOT add explanatory text.
+You MUST write all content in {{language}}.
+"""
+
+PLAN_ANNOTATION_ADD_USER = """\
+Insert new content into the following section as described.
+
+## Current Section Content
+{{section_content}}
+
+## Add Requests
+{{annotations_list}}
+
+Output the complete section with the new content inserted (Markdown only).
+"""
 
 
 # ============================================================================

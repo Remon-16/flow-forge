@@ -54,9 +54,17 @@ class PromptRegistry:
                 "system": plan_reviser.PLAN_REVISER_SYSTEM,
                 "user_template": plan_reviser.PLAN_REVISER_USER,
             },
-            "plan_annotation_reviser": {
-                "system": plan_reviser.PLAN_ANNOTATION_REVISER_SYSTEM,
-                "user_template": plan_reviser.PLAN_ANNOTATION_REVISER_USER,
+            "plan_annotation_intent": {
+                "system": plan_reviser.PLAN_ANNOTATION_INTENT_SYSTEM,
+                "user_template": plan_reviser.PLAN_ANNOTATION_INTENT_USER,
+            },
+            "plan_annotation_update": {
+                "system": plan_reviser.PLAN_ANNOTATION_UPDATE_SYSTEM,
+                "user_template": plan_reviser.PLAN_ANNOTATION_UPDATE_USER,
+            },
+            "plan_annotation_add": {
+                "system": plan_reviser.PLAN_ANNOTATION_ADD_SYSTEM,
+                "user_template": plan_reviser.PLAN_ANNOTATION_ADD_USER,
             },
             "plan_parser": {
                 "system": _plan_parser_mod.PLAN_PARSER_SYSTEM,
