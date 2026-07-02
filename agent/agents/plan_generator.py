@@ -9,7 +9,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent
-from config.settings import Settings, get_strategy
+from config.settings import Settings
 from knowledge.search import KnowledgeSearch
 from models.schema import InterfaceDef
 from prompts import KNOWLEDGE_SECTION_HEADER
@@ -70,24 +70,8 @@ class PlanGenerator(BaseAgent):
 
         Returns the full plan as a Markdown string.
         """
-        # Serialize interfaces
-        iface_dicts = []
-        for iface in interfaces:
-            if isinstance(iface, dict):
-                iface_dicts.append(iface)
-            else:
-                iface_dicts.append({
-                    "test_id": iface.test_id,
-                    "api_name": iface.api_name,
-                    "app_name": iface.app_name,
-                    "method": iface.method,
-                    "url": iface.url,
-                    "request_head": iface.request_head,
-                    "request_body": iface.request_body,
-                    "status_code": iface.status_code,
-                    "assert_dict": iface.assert_dict,
-                    "remark": iface.remark,
-                })
+        # 序列化接口 / Serialize interfaces
+        iface_dicts = _serialize_interfaces(interfaces)
 
         requirement_json = json.dumps(requirement_analysis, ensure_ascii=False, indent=2)
         iface_json = json.dumps(iface_dicts, ensure_ascii=False, indent=2)
@@ -248,43 +232,125 @@ class PlanGenerator(BaseAgent):
 
         # Resume 初始化 / Initialize resume state
         plan_parts: Dict[str, str] = {}
-        completed_chunks = 0
-        total_chunks = 1 + len(api_groups) + len(biz_batches)
         if chunk_progress:
             plan_parts = chunk_progress.get("plan_parts", {})
-            completed_chunks = chunk_progress.get("completed_chunks", 0)
-            logger.info(
-                _("plan_gen.resume_chunk",
-                  current=completed_chunks + 1, total=total_chunks)
-            )
+            logger.info(_("plan_gen.resume_chunk"))
 
         requirement_json = json.dumps(requirement_analysis, ensure_ascii=False, indent=2)
         api_summary_json = json.dumps(api_summary or [], ensure_ascii=False, indent=2)
         outline_json = json.dumps(outline, ensure_ascii=False, indent=2)
 
-        # ====================================================================
         # Phase A: 生成 Business Understanding + Mermaid（全局视角）
-        # ====================================================================
-        global_context = plan_parts.get("global_context", "")
-        if not global_context:
-            prompt = render_prompt(
-                PLAN_CHUNK_GLOBAL_USER,
-                outline=outline_json,
-                requirement_analysis=requirement_json,
-                api_summary=api_summary_json,
-                user_guidance=user_guidance or "(none)",
-                reference_summary=reference_summary or "(none)",
-                language=get_language_name(),
-            )
-            self.reset_steps()
-            global_context = self.call_llm(prompt, PLAN_CHUNK_GLOBAL_SYSTEM)
-            plan_parts["global_context"] = global_context
-            completed_chunks += 1
-            logger.info(_("plan_gen.phase_a_done"))
+        global_context = self._phase_a_global(
+            outline_json=outline_json,
+            requirement_json=requirement_json,
+            api_summary_json=api_summary_json,
+            user_guidance=user_guidance,
+            reference_summary=reference_summary,
+            plan_parts=plan_parts,
+        )
+
+        # Phase B: 按 API group 生成测试点 section
+        api_sections = self._phase_b_api_sections(
+            api_groups=api_groups,
+            iface_by_id=iface_by_id,
+            outline_json=outline_json,
+            global_context=global_context,
+            user_guidance=user_guidance,
+            plan_parts=plan_parts,
+        )
+
+        # Phase C: 按批次生成业务链路测试 section
+        biz_sections = self._phase_c_biz_sections(
+            biz_batches=biz_batches,
+            iface_by_id=iface_by_id,
+            outline_json=outline_json,
+            global_context=global_context,
+            user_guidance=user_guidance,
+            plan_parts=plan_parts,
+        )
+
+        # 保存分块结构到 plan_sections.json / Save section structure for revision
+        self._save_sections_artifact(
+            memory_dir=memory_dir,
+            api_groups=api_groups,
+            api_sections=api_sections,
+            biz_batches=biz_batches,
+            biz_sections=biz_sections,
+            global_context=global_context,
+        )
 
         # ====================================================================
-        # Phase B: 按 API group 生成测试点 section
+        # Phase D: 拼接 / Assemble
         # ====================================================================
+        parts: List[str] = [global_context]
+
+        for group in api_groups:
+            section_key = f"api_{group.get('group_name', '')}"
+            if section_key in api_sections:
+                parts.append(api_sections[section_key])
+
+        # Phase C 已改为批次，按 section_key 顺序添加
+        # Biz sections are now batched — add in key order
+        for section_key in sorted(biz_sections.keys()):
+            parts.append(biz_sections[section_key])
+
+        plan_md = "\n\n".join(parts)
+        logger.info(
+            _("plan_gen.assembled", chunks=len(parts), chars=len(plan_md))
+        )
+        return plan_md
+
+
+    # -----------------------------------------------------------------------
+    # Phase 私有方法 / Private phase methods
+    # -----------------------------------------------------------------------
+
+    def _phase_a_global(
+        self,
+        outline_json: str,
+        requirement_json: str,
+        api_summary_json: str,
+        user_guidance: str,
+        reference_summary: str,
+        plan_parts: Dict[str, str],
+    ) -> str:
+        """Phase A: 生成 Business Understanding + Mermaid / Generate global context section.
+
+        如果 plan_parts 中已有 global_context (resume), 则直接返回。
+        """
+        global_context = plan_parts.get("global_context", "")
+        if global_context:
+            return global_context
+
+        prompt = render_prompt(
+            PLAN_CHUNK_GLOBAL_USER,
+            outline=outline_json,
+            requirement_analysis=requirement_json,
+            api_summary=api_summary_json,
+            user_guidance=user_guidance or "(none)",
+            reference_summary=reference_summary or "(none)",
+            language=get_language_name(),
+        )
+        self.reset_steps()
+        global_context = self.call_llm(prompt, PLAN_CHUNK_GLOBAL_SYSTEM)
+        plan_parts["global_context"] = global_context
+        logger.info(_("plan_gen.phase_a_done"))
+        return global_context
+
+    def _phase_b_api_sections(
+        self,
+        api_groups: List[dict],
+        iface_by_id: Dict[str, dict],
+        outline_json: str,
+        global_context: str,
+        user_guidance: str,
+        plan_parts: Dict[str, Any],
+    ) -> Dict[str, str]:
+        """Phase B: 按 API group 逐个生成测试点 / Generate API test sections per group.
+
+        已完成的 group (resume) 自动跳过。
+        """
         api_sections = plan_parts.get("api_sections", {})
         if isinstance(api_sections, str):
             api_sections = json.loads(api_sections)
@@ -294,7 +360,6 @@ class PlanGenerator(BaseAgent):
             group_name = group.get("group_name", f"group_{i}")
             section_key = f"api_{group_name}"
             if section_key in api_sections:
-                completed_chunks += 1
                 continue
 
             # 收集该 group 的接口定义 / Collect interface defs for this group
@@ -327,13 +392,23 @@ class PlanGenerator(BaseAgent):
             self.reset_steps()
             section_md = self.call_llm(prompt, system_with_context)
             api_sections[section_key] = section_md
-            completed_chunks += 1
 
         plan_parts["api_sections"] = api_sections
+        return api_sections
 
-        # ====================================================================
-        # Phase C: 按批次生成业务链路测试 section
-        # ====================================================================
+    def _phase_c_biz_sections(
+        self,
+        biz_batches: List[List[dict]],
+        iface_by_id: Dict[str, dict],
+        outline_json: str,
+        global_context: str,
+        user_guidance: str,
+        plan_parts: Dict[str, Any],
+    ) -> Dict[str, str]:
+        """Phase C: 按批次生成业务链路测试 / Generate biz flow test sections in batches.
+
+        已完成的批次 (resume) 自动跳过。接口按 batch 去重收集。
+        """
         biz_sections = plan_parts.get("biz_sections", {})
         if isinstance(biz_sections, str):
             biz_sections = json.loads(biz_sections)
@@ -353,7 +428,6 @@ class PlanGenerator(BaseAgent):
                 flow_names = ", ".join(f.get("name", "?") for f in batch)
 
             if section_key in biz_sections:
-                completed_chunks += 1
                 continue
 
             # 收集本批次所有相关接口（去重）/ Collect relevant interfaces (deduped)
@@ -406,68 +480,60 @@ class PlanGenerator(BaseAgent):
             self.reset_steps()
             section_md = self.call_llm(prompt, system_with_context)
             biz_sections[section_key] = section_md
-            completed_chunks += 1
 
         plan_parts["biz_sections"] = biz_sections
+        return biz_sections
 
-        # ====================================================================
-        # 保存分块结构到 plan_sections.json / Save section structure for revision
-        # ====================================================================
-        if memory_dir:
-            from graph.nodes.helpers import save_pipeline_artifact
-            _sections = []
-            # API groups / 接口分组
-            for group in api_groups:
-                key = f"api_{group.get('group_name', '')}"
-                content = api_sections.get(key, "")
-                if content and content.strip():
-                    _sections.append({
-                        "key": key,
-                        "type": "api_group",
-                        "name": group.get("group_name", ""),
-                        "content": content,
-                    })
-            # Biz flows / 业务流 (按 batches 顺序)
-            for j, batch in enumerate(biz_batches):
-                if not batch:
-                    continue
-                if len(batch) == 1:
-                    key = f"biz_{batch[0].get('name', '')}"
-                else:
-                    key = f"biz_batch_{j}"
-                content = biz_sections.get(key, "")
-                if content and content.strip():
-                    _sections.append({
-                        "key": key,
-                        "type": "biz_flow",
-                        "name": ", ".join(f.get("name", "?") for f in batch),
-                        "content": content,
-                    })
-            save_pipeline_artifact(memory_dir, "plan_sections.json", {
-                "global": global_context,
-                "sections": _sections,
-            })
+    def _save_sections_artifact(
+        self,
+        memory_dir: str,
+        api_groups: List[dict],
+        api_sections: Dict[str, str],
+        biz_batches: List[List[dict]],
+        biz_sections: Dict[str, str],
+        global_context: str,
+    ):
+        """保存分块结构到 plan_sections.json / Save section structure for revision.
 
-        # ====================================================================
-        # Phase D: 拼接 / Assemble
-        # ====================================================================
-        parts: List[str] = [global_context]
+        转换 plan_parts (flat dicts) 为有序 sections 数组并持久化。
+        """
+        if not memory_dir:
+            return
 
+        from graph.nodes.helpers import save_pipeline_artifact
+
+        _sections = []
+        # API groups / 接口分组
         for group in api_groups:
-            section_key = f"api_{group.get('group_name', '')}"
-            if section_key in api_sections:
-                parts.append(api_sections[section_key])
-
-        # Phase C 已改为批次，按 section_key 顺序添加
-        # Biz sections are now batched — add in key order
-        for section_key in sorted(biz_sections.keys()):
-            parts.append(biz_sections[section_key])
-
-        plan_md = "\n\n".join(parts)
-        logger.info(
-            _("plan_gen.assembled", chunks=len(parts), chars=len(plan_md))
-        )
-        return plan_md
+            key = f"api_{group.get('group_name', '')}"
+            content = api_sections.get(key, "")
+            if content and content.strip():
+                _sections.append({
+                    "key": key,
+                    "type": "api_group",
+                    "name": group.get("group_name", ""),
+                    "content": content,
+                })
+        # Biz flows / 业务流 (按 batches 顺序)
+        for j, batch in enumerate(biz_batches):
+            if not batch:
+                continue
+            if len(batch) == 1:
+                key = f"biz_{batch[0].get('name', '')}"
+            else:
+                key = f"biz_batch_{j}"
+            content = biz_sections.get(key, "")
+            if content and content.strip():
+                _sections.append({
+                    "key": key,
+                    "type": "biz_flow",
+                    "name": ", ".join(f.get("name", "?") for f in batch),
+                    "content": content,
+                })
+        save_pipeline_artifact(memory_dir, "plan_sections.json", {
+            "global": global_context,
+            "sections": _sections,
+        })
 
 
 # ---------------------------------------------------------------------------
