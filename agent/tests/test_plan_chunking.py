@@ -19,7 +19,8 @@ from config.settings import Settings
 
 def _make_settings(**kwargs):
     s = Settings(llm_api_key="test")
-    s.plan_chunk_size = kwargs.get("plan_chunk_size", 8)
+    s.plan_single_batch_size = kwargs.get("plan_single_batch_size", 8)
+    s.plan_biz_flow_batch_size = kwargs.get("plan_biz_flow_batch_size", 3)
     return s
 
 

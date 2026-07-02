@@ -91,7 +91,7 @@ def generate_plan_node(state: GraphState) -> GraphState:
             plan_path.parent.mkdir(parents=True, exist_ok=True)
             plan_path.write_text(plan_md, encoding="utf-8")
         except Exception as e:
-            logger.warning("Failed to save plan.md to memory_dir: %s", e)
+            logger.warning(_("plan_gen.save_error", error=str(e)))
 
     plan_len = len(plan_md)
     if _sl():

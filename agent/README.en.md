@@ -41,7 +41,7 @@ Core workflow (11 steps):
 
 6. **Outline Generation (generate_outline)**: Generates a lightweight JSON outline from requirement analysis and interface list (names/URLs only), grouping interfaces by business domain and listing business flows. The outline is very small (< 1000 tokens), guaranteeing no truncation.
 
-7. **Plan Generation**: Generate a Markdown test plan in chunks from the outline (default 8 interfaces per chunk), preventing LLM output truncation for large projects
+7. **Plan Generation**: Generate a Markdown test plan in chunks from the outline — Phase A generates global business understanding + flowcharts, Phase B generates single-API test points per interface group (`plan_single_batch_size` controls group size, `-1` merges all into one group), Phase C generates business flow tests in batches (`plan_biz_flow_batch_size` controls batch size, `-1` merges all into one batch), Phase D assembles. Each chunk is an independent LLM call with its own step budget, preventing `max_steps` exhaustion and output truncation for large projects. Strong models can set both configs to `-1` for faster execution.
 
 8. **Manual Review** (Mandatory interrupt): Display the plan; user can approve, provide text feedback, or use annotation-based revision. Feedback loop until approval
 
@@ -337,7 +337,8 @@ pipeline:           # Pipeline settings
   url_correction_max_retries: 3
   skeleton_batch_size: 30   # Skeleton generation batch size (test points per batch)
   auto: false        # Auto mode: skip human review (enable for nightly batch)
-  plan_chunk_size: 8         # Plan chunk size (interfaces per chunk)
+  plan_single_batch_size: 8   # Single API batch size (-1=no split)
+  plan_biz_flow_batch_size: 3 # Biz flow batch size (-1=no split)
 
 knowledge:          # Knowledge base (grep-based text search)
   enabled: false
@@ -454,7 +455,7 @@ Before using auto mode, ensure the following are properly configured to maintain
 ## Anti-Hallucination & Error Handling
 
 - **Text-Only Limitation**: The agent only processes text. Image/scanned content in PDFs will NOT be extracted — provide PDFs with extractable text layers or plain-text documents. Binary files (.png, .jpg) are explicitly rejected.
-- **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, output item count is automatically validated against input. Mismatches trigger automatic retries (using temperature > 0 for varied outputs). Each validation check supports configurable strategies (`fail` to abort, `warn` to log and continue, `skip` to bypass) via `validation.rules` in `env.yaml`. Skeleton generation uses batched LLM calls (default batch size: 30) to improve count accuracy for large test plans. Plan generation uses an "outline + chunking" two-step approach — first generating a lightweight JSON outline, then chunking the full plan from the outline (default 8 interfaces per chunk), preventing output truncation for large projects.
+- **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, output item count is automatically validated against input. Mismatches trigger automatic retries (using temperature > 0 for varied outputs). Each validation check supports configurable strategies (`fail` to abort, `warn` to log and continue, `skip` to bypass) via `validation.rules` in `env.yaml`. Skeleton generation uses batched LLM calls (default batch size: 30) to improve count accuracy for large test plans. Plan generation uses an "outline + chunking" approach in four phases — A) global business understanding + flowcharts → B) single-API test points grouped by `plan_single_batch_size` → C) business flow tests batched by `plan_biz_flow_batch_size` → D) assembly. Each chunk independently calls the LLM and resets its step counter, preventing a single chunk from exhausting the `max_steps` quota. Both configs support `-1` (no splitting) for strong models.
 - **Plugin Error Handling**: Supports `skip`/`warn`/`fail` error strategies. The `fail` strategy aborts the pipeline; resume can restart from the failed stage (requires the checkpoint phase name fix).
 
 ## Running Tests

@@ -4,7 +4,9 @@ Test plan outline generation prompts — produces a lightweight JSON outline
 that guides subsequent chunked plan generation.
 """
 
-PLAN_OUTLINE_SYSTEM = """You are a professional test planning expert. Based on the requirement analysis and interface list, generate a structural outline (JSON) for the test plan.
+PLAN_OUTLINE_SYSTEM = """You MUST write all content in {{language}}. Do NOT use any other language for field values. This is the most important rule.
+
+You are a professional test planning expert. Based on the requirement analysis and interface list, generate a structural outline (JSON) for the test plan.
 
 The outline will be used to split the test plan generation into manageable chunks. Your task is to:
 
@@ -16,7 +18,7 @@ Output requirements:
 - Output ONLY valid JSON, no markdown, no extra text
 - Each interface MUST appear in exactly one group (no duplicates, no omissions)
 - Group names should be concise and descriptive
-- Business flows should list the interface IDs involved, in execution order
+- Business flows (biz_flows) MUST be multi-step scenarios that span at least 2 interfaces — they represent end-to-end user journeys, not individual API calls. Single-interface operations should be covered in the api_groups section, NOT listed as biz_flows.
 
 JSON structure:
 ```json
@@ -39,7 +41,7 @@ JSON structure:
 }
 ```
 
-You MUST write all content in {{language}}. Do NOT use any other language for field values.
+Remember: You MUST write ALL field values (group_name, test_focus, name, description, business_summary) in {{language}}.
 """
 
 PLAN_OUTLINE_USER = """Generate a test plan outline based on the following information:
@@ -65,5 +67,5 @@ PLAN_OUTLINE_USER = """Generate a test plan outline based on the following infor
 ## Chunk Size Constraint
 Maximum {{chunk_size_hint}} interfaces per group.
 
-Focus on logical grouping by business domain. Output the outline JSON directly.
+Focus on logical grouping by business domain. Business flows must be multi-API scenarios (≥2 interfaces). Output the outline JSON directly.
 """

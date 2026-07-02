@@ -25,7 +25,7 @@ from prompts.plan_generation import (
 )
 from prompts.plan_outline import PLAN_OUTLINE_SYSTEM, PLAN_OUTLINE_USER
 from prompts.render import render_prompt
-from i18n import get_language_name
+from i18n import get_language_name, _
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,8 @@ class PlanGenerator(BaseAgent):
             skill_extensions=skill_extensions,
         )
         self._knowledge = knowledge
-        self._plan_chunk_size = getattr(settings, "plan_chunk_size", 8)
+        self._plan_single_batch_size = getattr(settings, "plan_single_batch_size", 8)
+        self._plan_biz_flow_batch_size = getattr(settings, "plan_biz_flow_batch_size", 3)
 
     def generate(
         self,
@@ -113,17 +114,15 @@ class PlanGenerator(BaseAgent):
         input_tokens = self._estimate_input_tokens(PLAN_GENERATION_SYSTEM, prompt)
         if input_tokens > self._context_window:
             raise ValueError(
-                f"Plan generation input exceeds context window: "
-                f"{input_tokens} / {self._context_window} tokens. "
-                f"Consider reducing the number of interfaces or splitting the task."
+                _("plan_gen.input_exceeds_window",
+                  tokens=input_tokens, window=self._context_window)
             )
 
         logger.info(
-            "Generating test plan for %d interfaces (~%d tokens)...",
-            len(interfaces), input_tokens,
+            _("plan_gen.generating", count=len(interfaces), tokens=input_tokens)
         )
         plan_md = self.call_llm(prompt, PLAN_GENERATION_SYSTEM)
-        logger.info("Test plan generated (%d chars)", len(plan_md))
+        logger.info(_("plan_gen.generated", chars=len(plan_md)))
         return plan_md
 
     def generate_outline(
@@ -154,8 +153,10 @@ class PlanGenerator(BaseAgent):
         iface_json = json.dumps(interface_names, ensure_ascii=False, indent=2)
         api_summary_json = json.dumps(api_summary or [], ensure_ascii=False, indent=2)
 
-        # 获取 chunk_size 提示值 / Get chunk size hint for the prompt
-        chunk_size = getattr(self, "_plan_chunk_size", 8)
+        # 获取 chunk_size 提示值（-1 时传大值）/ Get chunk size hint (-1 → large value)
+        chunk_size = self._plan_single_batch_size
+        if chunk_size == -1:
+            chunk_size = 999
 
         prompt = render_prompt(
             PLAN_OUTLINE_USER,
@@ -171,19 +172,19 @@ class PlanGenerator(BaseAgent):
         input_tokens = self._estimate_input_tokens(PLAN_OUTLINE_SYSTEM, prompt)
         if input_tokens > self._context_window:
             raise ValueError(
-                f"Outline generation input exceeds context window: "
-                f"{input_tokens} / {self._context_window} tokens."
+                _("plan_gen.outline_exceeds_window",
+                  tokens=input_tokens, window=self._context_window)
             )
 
         logger.info(
-            "Generating test plan outline for %d interfaces (~%d tokens)...",
-            len(interface_names), input_tokens,
+            _("plan_gen.generating_outline",
+              count=len(interface_names), tokens=input_tokens)
         )
         outline = self.call_llm_json(prompt, PLAN_OUTLINE_SYSTEM)
         logger.info(
-            "Outline generated: %d API groups, %d biz flows",
-            len(outline.get("api_groups", [])),
-            len(outline.get("biz_flows", [])),
+            _("plan_gen.outline_result",
+              groups=len(outline.get("api_groups", [])),
+              flows=len(outline.get("biz_flows", [])))
         )
         return outline
 
@@ -200,7 +201,7 @@ class PlanGenerator(BaseAgent):
         """基于轮廓分块生成完整测试计划 / Generate full plan from outline in chunks.
 
         Phases: A) Business Understanding + Mermaid, B) API test points per group,
-        C) Biz flow tests per flow, D) Assemble.
+        C) Biz flow tests in batches, D) Assemble.
 
         Args:
             outline: 测试计划轮廓 / Plan outline JSON.
@@ -218,26 +219,53 @@ class PlanGenerator(BaseAgent):
         iface_dicts = _serialize_interfaces(interfaces)
         iface_by_id = {d["test_id"]: d for d in iface_dicts if d.get("test_id")}
 
+        # 计算 Phase B 分组数 + Phase C 批次数 / Count groups and batches
+        api_groups = outline.get("api_groups", [])
+        biz_flows = outline.get("biz_flows", [])
+
+        # Phase B: -1 时不分组（所有接口合为 1 组）/ -1 → one group for all
+        single_batch = self._plan_single_batch_size
+        if single_batch == -1 and api_groups:
+            all_ids = []
+            for g in api_groups:
+                all_ids.extend(g.get("api_ids", []))
+            api_groups = [{
+                "group_name": "All Interfaces",
+                "api_ids": all_ids,
+                "test_focus": "All API endpoints",
+            }]
+
+        # Phase C: 按 plan_biz_flow_batch_size 分批 / Batch biz flows
+        biz_batch = self._plan_biz_flow_batch_size
+        if biz_batch == -1 or biz_batch <= 0:
+            biz_batches = [biz_flows] if biz_flows else []
+        else:
+            biz_batches = [
+                biz_flows[i:i + biz_batch]
+                for i in range(0, len(biz_flows), biz_batch)
+            ]
+
         # Resume 初始化 / Initialize resume state
         plan_parts: Dict[str, str] = {}
         completed_chunks = 0
-        total_chunks = 1 + len(outline.get("api_groups", [])) + len(outline.get("biz_flows", []))
+        total_chunks = 1 + len(api_groups) + len(biz_batches)
         if chunk_progress:
             plan_parts = chunk_progress.get("plan_parts", {})
             completed_chunks = chunk_progress.get("completed_chunks", 0)
             logger.info(
-                "Resuming from chunk %d/%d", completed_chunks + 1, total_chunks
+                _("plan_gen.resume_chunk",
+                  current=completed_chunks + 1, total=total_chunks)
             )
 
         requirement_json = json.dumps(requirement_analysis, ensure_ascii=False, indent=2)
         api_summary_json = json.dumps(api_summary or [], ensure_ascii=False, indent=2)
+        outline_json = json.dumps(outline, ensure_ascii=False, indent=2)
 
         # ====================================================================
         # Phase A: 生成 Business Understanding + Mermaid（全局视角）
         # ====================================================================
         global_context = plan_parts.get("global_context", "")
         if not global_context:
-            outline_json = json.dumps(outline, ensure_ascii=False, indent=2)
             prompt = render_prompt(
                 PLAN_CHUNK_GLOBAL_USER,
                 outline=outline_json,
@@ -247,20 +275,21 @@ class PlanGenerator(BaseAgent):
                 reference_summary=reference_summary or "(none)",
                 language=get_language_name(),
             )
+            self.reset_steps()
             global_context = self.call_llm(prompt, PLAN_CHUNK_GLOBAL_SYSTEM)
             plan_parts["global_context"] = global_context
             completed_chunks += 1
-            logger.info("Phase A complete: Business Understanding + Mermaid")
+            logger.info(_("plan_gen.phase_a_done"))
 
         # ====================================================================
-        # Phase B: 逐 API group 生成测试点 section
+        # Phase B: 按 API group 生成测试点 section
         # ====================================================================
         api_sections = plan_parts.get("api_sections", {})
         if isinstance(api_sections, str):
             api_sections = json.loads(api_sections)
         plan_parts.setdefault("api_sections", {})
 
-        for i, group in enumerate(outline.get("api_groups", [])):
+        for i, group in enumerate(api_groups):
             group_name = group.get("group_name", f"group_{i}")
             section_key = f"api_{group_name}"
             if section_key in api_sections:
@@ -270,12 +299,10 @@ class PlanGenerator(BaseAgent):
             # 收集该 group 的接口定义 / Collect interface defs for this group
             group_api_ids = group.get("api_ids", [])
             group_ifaces = [iface_by_id[aid] for aid in group_api_ids if aid in iface_by_id]
-            group_iface_json = json.dumps(group_ifaces, ensure_ascii=False, indent=2)
 
-            outline_json = json.dumps(outline, ensure_ascii=False, indent=2)
             prompt = render_prompt(
                 PLAN_CHUNK_API_SECTION_USER,
-                interface_defs=group_iface_json,
+                interface_defs=json.dumps(group_ifaces, ensure_ascii=False, indent=2),
                 user_guidance=user_guidance or "(none)",
                 language=get_language_name(),
             )
@@ -292,10 +319,11 @@ class PlanGenerator(BaseAgent):
             )
 
             logger.info(
-                "Phase B chunk %d/%d: %s (%d interfaces)",
-                i + 1, len(outline.get("api_groups", [])),
-                group_name, len(group_ifaces),
+                _("plan_gen.phase_b_chunk",
+                  current=i + 1, total=len(api_groups),
+                  name=group_name, count=len(group_ifaces))
             )
+            self.reset_steps()
             section_md = self.call_llm(prompt, system_with_context)
             api_sections[section_key] = section_md
             completed_chunks += 1
@@ -303,29 +331,52 @@ class PlanGenerator(BaseAgent):
         plan_parts["api_sections"] = api_sections
 
         # ====================================================================
-        # Phase C: 逐 biz flow 生成流程测试 section
+        # Phase C: 按批次生成业务链路测试 section
         # ====================================================================
         biz_sections = plan_parts.get("biz_sections", {})
         if isinstance(biz_sections, str):
             biz_sections = json.loads(biz_sections)
         plan_parts.setdefault("biz_sections", {})
 
-        for j, flow in enumerate(outline.get("biz_flows", [])):
-            flow_name = flow.get("name", f"flow_{j}")
-            section_key = f"biz_{flow_name}"
+        for j, batch in enumerate(biz_batches):
+            if not batch:
+                continue
+
+            # 构造本批次的 key（首 flow 名 + 数量）/ Build batch key (first flow name + count)
+            first_name = batch[0].get("name", f"flow_{j}")
+            if len(batch) == 1:
+                section_key = f"biz_{first_name}"
+                flow_names = first_name
+            else:
+                section_key = f"biz_batch_{j}"
+                flow_names = ", ".join(f.get("name", "?") for f in batch)
+
             if section_key in biz_sections:
                 completed_chunks += 1
                 continue
 
-            # 收集相关接口定义 / Collect relevant interface defs
-            flow_api_ids = flow.get("involved_apis", [])
-            flow_ifaces = [iface_by_id[aid] for aid in flow_api_ids if aid in iface_by_id]
-            flow_iface_json = json.dumps(flow_ifaces, ensure_ascii=False, indent=2)
+            # 收集本批次所有相关接口（去重）/ Collect relevant interfaces (deduped)
+            seen_ids = set()
+            batch_ifaces = []
+            for flow in batch:
+                for aid in flow.get("involved_apis", []):
+                    if aid not in seen_ids and aid in iface_by_id:
+                        seen_ids.add(aid)
+                        batch_ifaces.append(iface_by_id[aid])
 
-            outline_json = json.dumps(outline, ensure_ascii=False, indent=2)
+            # 构造 flows_list 用于 prompt / Build flows_list for prompt
+            flows_desc = []
+            for flow in batch:
+                flows_desc.append(
+                    f"- Name: {flow.get('name', '?')}\n"
+                    f"  Description: {flow.get('description', '')}\n"
+                    f"  APIs: {', '.join(flow.get('involved_apis', []))}"
+                )
+            flows_list = "\n\n".join(flows_desc)
+
             prompt = render_prompt(
                 PLAN_CHUNK_BIZ_SECTION_USER,
-                interface_defs=flow_iface_json,
+                interface_defs=json.dumps(batch_ifaces, ensure_ascii=False, indent=2),
                 user_guidance=user_guidance or "(none)",
                 language=get_language_name(),
             )
@@ -334,16 +385,24 @@ class PlanGenerator(BaseAgent):
                 PLAN_CHUNK_BIZ_SECTION_SYSTEM,
                 outline=outline_json,
                 global_context=global_context,
-                flow_name=flow_name,
-                flow_description=flow.get("description", ""),
-                flow_api_ids=json.dumps(flow_api_ids),
+                flows_list=flows_list,
                 language=get_language_name(),
             )
 
-            logger.info(
-                "Phase C chunk %d/%d: %s",
-                j + 1, len(outline.get("biz_flows", [])), flow_name,
-            )
+            # 日志：单 flow vs 批量 / Log: single vs batch
+            if len(batch) == 1:
+                logger.info(
+                    _("plan_gen.phase_c_chunk",
+                      current=j + 1, total=len(biz_batches), name=flow_names)
+                )
+            else:
+                logger.info(
+                    _("plan_gen.phase_c_batch",
+                      current=j + 1, total=len(biz_batches),
+                      names=flow_names, count=len(batch))
+                )
+
+            self.reset_steps()
             section_md = self.call_llm(prompt, system_with_context)
             biz_sections[section_key] = section_md
             completed_chunks += 1
@@ -355,20 +414,19 @@ class PlanGenerator(BaseAgent):
         # ====================================================================
         parts: List[str] = [global_context]
 
-        for group in outline.get("api_groups", []):
+        for group in api_groups:
             section_key = f"api_{group.get('group_name', '')}"
             if section_key in api_sections:
                 parts.append(api_sections[section_key])
 
-        for flow in outline.get("biz_flows", []):
-            section_key = f"biz_{flow.get('name', '')}"
-            if section_key in biz_sections:
-                parts.append(biz_sections[section_key])
+        # Phase C 已改为批次，按 section_key 顺序添加
+        # Biz sections are now batched — add in key order
+        for section_key in sorted(biz_sections.keys()):
+            parts.append(biz_sections[section_key])
 
         plan_md = "\n\n".join(parts)
         logger.info(
-            "Plan assembled: %d chunks, %d chars",
-            len(parts), len(plan_md),
+            _("plan_gen.assembled", chunks=len(parts), chars=len(plan_md))
         )
         return plan_md
 

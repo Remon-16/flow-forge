@@ -73,7 +73,15 @@ class Settings:
     skeleton_batch_size: int = 30
 
     # 计划生成分块大小（每个分块包含的接口数）/ Plan chunk size (interfaces per chunk)
-    plan_chunk_size: int = 8
+    # 已废弃，请使用 plan_single_batch_size + plan_biz_flow_batch_size
+    # Deprecated — use plan_single_batch_size + plan_biz_flow_batch_size instead
+    plan_chunk_size: int = 0
+
+    # 单接口测试点分组大小（-1=不拆分，强模型建议 -1）/ Single API batch size (-1=no split)
+    plan_single_batch_size: int = 8
+
+    # 业务链路每批合并数（-1=不拆分，强模型建议 -1）/ Biz flow batch size (-1=no split)
+    plan_biz_flow_batch_size: int = 3
 
     # 是否将日志持久化到 output_dir/logs/agent.log / Persist logs to output_dir
     # 默认关闭，输出文件已较多，有需要的用户自行开启 / Default off, enable on demand
@@ -123,6 +131,8 @@ class Settings:
             "auto_mode": self.auto_mode,
             "skeleton_batch_size": self.skeleton_batch_size,
             "plan_chunk_size": self.plan_chunk_size,
+            "plan_single_batch_size": self.plan_single_batch_size,
+            "plan_biz_flow_batch_size": self.plan_biz_flow_batch_size,
             "logging_log_to_output": self.logging_log_to_output,
             "validation_rules": self.validation_rules,
         }
@@ -169,7 +179,7 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         consecutive_batch_failure_limit=int(pipeline.get("consecutive_batch_failure_limit", 3)),
         url_correction_max_retries=int(pipeline.get("url_correction_max_retries", 3)),
         skeleton_batch_size=int(pipeline.get("skeleton_batch_size", 30)),
-        plan_chunk_size=int(pipeline.get("plan_chunk_size", 8)),
+        plan_chunk_size=int(pipeline.get("plan_chunk_size", 0)),
         validation_rules=_parse_validation_rules(validation.get("rules", {})),
         enable_validation=validation.get("enabled", True),
         max_validation_retries=int(validation.get("max_retries", 3)),
@@ -188,5 +198,21 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
     # 为 i18n 设置语言（i18n 懒加载时通过 os.environ 读取）
     # Set language for i18n lazy init via os.environ
     os.environ["AGENT_LANG"] = settings.agent_lang
+
+    # ---- 向后兼容：plan_chunk_size → plan_single_batch_size + plan_biz_flow_batch_size ----
+    # Backward compat: migrate old plan_chunk_size to the two new config fields
+    _plan_chunk = int(pipeline.get("plan_chunk_size", 0))
+    _plan_single_raw = pipeline.get("plan_single_batch_size")
+    _plan_biz_raw = pipeline.get("plan_biz_flow_batch_size")
+
+    if _plan_single_raw is None and _plan_chunk > 0:
+        settings.plan_single_batch_size = _plan_chunk
+    elif _plan_single_raw is not None:
+        settings.plan_single_batch_size = int(_plan_single_raw)
+
+    if _plan_biz_raw is None and _plan_chunk > 0:
+        settings.plan_biz_flow_batch_size = _plan_chunk
+    elif _plan_biz_raw is not None:
+        settings.plan_biz_flow_batch_size = int(_plan_biz_raw)
 
     return settings

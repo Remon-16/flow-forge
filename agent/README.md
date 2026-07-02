@@ -41,7 +41,7 @@ graph TD
 
 6. **轮廓生成（generate_outline）**：基于需求分析和接口列表（仅名称/URL），生成轻量级 JSON 轮廓，将接口按业务领域分组、列出业务流程。轮廓数据量很小（< 1000 token），确保不会被截断。
 
-7. **计划生成**：基于轮廓和接口定义分块生成 Markdown 测试计划（默认每块 8 个接口），防止大项目下 LLM 输出截断
+7. **计划生成**：基于轮廓分块生成 Markdown 测试计划——Phase A 生成全局业务理解 + 流程图，Phase B 按接口分组（`plan_single_batch_size` 控制每组接口数，`-1` 合为 1 组），Phase C 按批次（`plan_biz_flow_batch_size` 控制每批合并数，`-1` 合为 1 批），Phase D 拼接。每批独立 LLM 调用，避免大项目下输出截断。强模型可将两个配置设为 `-1` 加快执行速度
 
 8. **人工审核**（强制中断点）：展示计划，用户可批准、提出文字修改意见或按批注文件修改。支持反馈循环直至批准
 
@@ -374,7 +374,8 @@ pipeline:           # 流水线设置
   url_correction_max_retries: 3
   skeleton_batch_size: 30   # 骨架生成分批大小（每个批次包含的测试点数量）
   auto: false        # 自动模式：跳过人工审核（夜间批量生成时建议开启）
-  plan_chunk_size: 8         # 计划生成分块大小（每个分块包含的接口数）/ Plan chunk size (interfaces per chunk)
+  plan_single_batch_size: 8   # 单接口测试点分组大小（-1=不拆分）/ Single API batch size (-1=no split)
+  plan_biz_flow_batch_size: 3 # 业务链路每批合并数（-1=不拆分）/ Biz flow batch size (-1=no split)
 
 knowledge:          # 知识库（grep 文本搜索）
   enabled: false
@@ -491,7 +492,7 @@ logging:
 ## 反幻觉与错误处理
 
 - **纯文本模态限制**：智能体仅支持文本输入。PDF 中的图片/扫描件内容不会被提取，请提供文本层可提取的 PDF 或纯文本格式文档。传入二进制文件（如 .png、.jpg）会明确报错。
-- **LLM 输出数量校验（反幻觉）**：骨架生成、数据填充、断言生成和 URL 纠错后，自动校验 LLM 输出条目数与输入是否一致。数量不匹配时自动重试（利用 temperature > 0 产生不同输出）。每个校验项在 `validation.rules` 中支持三级策略（`fail` 终止 / `warn` 警告继续 / `skip` 跳过）。骨架生成采用分批机制（默认每批 30 个测试点），提高大批量测试计划的计数精度。测试计划生成采用"轮廓 + 分块"两步法——先生成轻量 JSON 轮廓，再基于轮廓分块生成完整计划（默认每块 8 个接口），防止大项目下输出截断。
+- **LLM 输出数量校验（反幻觉）**：骨架生成、数据填充、断言生成和 URL 纠错后，自动校验 LLM 输出条目数与输入是否一致。数量不匹配时自动重试（利用 temperature > 0 产生不同输出）。每个校验项在 `validation.rules` 中支持三级策略（`fail` 终止 / `warn` 警告继续 / `skip` 跳过）。骨架生成采用分批机制（默认每批 30 个测试点），提高大批量测试计划的计数精度。测试计划生成采用"轮廓 + 分块"两步法——先生成轻量 JSON 轮廓，再基于轮廓分四阶段生成完整计划：A) 全局业务理解 + 流程图 → B) 按 `plan_single_batch_size` 分组的单接口测试点 → C) 按 `plan_biz_flow_batch_size` 合并的业务链路测试 → D) 拼接。每个分块独立调用 LLM 并重置步数计数器，防止单次调用耗尽 `max_steps` 配额。两个配置均支持 `-1`（不拆分），强模型可设为 `-1` 加快执行速度。
 - **插件错误处理**：支持 `skip`/`warn`/`fail` 三种错误策略。`fail` 策略下流水线终止，断点续写可从失败阶段恢复（需先修复 checkpoint 阶段名不匹配的 bug）。
 
 ## 运行测试

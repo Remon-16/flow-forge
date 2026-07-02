@@ -183,19 +183,20 @@ The following global context has already been generated:
 
 {{global_context}}
 
-Your task: generate the business flow test section ONLY for this flow:
-- Flow name: {{flow_name}}
-- Flow description: {{flow_description}}
-- Involved APIs: {{flow_api_ids}}
+Your task: generate the business flow test section(s) for the following flow(s):
 
-Design multi-step test scenarios with data passing relationships between steps.
+```
+{{flows_list}}
+```
 
-Do NOT generate content for other business flows. Do NOT generate single interface test points.
+For each flow, design multi-step test scenarios with data passing relationships between steps.
+
+Do NOT generate content for flows not listed above. Do NOT generate single interface test points.
 You MUST write the entire output in {{language}}.
-Output as standard Markdown (not JSON).
+Output as standard Markdown (not JSON). Start each flow section with a level-3 heading (###).
 """
 
-PLAN_CHUNK_BIZ_SECTION_USER = """Generate the business flow test section.
+PLAN_CHUNK_BIZ_SECTION_USER = """Generate the business flow test section(s).
 
 ## Relevant Interface Definitions
 ```json
@@ -205,5 +206,5 @@ PLAN_CHUNK_BIZ_SECTION_USER = """Generate the business flow test section.
 ## User Additional Guidance
 {{user_guidance}}
 
-Please generate the "## 3. Business Flow Testing" section for this flow. Include step-by-step test scenarios with data dependencies.
+Please generate the "## 3. Business Flow Testing" section for the flow(s) listed in the system prompt. Include step-by-step test scenarios with data dependencies.
 """
