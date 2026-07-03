@@ -343,6 +343,7 @@ pipeline:           # Pipeline settings
   plan_single_batch_size: 8   # Single API batch size (-1=no split)
   plan_biz_flow_batch_size: 3 # Biz flow batch size (-1=no split)
   case_type: both      # Case generation type: both | single | biz
+  plugin_batch_size: 10 # Plugin batch size (-1=no split)
 
 knowledge:          # Knowledge base (grep-based text search)
   enabled: false
@@ -363,7 +364,6 @@ validation:         # Case validation
 
 output:             # Output settings
   dir: ./output
-  batch_size: 10
   format: both      # yaml | excel | both
 
 plugins:            # Plugin system

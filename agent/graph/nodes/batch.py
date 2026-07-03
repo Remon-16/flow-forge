@@ -34,7 +34,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
     output_dir = state.get("output_dir", "./output")
     cases_dir = state.get("cases_dir") or state.get("output_dir", "./output")
     user_guidance = state.get("user_guidance", "")
-    batch_size = state.get("batch_size", _h._settings.batch_size)
+    batch_size = state.get("batch_size", _h._settings.plugin_batch_size)
     reference_dir = state.get("reference_dir", "")
     api_summary = state.get("api_summary", [])
     case_type = state.get("case_type", "both")

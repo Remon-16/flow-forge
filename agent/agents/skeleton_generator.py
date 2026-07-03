@@ -19,7 +19,7 @@ from prompts.skeleton_generation import (
     URL_CORRECTION_USER,
 )
 from prompts.render import render_prompt
-from i18n import get_language_name
+from i18n import _, get_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -155,27 +155,29 @@ def _count_validate(
         ValueError: 仅当 strategy 为 "fail" 且所有重试耗尽时。
     """
     items = []
+    agent.reset_steps()  # 每批重置步数计数器 / Reset step counter per batch
     for attempt in range(agent._max_retries + 1):
         result = agent.call_llm_json(prompt, system_msg)
         items = result.get(json_key, [])
         if len(items) == expected_count:
-            logger.info("Generated %d %s", len(items), label)
+            logger.info(_("skel_gen.batch_progress", count=len(items), label=label))
             return items
         logger.warning(
-            "%s count mismatch attempt %d/%d: expected %d, got %d",
-            label, attempt + 1, agent._max_retries + 1, expected_count, len(items),
+            _("skel_gen.count_mismatch", label=label,
+              attempt=attempt + 1, total=agent._max_retries + 1,
+              expected=expected_count, actual=len(items)),
         )
 
     last_count = len(items)
     # 跳过校验 / Skip validation
     if strategy == "skip":
-        logger.info("%s count check skipped, returning %d items", label, last_count)
+        logger.info(_("skel_gen.count_check_skipped", label=label, count=last_count))
         return items
     # 警告但继续 / Warn but continue
     elif strategy == "warn":
         logger.warning(
-            "%s count mismatch after %d retries: expected %d, got %d, continuing",
-            label, agent._max_retries + 1, expected_count, last_count,
+            _("skel_gen.count_mismatch_final", label=label,
+              retries=agent._max_retries + 1, expected=expected_count, actual=last_count),
         )
         return items
     # 严格模式：抛异常 / Strict mode: raise error
@@ -315,7 +317,7 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
             else 0
         )
         if expected_count == 0:
-            logger.info("No single test points in plan, skipping")
+            logger.info(_("skel_gen.no_single_points"))
             return []
 
         iface_dicts = _normalize_interfaces(interfaces)
@@ -375,8 +377,8 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
             batches.append(grouped)
 
         logger.info(
-            "Generating %d single case skeletons in %d batches (batch_size=%d)...",
-            expected_count, len(batches), self._skeleton_batch_size,
+            _("skel_gen.generating_single_batches",
+              count=expected_count, batches=len(batches), size=self._skeleton_batch_size),
         )
 
         # 3. 逐批调用 LLM / Call LLM for each batch
@@ -402,13 +404,13 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
         # 4. 最终汇总校验 / Final total count check
         if len(all_skeletons) != expected_count:
             logger.warning(
-                "Total single skeleton count mismatch: expected %d, got %d",
-                expected_count, len(all_skeletons),
+                _("skel_gen.total_count_mismatch",
+                  type="single", expected=expected_count, actual=len(all_skeletons)),
             )
 
         logger.info(
-            "Generated %d single case skeletons from %d batches",
-            len(all_skeletons), len(batches),
+            _("skel_gen.single_result",
+              count=len(all_skeletons), batches=len(batches)),
         )
         return all_skeletons
 
@@ -485,7 +487,7 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
             json.dumps(iface_dicts, ensure_ascii=False, indent=2),
         )
 
-        logger.info("Correcting URLs for %d cases...", len(bad_cases))
+        logger.info(_("skel_gen.correcting_urls", count=len(bad_cases)))
         expected_count = len(bad_cases)
 
         # URL 修正对数量偏差容忍度更高，使用 warn 策略
@@ -500,15 +502,16 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
                     corrected = result
             if not corrected:
                 logger.warning(
-                    "URL correction returned empty result, attempt %d/%d",
-                    attempt + 1, self._max_retries + 1,
+                    _("skel_gen.url_correction_empty",
+                      type="single", attempt=attempt + 1, total=self._max_retries + 1),
                 )
                 continue
             if len(corrected) == expected_count:
                 return corrected
             logger.warning(
-                "URL correction count mismatch attempt %d/%d: expected %d, got %d",
-                attempt + 1, self._max_retries + 1, expected_count, len(corrected),
+                _("skel_gen.url_correction_count_mismatch",
+                  type="single", attempt=attempt + 1, total=self._max_retries + 1,
+                  expected=expected_count, actual=len(corrected)),
             )
 
         # 按策略处理 / Handle by strategy
@@ -519,8 +522,8 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
             )
         # warn 或 skip：回退到原始 bad_cases / fallback to original
         logger.warning(
-            "URL correction count validation failed after %d attempts, "
-            "falling back to original bad_cases", self._max_retries + 1,
+            _("skel_gen.url_correction_fallback",
+              type="single", retries=self._max_retries + 1),
         )
         return bad_cases
 
@@ -579,7 +582,7 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
         """
         # 跳过：无业务链路场景 / Skip: no biz flow scenarios
         if not (hasattr(plan, "biz_flow_scenarios") and plan.biz_flow_scenarios):
-            logger.info("No biz flow scenarios in plan, skipping biz skeleton generation")
+            logger.info(_("skel_gen.no_biz_scenarios"))
             return []
 
         iface_dicts = _normalize_interfaces(interfaces)
@@ -627,8 +630,8 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
         total_batches = (len(scenarios) + self._skeleton_batch_size - 1) // self._skeleton_batch_size
 
         logger.info(
-            "Generating %d biz flow skeletons in %d batches (batch_size=%d)...",
-            expected_count, total_batches, self._skeleton_batch_size,
+            _("skel_gen.generating_biz_batches",
+              count=expected_count, batches=total_batches, size=self._skeleton_batch_size),
         )
 
         all_skeletons: List[Dict] = []
@@ -658,13 +661,13 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
         # 最终汇总校验 / Final total count check
         if len(all_skeletons) != expected_count:
             logger.warning(
-                "Total biz skeleton count mismatch: expected %d, got %d",
-                expected_count, len(all_skeletons),
+                _("skel_gen.total_count_mismatch",
+                  type="biz", expected=expected_count, actual=len(all_skeletons)),
             )
 
         logger.info(
-            "Generated %d biz flow skeletons from %d batches",
-            len(all_skeletons), total_batches,
+            _("skel_gen.batch_progress", count=len(all_skeletons),
+              label=f"biz flow skeletons"),
         )
         return all_skeletons
 
@@ -738,7 +741,7 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
             json.dumps(iface_dicts, ensure_ascii=False, indent=2),
         )
 
-        logger.info("Correcting URLs for %d biz flow cases...", len(bad_cases))
+        logger.info(_("skel_gen.correcting_biz_urls", count=len(bad_cases)))
         expected_count = len(bad_cases)
         strategy = get_strategy(self._validation_rules, "url_check")
 
@@ -755,15 +758,16 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
                     corrected = result
             if not corrected:
                 logger.warning(
-                    "Biz URL correction returned empty result, attempt %d/%d",
-                    attempt + 1, self._max_retries + 1,
+                    _("skel_gen.url_correction_empty",
+                      type="biz", attempt=attempt + 1, total=self._max_retries + 1),
                 )
                 continue
             if len(corrected) == expected_count:
                 return corrected
             logger.warning(
-                "Biz URL correction count mismatch attempt %d/%d: expected %d, got %d",
-                attempt + 1, self._max_retries + 1, expected_count, len(corrected),
+                _("skel_gen.url_correction_count_mismatch",
+                  type="biz", attempt=attempt + 1, total=self._max_retries + 1,
+                  expected=expected_count, actual=len(corrected)),
             )
 
         # 按策略处理 / Handle by strategy
@@ -774,7 +778,7 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
             )
         # warn 或 skip：回退到原始 bad_cases / fallback to original
         logger.warning(
-            "Biz URL correction count validation failed after %d attempts, "
-            "falling back to original bad_cases", self._max_retries + 1,
+            _("skel_gen.url_correction_fallback",
+              type="biz", retries=self._max_retries + 1),
         )
         return bad_cases

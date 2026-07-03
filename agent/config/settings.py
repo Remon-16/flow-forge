@@ -53,7 +53,7 @@ class Settings:
     llm_rate_limit_delay: float = 0.0
     llm_retry_base_delay: float = 2.0
     output_dir: str = "./output"
-    batch_size: int = 10
+    plugin_batch_size: int = 10
     enable_validation: bool = True
     max_validation_retries: int = 3
     output_format: str = "both"
@@ -119,7 +119,7 @@ class Settings:
             "llm_rate_limit_delay": self.llm_rate_limit_delay,
             "llm_retry_base_delay": self.llm_retry_base_delay,
             "output_dir": self.output_dir,
-            "batch_size": self.batch_size,
+            "plugin_batch_size": self.plugin_batch_size,
             "enable_validation": self.enable_validation,
             "max_validation_retries": self.max_validation_retries,
             "output_format": self.output_format,
@@ -191,7 +191,7 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         enable_validation=validation.get("enabled", True),
         max_validation_retries=int(validation.get("max_retries", 3)),
         output_dir=output.get("dir", "./output"),
-        batch_size=int(output.get("batch_size", 10)),
+        plugin_batch_size=int(pipeline.get("plugin_batch_size", 10)),
         output_format=output.get("format", "both"),
         enable_plugins=plugins.get("enabled", False),
         plugin_modules=plugins.get("modules", []),

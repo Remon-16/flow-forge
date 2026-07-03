@@ -32,7 +32,7 @@ def save_interfaces_node(state: GraphState) -> GraphState:
     debug_snapshots = state.get("debug_snapshots", False)
 
     if not interfaces:
-        logger.warning("No interfaces to save")
+        logger.warning(_("ifaces.no_interfaces_to_save"))
         return state
 
     interfaces_dir = Path(cases_dir) / "interfaces"
@@ -51,7 +51,7 @@ def save_interfaces_node(state: GraphState) -> GraphState:
                     "url": iface.get("url", "?") if isinstance(iface, dict) else getattr(iface, "url", "?"),
                 })
         except Exception as e:
-            logger.warning("Failed to save interface: %s", e)
+            logger.warning(_("ifaces.save_failed", error=str(e)))
 
     if debug_snapshots and memory_dir:
         save_snapshot(memory_dir, "interfaces.json", interfaces)
@@ -87,7 +87,7 @@ def reload_interfaces_node(state: GraphState) -> GraphState:
     interfaces_dir = Path(cases_dir) / "interfaces"
 
     if not interfaces_dir.is_dir():
-        logger.warning("Interfaces directory not found: %s", interfaces_dir)
+        logger.warning(_("ifaces.dir_not_found", dir=str(interfaces_dir)))
         return state
 
     logger.info(_("ifaces.reloading"))
@@ -96,7 +96,7 @@ def reload_interfaces_node(state: GraphState) -> GraphState:
 
     reloaded = YamlWriter.read_interfaces(str(cases_dir))
     if not reloaded:
-        logger.warning("No interfaces reloaded — keeping existing state")
+        logger.warning(_("ifaces.reload_empty"))
         if _sl():
             _sl().log_node_end("reload_interfaces")
         return state

@@ -18,7 +18,7 @@ from plugins.official.prompts.data_filling import (
     BIZ_DATA_FILLING_USER,
 )
 from prompts.render import render_prompt
-from i18n import get_language_name
+from i18n import _, get_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ class SingleDataFiller(BaseAgent):
             if docs:
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
-        logger.info("Filling data for %d single case skeletons...", len(skeletons))
+        logger.info(_("plugin.data_fill.single", count=len(skeletons)))
         expected_count = len(skeletons)
         return _count_validate(
             self, prompt, SINGLE_DATA_FILLING_SYSTEM,
@@ -292,7 +292,7 @@ class BizDataFiller(BaseAgent):
             if docs:
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
-        logger.info("Filling data for %d biz flow skeletons...", len(skeletons))
+        logger.info(_("plugin.data_fill.biz", count=len(skeletons)))
         expected_count = len(skeletons)
         return _count_validate(
             self, prompt, BIZ_DATA_FILLING_SYSTEM,

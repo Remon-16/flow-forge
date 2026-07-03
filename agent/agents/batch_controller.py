@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from plugins.base import CaseAttributeGenerator
 
 from config.settings import Settings, get_strategy
+from i18n import _
 from writers.yaml_writer import YamlWriter
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class BatchController:
     """
 
     def __init__(self, settings: Settings):
-        self._batch_size = settings.batch_size
+        self._batch_size = settings.plugin_batch_size
         self._enable_validation = settings.enable_validation
         self._max_validation_retries = settings.max_validation_retries
         self._max_steps_no_progress = settings.max_steps_no_progress
@@ -93,7 +94,7 @@ class BatchController:
             meta = ckpt_mgr.load_meta()
             if meta:
                 restart_phase = _CkptMgr.get_restart_phase(meta)
-                logger.info("Resume mode: restarting from phase '%s'", restart_phase)
+                logger.info(_("batch_controller.resume_phase", phase=restart_phase))
                 ckpt_settings = meta.get("settings", {})
                 if ckpt_settings:
                     self._batch_size = ckpt_settings.get("batch_size", self._batch_size)
@@ -112,14 +113,14 @@ class BatchController:
                     biz_cases = data.get("biz_cases", [])
                     all_failures = data.get("failures", [])
                     logger.info(
-                        "Restored checkpoint: %d single, %d biz",
-                        len(single_cases), len(biz_cases),
+                        _("batch_controller.resume_restored",
+                          single=len(single_cases), biz=len(biz_cases)),
                     )
             else:
-                logger.warning("Checkpoint invalid; starting from scratch.")
+                logger.warning(_("batch_controller.resume_invalid"))
                 resume = False
         elif resume:
-            logger.warning("No checkpoint found; starting from scratch.")
+            logger.warning(_("batch_controller.resume_none"))
             resume = False
 
         def _phase_index(phase: str) -> int:
@@ -133,35 +134,35 @@ class BatchController:
         # ================================================================
         if restart_phase == _SKELETON_PHASE:
             logger.info("=" * 60)
-            logger.info("Step 1: Skeleton generation")
+            logger.info(_("batch_controller.step_skeleton"))
             logger.info("=" * 60)
 
             # 1a. Single case skeletons
             # 根据 case_type 跳过 / Skip based on case_type
             if case_type in ("both", "single"):
-                logger.info("Generating single case skeletons...")
+                logger.info(_("batch_controller.skeleton_generating_single"))
                 single_skels = single_skel_gen.generate(
                     plan, interfaces, api_summary, user_guidance
                 )
-                logger.info("Generated %d single case skeletons", len(single_skels))
+                logger.info(_("batch_controller.skeleton_generated_single", count=len(single_skels)))
             else:
-                logger.info("Skipping single case skeletons (case_type=%s)", case_type)
+                logger.info(_("batch_controller.skeleton_skip_single_case_type", case_type=case_type))
                 single_skels = []
 
             # 1b. Biz flow skeletons
             # 根据 case_type 跳过 / Skip based on case_type
             if case_type in ("both", "biz"):
-                logger.info("Generating biz flow skeletons...")
+                logger.info(_("batch_controller.skeleton_generating_biz"))
                 biz_skels = []
                 if hasattr(plan, "biz_flow_scenarios") and plan.biz_flow_scenarios:
                     biz_skels = biz_skel_gen.generate(
                         plan, interfaces, api_summary, user_guidance
                     )
-                    logger.info("Generated %d biz flow skeletons", len(biz_skels))
+                    logger.info(_("batch_controller.skeleton_generated_biz", count=len(biz_skels)))
                 else:
-                    logger.info("No biz flow scenarios in plan, skipping")
+                    logger.info(_("batch_controller.skeleton_skip_biz"))
             else:
-                logger.info("Skipping biz flow skeletons (case_type=%s)", case_type)
+                logger.info(_("batch_controller.skeleton_skip_biz_case_type", case_type=case_type))
                 biz_skels = []
 
             # 1c. URL check + correction
@@ -193,7 +194,7 @@ class BatchController:
 
             self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE, single_cases, biz_cases, all_failures, output_dir, phases=phases)
         else:
-            logger.info("Step 1: Skeleton generation — SKIPPED (already completed)")
+            logger.info(_("batch_controller.step_skeleton_skipped"))
 
         # ================================================================
         # Step 2-N: Plugin execution (data filling, assertions, user plugins...)
@@ -202,16 +203,16 @@ class BatchController:
             phase_name = f"plugin_{plugin.declaration.plugin_name}"
             if _phase_index(restart_phase) > _phase_index(phase_name):
                 logger.info(
-                    "Plugin '%s' — SKIPPED (phase %s already completed)",
-                    plugin.declaration.plugin_name, phase_name,
+                    _("batch_controller.plugin_skipped",
+                      name=plugin.declaration.plugin_name, phase=phase_name),
                 )
                 continue
 
             decl = plugin.declaration
             logger.info("=" * 60)
             logger.info(
-                "Plugin: %s (single=%s, biz=%s)",
-                decl.plugin_name, decl.applies_to_single, decl.applies_to_biz,
+                _("batch_controller.plugin_header",
+                  name=decl.plugin_name, single=decl.applies_to_single, biz=decl.applies_to_biz),
             )
             logger.info("=" * 60)
 
@@ -239,8 +240,7 @@ class BatchController:
             YamlWriter.write_biz_flow(case, output_dir)
 
         if all_failures:
-            logger.warning("%d cases had URL correction failures", len(all_failures))
-            logger.info(_("batch_controller.url_failures", count=len(all_failures)))
+            logger.warning(_("batch_controller.url_failures", count=len(all_failures)))
             YamlWriter.write_failures(all_failures, output_dir)
 
         return {
@@ -271,8 +271,8 @@ class BatchController:
 
         # skip 策略：完全跳过 URL 校验 / Skip strategy: bypass entirely
         if url_strategy == "skip":
-            logger.info("URL check skipped (strategy=skip) for %d %s skeletons",
-                        len(skeletons), batch_type)
+            logger.info(_("batch_controller.url_check_skipped",
+                        count=len(skeletons), type=batch_type))
             return skeletons, []
 
         # 无 API 文档文本时跳过 / Skip when no API doc text
@@ -296,7 +296,7 @@ class BatchController:
                         break
 
             if not bad_cases:
-                logger.info("URL check passed for all %d %s skeletons", len(current), batch_type)
+                logger.info(_("batch_controller.url_passed", count=len(current), type=batch_type))
                 return current, []
 
             if retry >= max_retries:
@@ -317,14 +317,14 @@ class BatchController:
                     key = c.get("test_id") if batch_type == "single" else c.get("sheet_name", "")
                     (failed if key in bad_ids else valid).append(c)
                 logger.warning(
-                    "URL correction exhausted for %d %s cases after %d retries",
-                    len(failed), batch_type, max_retries,
+                    _("batch_controller.url_exhausted",
+                      count=len(failed), type=batch_type, retries=max_retries),
                 )
                 return valid, failed
 
             logger.info(
-                "URL correction retry %d/%d: %d %s cases with invalid URLs",
-                retry + 1, max_retries, len(bad_cases), batch_type,
+                _("batch_controller.url_correction_retry",
+                  retry=retry + 1, max=max_retries, count=len(bad_cases), type=batch_type),
             )
 
             try:
@@ -334,7 +334,7 @@ class BatchController:
                     corrected_map = {c.get(key_field, ""): c for c in corrected}
                     current = [corrected_map.get(c.get(key_field, ""), c) for c in current]
             except Exception as e:
-                logger.warning("URL correction LLM call failed: %s", e)
+                logger.warning(_("batch_controller.url_correction_llm_error", error=str(e)))
                 if retry >= max_retries - 1:
                     return self._split_good_bad(current, bad_cases, batch_type)
 
@@ -397,14 +397,15 @@ class BatchController:
                             raise
                         elif decl.error_strategy == "warn":
                             logger.warning(
-                                "Plugin '%s' failed after %d retries — keeping original",
-                                decl.plugin_name, decl.max_retries,
+                                _("batch_controller.plugin_failed_after_retries",
+                                  name=decl.plugin_name, retries=decl.max_retries),
                             )
                             results.extend(batch)
                         else:
                             results.extend(batch)
                     else:
-                        logger.info("Plugin '%s' retry %d/%d", decl.plugin_name, attempt + 1, decl.max_retries)
+                        logger.info(_("batch_controller.plugin_retry",
+                                    name=decl.plugin_name, attempt=attempt + 1, max=decl.max_retries))
 
             if batch_ok:
                 consecutive_failures = 0
@@ -415,7 +416,7 @@ class BatchController:
 
             self._maybe_wait_between_batches(i, len(batches))
 
-        logger.info("Plugin '%s': processed %d cases", decl.plugin_name, len(results))
+        logger.info(_("batch_controller.plugin_result", name=decl.plugin_name, count=len(results)))
         return results
 
     # ------------------------------------------------------------------
@@ -443,13 +444,14 @@ class BatchController:
         if limit < 0:
             return False
         if consecutive >= limit:
-            logger.warning("Stopping [%s]: %d consecutive failures (limit=%d)", label, consecutive, limit)
+            logger.warning(_("batch_controller.consecutive_failures",
+                            label=label, n=consecutive, limit=limit))
             return True
         return False
 
     def _maybe_wait_between_batches(self, batch_idx: int, total: int):
         if batch_idx < total - 1 and self._rate_limit_delay > 0:
-            logger.info("Waiting %.1fs before next batch", self._rate_limit_delay)
+            logger.info(_("batch_controller.wait_between_batches", delay=self._rate_limit_delay))
             time.sleep(self._rate_limit_delay)
 
     def _split_batches(self, items: List) -> List[List]:

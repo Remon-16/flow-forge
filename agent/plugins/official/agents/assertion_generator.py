@@ -18,7 +18,7 @@ from plugins.official.prompts.assertion_generation import (
     BIZ_ASSERTION_USER,
 )
 from prompts.render import render_prompt
-from i18n import get_language_name
+from i18n import _, get_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ class SingleAssertionGenerator(BaseAgent):
             if docs:
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
-        logger.info("Generating assertions for %d single cases...", len(cases))
+        logger.info(_("plugin.assertion_gen.single", count=len(cases)))
         expected_count = len(cases)
         return _count_validate(
             self, prompt, SINGLE_ASSERTION_SYSTEM,
@@ -225,7 +225,7 @@ class BizAssertionGenerator(BaseAgent):
             if docs:
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}" + "\n---\n".join(docs)
 
-        logger.info("Generating assertions for %d biz flows...", len(cases))
+        logger.info(_("plugin.assertion_gen.biz", count=len(cases)))
         expected_count = len(cases)
         return _count_validate(
             self, prompt, BIZ_ASSERTION_SYSTEM,

@@ -14,7 +14,7 @@ from plugins.base import CaseAttributeGenerator, PluginDeclaration
 def _make_settings(**kwargs):
     s = Settings()
     s.llm_api_key = "test"
-    s.batch_size = kwargs.get("batch_size", 2)
+    s.plugin_batch_size = kwargs.get("batch_size", 2)
     s.enable_validation = kwargs.get("enable_validation", False)
     s.max_validation_retries = kwargs.get("max_validation_retries", 1)
     s.max_steps_no_progress = kwargs.get("max_steps_no_progress", 10)

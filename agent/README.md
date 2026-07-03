@@ -380,6 +380,7 @@ pipeline:           # 流水线设置
   plan_single_batch_size: 8   # 单接口测试点分组大小（-1=不拆分）/ Single API batch size (-1=no split)
   plan_biz_flow_batch_size: 3 # 业务链路每批合并数（-1=不拆分）/ Biz flow batch size (-1=no split)
   case_type: both      # 用例生成类型 / Case type: both | single | biz
+  plugin_batch_size: 10 # 插件处理批次大小（-1=不分批）/ Plugin batch size (-1=no split)
 
 knowledge:          # 知识库（grep 文本搜索）
   enabled: false
@@ -400,7 +401,6 @@ validation:         # 用例校验
 
 output:             # 输出设置
   dir: ./output
-  batch_size: 10
   format: both      # yaml | excel | both
 
 plugins:            # 插件系统
