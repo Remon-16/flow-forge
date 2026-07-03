@@ -295,7 +295,11 @@ def _targeted_regenerate(
         reference_summary="(none)",
         language=get_language_name(),
     )
-    global_context = agent.call_llm(global_prompt, PLAN_CHUNK_GLOBAL_SYSTEM)
+    global_context = agent.call_llm(
+        global_prompt,
+        render_prompt(PLAN_CHUNK_GLOBAL_SYSTEM, outline=outline_json_new,
+                      language=get_language_name()),
+    )
 
     # Regenerate affected API groups / with feedback injected
     from prompts.plan_generation import (

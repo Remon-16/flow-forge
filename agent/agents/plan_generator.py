@@ -105,7 +105,8 @@ class PlanGenerator(BaseAgent):
         logger.info(
             _("plan_gen.generating", count=len(interfaces), tokens=input_tokens)
         )
-        plan_md = self.call_llm(prompt, PLAN_GENERATION_SYSTEM)
+        system_msg = render_prompt(PLAN_GENERATION_SYSTEM, language=get_language_name())
+        plan_md = self.call_llm(prompt, system_msg)
         logger.info(_("plan_gen.generated", chars=len(plan_md)))
         return plan_md
 
@@ -164,7 +165,8 @@ class PlanGenerator(BaseAgent):
             _("plan_gen.generating_outline",
               count=len(interface_names), tokens=input_tokens)
         )
-        outline = self.call_llm_json(prompt, PLAN_OUTLINE_SYSTEM)
+        system_msg = render_prompt(PLAN_OUTLINE_SYSTEM, language=get_language_name())
+        outline = self.call_llm_json(prompt, system_msg)
         logger.info(
             _("plan_gen.outline_result",
               groups=len(outline.get("api_groups", [])),
@@ -344,7 +346,12 @@ class PlanGenerator(BaseAgent):
             language=get_language_name(),
         )
         self.reset_steps()
-        global_context = self.call_llm(prompt, PLAN_CHUNK_GLOBAL_SYSTEM)
+        system_msg = render_prompt(
+            PLAN_CHUNK_GLOBAL_SYSTEM,
+            outline=outline_json,
+            language=get_language_name(),
+        )
+        global_context = self.call_llm(prompt, system_msg)
         plan_parts["global_context"] = global_context
         logger.info(_("plan_gen.phase_a_done"))
         return global_context

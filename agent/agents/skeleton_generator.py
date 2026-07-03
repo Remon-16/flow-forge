@@ -345,7 +345,8 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
             SINGLE_SKELETON_USER, SINGLE_SKELETON_SYSTEM,
         )
         return _count_validate(
-            self, prompt, SINGLE_SKELETON_SYSTEM,
+            self, prompt,
+            render_prompt(SINGLE_SKELETON_SYSTEM, language=get_language_name()),
             "single_skeletons", expected_count,
             "single case skeletons",
             get_strategy(self._validation_rules, "skeleton_count"),
@@ -396,7 +397,8 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
             )
 
             skeletons = _count_validate(
-                self, batch_prompt, SINGLE_SKELETON_SYSTEM,
+                self, batch_prompt,
+                render_prompt(SINGLE_SKELETON_SYSTEM, language=get_language_name()),
                 "single_skeletons", batch_expected, label, strategy,
             )
             all_skeletons.extend(skeletons)
@@ -612,7 +614,8 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
             knowledge_query="business flow test case",
         )
         return _count_validate(
-            self, prompt, BIZ_SKELETON_SYSTEM,
+            self, prompt,
+            render_prompt(BIZ_SKELETON_SYSTEM, language=get_language_name()),
             "biz_skeletons", expected_count,
             "biz flow skeletons",
             get_strategy(self._validation_rules, "skeleton_count"),
@@ -653,7 +656,8 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
             )
 
             skeletons = _count_validate(
-                self, batch_prompt, BIZ_SKELETON_SYSTEM,
+                self, batch_prompt,
+                render_prompt(BIZ_SKELETON_SYSTEM, language=get_language_name()),
                 "biz_skeletons", batch_expected, label, strategy,
             )
             all_skeletons.extend(skeletons)

@@ -12,7 +12,7 @@ Rules:
 - If the interface documentation lacks a description, infer one and note it in uncertainties
 - Auth type inference: if the interface has an Authorization header parameter or security definition, set need_token=true
 - For any uncertain inference, you MUST list specific questions in uncertainties
-- You MUST write all uncertainty questions in {{{{language}}}}.
+- You MUST write all uncertainty questions in {{language}}.
 - Return a JSON object with a "summaries" field containing an array of interface summaries
 - Format example: {{"summaries": [{{"api_path": "/api/xxx", "method": "POST", ...}}]}}
 - If there are no interfaces, return {{"summaries": []}}"""

@@ -14,7 +14,7 @@ def render_prompt(template: str, **kwargs: Any) -> str:
     """
     result = template
     for key, value in kwargs.items():
-        result = result.replace(f"{{{{{key}}}}}", str(value))
+        result = result.replace(f"{{{key}}}", str(value))
     # Warn about unresolved placeholders
     remaining = _VAR_RE.findall(result)
     if remaining:

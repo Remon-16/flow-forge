@@ -18,6 +18,7 @@ from models.schema import (
 from prompts import KNOWLEDGE_SECTION_HEADER
 from prompts.case_generation import CASE_GENERATION_SYSTEM, CASE_GENERATION_USER
 from prompts.render import render_prompt
+from i18n import get_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,8 @@ class CaseGenerator(BaseAgent):
             )
 
         logger.info("Generating test cases from plan (~%d tokens)...", input_tokens)
-        result = self.call_llm_json(prompt, CASE_GENERATION_SYSTEM)
+        system_msg = render_prompt(CASE_GENERATION_SYSTEM, language=get_language_name())
+        result = self.call_llm_json(prompt, system_msg)
 
         single_cases = self._parse_single_cases(result.get("single_cases", []))
         biz_flows = self._parse_biz_flows(result.get("biz_flows", []))

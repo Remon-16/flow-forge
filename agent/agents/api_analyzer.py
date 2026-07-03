@@ -18,6 +18,7 @@ from prompts.api_analyzer import (
     RAW_API_CHUNK_NOTICE,
 )
 from prompts.render import render_prompt
+from i18n import get_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +59,12 @@ class ApiAnalyzer(BaseAgent):
             API_ANALYSIS_USER,
             interfaces=iface_json,
             extra_context="",
+            language=get_language_name(),
         )
 
         logger.info("Analyzing %d interfaces...", len(interfaces))
-        result = self.call_llm_json(prompt, API_ANALYSIS_SYSTEM)
+        system_msg = render_prompt(API_ANALYSIS_SYSTEM, language=get_language_name())
+        result = self.call_llm_json(prompt, system_msg)
         return self._normalize_result(result)
 
     def analyze_raw_text(

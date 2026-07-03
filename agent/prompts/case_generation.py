@@ -64,7 +64,7 @@ Notes:
 - Inherit field format: `{{"key1": "StepID.response.field.path", "key2": "StepID.response.field.path"}}`
 - Variable references use the `#{{varName}}` syntax
 - ALL field values use double quotes
-- BizFlow sheet_name MUST be in {{{{language}}}}
+- BizFlow sheet_name MUST be in {{language}}
 """
 
 CASE_GENERATION_USER = """Please generate concrete test cases based on the following information:

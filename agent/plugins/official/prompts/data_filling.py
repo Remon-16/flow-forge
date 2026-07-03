@@ -12,7 +12,6 @@ Key Requirements:
 4. tag MUST be P0 (core flow) / P1 (important feature) / P2 (edge case) based on the importance of the test scenario
 {render_field_constraints('single_test_case', lang="en")}
 6. KEEP test_id, relevance_id, api_name, method, url, remark from the skeleton unchanged
-7. You MUST write api_name, tag, and remark fields in {{{{language}}}}.
 
 Return the populated cases in JSON format:
 ```json
@@ -72,7 +71,6 @@ Key Requirements:
 6. tag MUST be P0/P1/P2 based on the importance of the test scenario
 {render_field_constraints('biz_step', lang="en")}
 8. KEEP sheet_name, step_id, relevance_id, api_name, method, url, remark from the skeleton unchanged
-9. You MUST write sheet_name, api_name, tag, and remark fields in {{{{language}}}}.
 
 Return the populated business flow cases in JSON format:
 ```json
