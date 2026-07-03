@@ -59,6 +59,7 @@ class BaseAgent:
     _default_retry_base_delay: float = 2.0
     _default_max_concurrency: int = 1
     _default_request_timeout: float = 600.0
+    _default_extra_params: Dict[str, Any] | None = None
 
     def __init__(
         self,
@@ -77,6 +78,7 @@ class BaseAgent:
         max_concurrency: int | None = None,
         request_timeout: float | None = None,
         skill_extensions: List[str] | None = None,
+        extra_params: Dict[str, Any] | None = None,
     ):
         # Use shared client to avoid creating multiple httpx connection pools.
         # Each pool maintains keep-alive connections; with 10+ agent instances,
@@ -141,6 +143,12 @@ class BaseAgent:
 
         # Skill extensions — injected by plugin loader, appended to system_msg on each call
         self._skill_extensions: List[str] = skill_extensions or []
+
+        # Extra API params — injected via configure() from settings.llm_extra_params
+        self._extra_params: Dict[str, Any] = (
+            extra_params if extra_params is not None
+            else BaseAgent._default_extra_params or {}
+        )
 
     def set_progress_getter(
         self, getter: Callable[[], str], max_no_progress: int = 5
@@ -591,6 +599,11 @@ class BaseAgent:
 
                     if response_format == "json_object":
                         kwargs["response_format"] = {"type": "json_object"}
+
+                    # 合并额外参数（如思考模式等厂商特定配置）
+                    # Merge extra params (e.g. thinking mode, vendor-specific config)
+                    if self._extra_params:
+                        kwargs.update(self._extra_params)
 
                     response = self._client.chat.completions.create(**kwargs)
                     content = response.choices[0].message.content or ""

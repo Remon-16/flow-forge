@@ -31,6 +31,7 @@ class GraphState(TypedDict, total=False):
     batch_size: int             # Max cases per batch
     enable_validation: bool     # Whether to run case validation
     max_validation_retries: int # Max validation retries
+    case_type: str              # "both" | "single" | "biz"
 
     # === 文档解析 / Document parsing ===
     requirement_text: str

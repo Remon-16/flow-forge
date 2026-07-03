@@ -159,6 +159,7 @@ AI 智能体输出 Excel 格式（--output-format excel 或 both）
   - 弱模型：骨架分批建议 5-10，单接口分块建议 3-5（`plan_single_batch_size`），业务链路分块建议 1-3（`plan_biz_flow_batch_size`）
   - 配置方式：在 `env.yaml` 的 `pipeline` 段中设置
 - **自动模式**：调试好 skill 和插件后，可使用 `--auto` 启用自动模式跳过人工审核，提升批量生成效率。
+- **用例类型选择**：通过 `--case-type` 或 `env.yaml` 中的 `pipeline.case_type` 可选择只生成单接口用例 (`single`) 或只生成业务链路用例 (`biz`)，默认全部生成 (`both`)。
 
 ## 反幻觉与错误处理
 
@@ -166,6 +167,7 @@ AI 智能体输出 Excel 格式（--output-format excel 或 both）
 - **LLM 输出数量校验（反幻觉）**：所有 LLM 调用在骨架生成、数据填充、断言生成和 URL 纠错后，自动校验输出条目数与输入是否一致。数量不匹配时自动重试。每个校验项支持三级策略（终止 / 警告继续 / 跳过），可通过 `validation.rules` 配置。
 - **骨架分批与计划分块**：骨架生成采用分批机制（默认每批 30 个测试点），提高计数精度。测试计划生成采用"轮廓 + 四阶段"法——先生成轻量 JSON 轮廓，再分四阶段生成：A) 全局业务理解 + 流程图 → B) 按 `plan_single_batch_size` 分组的单接口测试点 → C) 按 `plan_biz_flow_batch_size` 合并的业务链路测试 → D) 拼接。每个分块独立调用 LLM 并重置步数计数器。两个配置均支持 `-1`（不拆分），强模型可设为 `-1` 加快执行。
 - **插件错误处理**：agent/ 插件支持三种错误策略——`skip`（跳过）、`warn`（警告）、`fail`（终止流水线）。`fail` 策略下流水线终止并可通过断点续写从失败阶段恢复。python/ 处理器失败时立即终止当前用例执行并在报告中记录错误。
+- **LLM 思考模式**：通过 `env.yaml` 中 `llm.extra_params` 可配置厂商特定的思考模式参数（如 DeepSeek 的 `thinking`、OpenAI o-series 的 `reasoning_effort`），参数将原样传递给 API。
 
 ## 运行测试
 

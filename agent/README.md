@@ -333,6 +333,8 @@ optional arguments:
   --resume              从已有 output 目录恢复执行
   --resume-overwrite    恢复时覆盖已有输出
   --auto                自动模式，跳过所有人工审核，适合夜间批量生成
+  --case-type {single,biz,both}
+                        用例生成类型: single=仅单接口, biz=仅业务链路, both=全部 (默认)
   --debug-snapshots     保存调试快照
   --debug               启用调试日志（完整 LLM I/O）
   --env PATH            .env 文件路径（默认 .env）
@@ -365,6 +367,7 @@ llm:                # LLM 供应商配置
   rate_limit_delay: 0.0
   retry_base_delay: 2.0
   request_timeout: 600.0
+  extra_params: {}    # 额外 API 参数（如思考模式）/ Extra API params (e.g. thinking)
 
 pipeline:           # 流水线设置
   max_steps: 10
@@ -376,6 +379,7 @@ pipeline:           # 流水线设置
   auto: false        # 自动模式：跳过人工审核（夜间批量生成时建议开启）
   plan_single_batch_size: 8   # 单接口测试点分组大小（-1=不拆分）/ Single API batch size (-1=no split)
   plan_biz_flow_batch_size: 3 # 业务链路每批合并数（-1=不拆分）/ Biz flow batch size (-1=no split)
+  case_type: both      # 用例生成类型 / Case type: both | single | biz
 
 knowledge:          # 知识库（grep 文本搜索）
   enabled: false
@@ -433,6 +437,37 @@ logging:
 
 - **全局关闭**：`skills.enabled: false` → 所有 Skill 注入停止，插件正常运行
 - **精细控制**：编辑 `skills.agents`，删除不需要的 Agent 或 Skill 条目
+
+### 思考模式（Thinking Mode）
+
+通过 `llm.extra_params` 配置厂商特定的思考/推理模式参数。参数将以 `**kwargs` 形式原样传递给 OpenAI SDK 的 `chat.completions.create()` 调用。
+
+```yaml
+# DeepSeek 思考模式示例 / DeepSeek thinking mode example:
+llm:
+  extra_params:
+    thinking:
+      type: enabled
+
+# OpenAI o-series 推理强度示例 / OpenAI o-series reasoning effort example:
+llm:
+  extra_params:
+    reasoning_effort: medium
+```
+
+> **注意**：参数名和值取决于具体的模型/API 厂商，配置前请先查阅对应厂商的 API 文档。不支持的参数可能被忽略或导致错误。
+
+### 用例类型选择（Case Type）
+
+通过 `pipeline.case_type` 或 `--case-type` CLI 参数可选择生成范围：
+
+| 值 | 说明 |
+|----|------|
+| `both` | 同时生成单接口用例和业务链路用例（默认） |
+| `single` | 仅生成单接口用例，跳过 Phase C 和业务链路骨架 |
+| `biz` | 仅生成业务链路用例，跳过 Phase B 和单接口骨架 |
+
+跳过逻辑在代码级别执行，不影响轮廓生成——轮廓仍会包含完整的 `api_groups` 和 `biz_flows`。
 
 ## 知识库
 

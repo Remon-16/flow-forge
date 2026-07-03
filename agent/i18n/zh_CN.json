@@ -107,6 +107,8 @@
   "plan_gen.outline_exceeds_window": "轮廓生成输入超出上下文窗口: {tokens} / {window} tokens。",
   "plan_gen.save_error": "保存 plan.md 到 memory_dir 失败: {error}",
   "plan_gen.phase_c_batch": "Phase C 分块 {current}/{total}: {names} ({count} 个流程)",
+  "plan_gen.case_type_skip_api_sections": "跳过单接口测试点生成 (case_type=biz)",
+  "plan_gen.case_type_skip_biz_sections": "跳过业务链路测试生成 (case_type=single)",
 
   "review.prompt_clarify": "\n是否需要澄清以上问题？(输入修改意见 / skip 跳过): ",
   "review.prompt_approve": "\n是否批准此测试计划？\n  y = 批准，继续执行用例生成\n  n = 提出文字修改意见\n  r = 按批注文件修改（需先在 Studio 中对 plan.md 添加批注）\n请输入 (y/n/r): ",

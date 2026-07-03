@@ -61,6 +61,7 @@ class BatchController:
         resume: bool = False,
         memory_dir: str = "",
         resume_overwrite: bool = False,
+        case_type: str = "both",
     ) -> Dict[str, Any]:
         """执行完整的用例生成流水线。
 
@@ -136,22 +137,32 @@ class BatchController:
             logger.info("=" * 60)
 
             # 1a. Single case skeletons
-            logger.info("Generating single case skeletons...")
-            single_skels = single_skel_gen.generate(
-                plan, interfaces, api_summary, user_guidance
-            )
-            logger.info("Generated %d single case skeletons", len(single_skels))
-
-            # 1b. Biz flow skeletons
-            logger.info("Generating biz flow skeletons...")
-            biz_skels = []
-            if hasattr(plan, "biz_flow_scenarios") and plan.biz_flow_scenarios:
-                biz_skels = biz_skel_gen.generate(
+            # 根据 case_type 跳过 / Skip based on case_type
+            if case_type in ("both", "single"):
+                logger.info("Generating single case skeletons...")
+                single_skels = single_skel_gen.generate(
                     plan, interfaces, api_summary, user_guidance
                 )
-                logger.info("Generated %d biz flow skeletons", len(biz_skels))
+                logger.info("Generated %d single case skeletons", len(single_skels))
             else:
-                logger.info("No biz flow scenarios in plan, skipping")
+                logger.info("Skipping single case skeletons (case_type=%s)", case_type)
+                single_skels = []
+
+            # 1b. Biz flow skeletons
+            # 根据 case_type 跳过 / Skip based on case_type
+            if case_type in ("both", "biz"):
+                logger.info("Generating biz flow skeletons...")
+                biz_skels = []
+                if hasattr(plan, "biz_flow_scenarios") and plan.biz_flow_scenarios:
+                    biz_skels = biz_skel_gen.generate(
+                        plan, interfaces, api_summary, user_guidance
+                    )
+                    logger.info("Generated %d biz flow skeletons", len(biz_skels))
+                else:
+                    logger.info("No biz flow scenarios in plan, skipping")
+            else:
+                logger.info("Skipping biz flow skeletons (case_type=%s)", case_type)
+                biz_skels = []
 
             # 1c. URL check + correction
             single_cases, single_failed = self._url_check_and_correct(

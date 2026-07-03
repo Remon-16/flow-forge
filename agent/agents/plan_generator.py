@@ -182,6 +182,7 @@ class PlanGenerator(BaseAgent):
         reference_summary: str = "",
         chunk_progress: Dict[str, Any] | None = None,
         memory_dir: str = "",
+        case_type: str = "both",
     ) -> str:
         """基于轮廓分块生成完整测试计划 / Generate full plan from outline in chunks.
 
@@ -251,24 +252,34 @@ class PlanGenerator(BaseAgent):
         )
 
         # Phase B: 按 API group 生成测试点 section
-        api_sections = self._phase_b_api_sections(
-            api_groups=api_groups,
-            iface_by_id=iface_by_id,
-            outline_json=outline_json,
-            global_context=global_context,
-            user_guidance=user_guidance,
-            plan_parts=plan_parts,
-        )
+        # 仅 both / single 模式生成 / Only generate for both or single mode
+        if case_type in ("both", "single"):
+            api_sections = self._phase_b_api_sections(
+                api_groups=api_groups,
+                iface_by_id=iface_by_id,
+                outline_json=outline_json,
+                global_context=global_context,
+                user_guidance=user_guidance,
+                plan_parts=plan_parts,
+            )
+        else:
+            logger.info(_("plan_gen.case_type_skip_api_sections"))
+            api_sections = []
 
         # Phase C: 按批次生成业务链路测试 section
-        biz_sections = self._phase_c_biz_sections(
-            biz_batches=biz_batches,
-            iface_by_id=iface_by_id,
-            outline_json=outline_json,
-            global_context=global_context,
-            user_guidance=user_guidance,
-            plan_parts=plan_parts,
-        )
+        # 仅 both / biz 模式生成 / Only generate for both or biz mode
+        if case_type in ("both", "biz"):
+            biz_sections = self._phase_c_biz_sections(
+                biz_batches=biz_batches,
+                iface_by_id=iface_by_id,
+                outline_json=outline_json,
+                global_context=global_context,
+                user_guidance=user_guidance,
+                plan_parts=plan_parts,
+            )
+        else:
+            logger.info(_("plan_gen.case_type_skip_biz_sections"))
+            biz_sections = []
 
         # 保存分块结构到 plan_sections.json / Save section structure for revision
         self._save_sections_artifact(

@@ -296,6 +296,8 @@ optional arguments:
   --resume              Resume from existing output directory
   --resume-overwrite    Overwrite existing output when resuming
   --auto                Auto mode: skip all human review, ideal for nightly batch
+  --case-type {single,biz,both}
+                        Case type: single=API only, biz=business flow only, both=all (default)
   --debug-snapshots     Save debug snapshots
   --debug               Enable debug logging (full LLM I/O)
   --env PATH            Path to .env file (default: .env)
@@ -328,6 +330,7 @@ llm:                # LLM provider settings
   rate_limit_delay: 0.0
   retry_base_delay: 2.0
   request_timeout: 600.0
+  extra_params: {}    # Extra API params (e.g. thinking mode)
 
 pipeline:           # Pipeline settings
   max_steps: 10
@@ -339,6 +342,7 @@ pipeline:           # Pipeline settings
   auto: false        # Auto mode: skip human review (enable for nightly batch)
   plan_single_batch_size: 8   # Single API batch size (-1=no split)
   plan_biz_flow_batch_size: 3 # Biz flow batch size (-1=no split)
+  case_type: both      # Case generation type: both | single | biz
 
 knowledge:          # Knowledge base (grep-based text search)
   enabled: false
@@ -396,6 +400,37 @@ logging:
 
 - **Global disable**: `skills.enabled: false` — all skill injection stops; plugins still run normally
 - **Fine-grained control**: edit `skills.agents` to remove unwanted agent entries or individual skills
+
+### Thinking Mode
+
+Configure vendor-specific thinking/reasoning mode parameters via `llm.extra_params`. Parameters are passed as `**kwargs` directly to the OpenAI SDK `chat.completions.create()` call.
+
+```yaml
+# DeepSeek thinking mode example:
+llm:
+  extra_params:
+    thinking:
+      type: enabled
+
+# OpenAI o-series reasoning effort example:
+llm:
+  extra_params:
+    reasoning_effort: medium
+```
+
+> **Note**: Parameter names and values depend on the specific model/API vendor. Consult the vendor's API documentation before configuring. Unsupported parameters may be ignored or cause errors.
+
+### Case Type Selection
+
+Use `pipeline.case_type` or `--case-type` CLI flag to choose the generation scope:
+
+| Value | Description |
+|-------|-------------|
+| `both` | Generate both single-API and business flow cases (default) |
+| `single` | Only generate single-API cases; skip Phase C and biz flow skeletons |
+| `biz` | Only generate business flow cases; skip Phase B and single-API skeletons |
+
+Skipping is performed at the code level and does not affect outline generation — the outline will still contain both `api_groups` and `biz_flows`.
 
 ## Knowledge Base
 

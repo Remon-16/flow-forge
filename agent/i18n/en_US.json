@@ -107,6 +107,8 @@
   "plan_gen.outline_exceeds_window": "Outline generation input exceeds context window: {tokens} / {window} tokens.",
   "plan_gen.save_error": "Failed to save plan.md to memory_dir: {error}",
   "plan_gen.phase_c_batch": "Phase C chunk {current}/{total}: {names} ({count} flows)",
+  "plan_gen.case_type_skip_api_sections": "Skipping single API test point generation (case_type=biz)",
+  "plan_gen.case_type_skip_biz_sections": "Skipping business flow test generation (case_type=single)",
 
   "review.prompt_clarify": "\nDo you need to clarify the above? (enter feedback / skip to bypass): ",
   "review.prompt_approve": "\nApprove this test plan?\n  y = approve and proceed to case generation\n  n = reject and provide text feedback\n  r = revise using annotation file (requires plan.md annotations from Studio)\nChoose (y/n/r): ",

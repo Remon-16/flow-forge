@@ -292,6 +292,7 @@ def main() -> int:
         "parse_mode": args.parse_mode,
         "parser_path": args.parser_path or "",
         "auto_mode": auto_mode,
+        "case_type": args.case_type or settings.case_type,
     }
     config = {"configurable": {"thread_id": thread_id}}
 

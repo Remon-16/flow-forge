@@ -159,6 +159,7 @@ The executor is a pure CLI tool that communicates results via exit codes, allowi
   - Weak models: skeleton batch size ~5-10, single-API chunk size ~3-5 (`plan_single_batch_size`), biz flow chunk size ~1-3 (`plan_biz_flow_batch_size`)
   - Configure in `env.yaml` under the `pipeline` section.
 - **Auto mode**: After tuning skills and plugins, use `--auto` to skip human review and speed up batch generation.
+- **Case type selection**: Use `--case-type` or `pipeline.case_type` in `env.yaml` to generate only single-API cases (`single`) or only business flow cases (`biz`). Defaults to both (`both`).
 
 ## Anti-Hallucination & Error Handling
 
@@ -166,6 +167,7 @@ The executor is a pure CLI tool that communicates results via exit codes, allowi
 - **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, the number of output items is automatically validated against the input count. Mismatches trigger automatic retries. Each validation check supports a configurable strategy (fail / warn / skip) via `validation.rules` in `env.yaml`.
 - **Skeleton Batching & Plan Chunking**: Skeleton generation uses batched LLM calls (default 30 test points per batch) for improved count accuracy. Test plan generation uses an "outline + four phases" approach — first generating a lightweight JSON outline, then: A) global business understanding + flowcharts → B) single-API test points grouped by `plan_single_batch_size` → C) business flow tests batched by `plan_biz_flow_batch_size` → D) assembly. Each chunk independently calls the LLM with a reset step counter. Both configs support `-1` (no splitting) for strong models.
 - **Plugin Error Handling**: The agent/ plugin system supports three error strategies — `skip`, `warn`, `fail`. The `fail` strategy aborts the pipeline and enables resumption from the failed stage via checkpoints. The python/ processor system halts the current case immediately on failure and records the error in the test report.
+- **LLM Thinking Mode**: Configure vendor-specific thinking/reasoning parameters (e.g., `thinking` for DeepSeek, `reasoning_effort` for OpenAI o-series) via `llm.extra_params` in `env.yaml`. Parameters are passed directly to the API as-is.
 
 ## Running Tests
 

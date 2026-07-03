@@ -64,10 +64,14 @@ class Settings:
     llm_max_concurrency: int = 1
     consecutive_batch_failure_limit: int = 3
     llm_request_timeout: float = 600.0
+    llm_extra_params: Dict[str, Any] = field(default_factory=dict)
     agent_lang: str = "zh_CN"
     enable_skills: bool = True
     skill_agents: Dict[str, List[str]] = field(default_factory=dict)
     auto_mode: bool = False
+
+    # 用例生成类型 / Case generation type: both | single | biz
+    case_type: str = "both"
 
     # 骨架生成分批大小 / Skeleton generation batch size
     skeleton_batch_size: int = 30
@@ -126,6 +130,7 @@ class Settings:
             "llm_max_concurrency": self.llm_max_concurrency,
             "consecutive_batch_failure_limit": self.consecutive_batch_failure_limit,
             "llm_request_timeout": self.llm_request_timeout,
+            "llm_extra_params": self.llm_extra_params,
             "enable_skills": self.enable_skills,
             "skill_agents": self.skill_agents,
             "auto_mode": self.auto_mode,
@@ -134,6 +139,7 @@ class Settings:
             "plan_single_batch_size": self.plan_single_batch_size,
             "plan_biz_flow_batch_size": self.plan_biz_flow_batch_size,
             "logging_log_to_output": self.logging_log_to_output,
+            "case_type": self.case_type,
             "validation_rules": self.validation_rules,
         }
 
@@ -171,6 +177,7 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         llm_rate_limit_delay=float(llm.get("rate_limit_delay", 0.0)),
         llm_retry_base_delay=float(llm.get("retry_base_delay", 2.0)),
         llm_request_timeout=float(llm.get("request_timeout", 600.0)),
+        llm_extra_params=llm.get("extra_params", {}),
         enable_knowledge=knowledge.get("enabled", False),
         knowledge_dir=knowledge.get("dir", "./knowledge"),
         max_steps=int(pipeline.get("max_steps", 10)),
@@ -192,6 +199,7 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         skill_agents=skills_cfg.get("agents", {}),
         agent_lang=agent_cfg.get("lang", "zh_CN"),
         auto_mode=pipeline.get("auto", False),
+        case_type=pipeline.get("case_type", "both"),
         logging_log_to_output=logging_cfg.get("log_to_output", False),
     )
 

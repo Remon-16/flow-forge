@@ -82,6 +82,7 @@ def generate_plan_node(state: GraphState) -> GraphState:
         reference_summary=reference_summary,
         chunk_progress=chunk_progress,
         memory_dir=memory_dir,
+        case_type=state.get("case_type", "both"),
     )
     state["plan_md"] = plan_md
 

@@ -37,6 +37,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
     batch_size = state.get("batch_size", _h._settings.batch_size)
     reference_dir = state.get("reference_dir", "")
     api_summary = state.get("api_summary", [])
+    case_type = state.get("case_type", "both")
 
     # Resume mode: build minimal TestPlan from existing YAMLs
     if state.get("resume") and (plan is None or not interfaces_raw):
@@ -108,6 +109,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
             resume=state.get("resume", False),
             memory_dir=state.get("memory_dir", ""),
             resume_overwrite=state.get("resume_overwrite", False),
+            case_type=case_type,
         )
     except Exception as e:
         msg = f"BatchController failed: {e}"
