@@ -63,6 +63,13 @@ def _(key: str, **kwargs) -> str:
     return text
 
 
+# 语言代码 → LLM 可读名称映射 / Locale code → LLM-friendly name mapping
+_LANGUAGE_NAMES: Dict[str, str] = {
+    "zh_CN": "简体中文 (Simplified Chinese)",
+    "en_US": "English",
+}
+
+
 def get_language_name() -> str:
     """返回当前语言的人可读名称，用于注入提示词。
 
@@ -70,12 +77,7 @@ def get_language_name() -> str:
     Maps AGENT_LANG env var to a name the LLM understands.
     """
     lang = os.getenv("AGENT_LANG", "zh_CN")
-    if lang == "zh_CN":
-        return "简体中文 (Simplified Chinese)"
-    elif lang == "en_US":
-        return "English"
-    else:
-        return "简体中文 (Simplified Chinese)"
+    return _LANGUAGE_NAMES.get(lang, _LANGUAGE_NAMES["zh_CN"])
 
 
 def _step(step_key: str, msg_key: str, **kwargs) -> str:

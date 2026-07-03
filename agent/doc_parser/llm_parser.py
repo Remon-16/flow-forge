@@ -21,6 +21,7 @@ from prompts.doc_parser import (
     DOC_PARSER_SYSTEM,
     DOC_PARSER_USER,
 )
+from i18n import get_language_name
 from prompts.render import render_prompt
 
 logger = logging.getLogger(__name__)
@@ -71,18 +72,21 @@ class DocParserAgent:
             logger.warning("DocParserAgent received empty text, returning []")
             return []
 
+        # 渲染系统提示词中的 {{language}} 占位符 / Render {{language}} placeholder in system prompt
+        system_msg = render_prompt(DOC_PARSER_SYSTEM, language=get_language_name())
+
         test_prompt = render_prompt(
             DOC_PARSER_USER,
             file_name=file_name or "unknown",
             raw_text=raw_text,
             file_type_hint=file_type_hint or DOC_DEFAULT_FILE_TYPE_HINT,
         )
-        input_tokens = self._agent._estimate_input_tokens(DOC_PARSER_SYSTEM, test_prompt)
+        input_tokens = self._agent._estimate_input_tokens(system_msg, test_prompt)
 
         if input_tokens < self._agent._context_window * self._agent._compression_threshold:
             # Single round
             try:
-                result = self._agent.call_llm_json(test_prompt, DOC_PARSER_SYSTEM)
+                result = self._agent.call_llm_json(test_prompt, system_msg)
                 return self._parse_response(result)
             except Exception as e:
                 logger.error("DocParserAgent LLM call failed: %s", e)
@@ -95,7 +99,7 @@ class DocParserAgent:
         )
         return self._agent._process_long_text(
             text=raw_text,
-            system_msg=DOC_PARSER_SYSTEM,
+            system_msg=system_msg,
             chunk_processor=lambda chunk, _: self._parse_chunk(chunk, file_name, file_type_hint),
             result_merger=self._merge_parsed_interfaces,
             chunk_notice=DOC_CHUNK_NOTICE,
@@ -105,6 +109,7 @@ class DocParserAgent:
         self, chunk: str, file_name: str, file_type_hint: str
     ) -> list:
         """Parse a single chunk of the document."""
+        system_msg = render_prompt(DOC_PARSER_SYSTEM, language=get_language_name())
         prompt = render_prompt(
             DOC_PARSER_USER,
             file_name=file_name or "unknown",
@@ -112,7 +117,7 @@ class DocParserAgent:
             file_type_hint=file_type_hint or DOC_DEFAULT_FILE_TYPE_HINT,
         )
         try:
-            result = self._agent.call_llm_json(prompt, DOC_PARSER_SYSTEM)
+            result = self._agent.call_llm_json(prompt, system_msg)
             return self._parse_response(result)
         except Exception as e:
             logger.warning("DocParserAgent chunk parse failed: %s", e)
