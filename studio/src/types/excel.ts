@@ -1,5 +1,7 @@
 // ============================================================
 // Core data types for the test case Excel workbook
+// 规范字段定义 / Canonical field definitions:
+// shared/schemas/types.json (interface_def, single_test_case, biz_step, biz_flow)
 // ============================================================
 
 export type JsonType = 'string' | 'number' | 'boolean' | 'Date' | 'List' | 'Dict'
@@ -95,6 +97,8 @@ export {
   JSON_FIELDS as JSON_COLUMNS,
 } from '@flow-forge-schemas'
 
+import { HTTP_METHODS as SCHEMA_HTTP_METHODS, TAG_LEVELS as SCHEMA_TAG_LEVELS } from '@flow-forge-schemas'
+
 // --- Processor types ---
 
 export interface PreProcessorItem {
@@ -106,8 +110,9 @@ export type PostProcessorItem = PreProcessorItem
 
 // --- Constants ---
 
-export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
-export const TAG_LEVELS = ['P0', 'P1', 'P2', 'P3', 'P4']
+// 基于 shared/schemas/constants.json 扩展，编辑器下拉需 HEAD/OPTIONS
+export const HTTP_METHODS: readonly string[] = [...SCHEMA_HTTP_METHODS, 'HEAD', 'OPTIONS']
+export const TAG_LEVELS: readonly string[] = SCHEMA_TAG_LEVELS
 
 // --- Validation ---
 

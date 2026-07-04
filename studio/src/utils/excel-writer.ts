@@ -4,6 +4,7 @@ import {
   API_DEF_COLUMNS,
   SINGLE_CASE_COLUMNS,
   BIZ_STEP_COLUMNS,
+  JSON_COLUMNS,
 } from '../types/excel'
 
 // --- Style constants (mirror agent/agents/excel_writer.py) ---
@@ -45,7 +46,6 @@ const THIN_BORDER: Partial<ExcelJS.Borders> = {
 
 // --- Helpers ---
 
-const JSON_FIELDS = ['RequestHead', 'RequestBody', 'AssertDict', 'AssertRules']
 const INTERNAL_FIELDS = ['_uid', '_relevanceValid', '_stepIdDuplicate', '_inheritError']
 
 function safeSheetName(name: string): string {
@@ -136,7 +136,7 @@ function writeSheetWithColumns(
   for (const row of rows) {
     const jsonValues: Record<string, string> = {}
     const values = columns.map((col) => {
-      if (JSON_FIELDS.includes(col)) {
+      if ((JSON_COLUMNS as readonly string[]).includes(col)) {
         const v = row[col]
         const str = v && typeof v === 'object' ? JSON.stringify(v, null, 2) : (v ?? '')
         jsonValues[col] = String(str)

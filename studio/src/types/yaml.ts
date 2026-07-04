@@ -1,4 +1,6 @@
 // YAML case data types — mirrors the executor YAML format
+// 规范字段定义 / Canonical field definitions:
+// shared/schemas/types.json (interface_def, single_test_case, biz_step, biz_flow)
 
 import type { PreProcessorItem, PostProcessorItem } from './excel'
 
