@@ -1,7 +1,7 @@
 """用例字段翻译提示词。
 
 Test case field translation prompts — translate generated test case fields
-into the target language. Input and output are both JSON arrays.
+into the target language. Input is a JSON array, output is a JSON object.
 """
 
 TRANSLATOR_SYSTEM = """You are a professional test case translator. You will receive a JSON array of test cases. Your task is to translate specific text fields of each case into {target_language}.
@@ -24,7 +24,10 @@ FIELDS TO KEEP UNCHANGED (return exactly as-is, byte-for-byte):
 - request_head, request_body, assert_dict, assert_rules
 - preprocessors, postprocessors, app_name, case_type
 
-Return a JSON array of the same length, in the same order. Each element is a complete case object with all original fields plus translated text fields."""
+Return a JSON object with exactly one key "cases" whose value is the translated JSON array. The array must have the same length and order as the input. Each element is a complete case object with all original fields plus translated text fields.
+
+Example response format:
+{"cases": [{...}, {...}, ...]}"""
 
 
 TRANSLATOR_USER = """Translate the following test cases. Only translate api_name, sheet_name (if present), and remark fields into {target_language}.
@@ -37,4 +40,4 @@ TRANSLATOR_USER = """Translate the following test cases. Only translate api_name
 ## Context
 These test cases were generated from API testing requirements. The API methods, URLs, and other technical fields provide context for understanding each case's business purpose.
 
-Return the complete JSON array with translated fields. Keep the same array length and order."""
+Return a JSON object: {"cases": [<complete translated array>]}. The array must contain ALL cases in the same order. Do NOT omit any cases."""

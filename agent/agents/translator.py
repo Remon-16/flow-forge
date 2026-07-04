@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from typing import Any, Dict, List
 
 from .base import BaseAgent
@@ -47,6 +48,7 @@ class CaseTranslator(BaseAgent):
             base_url=settings.llm_base_url,
             context_window=settings.llm_context_window,
             max_output_tokens=settings.llm_max_output_tokens,
+            max_steps=sys.maxsize,
             rate_limit_delay=settings.llm_rate_limit_delay,
             retry_base_delay=settings.llm_retry_base_delay,
             max_concurrency=settings.llm_max_concurrency,
@@ -145,6 +147,27 @@ class CaseTranslator(BaseAgent):
     # 批量翻译 / Batch translation
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _unwrap_dict(d: dict) -> list | None:
+        """递归搜索 dict 中的 list 值。
+
+        Recursively search dict values for a list of translated cases.
+        Handles nested wrappers like {"data": {"cases": [...]}}.
+        Returns the list if found, None otherwise.
+        """
+        for val in d.values():
+            if isinstance(val, list):
+                return val
+            if isinstance(val, dict):
+                result = CaseTranslator._unwrap_dict(val)
+                if result is not None:
+                    return result
+        logger.warning(
+            "Translator returned a dict (keys: %s) without any list value, using original",
+            list(d.keys()),
+        )
+        return None
+
     def translate_batch(self, cases: List[dict]) -> List[dict]:
         """翻译一批用例。
 
@@ -180,29 +203,33 @@ class CaseTranslator(BaseAgent):
             logger.warning(
                 "Failed to parse translator LLM response as JSON, len=%d", len(raw_response)
             )
+            logger.debug("Raw LLM response (first 500 chars):\n%s", raw_response[:500])
             # 返回原始数据作为回退 / Return original data as fallback
             return cases
 
         # 确保返回数组 / Ensure we got an array
         if isinstance(translated, dict):
-            # 可能 LLM 返回的是 {"cases": [...]} 之类的包装 / LLM may wrap in a dict
-            for val in translated.values():
-                if isinstance(val, list):
-                    translated = val
-                    break
-            else:
-                logger.warning("Translator returned a dict instead of array, using original")
+            translated = self._unwrap_dict(translated)
+            if translated is None:
                 return cases
 
         if not isinstance(translated, list):
-            logger.warning("Translator returned non-list: %s", type(translated).__name__)
+            logger.warning(
+                "Translator returned non-list: %s, using original", type(translated).__name__
+            )
+            logger.debug("Non-list value (first 500 chars): %s", str(translated)[:500])
             return cases
 
         # 长度不匹配时回退 / Fallback on length mismatch
         if len(translated) != len(cases):
+            returned_ids = [
+                c.get("test_id", c.get("sheet_name", "?"))
+                for c in translated[:5]
+            ]
             logger.warning(
-                "Translator returned %d cases but expected %d, using original",
-                len(translated), len(cases),
+                "Translator returned %d cases but expected %d, using original. "
+                "First 5 returned IDs: %s",
+                len(translated), len(cases), returned_ids,
             )
             return cases
 
@@ -217,13 +244,13 @@ class CaseTranslator(BaseAgent):
                 orig_steps = original.get("steps", [])
                 result_steps = result.get("steps", [])
                 if isinstance(orig_steps, list) and isinstance(result_steps, list):
-                    for j, (orig_step, res_step) in enumerate(zip(orig_steps, result_steps)):
-                        if isinstance(orig_step, dict) and isinstance(res_step, dict):
-                            for field in _PROTECTED_FIELDS:
-                                if field in orig_step:
-                                    res_step[field] = orig_step[field]
-                    # 如果步数不匹配，恢复原始步数 / Restore original steps if count mismatch
                     if len(result_steps) != len(orig_steps):
                         result["steps"] = orig_steps
+                    else:
+                        for j, (orig_step, res_step) in enumerate(zip(orig_steps, result_steps)):
+                            if isinstance(orig_step, dict) and isinstance(res_step, dict):
+                                for field in _PROTECTED_FIELDS:
+                                    if field in orig_step:
+                                        res_step[field] = orig_step[field]
 
         return translated

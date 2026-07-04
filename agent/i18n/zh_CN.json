@@ -234,5 +234,7 @@
   "translate.no_files": "未找到用例文件（YAML 或 Excel）",
   "translate.no_api_key": "错误: LLM API Key 未设置。请在 translate_env.yaml 中配置。",
   "translate.input_not_found": "错误: 输入目录不存在: {dir}",
-  "translate.log_enabled": "  → 日志输出到 {path}"
+  "translate.log_enabled": "  → 日志输出到 {path}",
+  "translate.failed_warning": "  ⚠ 有 {count} 个用例翻译失败，已保留原始内容。请检查 LLM 配置和日志。",
+  "translate.zero_changed": "  → 所有用例已是目标语言，无需翻译。如需强制翻译请使用 --no-detection。"
 }

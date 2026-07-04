@@ -381,6 +381,22 @@ class TestCaseTranslator:
         result = translator.translate_batch(_SAMPLE_SINGLE_CASES)
         assert len(result) == 2
 
+    def should_handle_many_batches_without_step_limit(self):
+        """max_steps 不应限制批次数 — 翻译工具可处理超过 10 批。"""
+        translator = _make_translator()
+        _mock_call_llm(translator, json.dumps(_TRANSLATED_SINGLE_CASES))
+
+        # 模拟 20 批翻译（每批 1 个用例），不应触发 ConvergenceError
+        for _ in range(20):
+            result = translator.translate_batch(_SAMPLE_SINGLE_CASES[:1])
+            assert len(result) == 1
+
+    def should_have_max_steps_set_to_unlimited(self):
+        """CaseTranslator 的 _max_steps 应为 sys.maxsize（不受默认 10 限制）。"""
+        translator = _make_translator()
+        import sys
+        assert translator._max_steps == sys.maxsize
+
 
 # ============================================================================
 # TestTranslateSettings — 配置加载测试

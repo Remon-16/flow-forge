@@ -234,5 +234,7 @@
   "translate.no_files": "No case files found (YAML or Excel)",
   "translate.no_api_key": "Error: LLM API Key not set. Please configure translate_env.yaml.",
   "translate.input_not_found": "Error: Input directory not found: {dir}",
-  "translate.log_enabled": "  → Log output to {path}"
+  "translate.log_enabled": "  → Log output to {path}",
+  "translate.failed_warning": "  ⚠ {count} cases failed to translate, original content preserved. Check LLM config and logs.",
+  "translate.zero_changed": "  → All cases already in target language, no translation needed. Use --no-detection to force translation."
 }

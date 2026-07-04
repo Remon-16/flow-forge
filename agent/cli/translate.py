@@ -196,6 +196,15 @@ def _read_yaml_cases(yaml_files: List[str]) -> List[dict]:
                 data = yaml.safe_load(f)
             if isinstance(data, dict):
                 data["_source_file"] = fpath
+                # 推断 case_type（若 YAML 中未设置）/ Infer case_type if not set
+                if "case_type" not in data:
+                    fpath_lower = fpath.replace("\\", "/").lower()
+                    if "/interfaces/" in fpath_lower:
+                        data["case_type"] = "interfaces"
+                    elif "/biz_flows/" in fpath_lower:
+                        data["case_type"] = "biz"
+                    elif "/single_cases/" in fpath_lower:
+                        data["case_type"] = "single"
                 cases.append(data)
         except Exception as exc:
             logger.warning(_("translate.error", error=str(exc)))
@@ -410,7 +419,7 @@ def _write_excel_output(cases: List[dict], output_dir: str, output_path: str) ->
     ExcelWriter.write(
         [_clean(c) for c in interfaces],
         [_clean(c) for c in single_cases],
-        [[_clean(s) for s in (c.get("steps", []) if isinstance(c.get("steps"), list) else [])] for c in biz_flows],
+        [_clean(c) for c in biz_flows],
         output_path,
     )
     logger.info(_("translate.writing_excel", path=output_path))
@@ -575,6 +584,12 @@ def translate_main() -> int:
         failed=failed_count,
         output_dir=output_dir,
     ))
+
+    if failed_count > 0:
+        logger.warning(_("translate.failed_warning", count=failed_count))
+
+    if len(translated_cases) == 0 and total > 0:
+        logger.info(_("translate.zero_changed"))
 
     if args.dry_run:
         logger.info(_("translate.dry_run"))
