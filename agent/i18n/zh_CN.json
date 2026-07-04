@@ -215,5 +215,24 @@
   "ifaces.no_interfaces_to_save": "没有接口需要保存",
   "ifaces.save_failed": "保存接口失败: %s",
   "ifaces.dir_not_found": "接口目录不存在: %s",
-  "ifaces.reload_empty": "未重新加载到任何接口 — 保持现有状态"
+  "ifaces.reload_empty": "未重新加载到任何接口 — 保持现有状态",
+
+  "translate.scanning": "扫描用例目录...",
+  "translate.yaml_priority": "  → 发现 YAML 文件，优先使用 YAML",
+  "translate.excel_only": "  → 未发现 YAML，使用 Excel 文件",
+  "translate.found_files": "找到 {count} 个用例文件",
+  "translate.detection_skip": "  → 跳过 {count} 个已是目标语言的用例",
+  "translate.batching": "  → 分 {batches} 批处理，每批 {size} 个",
+  "translate.batch_progress": "[{current}/{total}] 正在翻译第 {current} 批 ({count} 个用例)...",
+  "translate.batch_done": "  → 第 {current} 批完成",
+  "translate.translating": "  → CaseTranslator 正在调用 LLM...",
+  "translate.translated": "  → 已翻译，写入 {path}",
+  "translate.dry_run": "  → [dry-run] 翻译预览（未写入）:",
+  "translate.writing_excel": "  → 导出 Excel 到 {path}",
+  "translate.summary": "\n翻译完成。处理 {total} 个用例, 翻译 {translated} 个, 跳过 {skipped} 个, 失败 {failed} 个\n  输出目录: {output_dir}",
+  "translate.error": "  ✗ 翻译失败: {error}",
+  "translate.no_files": "未找到用例文件（YAML 或 Excel）",
+  "translate.no_api_key": "错误: LLM API Key 未设置。请在 translate_env.yaml 中配置。",
+  "translate.input_not_found": "错误: 输入目录不存在: {dir}",
+  "translate.log_enabled": "  → 日志输出到 {path}"
 }

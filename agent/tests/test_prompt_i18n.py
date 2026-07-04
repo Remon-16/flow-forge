@@ -150,7 +150,7 @@ class TestRenderPromptI18n:
     Test {{language}} substitution behavior of render_prompt().
     """
 
-    ZH_NAME = "简体中文 (Simplified Chinese)"
+    ZH_NAME = "简体中文"
     EN_NAME = "English"
 
     def should_replace_double_braces_in_plain_templates(self):
@@ -208,7 +208,7 @@ class TestDiscoveredTemplates:
     I18n tests for all discovered templates.
     """
 
-    ZH_NAME = "简体中文 (Simplified Chinese)"
+    ZH_NAME = "简体中文"
     EN_NAME = "English"
 
     @pytest.mark.parametrize("template_key,template_str", [
@@ -356,7 +356,7 @@ class TestLanguageNameMapping:
         try:
             name = get_language_name()
             assert "简体中文" in name
-            assert "Simplified Chinese" in name
+            assert "Simplified Chinese" not in name
         finally:
             if saved is not None:
                 os.environ["AGENT_LANG"] = saved
@@ -371,7 +371,7 @@ class TestLanguageNameMapping:
 
         assert "zh_CN" in _LANGUAGE_NAMES
         assert "en_US" in _LANGUAGE_NAMES
-        assert _LANGUAGE_NAMES["zh_CN"] == "简体中文 (Simplified Chinese)"
+        assert _LANGUAGE_NAMES["zh_CN"] == "简体中文"
         assert _LANGUAGE_NAMES["en_US"] == "English"
 
 

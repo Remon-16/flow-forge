@@ -5,6 +5,8 @@ Test plan generation prompts for producing test plans from requirement analysis 
 
 PLAN_GENERATION_SYSTEM = """You are a professional test planning expert. Based on the requirement analysis results and interface definitions, generate a detailed test plan.
 
+CRITICAL: You MUST write every single character of this test plan in {{language}}. Mixing languages is a hard failure. Do NOT write English words, phrases, or translations anywhere in the output.
+
 The test plan MUST include the following sections:
 
 ## 1. Business Understanding

@@ -140,8 +140,10 @@ class CustomPlugin(CaseAttributeGenerator):
 ```text
 agent/
 ├── main.py                      # CLI 入口（薄入口，实际逻辑在 cli/）
+├── translate_cases.py           # 用例字段翻译工具入口 / Translation tool entry
 ├── requirements.txt             # Python 依赖
 ├── env.example.yaml             # YAML 配置模板（双语注释）
+├── translate_env.example.yaml   # 翻译智能体独立配置模板 / Translator config template
 │
 ├── cli/
 │   ├── __init__.py
@@ -340,6 +342,66 @@ optional arguments:
   --env PATH            .env 文件路径（默认 .env）
   -v, --verbose         启用详细控制台日志
   --log-to-output       将日志持久化到输出目录 ({output_dir}/logs/agent.log)
+```
+
+## 用例字段翻译工具（兜底）
+
+当使用弱模型（如本地 Ollama 小参数量模型）生成测试用例时，部分文本字段（`api_name`、`sheet_name`、`remark`）可能出现中英文混合或全英文的情况。翻译工具作为**兜底机制**，对已生成的用例进行字段翻译，确保输出语言的纯净性。
+
+> **使用时机**：建议在用例生成后**第一时间运行翻译**，然后再进行人工修改。翻译后再修改用例可以确保手工调整不被覆盖。
+
+### 使用方法
+
+```bash
+# 翻译整个输出目录下的所有用例
+python translate_cases.py output/cases/ --target-lang zh_CN
+
+# 翻译到指定输出目录（保留原始目录不变）
+python translate_cases.py output/cases/ -o translated_cases/
+
+# 预览模式（不写文件，仅查看哪些用例需要翻译）
+python translate_cases.py output/cases/ --target-lang zh_CN --dry-run
+
+# 禁用已翻译检测（全量翻译）
+python translate_cases.py output/cases/ --no-detection
+
+# 详细日志 + 持久化日志文件
+python translate_cases.py output/cases/ -v --log-to-output
+```
+
+### 翻译策略
+
+- **场景推断**：翻译工具会参考用例的 method、URL 等字段推断测试场景，生成符合业务语义的自然翻译。例如 `DELETE /api/cart` 会翻译为 "删除购物车"，而非逐词翻译 HTTP 方法
+- **字段保护**：只修改 `api_name`、`sheet_name`、`remark` 字段，其他字段（test_id、method、URL 等）严格保持不变
+- **已翻译检测**：默认自动跳过已是目标语言的用例（可配置 `detection.enabled`）
+
+### 输入优先级
+
+- **YAML 优先**：若输入目录下存在 YAML 文件，优先翻译 YAML
+- **Excel 回退**：仅当无 YAML 文件时，才读取 Excel 文件进行翻译
+- 若输入含 Excel 且使用 YAML 翻译，输出时也会同时导出一份 Excel
+
+### 命令行参数
+
+| 参数 | 说明 |
+|------|------|
+| `input_dir` | 用例目录路径（通常是 agent 的 output/cases/） |
+| `--output`, `-o` | 输出根目录（默认：`<input_dir>_translated`） |
+| `--config`, `-c` | 翻译配置文件（默认 `translate_env.yaml`） |
+| `--target-lang` | 目标语言：`zh_CN` 或 `en_US` |
+| `--batch-size` | 每批最大用例数（覆盖配置文件） |
+| `--no-detection` | 禁用已翻译检测 |
+| `--dry-run` | 预览模式，不写入文件 |
+| `--log-to-output` | 将日志持久化到输出目录 |
+| `-v`, `--verbose` | 详细控制台日志 |
+
+### 独立配置文件
+
+翻译智能体使用独立的配置文件 `translate_env.yaml`（模板：`translate_env.example.yaml`），与主流水线的 `env.yaml` 完全独立、互不影响。用户可以为翻译任务配置不同的 LLM（例如主流水线使用本地弱模型，翻译使用云端强模型）。
+
+```bash
+cp translate_env.example.yaml translate_env.yaml
+# 编辑 translate_env.yaml 并填入翻译专用 LLM 配置
 ```
 
 ## 配置文件

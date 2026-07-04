@@ -13,7 +13,7 @@ Extraction Rules:
 3. Use reasonable defaults for fields that cannot be determined
 4. If the document describes request parameters, fill request_body in "field_name": "example_value" format
 5. If the document describes response fields, add them to assert_dict as check items
-6. You MUST write api_name, remark, and all descriptive fields in {{language}}.
+6. You MUST write api_name and remark in {{language}}. Do NOT mix languages within a single field. Do NOT include English translations.
 
 Return as a strict JSON object containing an "interfaces" field whose value is an array of interface definitions:
 ```json

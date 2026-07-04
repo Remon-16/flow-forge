@@ -140,8 +140,10 @@ Then add the plugin path to the `plugins.modules` list in `env.yaml`.
 ```text
 agent/
 ├── main.py                      # CLI entry (thin wrapper, logic in cli/)
+├── translate_cases.py           # Case field translation tool entry
 ├── requirements.txt             # Python dependencies
 ├── env.example.yaml             # YAML config template (bilingual comments)
+├── translate_env.example.yaml   # Translator standalone config template
 │
 ├── cli/
 │   ├── parser.py                # CLI argument parsing
@@ -303,6 +305,66 @@ optional arguments:
   --env PATH            Path to .env file (default: .env)
   -v, --verbose         Enable verbose console logging
   --log-to-output       Persist logs to output directory ({output_dir}/logs/agent.log)
+```
+
+## Case Field Translation Tool (Safety Net)
+
+When using weaker models (e.g., local Ollama small-parameter models) for test case generation, certain text fields (`api_name`, `sheet_name`, `remark`) may appear in mixed languages or entirely in the wrong language. The translation tool serves as a **safety net**, post-processing generated cases to ensure language purity in the output.
+
+> **When to use**: Run translation **immediately after case generation**, before making manual edits. Translating after editing would overwrite manual adjustments.
+
+### Usage
+
+```bash
+# Translate all cases in an output directory
+python translate_cases.py output/cases/ --target-lang zh_CN
+
+# Translate to a specific output directory (preserves original)
+python translate_cases.py output/cases/ -o translated_cases/
+
+# Preview mode (no files written, see what needs translation)
+python translate_cases.py output/cases/ --target-lang zh_CN --dry-run
+
+# Disable detection, force translate all cases
+python translate_cases.py output/cases/ --no-detection
+
+# Verbose logging with persistent log file
+python translate_cases.py output/cases/ -v --log-to-output
+```
+
+### Translation Strategy
+
+- **Context-aware**: Infers test scenario from method, URL, and other fields for natural business-level translations. For example, `DELETE /api/cart` translates to the equivalent of "Delete Shopping Cart" — not a literal word-by-word HTTP method translation
+- **Field-safe**: Only modifies `api_name`, `sheet_name`, and `remark` fields. All other fields (test_id, method, URL, etc.) are strictly preserved
+- **Auto-detection**: Skips cases already in the target language by default (configurable via `detection.enabled`)
+
+### Input Priority
+
+- **YAML first**: If YAML files exist in the input directory, they take priority
+- **Excel fallback**: Only reads Excel files when no YAML files are found
+- If the input contains Excel and YAML is translated, an Excel copy is also exported
+
+### CLI Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `input_dir` | Path to case directory (typically agent's output/cases/) |
+| `--output`, `-o` | Output directory (default: `<input_dir>_translated`) |
+| `--config`, `-c` | Translator config file (default: `translate_env.yaml`) |
+| `--target-lang` | Target language: `zh_CN` or `en_US` |
+| `--batch-size` | Max cases per batch (overrides config) |
+| `--no-detection` | Disable already-translated detection |
+| `--dry-run` | Preview without writing files |
+| `--log-to-output` | Persist logs to output directory |
+| `-v`, `--verbose` | Verbose console logging |
+
+### Independent Configuration
+
+The translator uses its own config file `translate_env.yaml` (template: `translate_env.example.yaml`), which is completely independent from the main pipeline's `env.yaml`. This allows using a different LLM for translation (e.g., main pipeline uses a local weak model, translator uses a cloud strong model).
+
+```bash
+cp translate_env.example.yaml translate_env.yaml
+# Edit translate_env.yaml with your translator-specific LLM settings
 ```
 
 ## Configuration File

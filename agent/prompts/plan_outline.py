@@ -41,7 +41,7 @@ JSON structure:
 }
 ```
 
-Remember: You MUST write ALL field values (group_name, test_focus, name, description, business_summary) in {{language}}.
+Remember: You MUST write ALL field values (group_name, test_focus, name, description, business_summary) in {{language}}. Do NOT include English words or translations in any field.
 """
 
 PLAN_OUTLINE_USER = """Generate a test plan outline based on the following information:

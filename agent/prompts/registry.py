@@ -36,6 +36,7 @@ class PromptRegistry:
         from . import plan_reviser
         from . import requirement_analysis
         from . import skeleton_generation
+        from . import translator
 
         self._data = {
             "api_analyzer": {
@@ -85,6 +86,10 @@ class PromptRegistry:
             "doc_parser": {
                 "system": doc_parser.DOC_PARSER_SYSTEM,
                 "user_template": doc_parser.DOC_PARSER_USER,
+            },
+            "case_translator": {
+                "system": translator.TRANSLATOR_SYSTEM,
+                "user_template": translator.TRANSLATOR_USER,
             },
         }
 

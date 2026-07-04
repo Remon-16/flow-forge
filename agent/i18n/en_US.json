@@ -215,5 +215,24 @@
   "ifaces.no_interfaces_to_save": "No interfaces to save",
   "ifaces.save_failed": "Failed to save interface: %s",
   "ifaces.dir_not_found": "Interfaces directory not found: %s",
-  "ifaces.reload_empty": "No interfaces reloaded — keeping existing state"
+  "ifaces.reload_empty": "No interfaces reloaded — keeping existing state",
+
+  "translate.scanning": "Scanning case directory...",
+  "translate.yaml_priority": "  → Found YAML files, using YAML (priority)",
+  "translate.excel_only": "  → No YAML found, using Excel files",
+  "translate.found_files": "Found {count} case files",
+  "translate.detection_skip": "  → Skipped {count} cases already in target language",
+  "translate.batching": "  → Processing in {batches} batches, {size} per batch",
+  "translate.batch_progress": "[{current}/{total}] Translating batch {current} ({count} cases)...",
+  "translate.batch_done": "  → Batch {current} complete",
+  "translate.translating": "  → CaseTranslator calling LLM...",
+  "translate.translated": "  → Translated, written to {path}",
+  "translate.dry_run": "  → [dry-run] Translation preview (not written):",
+  "translate.writing_excel": "  → Excel exported to {path}",
+  "translate.summary": "\nTranslation complete. Processed {total} cases, translated {translated}, skipped {skipped}, failed {failed}\n  Output directory: {output_dir}",
+  "translate.error": "  ✗ Translation failed: {error}",
+  "translate.no_files": "No case files found (YAML or Excel)",
+  "translate.no_api_key": "Error: LLM API Key not set. Please configure translate_env.yaml.",
+  "translate.input_not_found": "Error: Input directory not found: {dir}",
+  "translate.log_enabled": "  → Log output to {path}"
 }

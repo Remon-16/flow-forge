@@ -65,7 +65,7 @@ def _(key: str, **kwargs) -> str:
 
 # 语言代码 → LLM 可读名称映射 / Locale code → LLM-friendly name mapping
 _LANGUAGE_NAMES: Dict[str, str] = {
-    "zh_CN": "简体中文 (Simplified Chinese)",
+    "zh_CN": "简体中文",
     "en_US": "English",
 }
 
