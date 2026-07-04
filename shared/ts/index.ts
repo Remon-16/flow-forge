@@ -56,6 +56,9 @@ export const REQUIRED_BIZ_STEP: readonly string[] = constants.required_biz_step
 // 业务链路必填字段 / Required fields for biz flow
 export const REQUIRED_BIZ_FLOW: readonly string[] = constants.required_biz_flow
 
+// URL 不存在前缀标记 / URL-not-exist prefix marker
+export const URL_NOT_EXIST_PREFIX: string = constants.url_not_exist_prefix
+
 // ============================================================================
 // 断言规则运算符 / Assertion rule operators
 // ============================================================================

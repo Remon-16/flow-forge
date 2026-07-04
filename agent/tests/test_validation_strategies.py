@@ -10,7 +10,7 @@ import pytest
 
 from agents.base import BaseAgent
 from agents.skeleton_generator import SingleSkeletonGenerator, _count_validate
-from config.settings import Settings, get_strategy, _parse_validation_rules
+from config.settings import Settings, get_strategy, get_url_failure_action, _parse_validation_rules
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +94,56 @@ class TestParseValidationRules:
     def should_return_empty_list_for_empty_dict(self):
         """空 dict 返回空列表 / Returns empty list for empty dict."""
         assert _parse_validation_rules({}) == []
+
+    def should_parse_nested_dict_format(self):
+        """解析嵌套 dict 格式（url_check 带 failure_action）/ Parses nested dict format."""
+        result = _parse_validation_rules({
+            "skeleton_count": "fail",
+            "url_check": {"strategy": "warn", "failure_action": "keep"},
+        })
+        assert len(result) == 2
+        assert {"check": "skeleton_count", "strategy": "fail"} in result
+        assert {"check": "url_check", "strategy": "warn", "failure_action": "keep"} in result
+
+
+# ---------------------------------------------------------------------------
+# get_url_failure_action tests / url_failure_action 查询测试
+# ---------------------------------------------------------------------------
+
+class TestGetUrlFailureAction:
+    """Tests for get_url_failure_action() utility function."""
+
+    def should_return_default_for_empty_rules(self):
+        """空规则列表返回默认 discard / Returns default for empty rules."""
+        assert get_url_failure_action([]) == "discard"
+
+    def should_return_default_when_url_check_not_found(self):
+        """不存在 url_check 时返回默认 / Returns default when url_check not found."""
+        rules = [{"check": "skeleton_count", "strategy": "fail"}]
+        assert get_url_failure_action(rules) == "discard"
+
+    def should_return_failure_action_from_rule(self):
+        """从 url_check 规则中读取 failure_action / Reads failure_action from rule."""
+        rules = [
+            {"check": "skeleton_count", "strategy": "fail"},
+            {"check": "url_check", "strategy": "warn", "failure_action": "keep"},
+        ]
+        assert get_url_failure_action(rules) == "keep"
+
+    def should_return_discard_when_not_specified(self):
+        """未指定 failure_action 时返回默认 discard / Defaults to discard when absent."""
+        rules = [{"check": "url_check", "strategy": "warn"}]
+        assert get_url_failure_action(rules) == "discard"
+
+    def should_reject_invalid_value(self):
+        """非法值回退为默认 discard / Falls back to discard on invalid value."""
+        rules = [{"check": "url_check", "strategy": "warn", "failure_action": "invalid"}]
+        assert get_url_failure_action(rules) == "discard"
+
+    def should_return_custom_default(self):
+        """支持自定义默认值 / Supports custom default value."""
+        rules = [{"check": "url_check", "strategy": "warn"}]
+        assert get_url_failure_action(rules, default="keep") == "keep"
 
 
 # ---------------------------------------------------------------------------

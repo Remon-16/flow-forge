@@ -168,6 +168,7 @@
   "gen_cases.result": "生成 {single} 条单接口用例, {biz} 条业务链路",
 
   "batch_controller.url_failures": "\n  URL {count} <URL not exist> ",
+  "batch_controller.url_failure_keep": "URL 纠正耗尽: 保留 {count} 个 {type} 用例并继续执行 (failure_action=keep)",
   "batch_controller.skeleton_generating_single": "生成单接口用例骨架...",
   "batch_controller.skeleton_generated_single": "生成 {count} 个单接口用例骨架",
   "batch_controller.skeleton_generating_biz": "生成业务链路骨架...",

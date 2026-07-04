@@ -350,3 +350,122 @@ class TestSplitBatches:
         controller = BatchController(settings)
         batches = controller._split_batches([])
         assert batches == []
+
+
+# ---------------------------------------------------------------------------
+# URL failure action tests
+# ---------------------------------------------------------------------------
+
+class TestUrlFailureAction:
+    """Tests for url_failure_action behavior in BatchController."""
+
+    def test_discard_default(self):
+        """默认 behaviour: 失败用例进入 all_failures 列表 / Failed cases go to all_failures."""
+        from flow_forge_schemas import URL_NOT_EXIST_PREFIX
+
+        settings = _make_settings(url_correction_max_retries=0)
+        # 默认 url_check strategy=warn，无 failure_action → discard
+        controller = BatchController(settings)
+
+        plan = _make_mock_plan(single_count=1, biz_count=0)
+        plan.single_test_points = {"api1": [MagicMock(test_id="t1", tag="P0")]}
+        plan.biz_flow_scenarios = []
+
+        mock_single_gen = MagicMock()
+        mock_single_gen.generate.return_value = [{"test_id": "t1", "url": "/not/found"}]
+        mock_biz_gen = MagicMock()
+        mock_biz_gen.generate.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = controller.run(
+                plan=plan,
+                interfaces=[{"test_id": "t1", "method": "GET", "url": "/not/found"}],
+                output_dir=tmpdir,
+                single_skel_gen=mock_single_gen,
+                biz_skel_gen=mock_biz_gen,
+                plugins=[],
+                api_doc_text="only this text is in the doc",
+            )
+
+        assert len(result["failures"]) == 1
+        assert len(result["single_cases"]) == 0
+        assert result["failures"][0]["reason"] == "URL correction exhausted"
+
+    def test_keep_merges_failed(self):
+        """failure_action=keep: 失败用例合并回 single_cases / Failed cases merged back."""
+        settings = _make_settings(url_correction_max_retries=0)
+        settings.validation_rules = [
+            {"check": "url_check", "strategy": "warn", "failure_action": "keep"},
+        ]
+        controller = BatchController(settings)
+
+        plan = _make_mock_plan(single_count=1, biz_count=0)
+        plan.single_test_points = {"api1": [MagicMock(test_id="t1", tag="P0")]}
+        plan.biz_flow_scenarios = []
+
+        mock_single_gen = MagicMock()
+        mock_single_gen.generate.return_value = [{"test_id": "t1", "url": "/not/found"}]
+        mock_biz_gen = MagicMock()
+        mock_biz_gen.generate.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = controller.run(
+                plan=plan,
+                interfaces=[{"test_id": "t1", "method": "GET", "url": "/not/found"}],
+                output_dir=tmpdir,
+                single_skel_gen=mock_single_gen,
+                biz_skel_gen=mock_biz_gen,
+                plugins=[],
+                api_doc_text="only this text is in the doc",
+            )
+
+        assert len(result["failures"]) == 0
+        assert len(result["single_cases"]) == 1
+
+    def test_keep_url_prefix(self):
+        """failure_action=keep: URL 仍有 <URL not exist> 前缀 / URL still has prefix."""
+        from flow_forge_schemas import URL_NOT_EXIST_PREFIX
+
+        settings = _make_settings(url_correction_max_retries=0)
+        settings.validation_rules = [
+            {"check": "url_check", "strategy": "warn", "failure_action": "keep"},
+        ]
+        controller = BatchController(settings)
+
+        plan = _make_mock_plan(single_count=1, biz_count=0)
+        plan.single_test_points = {"api1": [MagicMock(test_id="t1", tag="P0")]}
+        plan.biz_flow_scenarios = []
+
+        mock_single_gen = MagicMock()
+        mock_single_gen.generate.return_value = [{"test_id": "t1", "url": "/not/found"}]
+        mock_biz_gen = MagicMock()
+        mock_biz_gen.generate.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = controller.run(
+                plan=plan,
+                interfaces=[{"test_id": "t1", "method": "GET", "url": "/not/found"}],
+                output_dir=tmpdir,
+                single_skel_gen=mock_single_gen,
+                biz_skel_gen=mock_biz_gen,
+                plugins=[],
+                api_doc_text="only this text is in the doc",
+            )
+
+        assert result["single_cases"][0]["url"].startswith(URL_NOT_EXIST_PREFIX)
+
+    def test_final_url_check_no_double_prefix(self):
+        """_final_url_check: 已有前缀的 URL 不重复添加 / No double prefix."""
+        from flow_forge_schemas import URL_NOT_EXIST_PREFIX
+
+        cases = [{"url": f"{URL_NOT_EXIST_PREFIX}/api/test"}]
+        BatchController._final_url_check(cases, "some doc text without that url")
+        assert cases[0]["url"] == f"{URL_NOT_EXIST_PREFIX}/api/test"
+
+    def test_final_url_check_adds_prefix_for_new_urls(self):
+        """_final_url_check: 新发现的无效 URL 正常添加前缀 / Adds prefix for new invalid URLs."""
+        from flow_forge_schemas import URL_NOT_EXIST_PREFIX
+
+        cases = [{"url": "/api/notindoc"}]
+        BatchController._final_url_check(cases, "only this text")
+        assert cases[0]["url"] == f"{URL_NOT_EXIST_PREFIX}/api/notindoc"

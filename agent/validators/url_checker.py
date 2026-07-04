@@ -2,7 +2,7 @@
 
 from typing import Dict, List
 
-_URL_NOT_EXIST = "<URL not exist>"
+from flow_forge_schemas import URL_NOT_EXIST_PREFIX
 
 
 def check_url_existence(cases: List[Dict], api_doc_text: str) -> None:
@@ -19,10 +19,10 @@ def check_url_existence(cases: List[Dict], api_doc_text: str) -> None:
         # Single test case — url at top level
         url = str(case.get("url", "")).strip()
         if url and url not in api_doc_text:
-            case["url"] = f"{_URL_NOT_EXIST}{url}"
+            case["url"] = f"{URL_NOT_EXIST_PREFIX}{url}"
 
         # Business flow — url inside each step
         for step in (case.get("steps") or []):
             url = str(step.get("url", "")).strip()
             if url and url not in api_doc_text:
-                step["url"] = f"{_URL_NOT_EXIST}{url}"
+                step["url"] = f"{URL_NOT_EXIST_PREFIX}{url}"

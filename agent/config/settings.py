@@ -24,14 +24,50 @@ def get_strategy(rules: List[Dict], check: str, default: str = "fail") -> str:
     return default
 
 
+def get_url_failure_action(rules: List[Dict], default: str = "discard") -> str:
+    """从校验规则列表中查找 url_check 的 failure_action 子规则。
+    Find the failure_action sub-rule from the url_check rule entry.
+
+    仅当 url_check 的 strategy 为 "warn" 时生效（fail 直接抛异常，skip 无失败用例）。
+    Only meaningful when url_check strategy is "warn".
+
+    Args:
+        rules: 校验规则列表 / List of validation rule dicts.
+        default: 未找到时的默认动作 / Default action if not found.
+
+    Returns:
+        失败处理动作 / Failure action: "discard" | "keep".
+    """
+    for rule in rules:
+        if rule.get("check") == "url_check":
+            action = rule.get("failure_action", default)
+            if action not in ("discard", "keep"):
+                return default
+            return action
+    return default
+
+
 def _parse_validation_rules(rules_raw) -> List[Dict[str, str]]:
     """解析校验规则，兼容 dict 和 list 两种 YAML 写法。
     Parse validation rules, supports both dict and list YAML formats.
+
+    dict 格式支持两种写法：
+      - {"url_check": "warn"} → [{"check": "url_check", "strategy": "warn"}]
+      - {"url_check": {"strategy": "warn", "failure_action": "keep"}}
+        → [{"check": "url_check", "strategy": "warn", "failure_action": "keep"}]
     """
     if isinstance(rules_raw, list):
         return rules_raw
     if isinstance(rules_raw, dict):
-        return [{"check": k, "strategy": v} for k, v in rules_raw.items()]
+        result = []
+        for check, val in rules_raw.items():
+            if isinstance(val, dict):
+                entry = {"check": check}
+                entry.update(val)
+                result.append(entry)
+            else:
+                result.append({"check": check, "strategy": val})
+        return result
     return []
 
 

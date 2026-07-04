@@ -49,7 +49,7 @@ Core workflow (11 steps):
 
 10. **Case Generation** (skeleton + plugin pipeline):
    - Skeleton generation: Generates single/biz case skeletons in batches of `skeleton_batch_size` (default 30). When test points exceed the batch size, they are automatically split into multiple batches, each calling the LLM independently, then merged
-   - URL validation: Check all skeleton URLs against source document; submit mis-matching URLs for correction. Validation strategy (fail/warn/skip) is configurable via `validation.rules` → `url_check`
+   - URL validation: Check all skeleton URLs against source document; submit mis-matching URLs for correction. Validation strategy (fail/warn/skip) and failure action (discard/keep) are configurable via `validation.rules` → `url_check`
    - Plugin execution: Run plugins in the order configured in PLUGIN_MODULES (e.g. data filling, assertion generation)
 
 11. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
@@ -414,11 +414,12 @@ knowledge:          # Knowledge base (grep-based text search)
 validation:         # Case validation
   enabled: true
   max_retries: 3
-  rules:            # Validation rules (each entry: check + strategy)
+  rules:            # Validation rules (each entry: check + strategy [+ failure_action])
     - check: skeleton_count     # Skeleton count validation
       strategy: fail            # fail | warn | skip
     - check: url_check          # URL existence check
       strategy: warn            # fail | warn | skip
+      failure_action: discard   # [url_check sub-rule] discard (send to failures.yaml, default) | keep (continue with plugin pipeline)
     - check: data_fill_count    # Data fill count validation
       strategy: fail            # fail | warn | skip
     - check: assertion_count    # Assertion count validation

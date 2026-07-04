@@ -168,6 +168,7 @@
   "gen_cases.result": "Generated {single} single cases, {biz} biz flows",
 
   "batch_controller.url_failures": "\n  URL {count} <URL not exist> ",
+  "batch_controller.url_failure_keep": "URL correction exhausted: keeping {count} {type} cases and continuing (failure_action=keep)",
   "batch_controller.skeleton_generating_single": "Generating single case skeletons...",
   "batch_controller.skeleton_generated_single": "Generated {count} single case skeletons",
   "batch_controller.skeleton_generating_biz": "Generating biz flow skeletons...",

@@ -156,6 +156,14 @@ def _count_validate(
     """
     items = []
     agent.reset_steps()  # 每批重置步数计数器 / Reset step counter per batch
+
+    # 跳过校验：调用一次直接返回，不重试 / Skip validation: one call, no retries
+    if strategy == "skip":
+        result = agent.call_llm_json(prompt, system_msg)
+        items = result.get(json_key, [])
+        logger.info(_("skel_gen.count_check_skipped", label=label, count=len(items)))
+        return items
+
     for attempt in range(agent._max_retries + 1):
         result = agent.call_llm_json(prompt, system_msg)
         items = result.get(json_key, [])
@@ -169,12 +177,8 @@ def _count_validate(
         )
 
     last_count = len(items)
-    # 跳过校验 / Skip validation
-    if strategy == "skip":
-        logger.info(_("skel_gen.count_check_skipped", label=label, count=last_count))
-        return items
     # 警告但继续 / Warn but continue
-    elif strategy == "warn":
+    if strategy == "warn":
         logger.warning(
             _("skel_gen.count_mismatch_final", label=label,
               retries=agent._max_retries + 1, expected=expected_count, actual=last_count),

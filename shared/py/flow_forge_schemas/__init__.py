@@ -68,6 +68,9 @@ REQUIRED_BIZ_STEP: list[str] = _c["required_biz_step"]
 # 业务链路必填字段 / Required fields for biz flow
 REQUIRED_BIZ_FLOW: list[str] = _c["required_biz_flow"]
 
+# URL 不存在前缀标记 / URL-not-exist prefix marker
+URL_NOT_EXIST_PREFIX: str = _c["url_not_exist_prefix"]
+
 
 # ============================================================================
 # 断言规则运算符 / Assertion rule operators

@@ -49,7 +49,7 @@ graph TD
 
 10. **用例生成**（骨架 + 插件流水线）：
    - 骨架生成：按 `skeleton_batch_size`（默认 30）分批生成单接口/业务链路用例骨架。测试点超过分批大小时自动拆分为多批，每批独立调用 LLM 后合并结果
-   - URL 校验：检查骨架中所有 URL 是否在文档原文中存在，不存在的提交纠错重试。校验策略（fail/warn/skip）可通过 `validation.rules` 中的 `url_check` 配置
+   - URL 校验：检查骨架中所有 URL 是否在文档原文中存在，不存在的提交纠错重试。校验策略（fail/warn/skip）和失败处理动作（discard/keep）可通过 `validation.rules` 中的 `url_check` 配置
    - 插件执行：按 PLUGIN_MODULES 配置的插件列表依次执行（如数据填充、断言生成等）
 
 11. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出
@@ -451,11 +451,12 @@ knowledge:          # 知识库（grep 文本搜索）
 validation:         # 用例校验
   enabled: true
   max_retries: 3
-  rules:            # 校验规则列表（每项: check + strategy）
+  rules:            # 校验规则列表（每项: check + strategy [+ failure_action]）
     - check: skeleton_count     # 骨架数量校验
       strategy: fail            # fail | warn | skip
     - check: url_check          # URL 存在性校验
       strategy: warn            # fail | warn | skip
+      failure_action: discard   # [url_check 子规则] discard (丢弃到 failures.yaml, 默认) | keep (保留继续插件处理)
     - check: data_fill_count    # 数据填充数量校验
       strategy: fail            # fail | warn | skip
     - check: assertion_count    # 断言生成数量校验
