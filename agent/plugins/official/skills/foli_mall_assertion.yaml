@@ -20,24 +20,24 @@ prompt_extension: |
   ### Common Status Codes (Module 00)
   | Code | Meaning |
   |------|---------|
-  | 100000 | Success |
-  | 200001 | Bad Request — invalid parameters |
-  | 200002 | Not Found — resource does not exist |
-  | 200003 | Forbidden — no permission |
-  | 300001 | Internal Server Error |
+  | 100000 | "成功" |
+  | 200001 | "请求参数错误" |
+  | 200002 | "请求的资源不存在" |
+  | 200003 | "无权执行此操作" |
+  | 300001 | "系统内部错误" |
 
   ### Module-Specific Status Codes
-  - User (01): 201001=Username exists, 201002=Invalid credentials, 201003=Account disabled, 201004=User not found
-  - Store (02): 202001=Store limit exceeded, 202002=Already reviewed, 202003=Store not found, 202004=Invalid review status, 202005=Not seller role, 202006=No store created
-  - Product (03): 203001=Product not found, 203002=Insufficient stock, 203003=Stock deduction failed, 203004=Product off shelf, 203005=Already reviewed
-  - Order (04): 204001=Order not found, 204002=Wrong order status, 204003=Only completed orders can return
-  - Finance (05): 205001=Insufficient balance, 205002=Balance deduction failed, 205003=Recharge failed
-  - File (06): 206001=File empty, 206002=File too large (>10MB), 206003=Not an image, 206004=Upload failed
-  - Cart (07): 207001=No selected items, 207002=Cart item not found
-  - Return/Refund (08): 208001=Return not found, 208002=Wrong return status, 208003=Already processed
-  - Complaint (09): 209001=Complaint not found, 209002=Already handled
-  - Message (10): 210001=Message not found
-  - Category (11): 211001=Category not found, 211002=Has sub-categories, 211003=Parent cannot be self
+  - User (01): 201001="用户名已存在", 201002="用户名或密码错误", 201003="账号已被禁用", 201004="用户不存在"
+  - Store (02): 202001="您已拥有一个店铺，请勿重复申请", 202002="该店铺已审核完毕，不可重复审核", 202003="店铺不存在", 202004="无效的审核状态", 202005=仅卖家可申请开店", 202006="您还没有店铺，请先创建店铺"
+  - Product (03): 203001="商品不存在", 203002="库存不足", 203003="扣减库存失败，商品已售罄", 203004="商品已下架", 203005="该商品已审核完毕，不可重复审核"
+  - Order (04): 204001="订单不存在", 204002="订单状态不正确，不允许此操作", 204003="仅已完成订单可申请退货退款"
+  - Finance (05): 205001="余额不足", 205002="余额扣减失败", 205003="充值失败，余额更新异常"
+  - File (06): 206001="上传文件不能为空", 206002="文件大小不能超过10MB", 206003="仅支持上传图片文件", 206004="文件上传失败"
+  - Cart (07): 207001="没有选中的商品", 207002="购物车项不存在或无权限操作"
+  - Return/Refund (08): 208001="退货记录不存在", 208002="退货状态不正确，不允许此操作", 208003="该退货申请已处理"
+  - Complaint (09): 209001="投诉不存在", 209002="该投诉已处理完毕，不可重复处理"
+  - Message (10): 210001="消息不存在"
+  - Category (11): 211001="分类不存在", 211002="该分类下存在子分类，无法删除", 211003="父分类不能设置为自身"
 
   ### Assertion Guidelines
   - For success cases: assert `code` == "100000"
