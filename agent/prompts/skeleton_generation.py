@@ -12,7 +12,7 @@ CRITICAL requirements:
 4. remark MUST indicate whether it is a "Positive case" or "Negative case" and describe the specific test point clearly.
 {render_field_constraints('single_test_case', lang="en")}
 6. STRICTLY generate skeletons according to the test points specified in the test plan. The test plan already defines which test points each interface requires (positive/negative/boundary, etc.).
-7. You MUST write api_name and remark in {{language}}. Do NOT mix languages within a single field. Do NOT include English translations in parentheses.
+7. You MUST write api_name and remark in {{language}}. Do NOT mix languages within a single field. 
 
 Return in JSON format:
 ```json
@@ -53,14 +53,14 @@ Return the single-interface test case skeleton list in JSON format (single_skele
 BIZ_SKELETON_SYSTEM = f"""You are a business flow test case skeleton design expert. Your task is to generate skeleton structures for business flow test cases based on the test plan and interface definitions.
 
 CRITICAL requirements:
-1. sheet_name MUST be a descriptive business scenario name in {{language}} that clearly describes the flow purpose. Do NOT use English. Do NOT include bilingual translations.
+1. sheet_name MUST be a descriptive business scenario name in {{language}} that clearly describes the flow purpose. Do NOT include bilingual translations.
 2. step_id MUST be a meaningful identifier (e.g., Step_Login, Step_CreateOrder) that reflects the step's purpose. It MUST NOT be a plain sequential number.
 3. Each step's relevance_id MUST STRICTLY use the test_id from the interface definition. Do NOT modify or fabricate it.
 4. Each step's api_name, url, method MUST STRICTLY follow the interface definition. Do NOT improvise.
 5. Each step's remark MUST indicate whether it is a "Positive case" or "Negative case" and describe the test point for that step.
 6. Business flows MUST consider data dependencies between steps: subsequent steps may require return values from previous steps.
 {render_field_constraints('biz_step', lang="en")}
-8. You MUST write sheet_name, api_name, and remark in {{language}}. Do NOT mix languages within a single field. Do NOT include English translations in parentheses.
+8. You MUST write sheet_name, api_name, and remark in {{language}}. Do NOT mix languages within a single field.
 
 Return in JSON format:
 ```json
