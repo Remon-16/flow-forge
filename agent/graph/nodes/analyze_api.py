@@ -211,14 +211,20 @@ def _print_api_summary_brief(summary: List[Dict]) -> None:
 
 
 def _print_uncertainties(summary: List[Dict]) -> None:
-    """仅打印有不确定项的条目。
-
-    Print only items that have uncertainties.
-    """
+    """打印有不确定项的条目 / Print entries that have uncertainties."""
     for item in summary:
-        uncertainties = item.get("uncertainties", [])
-        if uncertainties:
-            path = f"{item.get('method', '?')} {item.get('api_path', '?')}"
-            logger.info(_("analyze_api.endpoint_header", path=path))
-            for u in uncertainties:
-                logger.info(_("analyze_api.uncertainty_item", question=u))
+        raw = item.get("uncertainties", [])
+        if not raw:
+            continue
+        # 归一化：字符串转为单元素列表 / Normalize: string to single-element list
+        if isinstance(raw, str):
+            uncertainties = [raw]
+        elif isinstance(raw, list):
+            uncertainties = raw
+        else:
+            continue
+
+        path = f"{item.get('method', '?')} {item.get('api_path', '?')}"
+        logger.info(_("analyze_api.endpoint_header", path=path))
+        for u in uncertainties:
+            logger.info(_("analyze_api.uncertainty_item", question=u))
