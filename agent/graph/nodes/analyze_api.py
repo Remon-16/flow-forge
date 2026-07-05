@@ -47,31 +47,36 @@ def analyze_api_node(state: GraphState) -> GraphState:
 
     logger.info(_step("analyze_api", "pipeline.analyze_api"))
 
-    if api_raw_text and not interfaces:
-        logger.info(_("analyze_api.parsing_raw", model=_h._settings.llm_model))
-        if _sl():
-            _sl().log_node_start("analyze_api", "2/9")
-            _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
-                            model=_h._settings.llm_model, text_length=len(api_raw_text))
-        if feedback:
-            summary = agent.revise([], api_summary, feedback)
-        else:
-            summary = agent.analyze_raw_text(api_raw_text, Path(state.get("api_path", "")).name)
+    if api_summary and not feedback:
+        # resume 场景：summary 已在上一轮生成，跳过 LLM 调用
+        # Resume scenario: summary already generated, skip LLM call
+        summary = api_summary
     else:
-        logger.info(_("analyze_api.llm_calling", model=_h._settings.llm_model))
-        if _sl():
-            _sl().log_node_start("analyze_api", "2/9")
-        if feedback:
-            summary = agent.revise(interfaces, api_summary, feedback)
+        if api_raw_text and not interfaces:
+            logger.info(_("analyze_api.parsing_raw", model=_h._settings.llm_model))
+            if _sl():
+                _sl().log_node_start("analyze_api", "2/9")
+                _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
+                                model=_h._settings.llm_model, text_length=len(api_raw_text))
+            if feedback:
+                summary = agent.revise([], api_summary, feedback)
+            else:
+                summary = agent.analyze_raw_text(api_raw_text, Path(state.get("api_path", "")).name)
         else:
-            summary = agent.analyze(interfaces)
+            logger.info(_("analyze_api.llm_calling", model=_h._settings.llm_model))
+            if _sl():
+                _sl().log_node_start("analyze_api", "2/9")
+            if feedback:
+                summary = agent.revise(interfaces, api_summary, feedback)
+            else:
+                summary = agent.analyze(interfaces)
 
-    logger.info(_("analyze_api.generated_summaries", count=len(summary)))
-    if _sl():
-        _sl().log_node_end("analyze_api")
+        logger.info(_("analyze_api.generated_summaries", count=len(summary)))
+        if _sl():
+            _sl().log_node_end("analyze_api")
 
-    state["api_summary"] = summary
-    state["api_summary_feedback"] = ""
+        state["api_summary"] = summary
+        state["api_summary_feedback"] = ""
 
     memory_dir = state.get("memory_dir", "")
     if memory_dir:
@@ -180,6 +185,32 @@ def _load_custom_parser(parser_path: str):
     return module.parse
 
 
+def _get_item_issues(item: Dict) -> List[str]:
+    """收集一个摘要项的已知问题（critical 字段 + LLM uncertainties）。
+
+    Collect known issues for a summary item (critical fields + LLM uncertainties).
+    """
+    issues = []
+
+    # 关键字段检查 / Critical field checks
+    if item.get("auth_type") == "UNKNOWN":
+        issues.append(_("analyze_api.critical_auth"))
+    if item.get("need_token") is None:
+        issues.append(_("analyze_api.critical_token"))
+    if not item.get("description") or item.get("description") == "UNKNOWN":
+        issues.append(_("analyze_api.critical_description"))
+
+    # LLM 返回的 uncertainties / Uncertainties from LLM
+    raw = item.get("uncertainties", [])
+    if isinstance(raw, str):
+        if raw:
+            issues.append(raw)
+    elif isinstance(raw, list):
+        issues.extend(raw)
+
+    return issues
+
+
 def _has_critical_uncertainties(summary: List[Dict]) -> bool:
     """检查摘要中是否有需要用户输入的关键未知项。
 
@@ -213,18 +244,11 @@ def _print_api_summary_brief(summary: List[Dict]) -> None:
 def _print_uncertainties(summary: List[Dict]) -> None:
     """打印有不确定项的条目 / Print entries that have uncertainties."""
     for item in summary:
-        raw = item.get("uncertainties", [])
-        if not raw:
-            continue
-        # 归一化：字符串转为单元素列表 / Normalize: string to single-element list
-        if isinstance(raw, str):
-            uncertainties = [raw]
-        elif isinstance(raw, list):
-            uncertainties = raw
-        else:
+        issues = _get_item_issues(item)
+        if not issues:
             continue
 
         path = f"{item.get('method', '?')} {item.get('api_path', '?')}"
         logger.info(_("analyze_api.endpoint_header", path=path))
-        for u in uncertainties:
-            logger.info(_("analyze_api.uncertainty_item", question=u))
+        for question in issues:
+            logger.info(_("analyze_api.uncertainty_item", question=question))

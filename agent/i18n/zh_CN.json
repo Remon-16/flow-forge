@@ -25,6 +25,8 @@
   "reload.interfaces": "重新加载 {count} 个接口定义",
   "resume.from_stage": "[Resume] 从阶段 '{stage}' 恢复执行",
   "resume.loading_state": "[Resume] 从 {dir} 加载中间结果...",
+  "cli.output_auto_versioned": "输出目录已有内容，自动使用: {dir}",
+  "cli.resume_overwrite_enabled": "--resume-overwrite 已设置，将覆盖输出目录",
 
   "cli.no_api_key": "错误: LLM_API_KEY 未设置。请在 env.yaml 中配置。\n  cp env.example.yaml env.yaml\n  # 编辑 env.yaml 并填入 API 密钥",
   "cli.session_log_dir": "[Session] 日志目录: {path}",
@@ -64,6 +66,9 @@
   "analyze_api.trying_markdown": "尝试 MarkdownParser...",
   "analyze_api.custom_parser": "使用自定义解析器: {path}",
   "analyze_api.endpoint_header": "\n  [{path}]",
+  "analyze_api.critical_auth": "auth_type 未识别",
+  "analyze_api.critical_token": "无法确定是否需要 token",
+  "analyze_api.critical_description": "接口描述缺失",
 
   "url_check.checking": "[URL校验] 校验接口 URL 与文档原文的一致性...",
   "url_check.all_passed": "所有 {count} 个接口 URL 校验通过",

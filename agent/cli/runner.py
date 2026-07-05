@@ -7,6 +7,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from config.settings import load_settings
 from graph.state import GraphState
@@ -45,7 +46,7 @@ def _load_pipeline_state(memory_dir: str) -> dict:
             pass
 
     # 加载各阶段保存的工件 / Load saved artifacts
-    def _load_json(filename: str) -> dict | None:
+    def _load_json(filename: str) -> Optional[dict]:
         path = memory_path / filename
         if not path.exists():
             return None
@@ -98,7 +99,19 @@ def _load_pipeline_state(memory_dir: str) -> dict:
     if "parse_plan" in completed_stages:
         data = _load_json("plan_parsed.json")
         if data:
-            state["plan_parsed"] = data
+            from models.schema import PlanStep, TestPlan
+            # 重建 single_test_points 中的 PlanStep 对象，因为下游通过属性访问
+            # Reconstruct PlanStep objects — downstream accesses them via attributes
+            single_tps: dict = {}
+            for tid, steps in data.get("single_test_points", {}).items():
+                single_tps[tid] = [PlanStep(**s) for s in steps]
+            state["plan_parsed"] = TestPlan(
+                business_summary=data.get("business_summary", ""),
+                api_definitions=data.get("api_definitions", []),
+                single_test_points=single_tps,
+                mermaid_flows=data.get("mermaid_flows", {}),
+                biz_flow_scenarios=data.get("biz_flow_scenarios", []),
+            )
 
     # Reconstruct interfaces from YAML if available
     cases_dir = state.get("cases_dir", "")
@@ -168,7 +181,7 @@ def main() -> int:
                     return 2
 
         resume_overwrite = args.resume_overwrite
-        if not resume_overwrite:
+        if not resume_overwrite and not args.resume:
             has_content = output_path.exists() and any(
                 p.suffix in (".yaml", ".yml", ".xlsx")
                 for p in output_path.rglob("*")
@@ -180,12 +193,12 @@ def main() -> int:
                 while Path(f"{base}_v{suffix}").exists():
                     suffix += 1
                 output_dir = f"{base}_v{suffix}"
-                logger.info("Output directory has existing content, auto-using: %s", output_dir)
+                logger.info(_("cli.output_auto_versioned", dir=output_dir))
                 output_path = Path(output_dir)
                 _cases_dir, _memory_dir = ensure_output_structure(output_path)
 
         else:
-            logger.info("--resume-overwrite set, will overwrite output directory")
+            logger.info(_("cli.resume_overwrite_enabled"))
 
         # Determine resume stage for logging
         next_stage = "batch_controller"

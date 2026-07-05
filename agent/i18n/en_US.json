@@ -25,6 +25,8 @@
   "reload.interfaces": "Reloaded {count} interface definitions",
   "resume.from_stage": "[Resume] Resuming from stage '{stage}'",
   "resume.loading_state": "[Resume] Loading intermediate results from {dir}...",
+  "cli.output_auto_versioned": "Output directory has existing content, auto-using: {dir}",
+  "cli.resume_overwrite_enabled": "--resume-overwrite set, will overwrite output directory",
 
   "cli.no_api_key": "Error: LLM_API_KEY not set. Configure it in env.yaml.\n  cp env.example.yaml env.yaml\n  # Edit env.yaml and add your API key",
   "cli.session_log_dir": "[Session] Log directory: {path}",
@@ -64,6 +66,9 @@
   "analyze_api.trying_markdown": "Trying MarkdownParser...",
   "analyze_api.custom_parser": "Using custom parser: {path}",
   "analyze_api.endpoint_header": "\n  [{path}]",
+  "analyze_api.critical_auth": "auth_type not recognized",
+  "analyze_api.critical_token": "unable to determine if token is required",
+  "analyze_api.critical_description": "endpoint description missing",
 
   "url_check.checking": "[URL Check] Validating interface URLs against source document...",
   "url_check.all_passed": "All {count} interface URLs validated",
