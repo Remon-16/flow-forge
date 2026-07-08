@@ -325,7 +325,6 @@ optional arguments:
   --output PATH         输出根目录（默认 ./output_<timestamp>）
   --output-format {yaml,excel,both}
                         输出格式（默认 both）
-  --batch-size N        每批最大用例数（默认 10，-1 不分批）
   --prompt TEXT, -p TEXT
                         用户补充指导，注入到计划生成和用例生成阶段
   --parse-mode {raw,rule,llm}, -m {raw,rule,llm}

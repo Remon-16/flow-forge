@@ -288,7 +288,6 @@ optional arguments:
   --output PATH         Output root directory (default: ./output_<timestamp>)
   --output-format {yaml,excel,both}
                         Output format (default: both)
-  --batch-size N        Max cases per batch (default: 10, -1 to disable)
   --prompt TEXT, -p TEXT
                         User guidance injected into plan/case generation
   --parse-mode {raw,rule,llm}, -m {raw,rule,llm}
