@@ -266,7 +266,9 @@ class PlanGenerator(BaseAgent):
             )
         else:
             logger.info(_("plan_gen.case_type_skip_api_sections"))
-            api_sections = []
+            # 跳过时返回空 dict 以匹配 Phase 返回类型与下游 .get()/in/.keys() 用法
+            # Skip → empty dict to match Phase return type and downstream .get()/in/.keys() usage
+            api_sections = {}
 
         # Phase C: 按批次生成业务链路测试 section
         # 仅 both / biz 模式生成 / Only generate for both or biz mode
@@ -281,7 +283,9 @@ class PlanGenerator(BaseAgent):
             )
         else:
             logger.info(_("plan_gen.case_type_skip_biz_sections"))
-            biz_sections = []
+            # 跳过时返回空 dict 以匹配 Phase 返回类型与下游 .get()/in/.keys() 用法
+            # Skip → empty dict to match Phase return type and downstream .get()/in/.keys() usage
+            biz_sections = {}
 
         # 保存分块结构到 plan_sections.json / Save section structure for revision
         self._save_sections_artifact(

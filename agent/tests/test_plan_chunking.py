@@ -185,3 +185,80 @@ class TestPlanChunking:
 
         result = generate_plan_node(state)
         assert len(result.get("errors", [])) > 0
+
+    def should_generate_biz_only_without_crash(self, tmp_path):
+        """回归: case_type=biz 保存分块时不崩 / Regression: biz-only save must not crash.
+
+        Phase B 被跳过时 api_sections 必须是空 dict (而非 list)，
+        否则 _save_sections_artifact 的 api_sections.get() 抛 AttributeError。
+        When Phase B is skipped, api_sections must be an empty dict (not a list),
+        else _save_sections_artifact's api_sections.get() raises AttributeError.
+        """
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100), \
+                patch("graph.nodes.helpers.save_pipeline_artifact") as mock_save:
+            agent = _make_agent()
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [
+                    {"group_name": "Group A", "api_ids": ["api_a"], "test_focus": "Focus A"},
+                ],
+                "biz_flows": [
+                    {"name": "My Flow", "description": "A flow", "involved_apis": ["api_a"]},
+                ],
+            }
+            interfaces = [
+                {"test_id": "api_a", "api_name": "A", "method": "GET", "url": "/a", "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200, "assert_dict": {}, "remark": ""},
+            ]
+            # Phase A (global) + Phase C (1 biz batch) = 2 calls
+            agent.call_llm = MagicMock(side_effect=["GLOBAL_CONTEXT", "BIZ_FLOW_SECTION"])
+
+            plan_md = agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=interfaces,
+                memory_dir=str(tmp_path),
+                case_type="biz",
+            )
+
+            assert "BIZ_FLOW_SECTION" in plan_md
+            # 已真正触达保存逻辑 (memory_dir 非空) / Save logic was actually reached
+            mock_save.assert_called_once()
+
+    def should_generate_single_only_without_crash(self, tmp_path):
+        """回归: case_type=single 保存分块时不崩 / Regression: single-only save must not crash.
+
+        Phase C 被跳过时 biz_sections 必须是空 dict (而非 list)，
+        否则 biz_sections.get()/keys() 抛 AttributeError。
+        When Phase C is skipped, biz_sections must be an empty dict (not a list),
+        else biz_sections.get()/keys() raises AttributeError.
+        """
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100), \
+                patch("graph.nodes.helpers.save_pipeline_artifact") as mock_save:
+            agent = _make_agent()
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [
+                    {"group_name": "Group A", "api_ids": ["api_a"], "test_focus": "Focus A"},
+                ],
+                # biz_flows 非空 → biz_batches 非空，触发对称隐患
+                # Non-empty biz_flows → non-empty biz_batches, exercising the symmetric hazard
+                "biz_flows": [
+                    {"name": "My Flow", "description": "A flow", "involved_apis": ["api_a"]},
+                ],
+            }
+            interfaces = [
+                {"test_id": "api_a", "api_name": "A", "method": "GET", "url": "/a", "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200, "assert_dict": {}, "remark": ""},
+            ]
+            # Phase A (global) + Phase B (1 api group) = 2 calls
+            agent.call_llm = MagicMock(side_effect=["GLOBAL_CONTEXT", "API_SECTION"])
+
+            plan_md = agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=interfaces,
+                memory_dir=str(tmp_path),
+                case_type="single",
+            )
+
+            assert "API_SECTION" in plan_md
+            mock_save.assert_called_once()
