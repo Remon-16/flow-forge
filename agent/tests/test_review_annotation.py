@@ -9,13 +9,15 @@ import pytest
 
 from graph.nodes.review_annotation import (
     _apply_actions_to_section,
-    _bind_actions_to_annotations,
+    _bind_actions_to_batch,
     _build_apply_user_prompt,
     _enclosing_block,
     _locate_anchor,
     _map_annotations_to_sections,
+    _phase1_intent_analysis,
     _remove_annotation_target,
     _scan_headings,
+    _validate_intent_actions,
 )
 
 
@@ -41,6 +43,25 @@ class _TokenCounter:
 
     def count(self, text: str) -> int:
         return max(1, len(text) // 4)
+
+
+class _FakeIntentAgent:
+    """伪意图 agent, 返回预置动作 (可含错误 section_key) / Fake intent agent.
+
+    用于验证 Phase 1 绑定在 LLM 回传错误 section_key 时仍能纠正并绑定。
+    Returns canned intent actions to verify binding corrects wrong section_key.
+    """
+
+    def __init__(self, actions):
+        self._actions = actions
+        self.calls = 0
+
+    def reset_steps(self):
+        pass
+
+    def call_llm_json(self, prompt: str, system: str):
+        self.calls += 1
+        return self._actions
 
 
 # ---------------------------------------------------------------------------
@@ -369,43 +390,170 @@ class TestApplyActionsToSection:
 
 
 # ---------------------------------------------------------------------------
-# TestBindActions / 代码级绑定
+# TestBindActions / 按批次顺序绑定 (权威回填 section_key)
 # ---------------------------------------------------------------------------
 
 
-class TestBindActions:
-    """Tests for _bind_actions_to_annotations()."""
+def _make_batch(key: str, comments):
+    """构造单分块 batch / Build a single-section batch."""
+    return [{
+        "section": {"key": key, "type": "api_group", "name": key, "content": ""},
+        "annotations": [{"selected_text": "", "review_comment": c} for c in comments],
+    }]
 
-    def should_bind_actions_by_section_order(self):
-        section_annotations = {
-            "api_A": [
-                {"selected_text": "x", "review_comment": "c1"},
-                {"selected_text": "y", "review_comment": "c2"},
-            ],
-        }
+
+class TestBindActions:
+    """Tests for _bind_actions_to_batch()."""
+
+    def should_bind_actions_by_batch_order(self):
+        batch = _make_batch("api_A", ["c1", "c2"])
         actions = [
             {"section_key": "api_A", "action": "update"},
             {"section_key": "api_A", "action": "delete"},
         ]
 
-        _bind_actions_to_annotations(actions, section_annotations)
+        _bind_actions_to_batch(actions, batch)
 
         assert actions[0]["annotation"]["review_comment"] == "c1"
         assert actions[1]["annotation"]["review_comment"] == "c2"
 
-    def should_fallback_to_last_annotation_on_count_mismatch(self):
-        section_annotations = {"api_A": [{"review_comment": "only"}]}
+    def should_override_wrong_section_key(self):
+        """回归本 bug: LLM 回传归一化/错误的 section_key 时仍纠正回权威键并正确绑定。
+
+        Regression: even when the LLM returns a wrong/normalized section_key,
+        the action is rebound to the authoritative key and correct annotation.
+        """
+        batch = _make_batch("api_All Interfaces", ["del", "mod"])
+        actions = [
+            {"section_key": "api_all_interfaces", "action": "delete"},
+            {"section_key": "All Interfaces", "action": "update"},
+        ]
+
+        _bind_actions_to_batch(actions, batch)
+
+        assert all(a["section_key"] == "api_All Interfaces" for a in actions)
+        assert actions[0]["annotation"]["review_comment"] == "del"
+        assert actions[1]["annotation"]["review_comment"] == "mod"
+
+    def should_span_multiple_sections_in_order(self):
+        batch = [
+            {"section": {"key": "api_A", "type": "api_group", "name": "A", "content": ""},
+             "annotations": [{"review_comment": "a1"}]},
+            {"section": {"key": "api_B", "type": "api_group", "name": "B", "content": ""},
+             "annotations": [{"review_comment": "b1"}, {"review_comment": "b2"}]},
+        ]
+        actions = [
+            {"section_key": "?", "action": "delete"},
+            {"section_key": "?", "action": "update"},
+            {"section_key": "?", "action": "add"},
+        ]
+
+        _bind_actions_to_batch(actions, batch)
+
+        assert actions[0]["section_key"] == "api_A"
+        assert actions[0]["annotation"]["review_comment"] == "a1"
+        assert actions[1]["section_key"] == "api_B"
+        assert actions[1]["annotation"]["review_comment"] == "b1"
+        assert actions[2]["section_key"] == "api_B"
+        assert actions[2]["annotation"]["review_comment"] == "b2"
+
+    def should_set_none_for_extra_actions(self):
+        """动作多于批注时, 多出的置 None / Extra actions get annotation=None."""
+        batch = _make_batch("api_A", ["only"])
         actions = [
             {"section_key": "api_A", "action": "update"},
             {"section_key": "api_A", "action": "add"},
         ]
 
-        _bind_actions_to_annotations(actions, section_annotations)
+        _bind_actions_to_batch(actions, batch)
 
         assert actions[0]["annotation"]["review_comment"] == "only"
-        assert actions[1]["annotation"]["review_comment"] == "only"
+        assert actions[1]["annotation"] is None
 
-    def should_set_none_when_no_annotations_for_key(self):
-        actions = [{"section_key": "missing", "action": "noop"}]
-        _bind_actions_to_annotations(actions, {})
-        assert actions[0]["annotation"] is None
+
+# ---------------------------------------------------------------------------
+# TestValidateIntentActions / 意图动作校验 (含条数一致性)
+# ---------------------------------------------------------------------------
+
+
+class TestValidateIntentActions:
+    """Tests for _validate_intent_actions()."""
+
+    def should_error_on_count_mismatch(self):
+        actions = [{"section_key": "api_A", "action": "delete"}]
+        errors = _validate_intent_actions(actions, expected_count=2)
+        assert any("Expected 2" in e for e in errors)
+
+    def should_pass_when_count_matches(self):
+        actions = [
+            {"section_key": "api_A", "action": "delete"},
+            {"section_key": "api_A", "action": "update"},
+        ]
+        assert _validate_intent_actions(actions, expected_count=2) == []
+
+    def should_skip_count_check_when_expected_negative(self):
+        actions = [{"section_key": "api_A", "action": "delete"}]
+        assert _validate_intent_actions(actions) == []
+
+    def should_error_on_invalid_action(self):
+        actions = [{"section_key": "api_A", "action": "frobnicate"}]
+        assert _validate_intent_actions(actions, expected_count=1)
+
+
+# ---------------------------------------------------------------------------
+# TestPhase1Binding / Phase 1 端到端绑定 (回传错误 key 也能生效)
+# ---------------------------------------------------------------------------
+
+
+class TestPhase1Binding:
+    """Tests for _phase1_intent_analysis() end-to-end binding."""
+
+    def should_bind_even_when_llm_returns_wrong_section_key(self, monkeypatch):
+        """回归: LLM 回传错误 section_key 时, Phase 1 仍产出可被 Phase 2/3 执行的动作。
+
+        Regression for the "instant re-review, zero change" bug: with a wrong
+        section_key from the LLM, every returned action must still carry a
+        non-None annotation and the corrected authoritative section_key.
+        """
+        import types
+
+        from graph.nodes import helpers as _h
+        import graph.nodes.review_annotation as ra
+
+        sections = {
+            "global": "## 1. Overview\n\nglobal text",
+            "sections": [
+                {"key": "api_All Interfaces", "type": "api_group",
+                 "name": "All Interfaces",
+                 "content": "## 2. Points\n\n### A\n\ncase-x\n\n### B\n\ncase-y"},
+            ],
+        }
+        section_annotations = {
+            "api_All Interfaces": [
+                {"line_number": 3, "selected_text": "case-x", "review_comment": "删除"},
+                {"line_number": 5, "selected_text": "case-y", "review_comment": "修改"},
+            ],
+        }
+        # LLM 回传归一化后的错误 section_key / LLM returns wrong normalized keys
+        wrong_actions = [
+            {"section_key": "api_all_interfaces", "action": "delete", "reasoning": "d"},
+            {"section_key": "All Interfaces", "action": "update", "reasoning": "u"},
+        ]
+        monkeypatch.setattr(_h, "_settings", types.SimpleNamespace(
+            llm_context_window=8192, llm_max_output_tokens=2048, max_retries=1,
+        ))
+        monkeypatch.setattr(
+            ra, "_make_intent_agent", lambda state: _FakeIntentAgent(wrong_actions)
+        )
+
+        actions = ra._phase1_intent_analysis(
+            sections, section_annotations, _TokenCounter(), {}
+        )
+
+        assert len(actions) == 2
+        assert all(a["section_key"] == "api_All Interfaces" for a in actions)
+        assert actions[0]["action"] == "delete"
+        assert actions[0]["annotation"]["review_comment"] == "删除"
+        assert actions[1]["action"] == "update"
+        assert actions[1]["annotation"]["review_comment"] == "修改"
+

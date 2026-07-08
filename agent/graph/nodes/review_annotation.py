@@ -80,6 +80,10 @@ def _annotation_chunked_revision(
 
     # 拼接 / Re-assemble
     revised = _assemble_plan(sections)
+    if revised == plan_md:
+        # 无实质修改: 给出明确信号, 而非误导性的「计划已修改」
+        # No effective change — emit a clear signal instead of a misleading "plan revised"
+        logger.warning(_("review.no_effective_change"))
     if memory_dir:
         _save_plan_sections(memory_dir, sections)
     return revised
@@ -247,14 +251,19 @@ def _trunc(text: str, n: int = 80) -> str:
     return text[:n] + ("..." if len(text) > n else "")
 
 
-def _validate_intent_actions(actions: List[dict]) -> List[str]:
+def _validate_intent_actions(actions: List[dict], expected_count: int = -1) -> List[str]:
     """校验 LLM 返回的意图分析结果 / Validate LLM intent analysis output.
 
-    Returns a list of error messages (empty = valid).
+    expected_count >= 0 时额外要求动作条数与批注条数一致 (防截断/漏返/合并条目),
+    不一致则触发重试。Returns a list of error messages (empty = valid).
     """
     errors = []
     if not isinstance(actions, list):
         return ["Expected JSON array, got %s" % type(actions).__name__]
+    if expected_count >= 0 and len(actions) != expected_count:
+        errors.append(
+            f"Expected {expected_count} action(s), got {len(actions)}"
+        )
     for i, item in enumerate(actions):
         if not isinstance(item, dict):
             errors.append(f"Item {i}: expected object, got {type(item).__name__}")
@@ -281,7 +290,9 @@ def _make_intent_agent(state: GraphState) -> BaseAgent:
         api_key=_h._settings.llm_api_key,
         model=_h._settings.llm_model,
         temperature=0.1,
-        max_tokens=512,  # JSON 输出很小 / JSON output is tiny
+        # 用真实输出预算, 防截断靠输入分块而非人为限制输出
+        # Use the real output budget; prevent truncation via input chunking, not by capping output
+        max_tokens=_h._settings.llm_max_output_tokens,
         base_url=_h._settings.llm_base_url,
         max_steps=_h._settings.max_steps,
         context_window=_h._settings.llm_context_window,
@@ -357,7 +368,9 @@ def _phase1_intent_analysis(
     )
     system_tokens = token_counter.count(system_rendered)
     user_skeleton_tokens = 200  # USER prompt 骨架 (不含 section content)
-    output_reserve = 512       # JSON 输出极小
+    # 为完整输出预留真实预算, 使输入分块保证「输入 + 满额输出」不超上下文窗口
+    # Reserve the real output budget so chunking keeps input + full output within the context window
+    output_reserve = _h._settings.llm_max_output_tokens
     max_batch_input = (
         _h._settings.llm_context_window
         - system_tokens
@@ -395,6 +408,7 @@ def _phase1_intent_analysis(
 
     for batch_idx, batch in enumerate(batches):
         prompt = _build_intent_user_prompt(batch)
+        expected_count = sum(len(it["annotations"]) for it in batch)
         attempts = 0
 
         while attempts <= max_retries:
@@ -414,10 +428,10 @@ def _phase1_intent_analysis(
                 continue
 
             # 校验 / Validate
-            errors = _validate_intent_actions(actions)
+            errors = _validate_intent_actions(actions, expected_count)
             if not errors:
-                # 代码级绑定: 动作 ↔ 批注 (按 section 顺序) / Bind actions to annotations
-                _bind_actions_to_annotations(actions, section_annotations)
+                # 代码级绑定: 动作 ↔ 批注 (按批次顺序, 权威回填) / Bind by batch order
+                _bind_actions_to_batch(actions, batch)
                 all_actions.extend(actions)
                 logger.info(
                     _("review.intent_batch_ok",
@@ -448,29 +462,38 @@ def _phase1_intent_analysis(
                   errors="; ".join(errors))
             )
 
+    # 意图分布诊断: 让 noop 误判 / 零动作在日志里现形
+    # Intent distribution diagnostics: surface noop-misclassification / zero-action runs
+    logger.info(_(
+        "review.intent_distribution",
+        total=len(all_actions),
+        update=sum(1 for a in all_actions if a.get("action") == "update"),
+        delete=sum(1 for a in all_actions if a.get("action") == "delete"),
+        add=sum(1 for a in all_actions if a.get("action") == "add"),
+        noop=sum(1 for a in all_actions if a.get("action") == "noop"),
+    ))
     return all_actions
 
 
-def _bind_actions_to_annotations(
-    actions: List[dict], section_annotations: Dict[str, List[dict]],
-):
-    """按 section 顺序把意图动作绑定到来源批注 / Bind actions to source annotations.
+def _bind_actions_to_batch(actions: List[dict], batch: List[dict]):
+    """按批次内批注顺序绑定动作 → (权威 section_key, 批注)，忽略 LLM 回传的 section_key。
 
-    现有 prompt 已保证「每条批注一个输出对象」, 故按 section_key 分组后
-    与该 section 的批注列表按顺序配对; 数量不一致时按位置尽量兜底。
+    调 LLM 前我方已知每条批注属于哪个分块及其在 prompt 中的排列顺序
+    (_build_intent_user_prompt 即按此顺序展开)，故按位置回填权威 section_key 与批注，
+    彻底规避 LLM 未能一字不差复现 section_key (如带空格的 "api_All Interfaces") 造成的错配。
+    Bind actions to the batch's (section_key, annotation) sequence positionally;
+    ignore the LLM-returned section_key (it may not reproduce keys with spaces).
     """
-    by_key: Dict[str, List[dict]] = {}
-    for a in actions:
-        by_key.setdefault(a.get("section_key", ""), []).append(a)
-    for key, acts in by_key.items():
-        anns = section_annotations.get(key, [])
-        for i, act in enumerate(acts):
-            if i < len(anns):
-                act["annotation"] = anns[i]
-            elif anns:
-                act["annotation"] = anns[-1]
-            else:
-                act["annotation"] = None
+    expected = [
+        (item["section"]["key"], ann)
+        for item in batch
+        for ann in item["annotations"]
+    ]
+    for i, act in enumerate(actions):
+        if i < len(expected):
+            act["section_key"], act["annotation"] = expected[i]
+        else:
+            act["annotation"] = None
 
 
 # ---------------------------------------------------------------------------
