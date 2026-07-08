@@ -207,6 +207,18 @@ def _phase1_intent_analysis(
                 "annotations": section_annotations[key],
             })
 
+    # 处理映射到 global 的批注 / Handle annotations mapped to global section
+    if "__global__" in section_annotations:
+        pending.insert(0, {
+            "section": {
+                "key": "__global__",
+                "type": "global",
+                "name": "Global",
+                "content": sections.get("global", ""),
+            },
+            "annotations": section_annotations["__global__"],
+        })
+
     if not pending:
         return []
 
@@ -449,7 +461,11 @@ def _phase3_content_generation(
     agent = _make_apply_agent(state)
 
     for section_key, acts in chunk_actions.items():
-        target = _find_section_by_key(sections, section_key)
+        # 全局区块特殊处理 / Handle global section specially
+        if section_key == "__global__":
+            target = {"key": "__global__", "name": "Global", "content": sections.get("global", "")}
+        else:
+            target = _find_section_by_key(sections, section_key)
         if target is None:
             continue
 
@@ -472,6 +488,10 @@ def _phase3_content_generation(
                 PLAN_ANNOTATION_ADD_SYSTEM, PLAN_ANNOTATION_ADD_USER,
                 "add", state,
             )
+
+        # 将全局区块的修改同步回 sections / Sync global section changes back
+        if section_key == "__global__":
+            sections["global"] = target["content"]
 
 
 def _estimate_apply_output(
@@ -499,16 +519,25 @@ def _estimate_apply_output(
     return int(input_tokens + add_contribution)
 
 
-def _build_apply_user_prompt(target: dict, actions: List[dict]) -> str:
+def _build_apply_user_prompt(target: dict, annotations: List[dict]) -> str:
     """构建内容生成 USER prompt / Build content generation user prompt.
 
-    Formats annotations as a readable list for the apply prompt.
+    从原始批注中提取 selected_text 和 review_comment，
+    按 section content 过滤出属于当前 section 的批注。
+    Filters annotations to those whose selected_text appears in the section content.
     """
+    content = target.get("content", "")
     ann_lines = []
-    for a in actions:
+    for a in annotations:
+        sel = a.get("selected_text", "")
+        if not sel:
+            continue
+        # 只包含属于当前 section 的批注 / Only include annotations matching this section
+        if sel not in content:
+            continue
         ann_lines.append(
             f"- [Line ~{a.get('line_number', '?')}] "
-            f'Selected: "{a.get("selected_text", "")}"\n'
+            f'Selected: "{sel}"\n'
             f'  Comment: "{a.get("review_comment", "")}"'
         )
     return "\n".join(ann_lines)
@@ -543,7 +572,7 @@ def _apply_content_batch(
         )
         # 渲染 system prompt / Render system prompt
         system_rendered = render_prompt(system_prompt, language=get_language_name())
-        annotations_text = _build_apply_user_prompt(target, actions)
+        annotations_text = _build_apply_user_prompt(target, annotations)
         prompt = render_prompt(
             user_prompt_template,
             section_content=target["content"],
@@ -559,8 +588,10 @@ def _apply_content_batch(
               name=section_name, estimated=estimated_output, max=max_output)
         )
         system_rendered = render_prompt(system_prompt, language=get_language_name())
-        for act in actions:
-            annotations_text = _build_apply_user_prompt(target, [act])
+        section_anns = [a for a in annotations
+                       if a.get("selected_text", "") in target.get("content", "")]
+        for ann in section_anns:
+            annotations_text = _build_apply_user_prompt(target, [ann])
             prompt = render_prompt(
                 user_prompt_template,
                 section_content=target["content"],
