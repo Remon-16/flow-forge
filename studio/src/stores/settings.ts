@@ -9,6 +9,7 @@ const ZOOM_STEP = 0.1
 export const useSettingsStore = defineStore('settings', () => {
   const language = ref<Language>((localStorage.getItem('studio-lang') as Language) || 'zh-CN')
   const zoom = ref<number>(parseFloat(localStorage.getItem('studio-zoom') || '1.0'))
+  const showLineNumbers = ref<boolean>(localStorage.getItem('studio-line-numbers') === 'true')
 
   function setLanguage(lang: Language) {
     language.value = lang
@@ -23,7 +24,17 @@ export const useSettingsStore = defineStore('settings', () => {
   function zoomOut() { setZoom(zoom.value - ZOOM_STEP) }
   function zoomReset() { setZoom(1.0) }
 
+  function setLineNumbers(value: boolean) {
+    showLineNumbers.value = value
+    localStorage.setItem('studio-line-numbers', String(value))
+  }
+  function toggleLineNumbers() { setLineNumbers(!showLineNumbers.value) }
+
   const zoomPercent = computed(() => Math.round(zoom.value * 100) + '%')
 
-  return { language, zoom, zoomPercent, setLanguage, setZoom, zoomIn, zoomOut, zoomReset }
+  return {
+    language, zoom, zoomPercent, showLineNumbers,
+    setLanguage, setZoom, zoomIn, zoomOut, zoomReset,
+    setLineNumbers, toggleLineNumbers,
+  }
 })

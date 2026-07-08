@@ -7,6 +7,7 @@ Phase 3: 内容生成 (per-chunk LLM with output window estimation)
 
 import json
 import logging
+import re
 from typing import Any, Dict, List
 
 from agents.base import BaseAgent
@@ -58,26 +59,24 @@ def _annotation_chunked_revision(
     # 加载分块结构 / Load section structure
     sections = _load_or_parse_sections(memory_dir, plan_md, state.get("plan_outline"))
 
-    # 定位: grep 批注 → 区块 / Map annotations to sections
-    section_annotations = _map_annotations_to_sections(sections, annotations)
+    # 定位: 批注 → 区块 (selected_text + line_number) / Map annotations to sections
+    section_annotations = _map_annotations_to_sections(sections, annotations, plan_md)
 
     if not section_annotations:
         logger.warning(_("review.no_sections_matched"))
         return plan_md
 
-    # Phase 1: 意图分析 / Intent analysis
+    # Phase 1: 意图分析 + 代码级绑定批注 / Intent analysis + bind annotations
     token_counter = _get_token_counter(state)
     all_actions = _phase1_intent_analysis(
         sections, section_annotations, token_counter, state
     )
 
-    # Phase 2: 执行删除 / Execute deletions
-    _phase2_execute_deletions(sections, all_actions, annotations)
+    # Phase 2: 精确删除 / Precise deletions
+    _phase2_execute_deletions(sections, all_actions, plan_md)
 
-    # Phase 3: 内容生成 / Content generation
-    _phase3_content_generation(
-        sections, all_actions, annotations, token_counter, state, analysis, api_summary
-    )
+    # Phase 3: 块级内容生成 / Block-level content generation
+    _phase3_content_generation(sections, all_actions, token_counter, state, plan_md)
 
     # 拼接 / Re-assemble
     revised = _assemble_plan(sections)
@@ -92,32 +91,160 @@ def _annotation_chunked_revision(
 
 
 def _map_annotations_to_sections(
-    sections: dict, annotations: List[dict],
+    sections: dict, annotations: List[dict], plan_md: str = "",
 ) -> Dict[str, List[dict]]:
-    """grep: 将每条批注映射到包含其 selected_text 的区块。
+    """将每条批注映射到其所属区块 / Map each annotation to its section.
 
-    Map each annotation to the section containing its selected_text.
-    Returns {section_key: [annotations]}.
+    优先用 selected_text 子串匹配; 失败时用 line_number 落点兜底 (需 plan_md),
+    避免批注被静默丢弃。Returns {section_key: [annotations]}.
     """
     mapping: Dict[str, List[dict]] = {}
     for ann in annotations:
         selected = ann.get("selected_text", "")
-        if not selected:
-            continue
-        # 搜索 global / Search global
-        if selected in sections.get("global", ""):
-            mapping.setdefault("__global__", []).append(ann)
-            continue
-        # 搜索 sections / Search sections
-        found = False
-        for sec in sections.get("sections", []):
-            if selected in sec.get("content", ""):
-                mapping.setdefault(sec["key"], []).append(ann)
-                found = True
-                break
-        if not found:
-            logger.debug("Annotation selected_text not found in any section: %s", selected[:80])
+        # 1) selected_text 子串匹配 / substring match
+        if selected:
+            if selected in sections.get("global", ""):
+                mapping.setdefault("__global__", []).append(ann)
+                continue
+            placed = False
+            for sec in sections.get("sections", []):
+                if selected in sec.get("content", ""):
+                    mapping.setdefault(sec["key"], []).append(ann)
+                    placed = True
+                    break
+            if placed:
+                continue
+        # 2) line_number 落点兜底 / line_number fallback
+        if plan_md:
+            key = _section_key_for_line(sections, plan_md, ann.get("line_number"))
+            if key:
+                mapping.setdefault(key, []).append(ann)
+                continue
+        logger.debug("Annotation not mapped to any section: %s", (selected or "")[:80])
     return mapping
+
+
+def _section_key_for_line(sections: dict, plan_md: str, line_number) -> Any:
+    """按 line_number 落点找所属区块 key / Find section key by line_number range."""
+    if not isinstance(line_number, int):
+        return None
+    global_content = sections.get("global", "")
+    g_base = _section_base_line(plan_md, global_content)
+    if g_base is not None and global_content:
+        if g_base <= line_number < g_base + global_content.count("\n") + 1:
+            return "__global__"
+    for sec in sections.get("sections", []):
+        content = sec.get("content", "")
+        base = _section_base_line(plan_md, content)
+        if base is None:
+            continue
+        if base <= line_number < base + content.count("\n") + 1:
+            return sec["key"]
+    return None
+
+
+# ---------------------------------------------------------------------------
+# 动态定位辅助 / Dynamic block-location helpers (no hard-coded heading levels)
+# ---------------------------------------------------------------------------
+
+_HEADING_RE = re.compile(r"(?m)^(#{1,6})[ \t]+\S")
+
+
+def _scan_headings(content: str) -> List[tuple]:
+    """扫描所有 Markdown 标题 / Scan all markdown headings.
+
+    Returns [(offset, level, line_text), ...] — 级别由 # 数量决定, 不写死。
+    """
+    headings = []
+    for m in _HEADING_RE.finditer(content):
+        offset = m.start()
+        level = len(m.group(1))
+        line_end = content.find("\n", offset)
+        if line_end == -1:
+            line_end = len(content)
+        headings.append((offset, level, content[offset:line_end]))
+    return headings
+
+
+def _line_start_offset(text: str, line_number: int) -> int:
+    """1-based 行号 → 字符偏移 (clamp) / 1-based line number to char offset."""
+    lines = text.split("\n")
+    line_number = max(1, min(line_number, len(lines)))
+    return sum(len(lines[i]) + 1 for i in range(line_number - 1))
+
+
+def _section_base_line(plan_md: str, content: str):
+    """区块在整篇中的起始行 (1-based) / Section start line in plan_md, or None."""
+    if not plan_md or not content:
+        return None
+    first_line = content.lstrip().split("\n", 1)[0]
+    if not first_line:
+        return None
+    idx = plan_md.find(first_line)
+    if idx == -1:
+        return None
+    return plan_md[:idx].count("\n") + 1
+
+
+def _locate_anchor(content: str, annotation: dict, base_line) -> int:
+    """定位批注锚点在 content 中的字符偏移 / Locate annotation anchor offset.
+
+    优先 line_number (经 base_line 换算为本地行), 无效回退 selected_text。
+    Returns -1 if not locatable.
+    """
+    selected = annotation.get("selected_text", "")
+    line_number = annotation.get("line_number")
+    if base_line is not None and isinstance(line_number, int):
+        local_line = line_number - base_line + 1
+        if local_line >= 1:
+            off = max(0, min(_line_start_offset(content, local_line), len(content)))
+            if selected:
+                # 从锚点向后就近匹配, 消除重复文本歧义 / Nearest match at/after anchor
+                near = content.find(selected, off)
+                if near != -1 and near - off <= 2000:
+                    return near
+                # 锚点上方少量范围 / small window above anchor
+                back = content.rfind(selected, max(0, off - 500), off + len(selected))
+                if back != -1:
+                    return back
+            return off
+    if selected:
+        idx = content.find(selected)
+        if idx != -1:
+            return idx
+    return -1
+
+
+def _enclosing_block(content: str, anchor: int) -> tuple:
+    """anchor 所在的动态标题块 span / Enclosing heading block span.
+
+    取最近上方标题 (级别 L), 延伸到下一个级别 <= L 的标题为止。
+    anchor 在首标题前则返回 (0, 首标题); 无标题则返回整块。
+    """
+    headings = _scan_headings(content)
+    if not headings:
+        return (0, len(content))
+    cur_idx = -1
+    for i, (off, _level, _text) in enumerate(headings):
+        if off <= anchor:
+            cur_idx = i
+        else:
+            break
+    if cur_idx == -1:
+        return (0, headings[0][0])
+    start, level, _ = headings[cur_idx]
+    end = len(content)
+    for off, lvl, _text in headings[cur_idx + 1:]:
+        if lvl <= level:
+            end = off
+            break
+    return (start, end)
+
+
+def _trunc(text: str, n: int = 80) -> str:
+    """截断日志文本 / Truncate text for logs."""
+    text = text.strip()
+    return text[:n] + ("..." if len(text) > n else "")
 
 
 def _validate_intent_actions(actions: List[dict]) -> List[str]:
@@ -289,6 +416,8 @@ def _phase1_intent_analysis(
             # 校验 / Validate
             errors = _validate_intent_actions(actions)
             if not errors:
+                # 代码级绑定: 动作 ↔ 批注 (按 section 顺序) / Bind actions to annotations
+                _bind_actions_to_annotations(actions, section_annotations)
                 all_actions.extend(actions)
                 logger.info(
                     _("review.intent_batch_ok",
@@ -309,6 +438,7 @@ def _phase1_intent_analysis(
                             "section_key": item["section"]["key"],
                             "action": "noop",
                             "reasoning": "Validation retry exhausted",
+                            "annotation": ann,
                         })
                 break
 
@@ -321,18 +451,40 @@ def _phase1_intent_analysis(
     return all_actions
 
 
+def _bind_actions_to_annotations(
+    actions: List[dict], section_annotations: Dict[str, List[dict]],
+):
+    """按 section 顺序把意图动作绑定到来源批注 / Bind actions to source annotations.
+
+    现有 prompt 已保证「每条批注一个输出对象」, 故按 section_key 分组后
+    与该 section 的批注列表按顺序配对; 数量不一致时按位置尽量兜底。
+    """
+    by_key: Dict[str, List[dict]] = {}
+    for a in actions:
+        by_key.setdefault(a.get("section_key", ""), []).append(a)
+    for key, acts in by_key.items():
+        anns = section_annotations.get(key, [])
+        for i, act in enumerate(acts):
+            if i < len(anns):
+                act["annotation"] = anns[i]
+            elif anns:
+                act["annotation"] = anns[-1]
+            else:
+                act["annotation"] = None
+
+
 # ---------------------------------------------------------------------------
 # Phase 2: 代码删除 / Code Deletion
 # ---------------------------------------------------------------------------
 
 
 def _phase2_execute_deletions(
-    sections: dict, actions: List[dict], annotations: List[dict],
+    sections: dict, actions: List[dict], plan_md: str = "",
 ):
     """执行所有 delete 动作 — 代码直接操作, 零 LLM。
 
-    Execute all delete actions in code (zero LLM calls).
-    Removes the subsection containing the annotated selected_text.
+    每个 delete 动作只处理其绑定的那条批注, 用 line_number + selected_text 精确定位:
+    命中表格数据行则只删该行, 否则删除所在的动态标题块。
     """
     delete_actions = [a for a in actions if a.get("action") == "delete"]
     if not delete_actions:
@@ -340,83 +492,98 @@ def _phase2_execute_deletions(
 
     deleted = 0
     for action in delete_actions:
+        ann = action.get("annotation")
+        if not ann:
+            continue
         section_key = action.get("section_key", "")
+        if section_key == "__global__":
+            content = sections.get("global", "")
+            base_line = _section_base_line(plan_md, content)
+            new_content = _remove_annotation_target(content, ann, base_line)
+            if new_content is not None:
+                sections["global"] = new_content
+                deleted += 1
+            continue
         target = _find_section_by_key(sections, section_key)
         if target is None:
             continue
-
-        # 用关联批注的 selected_text 定位 / Use annotation's selected_text as anchor
-        if _remove_text_block(target, annotations):
+        base_line = _section_base_line(plan_md, target["content"])
+        new_content = _remove_annotation_target(target["content"], ann, base_line)
+        if new_content is not None:
+            target["content"] = new_content
             deleted += 1
 
     if deleted > 0:
         logger.info(_("review.phase2_deleted", count=deleted))
 
 
-def _remove_text_block(target: dict, annotations: List[dict]) -> bool:
-    """从区块 content 中移除 selected_text 所在的子区块。
+def _remove_annotation_target(content: str, annotation: dict, base_line):
+    """精确删除批注目标 / Precisely remove the annotation's target.
 
-    向前查找最近的 \\n#### 或 \\n### 标题,
-    向后查找下一个同级或上级标题, 整体移除。
-
-    Remove the subsection containing selected_text.
-    Returns True if a block was removed.
+    优先删除命中的表格数据行, 否则删除所在的动态标题块。
+    Returns modified content, or None if nothing was removed.
     """
-    content = target["content"]
+    anchor = _locate_anchor(content, annotation, base_line)
+    if anchor == -1:
+        return None
 
-    # 找到第一个在 content 中匹配的 selected_text / Find first matching annotation
-    matched_selected = ""
-    for ann in annotations:
-        sel = ann.get("selected_text", "")
-        if sel and sel in content:
-            matched_selected = sel
-            break
-    if not matched_selected:
+    # 1) 表格数据行删除 / Table-row deletion
+    row_result = _remove_table_rows(content, annotation, anchor)
+    if row_result is not None:
+        return row_result
+
+    # 2) 动态标题块删除 / Dynamic heading-block deletion
+    start, end = _enclosing_block(content, anchor)
+    if start == 0 and end == len(content):
+        # 无标题边界, 不安全整体删除 / No heading boundary — unsafe to delete
+        return None
+    removed = content[start:end]
+    new_content = (content[:start].rstrip() + "\n\n" + content[end:].lstrip())
+    new_content = re.sub(r"\n{3,}", "\n\n", new_content).strip()
+    logger.info(_("review.delete_block", text=_trunc(removed)))
+    return new_content
+
+
+def _is_table_data_row(line: str) -> bool:
+    """是否为表格数据行 (非分隔行) / Is a table data row (not a separator)."""
+    s = line.strip()
+    if not s.startswith("|"):
         return False
+    # 排除 |---|:--:| 之类的分隔行 / Exclude separator rows
+    return re.match(r"^\|[\s:|\-]+\|?\s*$", s) is None
 
-    idx = content.find(matched_selected)
+
+def _remove_table_rows(content: str, annotation: dict, anchor: int):
+    """若 selected_text 命中表格数据行, 仅删这些行 / Remove matched table rows only.
+
+    Returns modified content, or None if this is not a table-row deletion.
+    """
+    selected = annotation.get("selected_text", "")
+    if not selected:
+        return None
+    idx = content.find(selected, anchor)
     if idx == -1:
-        return False
+        idx = content.find(selected)
+    if idx == -1:
+        return None
 
-    # 向前找子区块起始 / Find subsection start (nearest #### or ### heading)
-    block_start = content.rfind("\n#### ", 0, idx)
-    if block_start == -1:
-        block_start = content.rfind("\n### ", 0, idx)
-    if block_start == -1:
-        return False  # 找不到边界, 不安全删除
+    # 命中文本覆盖的整行范围 / Full-line span covered by the match
+    seg_start = content.rfind("\n", 0, idx) + 1
+    seg_end = content.find("\n", idx + len(selected))
+    if seg_end == -1:
+        seg_end = len(content)
 
-    # 确定标题层级 / Determine heading level
-    after_start = content[block_start + 1:]  # skip leading \n
-    if after_start.startswith("#### "):
-        heading_level = "#### "
-    else:
-        heading_level = "### "
+    span_lines = [ln for ln in content[seg_start:seg_end].split("\n") if ln.strip()]
+    if not span_lines or not all(_is_table_data_row(ln) for ln in span_lines):
+        return None
 
-    # 向后找子区块结束 / Find subsection end (next same-level or higher heading)
-    next_block = content.find(f"\n{heading_level}", idx + len(matched_selected))
-    if next_block == -1:
-        next_block = content.find("\n### ", idx + len(matched_selected))
-        if next_block == -1:
-            next_block = content.find("\n## ", idx + len(matched_selected))
-    if next_block == -1:
-        next_block = len(content)
-
-    # 移除 / Remove
-    removed_text = content[block_start:next_block].strip()
-    target["content"] = (
-        content[:block_start].rstrip() + "\n\n" + content[next_block:].lstrip()
-    )
-    target["content"] = target["content"].replace("\n\n\n", "\n\n").strip()
-
-    logger.info(
-        _("review.delete_block",
-          text=removed_text[:80] + ("..." if len(removed_text) > 80 else ""))
-    )
-    return True
+    new_content = content[:seg_start].rstrip("\n") + "\n" + content[seg_end:].lstrip("\n")
+    logger.info(_("review.delete_row", text=_trunc(selected)))
+    return new_content.strip()
 
 
 # ---------------------------------------------------------------------------
-# Phase 3: 内容生成 (update / add) / Content Generation
+# Phase 3: 块级内容生成 (update / add) / Block-level Content Generation
 # ---------------------------------------------------------------------------
 
 
@@ -436,167 +603,144 @@ def _make_apply_agent(state: GraphState) -> BaseAgent:
 def _phase3_content_generation(
     sections: dict,
     actions: List[dict],
-    annotations: List[dict],
     token_counter,
     state: GraphState,
-    analysis: dict,
-    api_summary: list,
+    plan_md: str = "",
 ):
-    """为 update/add 的区块生成修订内容 / Generate revised content for update/add.
+    """为 update/add 生成修订内容 — 块级精确 splice / Block-level revision.
 
-    按区块单独调用 LLM, update 和 add 使用不同的 prompt。
-    预估输出 tokens, 超过 max_output_tokens 时拆分为逐条处理。
+    每个动作用 line_number + selected_text 定位其所属动态标题块,
+    只把该块发给 LLM 并原地替换, 其余字节不动。
     """
-    # 筛选需要内容生成的 / Filter actions needing content generation
-    chunk_actions: Dict[str, List[dict]] = {}
-    for action in actions:
-        if action.get("action") in ("update", "add"):
-            key = action.get("section_key", "")
-            chunk_actions.setdefault(key, []).append(action)
-
-    if not chunk_actions:
+    gen_actions = [
+        a for a in actions
+        if a.get("action") in ("update", "add") and a.get("annotation")
+    ]
+    if not gen_actions:
         return
 
-    max_output = _h._settings.llm_max_output_tokens
     agent = _make_apply_agent(state)
 
-    for section_key, acts in chunk_actions.items():
-        # 全局区块特殊处理 / Handle global section specially
+    # 按 section 分组 / Group by section
+    by_section: Dict[str, List[dict]] = {}
+    for a in gen_actions:
+        by_section.setdefault(a.get("section_key", ""), []).append(a)
+
+    for section_key, acts in by_section.items():
         if section_key == "__global__":
-            target = {"key": "__global__", "name": "Global", "content": sections.get("global", "")}
+            target = {"key": "__global__", "name": "Global",
+                      "content": sections.get("global", "")}
         else:
             target = _find_section_by_key(sections, section_key)
         if target is None:
             continue
 
-        # 按 action 类型分组 / Group by action type
-        updates = [a for a in acts if a.get("action") == "update"]
-        adds = [a for a in acts if a.get("action") == "add"]
+        base_line = _section_base_line(plan_md, target["content"])
+        _apply_actions_to_section(target, acts, base_line, token_counter, agent)
 
-        # 处理 update / Apply updates
-        if updates:
-            _apply_content_batch(
-                target, updates, annotations, token_counter, max_output, agent,
-                PLAN_ANNOTATION_UPDATE_SYSTEM, PLAN_ANNOTATION_UPDATE_USER,
-                "update", state,
-            )
-
-        # 处理 add / Apply adds
-        if adds:
-            _apply_content_batch(
-                target, adds, annotations, token_counter, max_output, agent,
-                PLAN_ANNOTATION_ADD_SYSTEM, PLAN_ANNOTATION_ADD_USER,
-                "add", state,
-            )
-
-        # 将全局区块的修改同步回 sections / Sync global section changes back
         if section_key == "__global__":
             sections["global"] = target["content"]
 
 
-def _estimate_apply_output(
-    target: dict, actions: List[dict], token_counter,
-) -> int:
-    """预估 update/add 后的输出 token 数 / Estimate output tokens after applying actions.
-
-    update: 输出 ≈ 输入 × 1.2 (修改不改变量级)
-    add: 输出 ≈ 输入 + add_count × avg_subsection × 1.5
-    """
+def _apply_actions_to_section(
+    target: dict, acts: List[dict], base_line, token_counter, agent: BaseAgent,
+):
+    """在单个 section 内按动态标题块逐块修订 / Revise per dynamic block within a section."""
     content = target["content"]
-    input_tokens = token_counter.count(content)
+    section_name = target.get("name", target.get("key", "?"))
 
-    add_count = sum(1 for a in actions if a.get("action") == "add")
+    # 定位每个动作所属块; 任一定位失败则回退整块处理 / Locate blocks; fallback whole section
+    located = []
+    for a in acts:
+        anchor = _locate_anchor(content, a["annotation"], base_line)
+        if anchor == -1:
+            revised = _revise_block(
+                content, [x["annotation"] for x in acts],
+                "add" if any(x.get("action") == "add" for x in acts) else "update",
+                section_name, token_counter, agent,
+            )
+            if revised and revised.strip():
+                target["content"] = revised.strip()
+            return
+        start, end = _enclosing_block(content, anchor)
+        located.append((start, end, a.get("action"), a["annotation"]))
 
-    if add_count == 0:
-        return int(input_tokens * 1.2)
+    # 合并同一块的动作 / Merge actions sharing the same block span
+    merged: Dict[tuple, dict] = {}
+    for start, end, atype, ann in located:
+        m = merged.setdefault((start, end), {"has_add": False, "anns": []})
+        m["anns"].append(ann)
+        if atype == "add":
+            m["has_add"] = True
 
-    # 计算子节平均大小 / Average subsection size
-    subsections = [s for s in content.split("\n#### ") if s.strip()]
-    num_subsections = max(len(subsections), 1)
-    avg_tokens = input_tokens / num_subsections
+    # 按起点降序 splice, 避免前面的替换使后面偏移失效 / Splice bottom-up
+    for (start, end) in sorted(merged, key=lambda s: s[0], reverse=True):
+        info = merged[(start, end)]
+        block_text = content[start:end]
+        atype = "add" if info["has_add"] else "update"
+        revised = _revise_block(
+            block_text, info["anns"], atype, section_name, token_counter, agent,
+        )
+        if revised and revised.strip():
+            content = (content[:start].rstrip() + "\n\n"
+                       + revised.strip() + "\n\n" + content[end:].lstrip())
+            content = re.sub(r"\n{3,}", "\n\n", content)
+    target["content"] = content.strip()
 
-    add_contribution = add_count * avg_tokens * 1.5
-    return int(input_tokens + add_contribution)
+
+def _revise_block(
+    block_text: str, annotations: List[dict], action_type: str,
+    section_name: str, token_counter, agent: BaseAgent,
+):
+    """把单个块 + 批注发给 LLM 生成修订块 / LLM-revise a single block.
+
+    Returns the revised block text, or None if there is nothing to do.
+    """
+    if action_type == "add":
+        system_prompt, user_template = PLAN_ANNOTATION_ADD_SYSTEM, PLAN_ANNOTATION_ADD_USER
+    else:
+        system_prompt, user_template = PLAN_ANNOTATION_UPDATE_SYSTEM, PLAN_ANNOTATION_UPDATE_USER
+
+    annotations_text = _build_apply_user_prompt({"content": block_text}, annotations)
+    if not annotations_text.strip():
+        # 绑定已保证相关性, 无过滤兜底 / Binding guarantees relevance — unfiltered fallback
+        annotations_text = _format_annotation_lines(annotations)
+    if not annotations_text.strip():
+        return None
+
+    logger.info(
+        _("review.phase3_block",
+          name=section_name, type=action_type, tokens=token_counter.count(block_text))
+    )
+    system_rendered = render_prompt(system_prompt, language=get_language_name())
+    prompt = render_prompt(
+        user_template, section_content=block_text, annotations_list=annotations_text,
+    )
+    return agent.call_llm(prompt, system_rendered)
+
+
+def _format_annotation_lines(annotations: List[dict]) -> str:
+    """格式化批注列表为 prompt 文本 / Format annotations as prompt text."""
+    lines = []
+    for a in annotations:
+        lines.append(
+            f"- [Line ~{a.get('line_number', '?')}] "
+            f'Selected: "{a.get("selected_text", "")}"\n'
+            f'  Comment: "{a.get("review_comment", "")}"'
+        )
+    return "\n".join(lines)
 
 
 def _build_apply_user_prompt(target: dict, annotations: List[dict]) -> str:
     """构建内容生成 USER prompt / Build content generation user prompt.
 
-    从原始批注中提取 selected_text 和 review_comment，
-    按 section content 过滤出属于当前 section 的批注。
-    Filters annotations to those whose selected_text appears in the section content.
+    从批注中提取 selected_text 和 review_comment，
+    只保留 selected_text 出现在 content 中的批注。
+    Filters annotations to those whose selected_text appears in the content.
     """
     content = target.get("content", "")
-    ann_lines = []
-    for a in annotations:
-        sel = a.get("selected_text", "")
-        if not sel:
-            continue
-        # 只包含属于当前 section 的批注 / Only include annotations matching this section
-        if sel not in content:
-            continue
-        ann_lines.append(
-            f"- [Line ~{a.get('line_number', '?')}] "
-            f'Selected: "{sel}"\n'
-            f'  Comment: "{a.get("review_comment", "")}"'
-        )
-    return "\n".join(ann_lines)
-
-
-def _apply_content_batch(
-    target: dict,
-    actions: List[dict],
-    annotations: List[dict],
-    token_counter,
-    max_output: int,
-    agent: BaseAgent,
-    system_prompt: str,
-    user_prompt_template: str,
-    action_type: str,
-    state: GraphState,
-):
-    """单类型内容生成 — 输出窗口预估 + 拆分。
-
-    Single-type content generation with output estimation and splitting.
-    Uses the provided system_prompt (update or add variant).
-    """
-    estimated_output = _estimate_apply_output(target, actions, token_counter)
-    input_tokens = token_counter.count(target["content"])
-    section_name = target.get("name", target.get("key", "?"))
-
-    if estimated_output < max_output and input_tokens < _h._settings.llm_context_window - 4096:
-        # 单次调用 / Single call
-        logger.info(
-            _("review.phase3_generating",
-              name=section_name, type=action_type, estimated=estimated_output)
-        )
-        # 渲染 system prompt / Render system prompt
-        system_rendered = render_prompt(system_prompt, language=get_language_name())
-        annotations_text = _build_apply_user_prompt(target, annotations)
-        prompt = render_prompt(
-            user_prompt_template,
-            section_content=target["content"],
-            annotations_list=annotations_text,
-        )
-        response = agent.call_llm(prompt, system_rendered)
-        if response.strip():
-            target["content"] = response.strip()
-    else:
-        # 逐条处理 / Process one annotation at a time
-        logger.info(
-            _("review.phase3_split",
-              name=section_name, estimated=estimated_output, max=max_output)
-        )
-        system_rendered = render_prompt(system_prompt, language=get_language_name())
-        section_anns = [a for a in annotations
-                       if a.get("selected_text", "") in target.get("content", "")]
-        for ann in section_anns:
-            annotations_text = _build_apply_user_prompt(target, [ann])
-            prompt = render_prompt(
-                user_prompt_template,
-                section_content=target["content"],
-                annotations_list=annotations_text,
-            )
-            response = agent.call_llm(prompt, system_rendered)
-            if response.strip():
-                target["content"] = response.strip()
+    matched = [
+        a for a in annotations
+        if a.get("selected_text", "") and a.get("selected_text", "") in content
+    ]
+    return _format_annotation_lines(matched)

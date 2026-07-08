@@ -209,7 +209,8 @@
     "autoSaved": "已自动保存",
     "fileName": "文件名",
     "annotationCount": "{count} 条批注",
-    "selectTextFirst": "请先选中文本再添加批注"
+    "selectTextFirst": "请先选中文本再添加批注",
+    "lineNumbers": "行号"
   },
   "search": {
     "find": "查找",

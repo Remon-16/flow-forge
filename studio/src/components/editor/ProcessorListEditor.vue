@@ -118,7 +118,7 @@ import {
   DeleteOutlined,
 } from '@ant-design/icons-vue'
 import { useI18n } from 'vue-i18n'
-import type { PreProcessorItem } from '@/types/excel'
+import type { PreProcessorItem } from '../../types/excel'
 
 const { t } = useI18n()
 

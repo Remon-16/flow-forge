@@ -209,7 +209,8 @@
     "autoSaved": "Auto-saved",
     "fileName": "File Name",
     "annotationCount": "{count} annotation(s)",
-    "selectTextFirst": "Please select text before adding an annotation"
+    "selectTextFirst": "Please select text before adding an annotation",
+    "lineNumbers": "Line numbers"
   },
   "search": {
     "find": "Find",

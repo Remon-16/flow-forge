@@ -13,6 +13,7 @@ export interface AnnotationData {
 const props = defineProps<{
   planContent: string
   annotations: AnnotationData[]
+  showLineNumbers?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -299,10 +300,6 @@ function handlePopoverDelete() {
   annotationPopoverVisible.value = false
 }
 
-function closeContextMenu() {
-  contextMenuVisible.value = false
-}
-
 // Scroll to annotation when clicked from sidebar
 function scrollToAnnotation(idx: number) {
   const el = previewRef.value?.querySelector(`mark[data-annotation-id="${idx}"]`)
@@ -321,6 +318,7 @@ defineExpose({ scrollToAnnotation })
     <div
       ref="previewRef"
       class="markdown-preview"
+      :class="{ 'show-line-numbers': showLineNumbers }"
       v-html="renderedHtml"
       @contextmenu="onContextMenu"
       @click="onMarkdownClick"
@@ -380,6 +378,27 @@ defineExpose({ scrollToAnnotation })
 .md-block {
   /* display: contents would break data-source-line traversal for some children */
   margin-bottom: 4px;
+}
+
+/* 行号栏：切换不改正文布局（零抖动）；开启时行号向左伸进预览区外侧的大留白 */
+/* Line-number gutter: no layout shift on toggle; when on, numbers reach left into the outer whitespace */
+/* 用 :deep() 穿透 v-html 注入的 .md-block（否则 scoped 选择器带 [data-v-*] 永不命中） */
+/* Use :deep() to pierce the v-html-injected .md-block (scoped selectors carry [data-v-*] and never match otherwise) */
+.markdown-preview.show-line-numbers :deep(.md-block) {
+  position: relative;
+}
+.markdown-preview.show-line-numbers :deep(.md-block)::before {
+  content: attr(data-source-line);
+  position: absolute;
+  left: -60px;      /* 负偏移伸进预览区外侧留白 / negative offset into the outer whitespace */
+  width: 48px;      /* 宽裕区域，可容 4~6 位行号 / roomy, fits 4-6 digit line numbers */
+  text-align: right;
+  color: #999;      /* 比原 #bbb 略深、更清晰 / slightly darker than #bbb for legibility */
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+  line-height: inherit;
+  user-select: none;
+  pointer-events: none;
 }
 
 /* Markdown rendered content styles */

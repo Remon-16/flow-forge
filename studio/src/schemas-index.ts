@@ -33,7 +33,7 @@ export const PASCAL_TO_SNAKE: Record<string, string> =
 // JSON 列字段 — 在 Excel 中存为 JSON 字符串，在内存中为 dict/list
 // JSON column fields — stored as JSON strings in Excel, dict/list in memory
 export const JSON_FIELDS: readonly string[] = fieldMapping.json_fields.map(
-  (f: string) => fieldMapping.snake_to_pascal[f] || f
+  (f: string) => SNAKE_TO_PASCAL[f] || f
 )
 
 // ============================================================================

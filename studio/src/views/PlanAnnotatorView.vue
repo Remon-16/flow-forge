@@ -49,16 +49,6 @@ const commentsPath = computed(() => {
   return directoryPath.value.replace(/[/\\]$/, '') + '/plan_comments.json'
 })
 
-const planPath = computed(() => {
-  if (!directoryPath.value) return ''
-  return directoryPath.value.replace(/[/\\]$/, '') + '/plan.md'
-})
-
-const historyDir = computed(() => {
-  if (!directoryPath.value) return ''
-  return directoryPath.value.replace(/[/\\]$/, '') + '/history-comments'
-})
-
 async function openDirectory() {
   if (!isDesktop) {
     message.warning('请在桌面应用中打开目录。')
@@ -259,6 +249,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
       <a-button size="small" @click="zoomIn" :disabled="settings.zoom >= 2.0" title="Ctrl+=">+</a-button>
       <a-button size="small" @click="zoomReset" :disabled="settings.zoom === 1" title="Ctrl+0">⟲</a-button>
 
+      <a-button
+        size="small"
+        :type="settings.showLineNumbers ? 'primary' : 'default'"
+        @click="settings.toggleLineNumbers()"
+      >
+        {{ t('annotator.lineNumbers') }}
+      </a-button>
+
       <a-select
         :value="settings.language"
         size="small"
@@ -304,6 +302,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
             ref="previewRef"
             :plan-content="planContent"
             :annotations="annotations"
+            :show-line-numbers="settings.showLineNumbers"
             @add-annotation="handleAddAnnotation"
             @edit-annotation="handleEditAnnotation"
             @delete-annotation="handleDeleteAnnotation"
