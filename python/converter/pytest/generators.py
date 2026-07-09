@@ -89,7 +89,7 @@ def generate_single_test(case: dict[str, Any], index: int) -> str:
         "url": url,
         "headers": headers,
         "body": body,
-        "expected_status": status_code,
+        "expected_status": int(status_code),
         "assertions": assert_dict,
         "assert_rules": assert_rules,
     }
@@ -168,6 +168,13 @@ def generate_biz_flow_class(flow: dict[str, Any], index: int) -> str:
         preprocessors = step.get("preprocessors") or []
         postprocessors = step.get("postprocessors") or []
         inherit = step.get("inherit") or {}
+        # 归一化 inherit：Excel 中为 JSON 字符串，需转为 dict
+        # Normalize inherit: stored as JSON string in Excel, convert to dict
+        if isinstance(inherit, str):
+            try:
+                inherit = json.loads(inherit)
+            except (json.JSONDecodeError, ValueError):
+                inherit = {}
 
         case_data: dict[str, Any] = {
             "step_id": step.get("step_id", f"step_{si}"),
@@ -175,7 +182,7 @@ def generate_biz_flow_class(flow: dict[str, Any], index: int) -> str:
             "url": url,
             "headers": headers,
             "body": body,
-            "expected_status": status_code,
+            "expected_status": int(status_code),
             "assertions": assert_dict,
             "assert_rules": assert_rules,
         }

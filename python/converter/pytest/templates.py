@@ -387,6 +387,26 @@ def _log_response_metrics(response_headers: Dict[str, Any], response_body: Any,
             logger.warning("Response body size %d exceeds threshold %d", content_length, threshold)
     else:
         logger.info("Response metrics — Content-Length: unknown")
+
+
+# ============================================================
+# 导出列表 — 供测试文件 from conftest import * 使用
+# Export list — for test files to use "from conftest import *"
+# ============================================================
+
+__all__ = [
+    "_resolve_path",
+    "_resolve_url",
+    "_assert_field",
+    "_assert_rules",
+    "_resolve_token",
+    "_apply_timestamp",
+    "_apply_hmac_sign",
+    "_print_request",
+    "_verify_hmac",
+    "_log_response_metrics",
+    "_print_response",
+]
 '''
 
 
@@ -408,6 +428,9 @@ import json
 import pytest
 import requests
 
+# conftest 辅助函数 / conftest helper functions
+from conftest import *  # noqa: F403, E402
+
 logger = logging.getLogger(__name__)
 
 '''
@@ -426,6 +449,9 @@ import logging
 import json
 import pytest
 import requests
+
+# conftest 辅助函数 / conftest helper functions
+from conftest import *  # noqa: F403, E402
 
 logger = logging.getLogger(__name__)
 
