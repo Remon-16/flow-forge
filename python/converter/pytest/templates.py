@@ -19,6 +19,14 @@ from typing import Any, Dict, List, Optional, Tuple
 import pytest
 import requests
 
+# 配置根日志记录器，使 print-demo 等处理器的 logger.info() 可见
+# Configure root logger so print-demo processor output is visible
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+
 logger = logging.getLogger(__name__)
 
 # ============================================================

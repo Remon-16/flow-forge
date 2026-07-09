@@ -15,6 +15,26 @@ __all__ = [
 ]
 
 
+# 需要将裸字符串包装为对象列表的 JSON 字段
+# JSON fields whose bare-string values should be wrapped as list-of-dicts
+_LIST_OF_DICT_FIELDS = {"preprocessors", "postprocessors"}
+
+
+def _normalize_json_field(field_name: str, value: str) -> object:
+    """将 JSON 解析失败的字符串值规范化为标准格式。
+       Normalize a string value that failed JSON parsing into standard format.
+
+       对 preprocessors/postprocessors 字段：
+       - "print-demo" → [{"name": "print-demo", "config": {}}]
+       - "hmac-sign,print-demo" → [{"name": "hmac-sign", ...}, {"name": "print-demo", ...}]
+    """
+    if field_name not in _LIST_OF_DICT_FIELDS:
+        return value
+    # 逗号分隔的多个处理器 / comma-separated processor names
+    names = [n.strip() for n in value.split(",") if n.strip()]
+    return [{"name": n, "config": {}} for n in names]
+
+
 def convert_row_to_snake(
     row: dict[str, object], *, parse_json: bool = True
 ) -> dict[str, object]:
@@ -33,7 +53,8 @@ def convert_row_to_snake(
             try:
                 result[snake_key] = json.loads(value)
             except (json.JSONDecodeError, TypeError):
-                result[snake_key] = value  # keep as-is on parse failure
+                # 尝试规范化简单格式 / try to normalize simple formats
+                result[snake_key] = _normalize_json_field(snake_key, value)
         else:
             result[snake_key] = value
     return result

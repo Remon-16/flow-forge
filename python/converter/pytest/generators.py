@@ -10,9 +10,37 @@ from ..common.utils import sanitize_name, indent_lines
 from ..common.export_utils import PREPROC_DISPATCH, POSTPROC_DISPATCH
 
 
+def _normalize_processor_list(value: Any) -> list[dict[str, Any]]:
+    """规范化处理器列表为 [{"name": ..., "config": {}}, ...] 格式。
+       Normalize processor list to list-of-dicts format.
+
+       支持格式 / Supported formats：
+       - None / [] → []
+       - "print-demo" → [{"name": "print-demo", "config": {}}]
+       - ["print-demo", "hmac-sign"] → [{"name": "print-demo", ...}, ...]
+       - [{"name": "print-demo", "config": {...}}] → 原样返回 / pass-through
+    """
+    if not value:
+        return []
+    if isinstance(value, list):
+        result: list[dict[str, Any]] = []
+        for item in value:
+            if isinstance(item, dict):
+                result.append(item)
+            elif isinstance(item, str):
+                result.append({"name": item.strip(), "config": {}})
+        return result
+    if isinstance(value, str):
+        # 逗号分隔的多个处理器 / comma-separated processor names
+        names = [n.strip() for n in value.split(",") if n.strip()]
+        return [{"name": n, "config": {}} for n in names]
+    return []
+
+
 def generate_preprocessor_calls(preprocessors: list) -> str:
     """生成前置处理器调度代码（插入到测试函数体中）。
        Generate preprocessor dispatch code for a test function body."""
+    preprocessors = _normalize_processor_list(preprocessors)
     if not preprocessors:
         return ""
     lines = ["    # --- PreProcessors ---"]
@@ -43,6 +71,7 @@ def generate_preprocessor_calls(preprocessors: list) -> str:
 def generate_postprocessor_calls(postprocessors: list) -> str:
     """生成后置处理器调度代码（插入到测试函数体中）。
        Generate postprocessor dispatch code for a test function body."""
+    postprocessors = _normalize_processor_list(postprocessors)
     if not postprocessors:
         return ""
     lines = ["    # --- PostProcessors ---"]
