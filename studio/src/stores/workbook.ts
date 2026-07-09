@@ -8,7 +8,6 @@ import type {
   WorkbookData,
 } from '../types/excel'
 import { readExcelFromBuffer } from '../utils/excel-reader'
-import { downloadExcel } from '../utils/excel-writer'
 import { validateRelevanceID, findDuplicateStepIDs, validateInherit } from '../utils/validators'
 import { isDesktop, writeFileBuffer, readFileBuffer, saveFileDialog } from '../utils/desktop-bridge'
 
@@ -95,8 +94,9 @@ export const useWorkbookStore = defineStore('workbook', () => {
   async function save() {
     const data = buildData()
     try {
+      // 惰性加载 excel-writer，将 exceljs 拆分到独立 chunk / Lazy-load excel-writer to split exceljs into a separate chunk
+      const { createWorkbook, downloadExcel } = await import('../utils/excel-writer')
       if (isDesktop && filePath.value) {
-        const { createWorkbook } = await import('../utils/excel-writer')
         const wb = await createWorkbook(data)
         const buffer = await wb.xlsx.writeBuffer()
         await writeFileBuffer(filePath.value, buffer)
@@ -114,13 +114,14 @@ export const useWorkbookStore = defineStore('workbook', () => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function saveAs() {
     const data = buildData()
+    // 惰性加载 excel-writer，将 exceljs 拆分到独立 chunk / Lazy-load excel-writer to split exceljs into a separate chunk
+    const { createWorkbook, downloadExcel } = await import('../utils/excel-writer')
     if (isDesktop) {
       const newPath = await saveFileDialog({
         filters: [{ name: 'Excel Files', extensions: ['xlsx'] }],
         defaultPath: fileName.value || 'testcase.xlsx',
       })
       if (newPath) {
-        const { createWorkbook } = await import('../utils/excel-writer')
         const wb = await createWorkbook(data)
         const buffer = await wb.xlsx.writeBuffer()
         await writeFileBuffer(newPath, buffer)
