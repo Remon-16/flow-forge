@@ -90,6 +90,6 @@ _FILENAME_ILLEGAL_RE = re.compile(r"[/\\:*?\"<>|]")
 
 
 def safe_filename(name: str) -> str:
-    """清理文件名 — 替换 \/:*?"<>| 为下划线。
+    r"""清理文件名 — 替换 \/:*?"<>| 为下划线。
        Sanitize filename — replace \/:*?"<>| with underscores."""
     return _FILENAME_ILLEGAL_RE.sub("_", str(name))

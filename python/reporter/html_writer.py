@@ -86,7 +86,7 @@ class HTMLReportWriter:
         parts.append("</head>")
         parts.append("<body>")
 
-        parts.append(f"<h1>{_(report.title_suffix, name=self.report_name)}</h1>")
+        parts.append(f"<h1>{_('report.title_suffix', name=self.report_name)}</h1>")
         parts.append("<div class=\"summary\">")
         parts.append(f"<p><strong>{_('report.environment')}:</strong> {self.env_name}</p>")
         parts.append(f"<p><strong>{_('report.test_time')}:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>")
@@ -101,7 +101,7 @@ class HTMLReportWriter:
         parts.append("<div class=\"section\">")
         parts.append(
             "<div class=\"section-header\" onclick=\"toggle('" + coll_id + "')\">"
-            + _(report.single_section)
+            + _('report.single_section')
             + f" <span class=\"pass\">{_('report.passed')} {passed}</span>"
             + f" <span class=\"fail\">{_('report.failed')} {failed}</span>"
             + f" {_('report.pass_rate')} {rate:.1f}%"
@@ -158,7 +158,7 @@ class HTMLReportWriter:
         parts.append("<div class=\"section\">")
         parts.append(
             "<div class=\"section-header\" onclick=\"toggle('" + coll_id + "')\">"
-            + _(report.biz_section)
+            + _('report.biz_section')
             + f" <span class=\"pass\">{_('report.passed')} {passed}</span>"
             + f" <span class=\"fail\">{_('report.failed')} {failed}</span>"
             + f" {_('report.pass_rate')} {rate:.1f}%"
@@ -185,7 +185,7 @@ class HTMLReportWriter:
         parts.append("<div class=\"case-detail\">")
 
         if parse_error:
-            parts.append(f"<p class=\"error-msg\">{_(report.parse_error, error=self._h(parse_error))}</p>")
+            parts.append(f"<p class=\"error-msg\">{_('report.parse_error', error=self._h(parse_error))}</p>")
             parts.append(f"<p><strong>{_('report.biz_zero_steps')}</strong></p>")
             parts.append("</div></div>")
             return
