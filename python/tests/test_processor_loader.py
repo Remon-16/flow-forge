@@ -28,6 +28,10 @@ class TestDiscoverProcessorsTest:
         # Mock relative_to to return a simple relative path
         p.relative_to.return_value = Path(f"processors/{name}.py")
         p.with_suffix.return_value = Path(f"processors/{name}")
+        # 让 mock 可被真实 sorted() 排序（按文件名）；MagicMock 调用魔术方法会传 self，故用 2 参签名。
+        # Make the mock orderable for the real sorted() (by file name); MagicMock passes
+        # `self` when invoking magic methods, hence the two-argument lambda.
+        p.__lt__ = lambda self, other: self.name < other.name
         return p
 
     def should_import_valid_processor_modules(self):
@@ -64,8 +68,7 @@ class TestDiscoverProcessorsTest:
 
         with patch.object(Path, "glob", return_value=all_files), \
              patch("importlib.import_module", return_value=mock_module) as mock_import, \
-             patch.object(Path, "is_dir", return_value=True), \
-             patch("processors.loader.sorted", lambda x: list(x)):
+             patch.object(Path, "is_dir", return_value=True):
             from processors.loader import discover_processors
             discover_processors("mock_dir")
 
