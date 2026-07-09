@@ -19,6 +19,16 @@ __all__ = [
 # JSON fields whose bare-string values should be wrapped as list-of-dicts
 _LIST_OF_DICT_FIELDS = {"preprocessors", "postprocessors"}
 
+# 需 JSON 解析的字段 = 共享 JSON 字段 + inherit
+# inherit 语义上是 JSON dict（如 {"authToken": "Step_Login.data.token"}），但未在
+# shared/schemas/field-mapping.json 的 json_fields 中标注，故在此本地补齐；
+# 否则 excel2yaml 会把它写成 JSON 字符串，执行器无法解析导致 token 无法在步骤间传递。
+# Fields to JSON-parse = shared JSON fields + inherit. `inherit` is semantically a JSON
+# dict but is not flagged in shared/schemas/field-mapping.json, so add it locally here;
+# otherwise excel2yaml emits it as a JSON string that the executor cannot parse, breaking
+# cross-step token passing.
+_JSON_PARSE_FIELDS = JSON_COLUMNS | {"inherit"}
+
 
 def _normalize_json_field(field_name: str, value: str) -> object:
     """将 JSON 解析失败的字符串值规范化为标准格式。
@@ -49,7 +59,7 @@ def convert_row_to_snake(
         snake_key = pascal_to_snake(pascal_key)
         if value is None or value == "":
             continue
-        if parse_json and snake_key in JSON_COLUMNS and isinstance(value, str):
+        if parse_json and snake_key in _JSON_PARSE_FIELDS and isinstance(value, str):
             try:
                 result[snake_key] = json.loads(value)
             except (json.JSONDecodeError, TypeError):
