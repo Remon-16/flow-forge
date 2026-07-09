@@ -1,8 +1,16 @@
 # Flow Forge Studio
 
-**English** | [中文](README.md)
+[中文](README.md) | **English**
 
-A desktop test case workspace built with Vue 3 + Ant Design Vue + Tauri 2, supporting visual editing of both Excel (.xlsx) and YAML (.yaml) test case formats, plus interactive Markdown annotation of test plans.
+A desktop test-case workbench built with Vue 3 + Ant Design Vue + Tauri 2: visually edit Excel (.xlsx) and YAML (.yaml) test cases, and add interactive Markdown annotations to AI test plans.
+
+## What It Can Do
+
+- **Excel editor**: table-based editing of interface definitions / single-API test cases / business flows, with a built-in JSON tree editor, an advanced assertion rule editor, and real-time validation.
+- **YAML editor**: form-based editing plus a split-view raw YAML panel on the right, with file-tree browsing, multiple tabs, and automatic syncing.
+- **Markdown plan annotator**: select text on the rendered test plan to add structured annotations that are saved automatically for the agent to read and revise the plan; historical annotations can be reviewed.
+- **Find and replace**: by cell in Excel and by raw text in YAML, with match-case / whole-word / regex options, including cross-file global search.
+- **Full executor compatibility**: the Excel/YAML formats it reads and writes are identical to those of the [python/](../python/README.en.md) executor.
 
 ## Quick Start
 
@@ -10,444 +18,32 @@ A desktop test case workspace built with Vue 3 + Ant Design Vue + Tauri 2, suppo
 cd studio
 npm install
 
-# Tauri desktop app dev mode
+# Tauri desktop app dev mode (launches the desktop window automatically)
 npm run dev
 ```
 
-Desktop mode launches the Tauri window automatically.
+> Flow Forge Studio targets **desktop mode** — launch it with `npm run dev`.
 
-## Tech Stack
+## Common Commands
 
-| Layer | Technology |
-|-------|------------|
-| Frontend Framework | Vue 3 (Composition API + `<script setup>`) |
-| UI Library | Ant Design Vue 4.x |
-| Build Tool | Vite 8.x |
-| Desktop Framework | Tauri 2.x |
-| State Management | Pinia |
-| Internationalization | vue-i18n 9.x |
-| Excel I/O | SheetJS (xlsx) + ExcelJS |
-| YAML Parsing | js-yaml 4.x |
-| Language | TypeScript |
-
-## Features
-
-### General
-- Home page with editor selection (Excel / YAML)
-- Tauri desktop app with native local file save to original path
-- Bilingual Chinese/English interface with on-the-fly switching
-- Save (Ctrl+S) and Save As (Ctrl+Alt+S) keyboard shortcuts
-- **Find & Replace** (Ctrl+F / Ctrl+H): search cells in Excel sheets or raw text in YAML files, with match-case, whole-word, and regex options
-- **Edit Menu**: new "Edit" dropdown in the toolbar with Find, Replace, Find in Files, Replace in Files entries, plus Zoom In, Zoom Out, and Reset Zoom controls
-- **Font Zoom**: Ctrl+= to zoom in, Ctrl+- to zoom out, Ctrl+0 to reset, and Ctrl+MouseWheel zoom — zoom level is persisted across sessions
-- **Global Search**: Find in Files searches across all sheets (Excel) or all YAML files in the project directory, with results grouped by source; Replace in Files supports both per-match review/replace and replace-all
-
-### Excel Editor
-- Open / edit / save Excel test case files (.xlsx format)
-- API definition editing (table view with add/delete row support)
-- Single-API test case editing (with RelevanceID cross-reference validation)
-- Business flow test case editing (StepID uniqueness check, Inherit field format validation)
-- **Find & Replace**: search and replace cell values within the current sheet — matching rows are highlighted; batch replace supported
-- **Visual JSON Editor**: turns JSON fields (RequestHead, RequestBody, AssertDict, etc.) into an interactive tree editor
-  - Paste a JSON string to auto-parse into a tree structure
-  - Each field displays key / type / value — all three columns are editable
-  - Supports 6 types: string, number, boolean, date, list, dictionary
-  - Recursive editing for nested Dict/List structures
-- **Advanced Assertion Editor (AssertRules)**: per-rule editing with real-time format validation
-  - Supports 12 operators: `==` `!=` `>` `>=` `<` `<=` `=~` `in` `contains` `not_contains` `is_null` `is_not_null` `typeof`
-  - Supports 3 functions: `.length()` `SUM()` `SUM_PRODUCT()`
-  - Real-time format error hints (operator validity, path syntax, function names, missing expected values, etc.)
-- Real-time validation (RelevanceID existence, StepID uniqueness, Inherit format) — invalid cells highlighted in red
-
-### YAML Editor
-- **Form-based editing**: not a text editor — edit YAML cases through structured form fields
-- **Right-side YAML edit panel**: direct raw YAML editing by default with real-time auto-sync to form (500ms debounce); toggle to read-only preview mode (similar to Markdown editor split view)
-- Auto-detect case type via `case_type` field: `single` (single-API case) / `biz` (business flow case) / `interfaces` (interface definition)
-- Open a directory (left file tree browsing, VS Code style) or open a single .yaml file (via header "Open" dropdown menu)
-- **File tabs**: open multiple files simultaneously, switch between them via tabs (similar to VS Code)
-- Single-API form: full fields (test_id, relevance_id, tag, api_name, method, url, request_head/body, assert_dict/rules, etc.)
-- Interface definition form: similar to single-API form but without relevance_id and tag fields
-- Business flow form: sheet_name + step list (draggable sort), each step with full fields
-- Reuses Excel editor's JSON Editor and AssertRules Editor
-- Field validation mirrors Excel editor (StepID duplicate, Inherit format)
-- **Find & Replace**: search and replace within the raw YAML text — auto-expands the right-side panel on activation; matching line numbers and content are clearly displayed
-- **Right-click file operations**: right-click files or folders in the file tree to rename, cut, copy, paste, delete to recycle bin, and open in file explorer. Cross-platform support for Windows, macOS, and Linux
-
-### Markdown Plan Annotator
-- Select text directly on the rendered Markdown preview to add annotations
-- Right-click context menu for quick annotation
-- Annotation text highlighted with a yellow background and a light blue numbered badge at the bottom-right corner
-- **Click on annotation highlights to view details**: a popover shows the comment text, line number, and provides in-place edit and delete buttons
-- Left-side annotation list with edit, delete, and scroll-to-location support
-- Auto-save to plan_comments.json — no manual save required
-- Historical annotation viewing (read-only) for traceability
-- Toolbar font zoom (buttons + Ctrl+MouseWheel)
-
-## Architecture
-
-### Component Tree
-
-```mermaid
-graph TD
-    App[App.vue] --> Home[HomePage - Editor Selection]
-    App --> Layout[Editor Layout - Header + Sidebar + Content + StatusBar]
-
-    Layout --> Excel[Excel Editor /excel]
-    Layout --> YAML[YAML Editor /yaml]
-
-    Excel --> ApiDefEditor[ApiDefEditor - API Definition Editor]
-    Excel --> SingleCaseEditor[SingleCaseEditor - Single-API Case Editor]
-    Excel --> BizFlowEditor[BizFlowEditor - Business Flow Editor]
-    Excel --> AssertRulesEditor[AssertRulesEditor - Advanced Assertion Editor]
-
-    YAML --> FileTree[YamlFileTree - File Tree Sidebar]
-    YAML --> TabBar[YamlTabBar - File Tab Bar]
-    YAML --> SingleForm[SingleCaseForm - Single-API Form]
-    YAML --> InterfaceForm[InterfaceForm - Interface Definition Form]
-    YAML --> BizForm[BizFlowForm - Business Flow Form]
-    YAML --> RawView[YamlRawView - Raw YAML View]
-    YAML --> StepEditor[StepEditor - Step Sub-form]
-
-    Layout --> Annotator[Plan Annotator /annotator]
-
-    Annotator --> AnnotatorViewer[MarkdownPreview - Markdown Preview]
-    Annotator --> CommentList[AnnotationSidebar - Annotation Sidebar]
-    Annotator --> CommentBubble[AnnotationDialog - Annotation Dialog]
-    Annotator --> HistoryViewer[HistoryAnnotationViewer - History Viewer]
+```bash
+npm run dev        # Tauri desktop app dev mode
+npm run build      # Tauri desktop app build (output in src-tauri/target/release/)
 ```
-
-### Data Flow
-
-```mermaid
-graph TD
-    subgraph Excel Editor
-        OPEN_E[Open Excel File] --> READ_E[xlsx Library Read]
-        READ_E --> STORE_E[workbook store]
-        STORE_E --> EDITORS[ApiDefEditor / SingleCaseEditor / BizFlowEditor]
-        EDITORS --> STORE_E
-        STORE_E --> WRITE_E[ExcelJS Write Back]
-        WRITE_E --> SAVE_E[Save to Local / Download]
-    end
-
-    subgraph YAML Editor
-        OPEN_Y[Open YAML Dir/File] --> READ_Y[Tauri API File Read]
-        READ_Y --> PARSE_Y[js-yaml Parse]
-        PARSE_Y --> STORE_Y[yaml-store]
-        STORE_Y --> FORMS[SingleCaseForm / BizFlowForm]
-        FORMS --> STORE_Y
-        STORE_Y --> STRINGIFY[js-yaml Serialize]
-        STRINGIFY --> WRITE_Y[Tauri API Write to Original Path]
-    end
-```
-
-## Project Structure
-
-```text
-studio/
-├── README.md
-├── README.en.md
-├── package.json
-├── vite.config.ts
-├── tsconfig.json
-├── tauri.conf.json
-├── index.html
-├── src-tauri/                         # Tauri Rust backend
-│   ├── Cargo.toml
-│   ├── src/
-│   │   ├── main.rs
-│   │   └── lib.rs                    # Plugin registration + custom commands
-│   ├── capabilities/
-│   │   └── default.json              # Permission configuration
-│   └── icons/
-└── src/
-    ├── main.ts                        # Renderer process entry
-    ├── App.vue                        # Root component, conditional layout
-    ├── env.d.ts                       # Type declarations
-    ├── router/index.ts                # Four routes: /, /excel, /yaml, /annotator
-    ├── stores/
-    │   ├── workbook.ts                # Excel workbook data (core store)
-    │   ├── yaml-store.ts             # YAML editor data store
-    │   ├── editor.ts                  # Editor UI state
-    │   └── settings.ts               # Settings (language)
-    ├── i18n/
-    │   ├── index.ts                   # vue-i18n initialization
-    │   ├── zh-CN.json                 # Chinese locale
-    │   └── en-US.json                 # English locale
-    ├── types/
-    │   ├── excel.ts                   # Excel data type definitions
-    │   ├── yaml.ts                    # YAML data type definitions
-    │   └── editor.ts                  # Editor UI type definitions
-    ├── utils/
-    │   ├── excel-reader.ts            # Excel read + parse
-    │   ├── excel-writer.ts            # Excel write logic
-    │   ├── yaml-parser.ts            # YAML parse / serialize
-    │   ├── assert-rules-validator.ts  # AssertRules format validation engine
-    │   ├── validators.ts             # General validation utilities
-    │   ├── desktop-bridge.ts         # Tauri API bridge + browser fallback
-    │   ├── deep-merge.ts             # Deep merge utility
-    │   └── json-helper.ts            # JSON parse / serialize helpers
-    ├── components/
-    │   ├── layout/
-    │   │   ├── AppHeader.vue          # Top menu bar
-    │   │   ├── AppSidebar.vue         # Left navigation
-    │   │   └── StatusBar.vue          # Bottom status bar
-    │   ├── editor/
-    │   │   ├── ApiDefEditor.vue         # API definition editor
-    │   │   ├── SingleCaseEditor.vue     # Single-API case editor
-    │   │   ├── BizFlowEditor.vue        # Business flow editor
-    │   │   ├── AssertRulesEditor.vue    # Advanced assertion rule editor
-    │   │   └── AssertRulesModal.vue     # Assertion rules structured editor modal
-    │   ├── yaml-editor/
-    │   │   ├── YamlFileTree.vue         # YAML file tree sidebar
-    │   │   ├── YamlTabBar.vue           # File tab bar
-    │   │   ├── SingleCaseForm.vue       # Single-API case form
-    │   │   ├── BizFlowForm.vue          # Business flow form
-    │   │   ├── StepEditor.vue           # Step sub-form
-    │   │   └── YamlRawView.vue          # Raw YAML text view
-    │   ├── json-editor/
-    │       ├── JsonEditor.vue         # JSON editor modal
-    │       ├── JsonNode.vue           # Recursive node component
-    │       └── ValueInput.vue         # Value input component
-    │   └── annotator/
-    │       ├── MarkdownPreview.vue      # Markdown plan annotator preview view
-    │       ├── AnnotationSidebar.vue    # Left annotation list panel
-    │       ├── AnnotationDialog.vue     # Annotation edit dialog
-    │       └── HistoryAnnotationViewer.vue  # Historical annotation viewer
-    ├── views/
-    │   ├── HomePage.vue              # Home page (editor selection)
-    │   ├── EditorView.vue            # Excel editor view
-    │   ├── YamlEditorView.vue        # YAML editor view
-    │   └── PlanAnnotatorView.vue     # Plan annotator view
-    └── assets/styles/
-        └── global.css                 # Global styles
-```
-
-## User Guide
-
-### Home Page
-
-The app opens to a home page with three selection cards:
-- **Excel Editor**: click to enter Excel spreadsheet editing mode
-- **YAML Editor**: click to enter YAML form-based editing mode
-- **Markdown Plan Annotator**: click to enter Markdown test plan annotation mode
-
-### Excel Editor
-
-#### Opening a File
-
-Click the **Open** button in the top toolbar (or press Ctrl+O), then select a `.xlsx` test case file. The file is read directly from the local path.
-
-#### Editing API Definitions
-
-Click **API Definitions** in the left sidebar to switch to the API definition sheet. Edit fields directly in the table:
-
-- Plain text columns: direct input
-- Method column: dropdown to select HTTP method
-- StatusCode column: text input
-- RequestHead / RequestBody / AssertDict columns: click the button to open the JSON Editor
-- AssertRules column: read-only preview area + "Edit Details" button, opens the structured assertion rules editing modal
-- PreProcessors / PostProcessors columns: JSON array columns containing processor names and configurations, formatted as `[{"name": "...", "config": {...}}]`. Supports inline editing, JSON tree editor, and list editor modes
-
-#### Editing AssertRules
-
-The AssertRules column shows a read-only preview area (one rule per line). Click the **Edit Details** button to open the structured editing modal:
-- Each rule is edited with three separate fields: Path, Operator, Expected
-- Supports 12 operators (== != > >= < <= =~ contains not_contains in typeof is_null is_not_null)
-- Real-time format validation with error hints
-- **Batch Paste** is supported: paste multiple lines and they are auto-parsed into structured rows
-
-#### Saving Files
-
-- **Save** (Ctrl+S): writes directly back to the original file path
-- **Save As** (Ctrl+Alt+S): opens a save dialog to choose a new path
-
-### YAML Editor
-
-#### Opening Cases
-
-- **Open Directory**: Click header "Open" → "Open Directory" to select a directory containing .yaml files; a file tree appears on the left
-- **Open File**: Click header "Open" → "Open File" to directly select a single .yaml file to edit
-- **File Tabs**: Open multiple files simultaneously, switch between them via tabs, click × to close
-
-#### Form Editing
-
-The form type automatically switches based on the `case_type` field in the YAML file:
-- `single`: single-API case form (test_id, relevance_id, api_name, method, url, etc.)
-- `biz`: business flow form (sheet_name + step list)
-- `interfaces`: interface definition form (test_id, api_name, app_name, method, url, etc.; no relevance_id or tag)
-
-Simple fields are arranged in a two-column grid layout, while JSON fields (RequestHead, RequestBody, AssertDict), AssertRules, PreProcessors, PostProcessors, and Remark each occupy a full row. JSON and AssertRules fields can be edited directly in the text area (auto-saves on blur), or the "Edit Details" button opens a structured editor for visual editing. PreProcessors / PostProcessors are JSON arrays (`[{"name": "...", "config": {...}}]`), supporting inline editing, JSON tree editor, and a name + key=value configuration list editor. JSON text areas auto-size to fit content.
-
-#### YAML Preview Panel
-
-The right-side panel can be toggled between:
-- Collapsed: only shows the toggle button
-- Edit mode (default): allows direct editing of YAML text with real-time auto-parse to the form (500ms debounce), ideal for bulk copy-paste workflows
-- Preview mode: displays the serialized YAML text from the current form data in real time (read-only)
-
-#### Saving
-
-- **Save** (Ctrl+S): writes directly back to the original file
-- **Save As** (Ctrl+Alt+S): opens a save dialog to choose a new path
-
-### Markdown Plan Annotator
-
-#### Opening a Test Plan Directory
-
-Click the "Markdown Plan Annotator" card on the home page to enter. Use the "Open Directory" button in the top toolbar to select a directory containing Markdown test plan files. Browse and select files from the file tree on the left.
-
-#### Adding Annotations
-
-1. Select text on the rendered Markdown preview that you want to annotate
-2. Right-click and choose "Add Annotation"
-3. Enter your review comment in the popup input box
-4. Annotation format: line number, selected text, review comment
-5. Annotated text is displayed with a yellow highlight and a light blue numbered badge at the bottom-right corner
-
-#### Managing Annotations
-
-- **Click on annotation highlights**: click a yellow-highlighted annotation in the preview to open a popover showing the comment text and line number, with buttons to edit or delete the annotation directly
-- The left-side annotation list shows all annotations for the current file, with edit, delete, and scroll-to-location support
-- Edit an annotation: use the "Edit" button in the popover or the list to open the edit dialog and modify the review comment
-- Delete an annotation: use the "Delete" button in the popover or the list to remove it — the highlight and badge are removed simultaneously
-
-#### Auto-Save
-
-All annotations are automatically saved to the `plan_comments.json` file in the test plan directory. No manual save required.
-
-#### Viewing Historical Annotations
-
-Toggle to "Historical Annotations" mode to view all previously saved annotations (read-only), making it easy to review annotation history.
-
-#### Integration with AI Agent
-
-Annotation data is used by the AI test case generation agent. When the `r` option is selected in the CLI tool, the agent reads annotation information from `plan_comments.json` as contextual reference for generating test cases.
-
-### Editing Processors
-
-The PreProcessors / PostProcessors columns support the following editing modes:
-
-- **Inline Editing** — edit the JSON text directly in the cell
-- **JSON Tree Editor** — click the "Details" button to open a tree-structured editor
-- **List Editor** — a simple name + key=value configuration list editor with add, remove, reorder, and JSON paste support
-
-#### Validation Rules
-
-- Empty values are allowed
-- Must be a valid JSON array
-- Each item must have a `name` field (non-empty string)
-- `config` field is optional; if present it must be an object
-
-## Validation Rules
-
-### Excel Editor
-
-| Rule | Applies To | Description | UI Indicator |
-|------|-----------|-------------|--------------|
-| RelevanceID | Single-API cases, Business flows | Must exist in the API definition TestID set | Red cell highlight |
-| StepID | Business flows | Must be unique within the same sheet | Red cell highlight |
-| Inherit format | Business flows | JSON object format (key: StepID.path) | Red cell + tooltip |
-| Inherit brackets | Business flows | `[` and `]` counts must match; `(` and `)` counts must match | Red cell + tooltip |
-| Inherit Chinese chars | Business flows | Chinese characters are not allowed | Red cell + tooltip |
-| AssertRules format | All | Operator validity, path syntax, function names, expected values | Red ✗ icon + tooltip |
-| URL existence | All | URL contains `<URL not exist>` marker (injected by Agent) | Red border + warning icon + Tooltip |
-| JSON format | JSON fields | Must be valid JSON string | Red hint below text area |
-
-### YAML Editor
-
-| Rule | Applies To | Description | UI Indicator |
-|------|-----------|-------------|--------------|
-| StepID | Business flows | Must be unique within the same file | Red input highlight |
-| Inherit format | Business flows | JSON object format, bracket matching, no Chinese chars | Red input + tooltip |
-| URL existence | All | URL contains `<URL not exist>` marker | Red border on input |
-| AssertRules format | All | Same as Excel editor | Red ✗ icon + tooltip |
-
-## AssertRules Operators & Functions Reference
-
-### Operators
-
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `==` | Equal to | `$.data.code == 0` |
-| `!=` | Not equal to | `$.data.status != ERROR` |
-| `>` | Greater than (numeric) | `$.data.price > 10.5` |
-| `>=` | Greater than or equal (numeric) | `$.data.total >= 100` |
-| `<` | Less than (numeric) | `$.data.age < 150` |
-| `<=` | Less than or equal (numeric) | `$.data.size <= 1000` |
-| `=~` | Regex match | `$.data.time =~ ^\\d{4}-\\d{2}-\\d{2}$` |
-| `in` | Value in list | `$.data.status in ["PAID","PENDING"]` |
-| `contains` | Contains substring | `$.data.tags contains "premium"` |
-| `not_contains` | Does not contain substring | `$.data.error not_contains "timeout"` |
-| `is_null` | Is null/empty | `$.data.error is_null` |
-| `is_not_null` | Is not null/empty | `$.data.token is_not_null` |
-| `typeof` | Type check | `$.data.count typeof int` |
-
-### Functions
-
-| Function | Description | Example |
-|----------|-------------|---------|
-| `.length()` | Array length | `$.data.list.length() == 3` |
-| `SUM(path)` | Sum over wildcard path | `SUM($.data.list[*].price)` |
-| `SUM_PRODUCT(p1, p2)` | Element-wise product sum over two wildcard paths | `SUM_PRODUCT($.data.items[*].price, $.data.items[*].qty)` |
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+O | Open file |
-| Ctrl+S | Save |
-| Ctrl+Alt+S | Save As |
-| Ctrl+N | New blank workbook |
-| Ctrl+F | Find |
-| Ctrl+H | Replace |
-| Esc | Close search bar |
-| Ctrl+= | Zoom in |
-| Ctrl+- | Zoom out |
-| Ctrl+0 | Reset zoom |
-| Ctrl+MouseWheel | Zoom in/out |
 
 ## Recommended Workflow
 
-The recommended workflow for using Flow Forge in real projects:
+1. **AI generates Excel cases**: run the [Agent](../agent/README.en.md) with `--output-format excel` or `both`.
+2. **Batch edit in Studio**: open the Excel file to bulk-adjust tags, fill in parameters, and modify assertions.
+3. **Convert to YAML and diff**: run `python converter_main.py excel2yaml` to convert to YAML, then commit each file to Git.
+4. **Run the executor**: use the [executor](../python/README.en.md) to run the YAML directory and get a report.
 
-1. **AI generates Excel cases**: Run the Agent with `--output-format excel` or `both` to generate test cases in Excel format.
-2. **Batch edit in Studio**: Open the generated Excel in Flow Forge Studio, use the table view to batch-adjust tag levels, fill in request parameters, and modify assertion rules.
-3. **Convert to YAML for diff**: After editing, run `python converter_main.py excel2yaml` to convert the Excel to YAML format, then commit each file to Git. With one YAML file per case, git diff clearly shows every change.
-4. **Executor runs the cases**: Run the YAML directory with the executor to get a test report.
+> Excel is ideal for batch editing; YAML is ideal for diffing (one file per case makes every change obvious during code review).
 
-> **Why this workflow?** Excel is ideal for batch editing — quickly browse, sort, and modify large numbers of cases in Studio. YAML is ideal for diffing — one file per case means code review changes are crystal clear.
+## Documentation Index
 
-## Development
-
-### Local Development
-
-```bash
-# Tauri desktop app dev mode
-npm run dev
-```
-
-### Build
-
-```bash
-# Tauri desktop app packaging
-npm run build
-
-# Pure web build (static file deployment, for special use cases)
-npm run build:web
-```
-
-- Tauri package output goes to `src-tauri/target/release/`
-- Web build output goes to `dist/`
-
-### Extending the Editor
-
-- **Add a new JSON type**: add the type to `JsonType` in `types/excel.ts`, then add the corresponding input control in `ValueInput.vue`
-- **Add a new validation rule**: add the validation function in `utils/validators.ts`, then invoke it in the corresponding store
-- **Add a new locale**: add a new locale JSON file in `i18n/`, then register it in `i18n/index.ts`
-
-### Compatibility with the Python Executor
-
-The Excel/YAML formats read and written by the editor are fully compatible with the `python/` executor:
-
-- **Excel**: sheet order is API Definitions → Single-API Cases → Business Flows; column names are identical; JSON fields use compact JSON serialization
-- **YAML**: one `.yaml` file per case; `case_type` field distinguishes type (`single`/`biz`); field names use snake_case, fully compatible with the executor's YAML parser
+| Document | Contents |
+|------|------|
+| [Feature Guide](./docs/features.en.md) | Excel/YAML editors, Markdown annotator, find and replace, keyboard shortcuts |
+| [Architecture & Development](./docs/architecture.en.md) | Component tree, data flow, project structure, development commands, extension development, executor compatibility |
+| [Validation Rules & Assertion Reference](./docs/validation.en.md) | Excel/YAML validation rules, processor field validation, AssertRules operators and functions |

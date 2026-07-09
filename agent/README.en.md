@@ -1,559 +1,61 @@
 # Flow Forge — API Test Case Generation Agent
 
-**English** | [中文](README.md)
+[中文](README.md) | **English**
 
-A multi-agent system based on LangGraph pipeline pattern that transforms requirement documents and API documentation into YAML test cases (with optional Excel export) compatible with the executor. Supports both simple assertions (`assert_dict`) and advanced multi-operator assertion rules (`assert_rules`), covering equality checks, numeric comparisons, regex matching, list aggregation, and more.
+A multi-agent system built on a LangGraph pipeline. It reads **requirement documents** and **API documentation**, runs them through a "plan generation → human review → case orchestration" pipeline, and automatically generates YAML test cases in the executor's format (with optional Excel export).
 
-## System Architecture
+## What It Does
 
-```mermaid
-graph TD
-    CLI[CLI Entry] --> GRAPH[LangGraph StateGraph]
-    GRAPH --> PARSE[parse_docs Document Parsing]
-    PARSE --> ANALYZE_API[analyze_api API Analysis + Self-Eval]
-    ANALYZE_API -->|Passed / Skipped| VALIDATE_URLS[validate_interface_urls URL Validation]
-    ANALYZE_API -.->|Critical uncertainties| API_ASK{Optional Query}
-    API_ASK -.->|User feedback| ANALYZE_API
-    VALIDATE_URLS --> SAVE_IFACES[save_interfaces Save YAMLs]
-    SAVE_IFACES --> ANALYZE_REQ[analyze_requirement Requirements Analysis]
-    ANALYZE_REQ --> GEN_OUTLINE[generate_outline Outline Generation] --> GEN_PLAN[generate_plan Plan Generation]
-    GEN_PLAN --> CONFIRM{human_confirm Review Interrupt}
-    CONFIRM -->|Approved| RELOAD_IFACES[reload_interfaces Reload YAMLs]
-    CONFIRM -->|Rejected| REVISE[revise_plan Revise from Feedback]
-    REVISE --> CONFIRM
-    RELOAD_IFACES --> PARSE_PLAN[parse_plan Plan Parsing]
-    PARSE_PLAN --> BATCH[batch_controller Skeleton + Plugin Pipeline]
-    BATCH --> WRITE[write_output YAML + Optional Excel]
-    WRITE --> END((End))
-```
+- **Multi-format input**: Requirement documents support Markdown / PDF / plain text; API documentation supports OpenAPI 3.0 (JSON/YAML) / Markdown tables.
+- **Two case types**: Generates single-API test cases and multi-step business-flow test cases, supporting simple equality assertions (`assert_dict`) and advanced multi-operator assertion rules (`assert_rules`).
+- **Controllable human review**: After the AI generates the test plan, a human confirms it (via `y` / `n` / `r`), ensuring quality before cases are generated.
+- **Anti-hallucination**: URL correction, output-count validation, and batched generation catch unreliable output at the generation stage.
+- **Pluggable extensions**: Plugins (enrich case attributes) + skills (inject domain knowledge), customizable without touching code.
+- **Broad LLM compatibility**: Works with any OpenAI-compatible API — a strong cloud model (such as DeepSeek) or a weak local model (such as Ollama) both work.
+- **Resume/checkpoint recovery**: Case generation can resume after an interruption, and incremental updates are supported after requirement changes.
 
-Core workflow (11 steps):
-
-1. **Document Parsing**: Read requirement documents (Markdown / PDF / plain text) and API documentation (OpenAPI 3.0 / Markdown tables), with token-aware chunking for long texts
-
-2. **API Analysis**: Analyze API documentation completeness — auth methods, parameter patterns, missing info. Auto-passes when quality is good, only asks user for critical uncertainties
-
-3. **Interface URL Validation** (source-level): Verify each interface URL exists in the source document; URLs failing validation trigger automatic LLM correction retries
-
-4. **Save Interfaces**: Write validated interfaces to YAML files. Users can edit these files during the plan review phase; edits are picked up after approval
-
-5. **Requirements Analysis**: LLM extracts business flows, user roles, constraints, and exception scenarios
-
-6. **Outline Generation (generate_outline)**: Generates a lightweight JSON outline from requirement analysis and interface list (names/URLs only), grouping interfaces by business domain and listing business flows. The outline is very small (< 1000 tokens), guaranteeing no truncation.
-
-7. **Plan Generation**: Generate a Markdown test plan in chunks from the outline — Phase A generates global business understanding + flowcharts, Phase B generates single-API test points per interface group (`plan_single_batch_size` controls group size, `-1` merges all into one group), Phase C generates business flow tests in batches (`plan_biz_flow_batch_size` controls batch size, `-1` merges all into one batch), Phase D assembles. Each chunk is an independent LLM call with its own step budget, preventing `max_steps` exhaustion and output truncation for large projects. Strong models can set both configs to `-1` for faster execution.
-
-8. **Manual Review** (Mandatory interrupt): Display the plan; user can approve, provide text feedback, or use annotation-based revision. Feedback loop until approval
-
-9. **Plan Parsing**: Parse the approved Markdown test plan into structured data, extracting test point lists for downstream case generation
-
-10. **Case Generation** (skeleton + plugin pipeline):
-   - Skeleton generation: Generates single/biz case skeletons in batches of `skeleton_batch_size` (default 30). When test points exceed the batch size, they are automatically split into multiple batches, each calling the LLM independently, then merged
-   - URL validation: Check all skeleton URLs against source document; submit mis-matching URLs for correction. Validation strategy (fail/warn/skip) and failure action (discard/keep) are configurable via `validation.rules` → `url_check`
-   - Plugin execution: Run plugins in the order configured in PLUGIN_MODULES (e.g. data filling, assertion generation)
-
-11. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export
-
-### Recommended Workflow: Excel for Editing + YAML for Version Control
-
-- **Excel for batch editing**: Open in Flow Forge Studio to quickly browse, sort, and batch-modify cases
-- **YAML for diffing**: Convert Excel to YAML with the converter; git diff shows every change
-- **Converter is independently usable**: `python converter_main.py` converts between Excel and YAML at any time
-
-## Plugin System
-
-Flow Forge uses a plugin system to enrich test case skeletons with additional attributes after generation. All plugins are configured via the `plugins` section in `env.yaml`:
-
-```yaml
-plugins:
-  enabled: true
-  modules:
-    - plugins.official.data_filling.DataFillingPlugin
-    - plugins.official.assertion_generation.AssertionGenerationPlugin
-```
-
-### Official Plugins
-
-| Plugin | Purpose | Attributes |
-|--------|---------|------------|
-| `data_filling` | Fill request data into skeletons (request_head, request_body, status_code, tag) | Single + Biz |
-| `assertion_generation` | Generate assertions for filled cases (assert_dict, assert_rules) | Single + Biz |
-
-Users may remove unwanted plugins from the `plugins.modules` list or replace them with custom implementations.
-
-### Writing a Custom Plugin
-
-1. Subclass `CaseAttributeGenerator` (`plugins/base.py`)
-2. Declare `PluginDeclaration` (name, attributes, scope, etc.)
-3. Implement `generate()` (receives a batch of cases, returns enriched cases)
-
-```python
-from plugins.base import CaseAttributeGenerator, PluginDeclaration
-
-class CustomPlugin(CaseAttributeGenerator):
-    @property
-    def declaration(self):
-        return PluginDeclaration(
-            plugin_name="my-custom-plugin",
-            attributes=["preprocessors"],
-            applies_to_single=True,
-            applies_to_biz=False,
-            max_retries=1,
-            error_strategy="skip",
-        )
-
-    def generate(self, cases, interfaces, api_summary, api_doc_text):
-        for case in cases:
-            case["preprocessors"] = [...]
-        return cases
-```
-
-Then add the plugin path to the `plugins.modules` list in `env.yaml`.
-
-### PluginDeclaration Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `plugin_name` | str | Plugin name |
-| `attributes` | List[str] | Attribute names to add |
-| `applies_to_single` | bool | Apply to single-API cases |
-| `applies_to_biz` | bool | Apply to business flow cases |
-| `max_retries` | int | Retries per batch |
-| `error_strategy` | str | Failure strategy: `"skip"` / `"warn"` / `"fail"` |
-
-## Tech Stack
-
-| Dependency | Purpose |
-|------------|---------|
-| `langgraph` | StateGraph workflow orchestration, interrupts, checkpoints |
-| `langchain-core` | ChatModel abstraction, message types |
-| `langchain-openai` | OpenAI ChatModel adapter |
-| `openai` | Direct LLM calls (OpenAI-compatible API) |
-| `openpyxl` | Excel file writing |
-| `prance` | OpenAPI 3.0 spec parsing |
-| `pymupdf` | PDF text extraction |
-| `pyyaml` | YAML config and skill parsing |
-| `tiktoken` | Accurate token counting (falls back to char estimation) |
-
-## Directory Structure
-
-```text
-agent/
-├── main.py                      # CLI entry (thin wrapper, logic in cli/)
-├── translate_cases.py           # Case field translation tool entry
-├── requirements.txt             # Python dependencies
-├── env.example.yaml             # YAML config template (bilingual comments)
-├── translate_env.example.yaml   # Translator standalone config template
-│
-├── cli/
-│   ├── parser.py                # CLI argument parsing
-│   ├── interactive.py           # Interactive review loop
-│   ├── bootstrap.py             # Logging setup + directory structure
-│   └── runner.py                # Main pipeline orchestration
-│
-├── config/
-│   └── settings.py              # .env → Settings dataclass
-│
-├── i18n/
-│   ├── loader.py                # Load translations by AGENT_LANG
-│   ├── zh_CN.json               # Chinese translations (default)
-│   └── en_US.json               # English translations
-│
-├── models/
-│   ├── schema.py                # Data models (InterfaceDef, TestPlan, etc.)
-│   └── state.py                 # AgentConfig
-│
-├── llm/
-│   └── factory.py               # LLM provider factory
-│
-├── prompts/
-│   ├── __init__.py              # Unified prompt exports
-│   ├── render.py                # {{variable}} template substitution
-│   ├── registry.py              # PromptRegistry — Python module loader
-│   ├── compression.py           # Context compression prompts
-│   ├── json_fix.py              # JSON fix prompt
-│   └── *.py                     # One module per agent (SYSTEM + USER constants)
-│
-├── tools/
-│   ├── registry.py              # ToolRegistry
-│   ├── builtin/                 # Built-in tools
-│   └── custom/                  # User custom tools
-│
-├── skills/
-│   ├── registry.py              # SkillRegistry (loads YAML, injects into agents)
-│   ├── builtin/                 # Built-in skills (reserved)
-│   └── custom/                  # User custom skills (reserved)
-│
-├── plugins/
-│   ├── base.py                  # CaseAttributeGenerator base class
-│   ├── loader.py                # Plugin loader
-│   ├── skill_loader.py          # Skill loader (reads skill config from settings)
-│   └── official/                # Official plugins
-│       ├── __init__.py
-│       ├── data_filling.py      # Data filling plugin entry point
-│       ├── assertion_generation.py # Assertion generation plugin entry point
-│       ├── agents/              #   Internal agent implementations
-│       │   ├── __init__.py
-│       │   ├── data_filler.py
-│       │   └── assertion_generator.py
-│       ├── prompts/             #   Internal prompt templates
-│       │   ├── __init__.py
-│       │   ├── data_filling.py
-│       │   └── assertion_generation.py
-│       └── skills/              #   Plugin-specific skills (YAML data files)
-│           ├── foli_mall_data_filling.yaml
-│           └── foli_mall_assertion.yaml
-│
-├── agents/
-│   ├── base.py                  # BaseAgent foundation class
-│   ├── requirement_analyzer.py  # Requirements analysis
-│   ├── api_analyzer.py          # API analysis
-│   ├── plan_generator.py        # Plan generation
-│   ├── plan_parser.py           # Plan parsing
-│   ├── case_generator.py        # Case generation (legacy)
-│   ├── skeleton_generator.py    # Skeleton generation (single + biz)
-│   ├── batch_controller.py      # Batch controller (plugin pipeline)
-│   └── excel_writer.py          # Excel writer
-│
-├── graph/
-│   ├── state.py                 # GraphState TypedDict
-│   ├── workflow.py              # build_workflow() main StateGraph
-│   ├── checkpoint.py            # Resume/checkpoint management
-│   └── nodes/                   # Node functions (split by domain)
-│       ├── helpers.py           # Shared helpers + dependency injection
-│       ├── parse_docs.py        # Document parsing node
-│       ├── analyze_api.py       # API analysis node
-│       ├── analyze_requirement.py # Requirement analysis node
-│       ├── generate_plan.py     # Plan generation node
-│       ├── review.py            # Human review + plan revision nodes
-│       ├── parse_plan.py        # Plan parsing node
-│       ├── validate_urls.py     # URL validation node
-│       ├── interfaces_io.py     # Interface save/reload nodes
-│       ├── batch.py             # Batch controller node
-│       ├── output.py            # Output writing node
-│       └── routing.py           # Conditional routing functions
-│
-├── validators/
-│   ├── case_validator.py        # Case format validation
-│   └── url_checker.py           # URL existence check
-│
-├── knowledge/
-│   ├── search.py                # Grep-based text search (zero deps)
-│   └── *.md                     # Domain knowledge files
-│
-├── doc_parser/
-│   ├── openapi_parser.py        # OpenAPI 3.0 parser
-│   ├── markdown_parser.py       # Markdown table parser
-│   ├── pdf_parser.py            # PDF text extractor
-│   ├── llm_parser.py            # LLM interface extractor
-│   └── text_extractor.py        # Multi-format text extraction
-│
-├── utils/
-│   ├── session_logger.py        # Session event logging
-│   └── token_counter.py         # Token counting
-│
-├── logs/                        # Session logs (runtime-generated)
-└── <output>/                    # Output directory (runtime-generated)
-    ├── cases/
-    │   ├── interfaces/
-    │   ├── single_cases/
-    │   ├── biz_flows/
-    │   └── test_cases.xlsx
-    └── memory/
-        ├── plan.md
-        └── snapshots/
-```
-
-## Prompt Management
-
-All agent system prompts and user templates are stored as Python modules under `prompts/`. Each file exports `<AGENT>_SYSTEM` and `<AGENT>_USER` constants. ALL prompts are written in English — this improves instruction comprehension accuracy, especially for smaller open-source models that handle English better than other languages.
-
-For prompts that generate user-visible text (test plans, API analysis questions, case fields like api_name/remark/sheet_name), the templates include a `{{language}}` variable that FORCES the LLM to output in the user's configured language, ensuring English system prompts do not cause the LLM to reply in English everywhere.
-
-To modify prompts, simply edit the corresponding file — no business code changes needed. `PromptRegistry` provides programmatic access.
-
-## CLI Arguments
-
-```
-usage: main.py [-h] [--requirement PATH [PATH ...]] [--api PATH]
-               [--output PATH] [--parse-mode {raw,rule,llm}]
-               [--prompt TEXT] [--batch-size N] [--resume]
-
-Flow Forge — API Test Case Generation Agent
-
-optional arguments:
-  --requirement PATH [PATH ...]
-                        Requirement document path(s) (.txt, .md, .pdf)
-  --api PATH            API documentation path (OpenAPI .yaml/.json or .md)
-  --output PATH         Output root directory (default: ./output_<timestamp>)
-  --output-format {yaml,excel,both}
-                        Output format (default: both)
-  --prompt TEXT, -p TEXT
-                        User guidance injected into plan/case generation
-  --parse-mode {raw,rule,llm}, -m {raw,rule,llm}
-                        API doc parse mode (default: raw)
-  --parser-path PATH    Custom parser .py file (only for -m rule)
-  --reference-dir PATH  Reference directory for incremental updates
-  --resume              Resume from existing output directory
-  --resume-overwrite    Overwrite existing output when resuming
-  --auto                Auto mode: skip all human review, ideal for nightly batch
-  --case-type {single,biz,both}
-                        Case type: single=API only, biz=business flow only, both=all (default)
-  --debug-snapshots     Save debug snapshots
-  --debug               Enable debug logging (full LLM I/O)
-  --env PATH            Path to .env file (default: .env)
-  -v, --verbose         Enable verbose console logging
-  --log-to-output       Persist logs to output directory ({output_dir}/logs/agent.log)
-```
-
-## Case Field Translation Tool (Safety Net)
-
-When using weaker models (e.g., local Ollama small-parameter models) for test case generation, certain text fields (`api_name`, `sheet_name`, `remark`) may appear in mixed languages or entirely in the wrong language. The translation tool serves as a **safety net**, post-processing generated cases to ensure language purity in the output.
-
-> **When to use**: Run translation **immediately after case generation**, before making manual edits. Translating after editing would overwrite manual adjustments.
-
-### Usage
+## Quick Start
 
 ```bash
-# Translate all cases in an output directory
-python translate_cases.py output/cases/ --target-lang zh_CN
+cd agent
+pip install -r requirements.txt
 
-# Translate to a specific output directory (preserves original)
-python translate_cases.py output/cases/ -o translated_cases/
-
-# Preview mode (no files written, see what needs translation)
-python translate_cases.py output/cases/ --target-lang zh_CN --dry-run
-
-# Disable detection, force translate all cases
-python translate_cases.py output/cases/ --no-detection
-
-# Verbose logging with persistent log file
-python translate_cases.py output/cases/ -v --log-to-output
-```
-
-### Translation Strategy
-
-- **Context-aware**: Infers test scenario from method, URL, and other fields for natural business-level translations. For example, `DELETE /api/cart` translates to the equivalent of "Delete Shopping Cart" — not a literal word-by-word HTTP method translation
-- **Field-safe**: Only modifies `api_name`, `sheet_name`, and `remark` fields. All other fields (test_id, method, URL, etc.) are strictly preserved
-- **Auto-detection**: Skips cases already in the target language by default (configurable via `detection.enabled`)
-
-### Input Priority
-
-- **YAML first**: If YAML files exist in the input directory, they take priority
-- **Excel fallback**: Only reads Excel files when no YAML files are found
-- If the input contains Excel and YAML is translated, an Excel copy is also exported
-
-### CLI Arguments
-
-| Argument | Description |
-|----------|-------------|
-| `input_dir` | Path to case directory (typically agent's output/cases/) |
-| `--output`, `-o` | Output directory (default: `<input_dir>_translated`) |
-| `--config`, `-c` | Translator config file (default: `translate_env.yaml`) |
-| `--target-lang` | Target language: `zh_CN` or `en_US` |
-| `--batch-size` | Max cases per batch (overrides config) |
-| `--no-detection` | Disable already-translated detection |
-| `--dry-run` | Preview without writing files |
-| `--log-to-output` | Persist logs to output directory |
-| `-v`, `--verbose` | Verbose console logging |
-
-### Independent Configuration
-
-The translator uses its own config file `translate_env.yaml` (template: `translate_env.example.yaml`), which is completely independent from the main pipeline's `env.yaml`. This allows using a different LLM for translation (e.g., main pipeline uses a local weak model, translator uses a cloud strong model).
-
-```bash
-cp translate_env.example.yaml translate_env.yaml
-# Edit translate_env.yaml with your translator-specific LLM settings
-```
-
-## Configuration File
-
-Flow Forge uses `env.yaml` as its unified configuration file (YAML format). Create it from the template:
-
-```bash
+# 1) Configure the LLM: copy the template and fill in api_key / model / base_url
 cp env.example.yaml env.yaml
-# Edit env.yaml with your settings
+
+# 2) Run the full pipeline (requirement doc + API doc)
+python main.py --requirement docs/req.md --api docs/api.yaml
+
+# 3) Review the test plan: enter y to approve / n for text feedback / r to revise from the annotation file
+# 4) After approval, cases are generated automatically and written to ./output_<timestamp>/
 ```
 
-### Configuration Structure
+The generated cases can be run directly by the [executor](../python/README.en.md), or edited visually in [Studio](../studio/README.en.md).
 
-```yaml
-llm:                # LLM provider settings
-  provider: openai
-  api_key: sk-...   # API key (required)
-  model: gpt-4o
-  temperature: 0.3
-  max_output_tokens: 4096
-  context_window: 128000
-  context_compression_threshold: 0.9
-  base_url: ""      # Third-party API base URL
-  max_concurrency: 1
-  rate_limit_delay: 0.0
-  retry_base_delay: 2.0
-  request_timeout: 600.0
-  extra_params: {}    # Extra API params (e.g. thinking mode)
+## Common Commands
 
-pipeline:           # Pipeline settings
-  max_steps: 10
-  max_retries: 3
-  max_steps_no_progress: 5
-  consecutive_batch_failure_limit: 3
-  url_correction_max_retries: 3
-  skeleton_batch_size: 30   # Skeleton generation batch size (test points per batch)
-  auto: false        # Auto mode: skip human review (enable for nightly batch)
-  plan_single_batch_size: 8   # Single API batch size (-1=no split)
-  plan_biz_flow_batch_size: 3 # Biz flow batch size (-1=no split)
-  case_type: both      # Case generation type: both | single | biz
-  plugin_batch_size: 10 # Plugin batch size (-1=no split)
+```bash
+# Specify the output directory
+python main.py --requirement docs/req.md --api docs/api.yaml --output my_output
 
-knowledge:          # Knowledge base (grep-based text search)
-  enabled: false
-  dir: ./knowledge
+# Output YAML only (no Excel export)
+python main.py --requirement docs/req.md --api docs/api.yaml --output-format yaml
 
-validation:         # Case validation
-  enabled: true
-  max_retries: 3
-  rules:            # Validation rules (each entry: check + strategy [+ failure_action])
-    - check: skeleton_count     # Skeleton count validation
-      strategy: fail            # fail | warn | skip
-    - check: url_check          # URL existence check
-      strategy: warn            # fail | warn | skip
-      failure_action: discard   # [url_check sub-rule] discard (send to failures.yaml, default) | keep (continue with plugin pipeline)
-    - check: data_fill_count    # Data fill count validation
-      strategy: fail            # fail | warn | skip
-    - check: assertion_count    # Assertion count validation
-      strategy: fail            # fail | warn | skip
+# Generate single-API cases only / business-flow cases only
+python main.py --requirement docs/req.md --api docs/api.yaml --case-type single
+python main.py --requirement docs/req.md --api docs/api.yaml --case-type biz
 
-output:             # Output settings
-  dir: ./output
-  format: both      # yaml | excel | both
+# Auto mode: skip all human review (ideal for nightly batch generation after tuning)
+python main.py --requirement docs/req.md --api docs/api.yaml --auto
 
-plugins:            # Plugin system
-  enabled: true
-  modules:          # YAML list syntax, executed in declaration order
-    - plugins.official.data_filling.DataFillingPlugin
-    - plugins.official.assertion_generation.AssertionGenerationPlugin
+# Resume from an existing output directory
+python main.py --resume --output output_20240101_120000
 
-skills:             # Skill system (plugin-attached configs)
-  enabled: true     # Global switch: false disables all skill injection
-  agents:           # Assign skill files to agents (without .yaml extension)
-    # Plugin agents
-    data_filler:
-      - foli_mall_data_filling
-    assertion_generator:
-      - foli_mall_assertion
-    # Main pipeline agents (uncomment as needed)
-    # requirement_analyzer: []
-    # api_analyzer: []
-    # plan_generator: []
-    # case_generator:
-    #   - boundary_test
-
-agent:              # UI language
-  lang: zh_CN       # zh_CN | en_US
-
-# --- Logging Settings ---
-logging:
-  # Persist logs to output_dir/logs/agent.log
-  log_to_output: false
+# Case field translation safety-net tool (use when a weak model outputs mixed Chinese/English)
+python translate_cases.py output/cases/ --target-lang zh_CN
 ```
 
-### Skill Toggle
-
-- **Global disable**: `skills.enabled: false` — all skill injection stops; plugins still run normally
-- **Fine-grained control**: edit `skills.agents` to remove unwanted agent entries or individual skills
-
-### Thinking Mode
-
-Configure vendor-specific thinking/reasoning mode parameters via `llm.extra_params`. Parameters are passed as `**kwargs` directly to the OpenAI SDK `chat.completions.create()` call.
-
-```yaml
-# DeepSeek thinking mode example:
-llm:
-  extra_params:
-    thinking:
-      type: enabled
-
-# OpenAI o-series reasoning effort example:
-llm:
-  extra_params:
-    reasoning_effort: medium
-```
-
-> **Note**: Parameter names and values depend on the specific model/API vendor. Consult the vendor's API documentation before configuring. Unsupported parameters may be ignored or cause errors.
-
-### Case Type Selection
-
-Use `pipeline.case_type` or `--case-type` CLI flag to choose the generation scope:
-
-| Value | Description |
-|-------|-------------|
-| `both` | Generate both single-API and business flow cases (default) |
-| `single` | Only generate single-API cases; skip Phase C and biz flow skeletons |
-| `biz` | Only generate business flow cases; skip Phase B and single-API skeletons |
-
-Skipping is performed at the code level and does not affect outline generation — the outline will still contain both `api_groups` and `biz_flows`.
-
-## Knowledge Base
-
-The knowledge base (`knowledge/search.py`) provides grep-based keyword search — no embedding models or vector databases required. Knowledge is stored as `.md` files in the `knowledge/` directory.
-
-Controlled by `ENABLE_KNOWLEDGE` in `.env`. When enabled, agents search `.md` files during prompt construction and append relevant knowledge snippets to provide domain-specific guidance.
-
-Users can extend the knowledge base by adding `.md` files to the `knowledge/` directory.
-
-## Auto Mode
-
-Auto mode runs the full pipeline while skipping all human review checkpoints. It is ideal for nightly batch generation after Skills and plugins have been thoroughly tested.
-
-### Enabling
-
-- **CLI**: `--auto` flag
-- **Config**: set `pipeline.auto: true` in `env.yaml`
-- When both are present, the CLI flag takes precedence
-
-### Behavior
-
-| Checkpoint | Auto Mode Behavior |
-|------------|-------------------|
-| API analysis uncertainties | Log warning and skip, continue execution |
-| Test plan review | Auto-approve, proceed to case generation |
-
-### Use Cases
-
-- **Nightly batch generation**: Once Skills and plugins are configured correctly, use `--auto` for unattended runs:
-  ```bash
-  python main.py --requirement docs/req.md --api docs/api.yaml --auto
-  ```
-- **Combined with --resume**: Resume after power loss without manual intervention:
-  ```bash
-  python main.py --resume --output output_20240101_120000 --auto
-  ```
-
-### Prerequisites
-
-Before using auto mode, ensure the following are properly configured to maintain test case quality:
-
-- **Skills**: Encode project-specific business rules into Skills, such as:
-  - Expected HTTP status code conventions (200 OK vs 201 Created)
-  - Authentication method (JWT, API Key, Session Cookie)
-  - Baseline test credentials and data field formats
-- **Plugins**: Verify that data filling and assertion generation plugins are correctly configured
-- **--prompt guidance**: Use `--prompt` to pass additional business guidance for better generation quality
-
-### Comparison with --resume
-
-| Flag | Purpose | When to Use |
-|------|---------|-------------|
-| `--auto` | Skip human interaction, run full pipeline | First-time nightly batch run |
-| `--resume` | Continue from last completed stage (full pipeline) | Recovery after power loss / crash |
-| `--resume --auto` | Resume + auto-approve remaining reviews | Unattended recovery after power loss |
-
-## Anti-Hallucination & Error Handling
-
-- **Text-Only Limitation**: The agent only processes text. Image/scanned content in PDFs will NOT be extracted — provide PDFs with extractable text layers or plain-text documents. Binary files (.png, .jpg) are explicitly rejected.
-- **LLM Output Count Validation (Anti-Hallucination)**: After skeleton generation, data filling, assertion generation, and URL correction, output item count is automatically validated against input. Mismatches trigger automatic retries (using temperature > 0 for varied outputs). Each validation check supports configurable strategies (`fail` to abort, `warn` to log and continue, `skip` to bypass) via `validation.rules` in `env.yaml`. Skeleton generation uses batched LLM calls (default batch size: 30) to improve count accuracy for large test plans. Plan generation uses an "outline + chunking" approach in four phases — A) global business understanding + flowcharts → B) single-API test points grouped by `plan_single_batch_size` → C) business flow tests batched by `plan_biz_flow_batch_size` → D) assembly. Each chunk independently calls the LLM and resets its step counter, preventing a single chunk from exhausting the `max_steps` quota. Both configs support `-1` (no splitting) for strong models.
-- **Plugin Error Handling**: Supports `skip`/`warn`/`fail` error strategies. The `fail` strategy aborts the pipeline; resume can restart from the failed stage (requires the checkpoint phase name fix).
+See the [Configuration & CLI Reference](./docs/configuration.en.md) for the full parameter list.
 
 ## Running Tests
 
@@ -561,47 +63,13 @@ Before using auto mode, ensure the following are properly configured to maintain
 python -m pytest tests/ -v
 ```
 
-Tests incur zero LLM API costs (all LLM calls are mocked).
+Tests incur no LLM API costs (all LLM calls are mocked).
 
-## Design Rationale
+## Documentation Index
 
-### Why LangGraph
-
-LangGraph provides three key capabilities:
-
-- **State management**: `GraphState` TypedDict auto-passes between nodes — no manual state handling
-- **Interrupts & resume**: `interrupt()` + `MemorySaver` natively support human-in-the-loop with exact resumption
-- **Conditional routing**: `add_conditional_edges()` makes review branches a natural part of the graph
-
-### Why grep over embedding search
-
-- **Zero cost**: No embedding API calls needed
-- **Zero external deps**: Pure Python standard library
-- **Interpretable**: Exact keyword matching, no semantic drift
-- **Extensible**: Users just create `.md` files — no reindexing needed
-
-### Why pipeline pattern
-
-The pipeline pattern decomposes test case generation into sequential, independent stages (doc parsing → API analysis → plan generation → review → skeleton generation → plugin execution → output). Each stage has a single responsibility, can be tested independently, and can be replaced individually. Compared to the ReAct pattern, the pipeline is better suited for batch processing — avoiding the overhead and uncertainty of tool-calling loops.
-
-### Why plugin architecture
-
-Data filling and assertion generation are provided as official plugins, configured via `PLUGIN_MODULES`. Users can remove unwanted plugins or register custom plugins to extend the default behavior. Different projects have different testing needs — some require HMAC signing preprocessors, others need database-backed verification — and the plugin architecture allows customizing the generation pipeline without modifying framework code.
-
-### Why Skill system
-
-Skills are YAML files that append domain knowledge or business rules to agent system prompts via the `prompt_extension` field, customizing agent behavior without code changes.
-
-Skills can be injected into **all** agents — both main pipeline agents and plugin-internal agents:
-- **Main pipeline agents**: `requirement_analyzer`, `api_analyzer`, `plan_generator`, `plan_parser`, `case_generator`, `skeleton_generator` — skills stored in `skills/builtin/`
-- **Plugin agents**: `data_filler`, `assertion_generator` — skills stored in `plugins/official/skills/`
-
-Skill injection uses a two-layer control: `skills.enabled` in `env.yaml` acts as a global on/off switch, while `skills.agents` maps target agents to their skill files. Users can comment out or remove individual skill entries for fine-grained control, or disable the global switch to turn off all skill injection at once.
-
-### Why English prompts
-
-All agent system and user prompts are written in English. English instructions are structurally simpler with less ambiguity — smaller open-source models typically achieve higher comprehension accuracy with English prompts than with other languages. When generating user-visible content (test plans, API analysis questions, case fields like api_name/remark/sheet_name), the `{{language}}` template variable forces the LLM to output in the language configured by `AGENT_LANG`, preventing English system prompts from causing the LLM to reply in English throughout all interactive steps.
-
-### Context Compression
-
-When processing long documents, the system splits text into chunks at paragraph boundaries and processes each chunk sequentially. Before each round, token usage is checked: when input tokens exceed `LLM_CONTEXT_COMPRESSION_THRESHOLD × LLM_CONTEXT_WINDOW` (default 90%), an LLM-driven compression is triggered — distilling intermediate results from prior rounds into a concise summary of key points, freeing up context window space. Compression only applies to accumulated chunk processing results; system prompts and skill content remain untouched. The agent's core instructions stay intact across all processing rounds.
+| Document | Contents |
+|------|------|
+| [Configuration & CLI Reference](./docs/configuration.en.md) | All `env.yaml` fields, `translate_env.yaml`, all CLI parameters, the translation tool |
+| [How It Works](./docs/how-it-works.en.md) | The 11-step pipeline architecture, review modes y/n/r, auto mode, knowledge base, directory structure, design philosophy |
+| [Plugin & Skill System](./docs/plugins-and-skills.en.md) | Plugin development and configuration, skill injection, official plugins and built-in skills |
+| [Anti-Hallucination & Error Handling](./docs/anti-hallucination.en.md) | URL correction, count validation, retry strategies (warn/retry/keep) |
