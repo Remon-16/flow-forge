@@ -8,7 +8,7 @@ import os
 from typing import Any
 
 from .common.utils import read_yaml_dir
-from .common.export_utils import write_ff_compat, write_env_configs, bundle_custom_processors
+from .common.export_utils import write_ff_compat, write_env_configs, bundle_processors
 from .pytest.writers import write_conftest, write_single_tests, write_biz_flow_tests
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ def _write_setup_files(output_dir: str, config_dir: str, processors_dir: str | N
     write_conftest(output_dir)
     write_ff_compat(output_dir)
     write_env_configs(output_dir, config_src)
-    return bundle_custom_processors(processors_dir, output_dir)
+    return bundle_processors(output_dir, custom_processors_dir=processors_dir)
 
 
 def yaml_to_pytest(
@@ -60,7 +60,7 @@ def yaml_to_pytest(
     n_single = write_single_tests(single_cases, output_dir)
     n_biz = write_biz_flow_tests(biz_flows, output_dir)
 
-    return {"single_cases": n_single, "biz_flows": n_biz, "custom_processors": n_custom}
+    return {"single_cases": n_single, "biz_flows": n_biz, "bundled_processors": n_custom}
 
 
 def excel_to_pytest(
@@ -86,4 +86,4 @@ def excel_to_pytest(
     n_single = write_single_tests(data.get("single_cases", []), output_dir)
     n_biz = write_biz_flow_tests(data.get("biz_flows", []), output_dir)
 
-    return {"single_cases": n_single, "biz_flows": n_biz, "custom_processors": n_custom}
+    return {"single_cases": n_single, "biz_flows": n_biz, "bundled_processors": n_custom}

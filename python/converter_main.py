@@ -81,7 +81,7 @@ def _cmd_yaml2pytest(args: argparse.Namespace) -> int:
         _("cli.pytest_generated",
            single=counts['single_cases'],
            biz=counts['biz_flows'],
-           custom=counts['custom_processors'],
+           custom=counts['bundled_processors'],
            output=args.output))
     return 0
 
@@ -97,7 +97,7 @@ def _cmd_excel2pytest(args: argparse.Namespace) -> int:
         _("cli.pytest_generated",
            single=counts['single_cases'],
            biz=counts['biz_flows'],
-           custom=counts['custom_processors'],
+           custom=counts['bundled_processors'],
            output=args.output))
     return 0
 

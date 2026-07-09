@@ -6,14 +6,11 @@
 # ============================================================================
 
 CONFTEST_TEMPLATE = r'''"""Shared fixtures and helpers — no Flow Forge dependency."""
-import hashlib
-import hmac
+import importlib
 import json
 import logging
 import os
 import re
-import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
@@ -28,6 +25,16 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def pytest_configure(config):
+    """配置 pytest 日志输出到 CLI，使 print-demo 处理器默认可见。
+       Enable log_cli so print-demo processor output is visible by default."""
+    config.option.log_cli = True
+    config.option.log_cli_level = "INFO"
+    config.option.log_cli_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    config.option.log_cli_date_format = "%H:%M:%S"
+
 
 # ============================================================
 # Fixtures
@@ -325,86 +332,81 @@ def _do_login(app_name: str, app_config: Dict[str, Any], user_key: str) -> Optio
 
 
 # ============================================================
-# Built-in processor equivalents
+# 处理器调度（Processor dispatch）
 # ============================================================
 
-def _apply_timestamp(headers: Dict[str, Any], config: Optional[Dict[str, Any]] = None) -> None:
-    """Inject X-Timestamp (ISO 8601 UTC) and X-Request-Id (UUID4) headers."""
-    cfg = config or {}
-    headers[cfg.get("header_timestamp", "X-Timestamp")] = datetime.now(timezone.utc).isoformat()
-    headers[cfg.get("header_request_id", "X-Request-Id")] = str(uuid.uuid4())
+# 从 _config 中加载 processor_configs，供处理器使用
+# Load processor_configs from _config for use by processors
+try:
+    from _config import APPS as _APPS
+    _GLOBAL_CONFIG = {"processor_configs": _APPS.get("processor_configs", {})}
+except ImportError:
+    _GLOBAL_CONFIG = {}
 
 
-def _apply_hmac_sign(headers: Dict[str, Any], body: Dict[str, Any],
-                      config: Optional[Dict[str, Any]] = None) -> None:
-    """Compute HMAC-SHA256 signature and add to headers."""
-    cfg = config or {}
-    secret_env = cfg.get("secret_env", "SIGN_SECRET")
-    secret = os.environ.get(secret_env, "")
-    if not secret:
-        logger.warning("HMAC secret env var '%s' is empty or not set", secret_env)
+# 处理器类缓存：processor_name → class
+# Processor class cache: processor_name → class
+_PROCESSOR_CACHE: Dict[str, Any] = {}
+
+
+def _build_processor_cache():
+    """扫描 _processors/ 目录（含子目录），建立处理器名 → 类的缓存。
+       Scan _processors/ directory (including subdirs) and build name → class cache."""
+    if _PROCESSOR_CACHE:
         return
-    body_str = json.dumps(body, ensure_ascii=False, sort_keys=True) if body else ""
-    payload = cfg.get("body_template", "{body}").format(body=body_str, method="", path="")
-    digest = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    headers[cfg.get("header_name", "X-Signature")] = digest
+    try:
+        import pkgutil
+        import _processors as pkg
+        for _importer, mod_name, _is_pkg in pkgutil.walk_packages(
+            pkg.__path__, pkg.__name__ + "."
+        ):
+            try:
+                mod = importlib.import_module(mod_name)
+            except ImportError:
+                continue
+            for attr_name in dir(mod):
+                obj = getattr(mod, attr_name)
+                if isinstance(obj, type) and hasattr(obj, 'name'):
+                    pname = getattr(obj, 'name', None)
+                    if pname:
+                        _PROCESSOR_CACHE[pname] = obj
+    except ImportError:
+        pass
 
 
-def _verify_hmac(response_headers: Dict[str, Any], response_body: Any,
-                 config: Optional[Dict[str, Any]] = None) -> None:
-    """Verify HMAC signature in response. Raises AssertionError on mismatch."""
-    cfg = config or {}
-    secret_env = cfg.get("secret_env", "SIGN_SECRET")
-    header_name = cfg.get("header_name", "X-Signature")
-    secret = os.environ.get(secret_env, "")
-    if not secret:
-        logger.warning("HMAC verify secret env var '%s' is empty", secret_env)
-        return
-    expected = response_headers.get(header_name)
-    if not expected:
-        raise AssertionError(f"HMAC header '{header_name}' not found in response")
-    if response_body is None:
-        body_str = ""
-    elif isinstance(response_body, str):
-        body_str = response_body
-    else:
-        body_str = json.dumps(response_body, ensure_ascii=False, sort_keys=True)
-    payload = cfg.get("body_template", "{body}").format(body=body_str)
-    actual = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(actual, expected):
-        raise AssertionError(f"HMAC signature mismatch in response header '{header_name}'")
+def _get_processor_class(processor_name: str):
+    """从 _processors 缓存中获取处理器类。
+       Get processor class from _processors cache."""
+    _build_processor_cache()
+    cls = _PROCESSOR_CACHE.get(processor_name)
+    if cls is not None:
+        return cls
+    raise ImportError(
+        f"No processor class found for '{processor_name}'. "
+        f"Available: {list(_PROCESSOR_CACHE.keys())}"
+    )
 
 
-def _print_request(headers: Dict[str, Any], body: Dict[str, Any],
-                   prefix: str = "[PreDemo]") -> None:
-    """Log request summary at INFO level."""
-    logger.info("%s Request — Headers: %s | Body: %.200s", prefix, list(headers.keys()), str(body))
+def _run_preprocessor(name: str, headers: Dict[str, Any], body: Dict[str, Any],
+                      config: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """动态加载并执行前置处理器。
+       Dynamically load and execute a preprocessor by name.
+
+       Returns (modified_headers, modified_body).
+    """
+    cls = _get_processor_class(name)
+    instance = cls()
+    return instance.process(headers, body, config or {}, _GLOBAL_CONFIG)
 
 
-def _print_response(response_headers: Dict[str, Any], response_body: Any,
-                    prefix: str = "[PostDemo]") -> None:
-    """Log response summary at INFO level."""
-    logger.info("%s Response — Headers: %s | Body: %.200s", prefix,
-                list(response_headers.keys()), str(response_body))
-
-
-def _log_response_metrics(response_headers: Dict[str, Any], response_body: Any,
-                          threshold: int = 1048576) -> None:
-    """Log response size metrics; warn if above threshold."""
-    content_length = response_headers.get("Content-Length")
-    if content_length is not None:
-        try:
-            content_length = int(content_length)
-        except (ValueError, TypeError):
-            content_length = None
-    if content_length is None and response_body is not None:
-        content_length = len(str(response_body).encode("utf-8"))
-    if content_length is not None:
-        logger.info("Response metrics — Content-Length: %d bytes", content_length)
-        if content_length > threshold:
-            logger.warning("Response body size %d exceeds threshold %d", content_length, threshold)
-    else:
-        logger.info("Response metrics — Content-Length: unknown")
+def _run_postprocessor(name: str, req_headers: Dict[str, Any], req_body: Dict[str, Any],
+                       resp_headers: Dict[str, Any], resp_body: Any,
+                       config: Optional[Dict[str, Any]] = None) -> None:
+    """动态加载并执行后置处理器。
+       Dynamically load and execute a postprocessor by name."""
+    cls = _get_processor_class(name)
+    instance = cls()
+    instance.process(req_headers, req_body, resp_headers, resp_body, config or {}, _GLOBAL_CONFIG)
 
 
 # ============================================================
@@ -420,12 +422,9 @@ __all__ = [
     "_assert_field",
     "_assert_rules",
     "_resolve_token",
-    "_apply_timestamp",
-    "_apply_hmac_sign",
-    "_print_request",
-    "_verify_hmac",
-    "_log_response_metrics",
-    "_print_response",
+    "_run_preprocessor",
+    "_run_postprocessor",
+    "_get_processor_class",
 ]
 '''
 

@@ -5,8 +5,6 @@ generator behaves correctly.  The functions are loaded from a generated
 conftest.py in a temporary directory.
 """
 
-import hashlib
-import hmac
 import json
 import logging
 import os
@@ -275,118 +273,7 @@ class TestResolveToken:
 
 
 # ============================================================================
-# Built-in processor helpers
+# 处理器调度函数（Processor dispatch functions）
+# 这些测试需要 _processors/ 目录下有实际的处理器文件，因此放在集成测试中。
+# These tests require actual processor files in _processors/, handled in integration tests.
 # ============================================================================
-
-class TestApplyTimestamp:
-    def should_add_timestamp_and_request_id(self, helpers):
-        headers = {}
-        helpers._apply_timestamp(headers)
-        assert "X-Timestamp" in headers
-        assert "X-Request-Id" in headers
-
-    def should_use_custom_header_names(self, helpers):
-        headers = {}
-        helpers._apply_timestamp(headers, {
-            "header_timestamp": "X-Custom-TS",
-            "header_request_id": "X-Custom-RID",
-        })
-        assert "X-Custom-TS" in headers
-        assert "X-Custom-RID" in headers
-
-    def should_produce_iso8601_timestamp(self, helpers):
-        import re
-        headers = {}
-        helpers._apply_timestamp(headers)
-        # ISO 8601: 2024-01-15T10:30:00.123456+00:00 or similar
-        iso_re = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
-        assert iso_re.search(headers["X-Timestamp"])
-
-
-class TestApplyHmacSign:
-    @patch.dict(os.environ, {"SIGN_SECRET": "my-secret"})
-    def should_add_signature_header(self, helpers):
-        headers = {}
-        body = {"key": "value"}
-        helpers._apply_hmac_sign(headers, body)
-        assert "X-Signature" in headers
-
-    @patch.dict(os.environ, {"SIGN_SECRET": "my-secret"})
-    def should_produce_deterministic_signature(self, helpers):
-        headers1 = {}
-        headers2 = {}
-        body = {"key": "value"}
-        helpers._apply_hmac_sign(headers1, body)
-        helpers._apply_hmac_sign(headers2, body)
-        assert headers1["X-Signature"] == headers2["X-Signature"]
-
-    def should_skip_when_secret_empty(self, helpers, caplog):
-        with patch.dict(os.environ, {}, clear=True):
-            os.environ.pop("SIGN_SECRET", None)
-            headers = {}
-            helpers._apply_hmac_sign(headers, {})
-            assert "X-Signature" not in headers
-
-
-class TestVerifyHmac:
-    def should_not_raise_on_match(self, helpers):
-        secret = "test-secret"
-        body = {"result": "ok"}
-        body_str = json.dumps(body, ensure_ascii=False, sort_keys=True)
-
-        with patch.dict(os.environ, {"SIGN_SECRET": secret}):
-            headers = {
-                "X-Signature": hmac.new(
-                    secret.encode(), body_str.encode(), hashlib.sha256,
-                ).hexdigest(),
-            }
-            helpers._verify_hmac(headers, body)  # should not raise
-
-    def should_raise_on_mismatch(self, helpers):
-        with patch.dict(os.environ, {"SIGN_SECRET": "secret"}):
-            with pytest.raises(AssertionError, match="HMAC signature mismatch"):
-                helpers._verify_hmac({"X-Signature": "bad"}, {"result": "ok"})
-
-    def should_raise_on_missing_header(self, helpers):
-        with patch.dict(os.environ, {"SIGN_SECRET": "secret"}):
-            with pytest.raises(AssertionError, match="not found"):
-                helpers._verify_hmac({}, {"result": "ok"})
-
-
-class TestPrintRequest:
-    def should_log_request_summary(self, helpers, caplog):
-        with caplog.at_level(logging.INFO):
-            helpers._print_request({"Content-Type": "json"}, {"a": 1})
-        assert "Content-Type" in caplog.text
-
-
-class TestPrintResponse:
-    def should_log_response_summary(self, helpers, caplog):
-        with caplog.at_level(logging.INFO):
-            helpers._print_response({"Content-Type": "json"}, {"status": "ok"})
-        assert "Content-Type" in caplog.text
-
-
-class TestLogResponseMetrics:
-    def should_log_content_length(self, helpers, caplog):
-        with caplog.at_level(logging.INFO):
-            helpers._log_response_metrics({"Content-Length": "500"}, None)
-        assert "500" in caplog.text
-
-    def should_warn_when_exceeds_threshold(self, helpers, caplog):
-        with caplog.at_level(logging.WARNING):
-            helpers._log_response_metrics(
-                {"Content-Length": "2000000"}, None, threshold=100
-            )
-        assert "exceeds threshold" in caplog.text
-
-    def should_compute_from_body_when_no_header(self, helpers, caplog):
-        with caplog.at_level(logging.INFO):
-            helpers._log_response_metrics({}, "hello")
-        # len("hello".encode("utf-8")) == 5
-        assert "5 bytes" in caplog.text
-
-    def should_handle_missing_content_length(self, helpers, caplog):
-        with caplog.at_level(logging.INFO):
-            helpers._log_response_metrics({}, None)
-        assert "unknown" in caplog.text.lower()

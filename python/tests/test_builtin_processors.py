@@ -294,18 +294,17 @@ class TestHmacVerifyPostProcessorTest:
                     {},
                 )
 
-    def should_warn_when_secret_env_empty(self, caplog):
+    def should_raise_when_secret_env_empty(self):
+        """密钥为空时应抛出 ProcessorError，判定用例失败。
+           When secret is empty, raise ProcessorError to fail the test case."""
         from processors.builtin.post.hmac_verify_post import HmacVerifyPostProcessor
 
         proc = HmacVerifyPostProcessor()
-        with caplog.at_level(logging.WARNING):
-            with pytest.raises(ProcessorError, match="not found"):
-                proc.process(
-                    {}, {}, {}, {"data": "test"},
-                    {"secret_env": "EMPTY_SECRET"}, {},
-                )
-
-        assert any("empty" in m.lower() for m in caplog.messages)
+        with pytest.raises(ProcessorError, match="empty or not set"):
+            proc.process(
+                {}, {}, {}, {"data": "test"},
+                {"secret_env": "EMPTY_SECRET"}, {},
+            )
 
     def should_use_custom_header_name(self):
         from processors.builtin.post.hmac_verify_post import HmacVerifyPostProcessor

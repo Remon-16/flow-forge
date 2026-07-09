@@ -24,7 +24,7 @@ import logging
 import os
 from typing import Any, Dict, Tuple
 
-from processors.base import PreProcessor
+from processors.base import PreProcessor, ProcessorError
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +56,13 @@ class HmacSignPreProcessor(PreProcessor):
             "body_template", "{method}\n{path}\n{body}"
         )
 
-        secret = os.environ.get(secret_env, "")
+        # 优先从 config 直接读取 secret，其次从环境变量
+        # Prefer direct secret from config, fall back to env var
+        secret = cfg.get("secret") or os.environ.get(secret_env, "")
         if not secret:
-            logger.warning(
-                "HMAC secret env var '%s' is empty or not set", secret_env
+            raise ProcessorError(
+                f"HMAC secret env var '{secret_env}' is empty or not set",
+                processor_name=self.name,
             )
 
         body_str = json.dumps(body, ensure_ascii=False, sort_keys=True) if body else ""

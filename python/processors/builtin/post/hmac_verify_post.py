@@ -61,10 +61,13 @@ class HmacVerifyPostProcessor(PostProcessor):
         header_name = cfg.get("header_name", "X-Signature")
         body_template = cfg.get("body_template", "{body}")
 
-        secret = os.environ.get(secret_env, "")
+        # 优先从 config 直接读取 secret，其次从环境变量
+        # Prefer direct secret from config, fall back to env var
+        secret = cfg.get("secret") or os.environ.get(secret_env, "")
         if not secret:
-            logger.warning(
-                "HMAC verify secret env var '%s' is empty or not set", secret_env
+            raise ProcessorError(
+                f"HMAC verify secret env var '{secret_env}' is empty or not set",
+                processor_name=self.name,
             )
 
         expected = response_headers.get(header_name)

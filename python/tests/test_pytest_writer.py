@@ -46,21 +46,25 @@ class TestPreprocessorCalls:
 
     def should_generate_timestamp_call(self):
         result = generate_preprocessor_calls([{"name": "timestamp", "config": {}}])
-        assert "_apply_timestamp" in result
+        assert "_run_preprocessor" in result
+        assert '"timestamp"' in result
 
     def should_generate_hmac_sign_call(self):
         result = generate_preprocessor_calls([{"name": "hmac-sign", "config": {"secret_env": "KEY"}}])
-        assert "_apply_hmac_sign" in result
+        assert "_run_preprocessor" in result
+        assert '"hmac-sign"' in result
         assert '"secret_env"' in result
 
     def should_generate_print_demo_call(self):
         result = generate_preprocessor_calls([{"name": "print-demo", "config": {"prefix": "[DEBUG]"}}])
-        assert "_print_request" in result
+        assert "_run_preprocessor" in result
+        assert '"print-demo"' in result
         assert "[DEBUG]" in result
 
-    def should_comment_unknown_processor(self):
+    def should_generate_custom_processor_call(self):
         result = generate_preprocessor_calls([{"name": "custom-auth", "config": {}}])
-        assert "Custom processor" in result
+        assert "_run_preprocessor" in result
+        assert '"custom-auth"' in result
 
 
 class TestPostprocessorCalls:
@@ -69,16 +73,18 @@ class TestPostprocessorCalls:
 
     def should_generate_response_time_call(self):
         result = generate_postprocessor_calls([{"name": "response-time", "config": {}}])
-        assert "_log_response_metrics" in result
+        assert "_run_postprocessor" in result
+        assert '"response-time"' in result
 
     def should_generate_hmac_verify_call(self):
         result = generate_postprocessor_calls([{"name": "hmac-verify", "config": {"secret_env": "KEY"}}])
-        assert "_verify_hmac" in result
+        assert "_run_postprocessor" in result
+        assert '"hmac-verify"' in result
 
     def should_generate_print_demo_post_call(self):
         result = generate_postprocessor_calls([{"name": "print-demo-post", "config": {"prefix": "[POST]"}}])
-        assert "_print_response" in result
-        assert "[POST]" in result
+        assert "_run_postprocessor" in result
+        assert '"print-demo-post"' in result
 
 
 class TestGenerateSingleTest:
@@ -91,7 +97,7 @@ class TestGenerateSingleTest:
         }
         src = generate_single_test(case, 0)
         assert "CASE_demo_001" in src
-        assert "def test_demo_001(base_url)" in src
+        assert "def test_demo_001()" in src
         assert "requests.request" in src
 
     def should_include_token_resolution_when_app_name_present(self):
@@ -152,8 +158,8 @@ def _resolve_path(d, p): return None
 def _assert_field(d, p, e): return True
 def _assert_rules(d, r): return []
 def _resolve_token(h, a): return h
-def _apply_timestamp(h, c=None): pass
-def _log_response_metrics(h, b, threshold=1048576): pass
+def _run_preprocessor(n, h, b, c=None): return h, b
+def _run_postprocessor(n, rh, rb, resh, resb, c=None): pass
 '''
             f.write(stubs + "\n" + src)
         import py_compile
@@ -172,7 +178,7 @@ class TestGenerateBizFlowClass:
         }
         src = generate_biz_flow_class(flow, 0)
         assert "class TestBizFlow_test_flow" in src
-        assert "def setup_method(self)" in src
+        assert "def test_biz_flow(self)" in src
         assert "STEP_s1" in src
 
     def should_generate_multiple_steps(self):
@@ -190,8 +196,7 @@ class TestGenerateBizFlowClass:
         src = generate_biz_flow_class(flow, 0)
         assert "STEP_login" in src
         assert "STEP_action" in src
-        assert "def test_step_00_login" in src
-        assert "def test_step_01_action" in src
+        assert "def test_biz_flow(self)" in src
 
     def should_include_inherit_handling(self):
         flow = {
@@ -208,7 +213,7 @@ class TestGenerateBizFlowClass:
         }
         src = generate_biz_flow_class(flow, 0)
         assert "Inherit" in src
-        assert "_resolve_path(self._flow_data" in src
+        assert "_resolve_path(_flow_data" in src
         assert "data.token" in src
 
     def should_return_empty_for_no_steps(self):

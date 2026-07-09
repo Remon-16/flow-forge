@@ -7,7 +7,6 @@ import json
 from typing import Any
 
 from ..common.utils import sanitize_name, indent_lines
-from ..common.export_utils import PREPROC_DISPATCH, POSTPROC_DISPATCH
 
 
 def _normalize_processor_list(value: Any) -> list[dict[str, Any]]:
@@ -46,24 +45,10 @@ def generate_preprocessor_calls(preprocessors: list) -> str:
     lines = ["    # --- PreProcessors ---"]
     for pp in preprocessors:
         name = pp.get("name", "")
-        func = PREPROC_DISPATCH.get(name)
         config = json.dumps(pp.get("config", {}) or {})
-        if func:
-            if name == "hmac-sign":
-                lines.append(f"    {func}(headers, body, {config})")
-            elif name == "print-demo":
-                prefix = (pp.get("config") or {}).get("prefix", "[PreDemo]")
-                lines.append(f"    {func}(headers, body, prefix={json.dumps(prefix)})")
-            else:
-                lines.append(f"    {func}(headers, {config})")
-        elif name == "path-param-restore":
-            lines.append(f"    # path-param-restore: standalone mode keeps body fields by default, "
-                         f"no restore needed")
-        else:
-            lines.append(f"    # Custom processor '{name}' — "
-                         f"check _custom_processors/ for implementation")
-            lines.append(f"    # from _custom_processors.{name.replace('-', '_')} "
-                         f"import process; process(headers, body, {config}, {{}})")
+        lines.append(
+            f"    headers, body = _run_preprocessor({json.dumps(name)}, headers, body, {config})"
+        )
     lines.append("")
     return "\n".join(lines) + "\n"
 
@@ -77,21 +62,10 @@ def generate_postprocessor_calls(postprocessors: list) -> str:
     lines = ["    # --- PostProcessors ---"]
     for pp in postprocessors:
         name = pp.get("name", "")
-        func = POSTPROC_DISPATCH.get(name)
         config = json.dumps(pp.get("config", {}) or {})
-        if func:
-            if name == "response-time":
-                threshold = (pp.get("config") or {}).get("warn_threshold_bytes", 1048576)
-                lines.append(f"    {func}(resp.headers, data, threshold={threshold})")
-            elif name == "print-demo-post":
-                prefix = (pp.get("config") or {}).get("prefix", "[PostDemo]")
-                lines.append(f"    {func}(resp.headers, data, prefix={json.dumps(prefix)})")
-            elif name == "hmac-verify":
-                lines.append(f"    {func}(resp.headers, data, {config})")
-            else:
-                lines.append(f"    {func}(resp.headers, data, {config})")
-        else:
-            lines.append(f"    # Custom postprocessor '{name}'")
+        lines.append(
+            f"    _run_postprocessor({json.dumps(name)}, headers, body, resp.headers, data, {config})"
+        )
     lines.append("")
     return "\n".join(lines) + "\n"
 

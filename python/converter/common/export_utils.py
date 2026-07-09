@@ -74,24 +74,18 @@ class PostProcessor(ABC):
 
 
 # ============================================================================
-# 处理器调度表（Processor dispatch maps）
+# 内置处理器源目录（相对于 python/ 根目录）
+# Built-in processor source directories (relative to python/ root)
 # ============================================================================
 
-# 内置前置处理器名 → conftest 函数名
-# Built-in preprocessor name → conftest function name
-PREPROC_DISPATCH: dict[str, str] = {
-    "timestamp": "_apply_timestamp",
-    "hmac-sign": "_apply_hmac_sign",
-    "print-demo": "_print_request",
-}
-
-# 内置后置处理器名 → conftest 函数名
-# Built-in postprocessor name → conftest function name
-POSTPROC_DISPATCH: dict[str, str] = {
-    "hmac-verify": "_verify_hmac",
-    "response-time": "_log_response_metrics",
-    "print-demo-post": "_print_response",
-}
+_BUILTIN_PRE_DIR = str(
+    Path(__file__).resolve().parent.parent.parent
+    / "processors" / "builtin" / "pre"
+)
+_BUILTIN_POST_DIR = str(
+    Path(__file__).resolve().parent.parent.parent
+    / "processors" / "builtin" / "post"
+)
 
 
 # ============================================================================
@@ -159,46 +153,106 @@ APPS = {json.dumps(data, indent=4, ensure_ascii=False)}
     logger.info(_("converter.wrote_config_py", path=str(Path(output_dir) / "_config.py")))
 
 
-def bundle_custom_processors(processors_dir: str | None, output_dir: str) -> int:
-    """复制自定义处理器 .py 文件到 _custom_processors/，替换 Flow Forge import。
-       Copy custom processor .py files, rewrite Flow Forge imports to _ff_compat.
+def _ensure_package(dir_path: Path) -> None:
+    """确保目录是一个 Python 包（创建 __init__.py）。
+       Ensure the directory is a Python package by creating __init__.py."""
+    dir_path.mkdir(parents=True, exist_ok=True)
+    init_file = dir_path / "__init__.py"
+    if not init_file.exists():
+        init_file.write_text("", encoding="utf-8")
 
-       跳过内部模块（base, loader, runner）和内置处理器。
-       Skips internal modules (base, loader, runner) and built-in processors.
+
+def _copy_and_rewrite_processor(src_file: Path, dest_dir: Path) -> bool:
+    """复制单个处理器文件并重写 Flow Forge import。
+       Copy a single processor file and rewrite Flow Forge imports to _ff_compat.
+
+       如果目标文件已存在（自定义处理器覆盖内置），记录警告。
+       If destination exists (custom overrides built-in), log warning.
     """
-    if not processors_dir:
-        return 0
-    src = Path(processors_dir)
-    if not src.is_dir():
-        return 0
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_file = dest_dir / src_file.name
+    if dest_file.exists():
+        logger.warning(
+            _("converter.processor_overwrite",
+              name=src_file.name, source=str(src_file))
+        )
 
-    dest = Path(output_dir) / "_custom_processors"
-    internal = {"base", "loader", "runner", "__init__"}
-    builtin_names = {"hmac_sign", "hmac_verify", "path_param_restore",
-                     "print_demo", "response_time", "timestamp_sign"}
+    content = src_file.read_text(encoding="utf-8")
+    # 替换 Flow Forge import → 兼容层 import
+    # Replace Flow Forge import → compat layer import
+    content = content.replace(
+        "from processors.base import", "from _ff_compat import"
+    )
+    content = content.replace(
+        "from processors.base import PreProcessor, ProcessorError",
+        "from _ff_compat import PreProcessor, ProcessorError",
+    )
+    content = content.replace(
+        "from processors.base import PostProcessor, ProcessorError",
+        "from _ff_compat import PostProcessor, ProcessorError",
+    )
+
+    dest_file.write_text(content, encoding="utf-8")
+    logger.info(_("converter.bundled_processor", name=src_file.name))
+    return True
+
+
+def bundle_processors(
+    output_dir: str,
+    custom_processors_dir: str | None = None,
+    builtin_pre_dir: str | None = None,
+    builtin_post_dir: str | None = None,
+) -> int:
+    """复制所有处理器（内置 + 自定义）到 _processors/，统一替换 import。
+       Bundle all processors (built-in + custom) into _processors/ with rewritten imports.
+
+       内置处理器从 processors/builtin/pre/ 和 processors/builtin/post/ 复制。
+       自定义处理器从 custom_processors_dir 复制。
+       所有文件的 from processors.base import → from _ff_compat import。
+    """
+    if builtin_pre_dir is None:
+        builtin_pre_dir = _BUILTIN_PRE_DIR
+    if builtin_post_dir is None:
+        builtin_post_dir = _BUILTIN_POST_DIR
+
+    base_dir = Path(output_dir) / "_processors"
     count = 0
-    for py_file in sorted(src.glob("*.py")):
-        stem = py_file.stem
-        if stem.startswith("_") or stem in internal or stem in builtin_names:
-            continue
-        content = py_file.read_text(encoding="utf-8")
-        # 替换 Flow Forge import → 兼容层 import
-        # Replace Flow Forge import → compat layer import
-        content = content.replace(
-            "from processors.base import", "from _ff_compat import"
-        )
-        content = content.replace(
-            "from processors.base import PreProcessor, ProcessorError",
-            "from _ff_compat import PreProcessor, ProcessorError",
-        )
-        content = content.replace(
-            "from processors.base import PostProcessor, ProcessorError",
-            "from _ff_compat import PostProcessor, ProcessorError",
-        )
 
-        dest.mkdir(parents=True, exist_ok=True)
-        (dest / py_file.name).write_text(content, encoding="utf-8")
-        logger.info(_("converter.bundled_processor", name=py_file.name))
-        count += 1
+    # 确保 _processors 是 Python 包 / Ensure _processors is a Python package
+    base_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_package(base_dir)
+
+    # 复制内置前置处理器到 _processors/pre/ / Copy built-in preprocessors
+    pre_dest = base_dir / "pre"
+    _ensure_package(pre_dest)
+    pre_path = Path(builtin_pre_dir)
+    if pre_path.is_dir():
+        for py_file in sorted(pre_path.glob("*.py")):
+            if py_file.stem == "__init__":
+                continue
+            if _copy_and_rewrite_processor(py_file, pre_dest):
+                count += 1
+
+    # 复制内置后置处理器到 _processors/post/ / Copy built-in postprocessors
+    post_dest = base_dir / "post"
+    _ensure_package(post_dest)
+    post_path = Path(builtin_post_dir)
+    if post_path.is_dir():
+        for py_file in sorted(post_path.glob("*.py")):
+            if py_file.stem == "__init__":
+                continue
+            if _copy_and_rewrite_processor(py_file, post_dest):
+                count += 1
+
+    # 复制自定义处理器到 _processors/ 根目录 / Copy custom processors to root
+    if custom_processors_dir:
+        custom_src = Path(custom_processors_dir)
+        if custom_src.is_dir():
+            for py_file in sorted(custom_src.glob("*.py")):
+                stem = py_file.stem
+                if stem.startswith("_") or stem in {"base", "loader", "runner", "__init__"}:
+                    continue
+                if _copy_and_rewrite_processor(py_file, base_dir):
+                    count += 1
 
     return count
