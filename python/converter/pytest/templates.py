@@ -25,10 +25,20 @@ logger = logging.getLogger(__name__)
 # Fixtures
 # ============================================================
 
-@pytest.fixture(scope="session")
-def base_url():
-    """Base URL for the API under test. Set via BASE_URL env var."""
-    return os.environ.get("BASE_URL", "http://localhost:8000")
+def _get_base_url(app_name=None):
+    """从 app 配置或环境变量中获取 base URL。
+       Resolve base URL from app config or environment variable."""
+    # 环境变量优先 / env var takes precedence
+    base = os.environ.get("BASE_URL")
+    if base:
+        return base.rstrip("/")
+    if app_name:
+        try:
+            from _config import APPS  # noqa: F401
+            return APPS[app_name]["baseURL"].rstrip("/")
+        except (ImportError, KeyError, TypeError):
+            pass
+    return "http://localhost:8000"
 
 
 # ============================================================
@@ -395,6 +405,8 @@ def _log_response_metrics(response_headers: Dict[str, Any], response_body: Any,
 # ============================================================
 
 __all__ = [
+    "_Missing",
+    "_get_base_url",
     "_resolve_path",
     "_resolve_url",
     "_assert_field",

@@ -112,9 +112,9 @@ def generate_single_test(case: dict[str, Any], index: int) -> str:
 CASE_{test_id} = {data_block}
 
 
-def test_{test_id}(base_url):
+def test_{test_id}():
     case = CASE_{test_id}
-    url = _resolve_url(base_url + case["url"], case["body"])
+    url = _resolve_url(_get_base_url(case.get("app_name")) + case["url"], case["body"])
     headers = dict(case["headers"])
     body = dict(case["body"])
 {token_line}
@@ -144,19 +144,19 @@ def test_{test_id}(base_url):
 
 
 def generate_biz_flow_class(flow: dict[str, Any], index: int) -> str:
-    """生成 class TestBizFlow_xxx: 测试类及步骤方法。
-       Generate a pytest test class for a business flow."""
+    """生成 class TestBizFlow_xxx: 测试类，所有步骤在单个 test 方法中顺序执行。
+       Generate a pytest test class with all steps in a single sequential test method."""
     sheet_name = sanitize_name(flow.get("sheet_name", f"flow_{index}"))
     steps: list[dict[str, Any]] = flow.get("steps", [])
     if not steps:
         return ""
 
     class_name = f"TestBizFlow_{sheet_name}"
-    methods = []
+    constants_parts: list[str] = []
+    step_bodies: list[str] = []
 
     for si, step in enumerate(steps):
         step_id = sanitize_name(step.get("step_id", f"step_{si}"))
-        method_name = f"test_step_{si:02d}_{step_id}"
         method = (step.get("method") or "GET").upper()
         url = step.get("url", "/")
         status_code = step.get("status_code", 200)
@@ -176,6 +176,7 @@ def generate_biz_flow_class(flow: dict[str, Any], index: int) -> str:
             except (json.JSONDecodeError, ValueError):
                 inherit = {}
 
+        # 构建 STEP 数据常量（Build STEP data constant）
         case_data: dict[str, Any] = {
             "step_id": step.get("step_id", f"step_{si}"),
             "method": method,
@@ -190,68 +191,158 @@ def generate_biz_flow_class(flow: dict[str, Any], index: int) -> str:
             case_data["app_name"] = app_name
 
         data_block = json.dumps(case_data, indent=8, ensure_ascii=False)
+        constants_parts.append(f"    STEP_{step_id} = {data_block}")
 
-        # 步骤间变量传递（Step variable inheritance）
-        inherit_lines = ""
-        if inherit:
-            inherit_lines = "        # --- Inherit (step variable passing) ---\n"
+        # ==== 构建步骤体 / Build step body ====
+        is_first = (si == 0)
+        body_lines: list[str] = []
+
+        # 步骤标题 / Step header
+        body_lines.append(f"        # ===== Step {si}: {step_id} =====")
+        body_lines.append(f"        step_data = self.STEP_{step_id}")
+        body_lines.append(
+            "        url = _resolve_url(_get_base_url(step_data.get(\"app_name\"))"
+            " + step_data[\"url\"], step_data[\"body\"])"
+        )
+        body_lines.append("        headers = dict(step_data[\"headers\"])")
+        body_lines.append("        body = dict(step_data[\"body\"])")
+        body_lines.append("")
+
+        # 从上游步骤响应中解析流程变量 / resolve flow variables from previous steps
+        if not is_first and inherit:
+            body_lines.append(
+                "        # 从上游步骤响应中解析流程变量 / "
+                "resolve #{var} from flow_data"
+            )
             for var, expr in inherit.items():
-                inherit_lines += (
-                    f"        step_data[\"body\"][\"{var}\"] = "
-                    f"_resolve_path(self._flow_data, \"{expr}\")\n"
+                safe_var = sanitize_name(var)
+                body_lines.append(
+                    f"        _fv_{safe_var} = _resolve_path(_flow_data, \"{expr}\")"
                 )
+                body_lines.append(
+                    f"        if not isinstance(_fv_{safe_var}, _Missing):"
+                )
+                body_lines.append(
+                    f"            for _hk in list(headers.keys()):"
+                )
+                body_lines.append(
+                    f"                _hv = headers[_hk]"
+                )
+                body_lines.append(
+                    f"                if isinstance(_hv, str):"
+                )
+                body_lines.append(
+                    f"                    headers[_hk] = _hv.replace("
+                    f"\"#{{{var}}}\", str(_fv_{safe_var}))"
+                )
+            body_lines.append("")
 
-        pre_calls = indent_lines(generate_preprocessor_calls(preprocessors), 8)
-        post_calls = indent_lines(generate_postprocessor_calls(postprocessors), 8)
-
-        token_line = ""
+        # Token 解析 / token resolution (剩余的用户凭证占位符)
         if app_name:
-            token_line = f'\n        headers = _resolve_token(headers, "{app_name}")'
+            body_lines.append(
+                f"        headers = _resolve_token(headers, \"{app_name}\")"
+            )
+            body_lines.append("")
 
-        source = f'''
-    STEP_{step_id} = {data_block}
+        # 步骤间变量传递（body 字段继承）/ Inherit: copy flow_data values to body
+        if inherit:
+            body_lines.append(
+                "        # --- Inherit (step variable passing) ---"
+            )
+            for var, expr in inherit.items():
+                body_lines.append(
+                    f"        body[\"{var}\"] = "
+                    f"_resolve_path(_flow_data, \"{expr}\")"
+                )
+            body_lines.append("")
 
-    def {method_name}(self, base_url):
-        step_data = self.STEP_{step_id}
-        url = _resolve_url(base_url + step_data["url"], step_data["body"])
-        headers = dict(step_data["headers"])
-        body = dict(step_data["body"])
-{token_line}
-{inherit_lines}
-{pre_calls}        # --- HTTP Request ---
-        resp = requests.request(
-            step_data["method"], url, headers=headers,
-            json=body if body else None, timeout=30)
+        # 前置处理器 / PreProcessors
+        pre_calls = generate_preprocessor_calls(preprocessors)
+        if pre_calls:
+            body_lines.append(indent_lines(pre_calls, 4).rstrip())
+            body_lines.append("")
 
-        assert resp.status_code == step_data["expected_status"], \\
-            f"Expected {{step_data['expected_status']}}, got {{resp.status_code}}"
+        # HTTP 请求 / HTTP Request
+        body_lines.append("        # --- HTTP Request ---")
+        body_lines.append("        resp = requests.request(")
+        body_lines.append(
+            "            step_data[\"method\"], url, headers=headers,"
+        )
+        body_lines.append(
+            "            json=body if body else None, timeout=30)"
+        )
+        body_lines.append("")
+        body_lines.append(
+            "        assert resp.status_code == step_data[\"expected_status\"], \\"
+        )
+        body_lines.append(
+            "            f\"Expected {step_data['expected_status']}, "
+            "got {resp.status_code}\""
+        )
+        body_lines.append("")
+        body_lines.append(
+            "        data = resp.json() if resp.headers.get(\"Content-Type\", \"\")"
+            ".startswith(\"application/json\") else resp.text"
+        )
+        body_lines.append("")
 
-        data = resp.json() if resp.headers.get("Content-Type", "").startswith("application/json") else resp.text
+        # 存储响应供下游步骤使用 / store response for downstream steps
+        body_lines.append(
+            f"        # 存储响应供下游步骤使用 / store for downstream"
+        )
+        body_lines.append(f"        _flow_data[\"{step_id}\"] = data")
+        body_lines.append("")
 
-        # Store response for downstream steps
-        self._flow_data = data
+        # 字段断言 / Field Assertions
+        body_lines.append("        # --- Field Assertions ---")
+        body_lines.append(
+            "        for path, expected in step_data[\"assertions\"].items():"
+        )
+        body_lines.append(
+            "            ok = _assert_field(data, path, expected)"
+        )
+        body_lines.append(
+            "            actual = _resolve_path(data, path)"
+        )
+        body_lines.append(
+            "            assert ok, f\"[{path}] expected={expected!r},"
+            " actual={actual!r}\""
+        )
+        body_lines.append("")
 
-        # --- Field Assertions ---
-        for path, expected in step_data["assertions"].items():
-            ok = _assert_field(data, path, expected)
-            actual = _resolve_path(data, path)
-            assert ok, f"[{{path}}] expected={{expected!r}}, actual={{actual!r}}"
+        # 规则断言 / Rule Assertions
+        body_lines.append("        # --- Rule Assertions ---")
+        body_lines.append(
+            "        rule_results = _assert_rules("
+            "data, step_data.get(\"assert_rules\", []))"
+        )
+        body_lines.append("        for r in rule_results:")
+        body_lines.append(
+            "            assert r[\"passed\"], "
+            "f\"Rule failed: {r['field']} (expected={r['expected']},"
+            " actual={r['actual']})\""
+        )
 
-        # --- Rule Assertions ---
-        rule_results = _assert_rules(data, step_data.get("assert_rules", []))
-        for r in rule_results:
-            assert r["passed"], f"Rule failed: {{r['field']}} (expected={{r['expected']}}, actual={{r['actual']}})"
-{post_calls}
-'''
-        methods.append(source)
+        # 后置处理器 / PostProcessors
+        post_calls = generate_postprocessor_calls(postprocessors)
+        if post_calls:
+            body_lines.append("")
+            body_lines.append(indent_lines(post_calls, 4).rstrip())
 
-    methods_str = "".join(methods)
+        step_bodies.append("\n".join(body_lines))
+
+    constants_str = "\n".join(constants_parts)
+    bodies_str = "\n\n".join(step_bodies)
 
     return f'''
 class {class_name}:
     """Business flow: {flow.get("sheet_name", f"flow_{index}")}"""
 
-    def setup_method(self):
-        self._flow_data = None
-{methods_str}
+{constants_str}
+
+    def test_biz_flow(self):
+        """执行完整业务链路 / Execute the full business flow."""
+        _flow_data = {{}}
+
+{bodies_str}
 '''
