@@ -209,6 +209,8 @@ function onInheritEditChange(rowIdx: number, text: string) {
 
 function onInheritEditBlur(rowIdx: number) {
   const cacheKey = `inherit_${rowIdx}`
+  // 未触发 change（仅点击/失焦）则保持原值 / No change event fired (click only, no edit): keep original value
+  if (!(cacheKey in inheritEditCache.value)) return
   const text = (inheritEditCache.value[cacheKey] || '').trim()
   if (!text) {
     onCellChange(rowIdx, 'Inherit', '{}')

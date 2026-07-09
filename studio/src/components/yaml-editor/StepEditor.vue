@@ -138,10 +138,10 @@ function formatInheritDisplay(val: unknown): string {
 }
 
 // Inline Inherit editing cache
-const inheritEditText = ref('')
+const inheritEditText = ref<string | null>(null)
 
 function getInheritEditText(val: unknown): string {
-  if (inheritEditText.value) return inheritEditText.value
+  if (inheritEditText.value !== null) return inheritEditText.value
   return formatInheritDisplay(val)
 }
 
@@ -150,22 +150,19 @@ function onInheritEditChange(text: string) {
 }
 
 function onInheritEditBlur() {
-  if (!inheritEditText.value) {
-    emit('update', props.index, 'inherit', {})
-    inheritEditText.value = ''
-    return
-  }
+  // 未触发 change（仅点击/失焦）则保持原值 / No change event fired (click only, no edit): keep original value
+  if (inheritEditText.value === null) return
   const text = inheritEditText.value.trim()
   if (!text) {
     emit('update', props.index, 'inherit', {})
-    inheritEditText.value = ''
+    inheritEditText.value = null
     return
   }
   try {
     const parsed = JSON.parse(text)
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       emit('update', props.index, 'inherit', parsed)
-      inheritEditText.value = ''
+      inheritEditText.value = null
     }
   } catch {
     // Keep dirty text
