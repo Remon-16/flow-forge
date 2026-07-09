@@ -26,13 +26,31 @@ class PdfParser:
 
         doc = fitz.open(str(path))
         texts: list[str] = []
+        has_images = False
         for page in doc:
             text = page.get_text()
             if text:
                 texts.append(text)
+            if not has_images and page.get_images():
+                has_images = True
         doc.close()
 
         result = "\n\n".join(texts)
+
+        if has_images and len(result) < 100:
+            logger.warning(
+                "PDF '%s' contains images with very little extractable text (%d chars). "
+                "This may be a scanned document — image content will NOT be processed. "
+                "Consider OCR or providing a text-based version.",
+                file_path, len(result),
+            )
+        elif has_images:
+            logger.info(
+                "PDF '%s' contains embedded images. Only text layer was extracted; "
+                "content inside images (screenshots, diagrams) will NOT be processed.",
+                file_path,
+            )
+
         logger.info("Extracted %d chars from %d pages in %s",
                     len(result), len(texts), file_path)
         return result

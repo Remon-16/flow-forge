@@ -1,139 +1,133 @@
-# Flow Forge — API Automation Testing Framework
+# Flow Forge — API Test Automation Framework
 
-**English** | [中文](README.md)
+[中文](README.md) | **English**
 
-![Development Status](https://img.shields.io/badge/status-Alpha-orange)
-![Version](https://img.shields.io/badge/version-v0.2.1--alpha-blue)
-![Branch](https://img.shields.io/badge/dev_brach-dev-brigAhtgreen)
+![Development Status](https://img.shields.io/badge/status-early--stage-orange)
+![Version](https://img.shields.io/badge/version-v0.3.1--alpha-blue)
+![Branch](https://img.shields.io/badge/branch-dev-brightgreen)
 
-An AI agent-based API automation testing framework. Provide requirement documents and API documentation, and the agent automatically generates test case YAML files (with optional Excel export). Feed the cases to the CLI executor, and you get a test report. The executor integrates seamlessly with Jenkins for CI/CD pipelines.
+**Feed in requirement docs and API docs, and an AI agent automatically generates test cases; a command-line executor runs them in one shot and produces a test report.** A full API test automation chain from requirements to report — test cases are stored as YAML/Excel for easy Git management and human review, and the executor integrates seamlessly with Jenkins CI/CD.
 
-The AI agent enables rapid test case generation, but due to potential AI hallucinations, manual review of the generated output is recommended. Test cases are stored as individual YAML files — one file per case — making them easy to review, version-control with Git, and update incrementally. Supports resumable and incremental generation — resume interrupted runs and update cases after requirement changes without regenerating everything from scratch. For detailed rules, see [agent/README.md](./agent/README.md).
+## What It Does
 
-## Current Status
-
-The minimum viable pipeline has been validated end-to-end. Given a set of requirement documents, API documentation, and optional user guidance, the agent produces a test plan for manual review. Once the plan is approved, it generates single-API and business-flow test cases. If the reviewer rejects the plan and provides feedback, the agent revises the plan accordingly; the review loop can iterate until the plan is accepted, at which point test cases are produced. The underlying LLM is deepseek-v4-flash.
-
-**Agent example** — see [agent/README.md](./agent/README.md) for details:
-
-```bash
-# Option 1: Output YAML cases
-python agent/main.py --requirement docs/req.md --api docs/api.yaml --output-dir someDir
-
-# Option 2: Output Excel cases
-python agent/main.py --requirement docs/req.md --api docs/api.yaml --output testcase.xlsx
-```
-
-The executor supports both single-threaded and multi-threaded modes (concurrent case execution, not load testing). In business-flow mode, responses from earlier steps can feed data into later steps, enabling cross-API parameter chaining. The assertion engine supports both simple equality checks and advanced multi-operator assertion rules (numeric comparisons, regex matching, list aggregation, etc.).
-
-**Executor example** — see [python/README.md](./python/README.md) for details:
-
-```bash
-# Option 1: Use YAML cases
-python main.py --config /path/to/env.yml --envName local --yamlDir ./output --apiMode all
-
-# Option 2: Use Excel cases
-python main.py --config /path/to/env.yml --scriptType APITest --envName local \
-               --caseFilePath ./test_cases.xlsx --maxThread 5 --reportName MyReport \
-               --apiMode all
-```
-
-A Tauri desktop test case editor has been implemented. It supports visual editing of both Excel (.xlsx) and YAML (.yaml) test case formats, featuring form-based YAML editing, an advanced assertion rule editor, a JSON tree editor, and more. See [case-editor/README.en.md](./case-editor/README.en.md) for details.
-
-## Roadmap
-
-1. Broader validation across additional scenarios and document formats.
-2. Improve interoperability, such as a converter that exports test cases to Postman collections.
-
-## System Architecture
+- **AI-generated test cases**: Reads requirement docs (Markdown/PDF/text) plus API docs (OpenAPI/Markdown) and automatically generates single-API and business-flow test cases.
+- **Controllable human review**: The AI-produced test plan is confirmed by a human first (visual annotation supported in Studio) before cases are generated, suppressing AI hallucinations.
+- **Visual editing**: The Studio desktop app batch-edits Excel/YAML cases and graphically edits JSON fields and assertion rules.
+- **Multi-threaded execution**: The executor runs cases concurrently, automatically manages login/session state, supports cross-request parameter passing (tokens, etc.), and provides a two-tier assertion engine.
+- **Self-contained reports**: Produces HTML reports with inline styles and scripts that open directly in a browser; integrates with Jenkins via exit codes.
+- **Flexible formats**: Bidirectional YAML/Excel conversion, plus generation of zero-dependency standalone pytest code.
 
 ```mermaid
 graph TD
-    REQ[Requirements Doc] --> AGENT[AI Case Generation Agent]
+    REQ[Requirements Doc] --> AGENT[AI Test Case Generation Agent]
     API[API Documentation] --> AGENT
     KB[(Grep Search)] -.-> AGENT
-    AGENT --> |plan.md| REVIEW[Manual Review]
-    REVIEW --> |Approved| AGENT
-    AGENT --> |YAML/Excel Cases| EXEC[Test Executor]
-    EXEC --> LM[Login State Manager]
+    AGENT --> |plan.md| REVIEW[Human Review / Studio Annotation]
+    REVIEW --> |Review Confirmed| AGENT
+    AGENT --> |YAML/Excel Cases| STUDIO[Studio Visual Editing]
+    STUDIO --> EXEC[Test Executor]
+    AGENT --> |YAML/Excel Cases| EXEC
+    EXEC --> LM[Login/Session Manager]
     EXEC --> AE[Assertion Engine]
     EXEC --> |HTML Report| REPORT[Test Report]
     JENKINS[Jenkins CI/CD] --> |Trigger| EXEC
     EXEC --> |Exit Code| JENKINS
 ```
 
-The framework consists of two core components:
+## Quick Start (Shortest End-to-End Path)
 
-- **[agent/](./agent/)** — AI Case Generation Agent: reads requirement documents + API documentation, passes through a two-phase pipeline of "Plan Generation → Manual Review → Case Orchestration", and outputs test case YAML files (with optional Excel export).
-- **[python/](./python/)** — API Test Executor: reads YAML case directories/files or Excel case files, automatically manages login state, executes HTTP requests with multi-threading, runs assertions, and generates self-contained HTML test reports.
+The three components are independent and can be used separately; below is the full chain from requirements to report:
 
-The two components are decoupled via **YAML files** as the primary contract (Excel remains compatible) — the agent generates a specific format, and the executor parses that format. Users are free to choose: use the agent to auto-generate cases, manually write YAML/Excel cases and run them directly with the executor, or use the Excel editor for editing.
+```bash
+# ── 1. AI generates cases (agent/) ────────────────────────────
+cd agent
+pip install -r requirements.txt
+cp env.example.yaml env.yaml          # Fill in the LLM api_key / model / base_url
+python main.py --requirement docs/req.md --api docs/api.yaml
+# Review the test plan: enter y to approve / n for text feedback / r to revise from the annotation file
+# Generated cases are written to agent/output_<timestamp>/
 
-## Project Structure
+# ── 2. (Optional) Visually edit cases in Studio (studio/) ──────────
+cd ../studio
+npm install
+npm run dev                            # Open the Excel/YAML editor for batch adjustments
 
-```text
-flow-forge/
-├── README.en.md                  # Project overview (this file)
-├── agent/                        # AI Case Generation Agent
-├── python/                       # API Test Executor
-└── case-editor/                  # Tauri Desktop Test Case Editor (Excel + YAML)
+# ── 3. Executor runs cases and produces a report (python/) ────────────────
+cd ../python
+pip install -r requirements.txt        # Edit env-local.yml with the target app and login info
+python main.py --yamlDir ../agent/output_<timestamp>/cases --envName local --apiMode all
+# The report is generated at python/report/{filename}_{timestamp}.html
 ```
+
+See each component's README below for detailed usage.
+
+## The Three Sub-projects
+
+| Sub-project | Purpose | Quick Access |
+|--------|------|----------|
+| **[agent/](./agent/README.en.md)** | AI test-case generation agent: requirements + API docs → test plan (human review) → YAML/Excel cases | [Docs →](./agent/README.en.md) |
+| **[python/](./python/README.en.md)** | API test executor + format converter: run YAML/Excel cases → HTML report; Excel↔YAML↔pytest conversion | [Docs →](./python/README.en.md) |
+| **[studio/](./studio/README.en.md)** | Flow Forge Studio desktop app: visually edit cases, annotate Markdown plans | [Docs →](./studio/README.en.md) |
+
+The three communicate through **YAML files** as the primary contract (Excel remains compatible) — whatever format the agent generates, the executor parses. Users are free to choose: AI auto-generation, manual authoring, or visual editing in Studio.
+
+The `shared/` directory holds cross-language shared schemas (column definitions, field mappings, operators, etc.), keeping field definitions consistent across the agent, python, and studio ends.
 
 ## Workflow
 
-### Option 1: AI Agent Generation + Executor (Full Pipeline)
+Flow Forge supports three workflows; choose as needed:
 
-```text
-Requirements Doc + API Documentation
-       │
-       ▼
-  AI Agent generates test plan (plan.md)
-       │
-       ▼
-  Manual review & revision of test plan
-       │
-       ▼
-  AI Agent generates YAML cases (output/ directory)
-       │
-       ▼
-  Manual review of YAML cases (optional parameter tweaks)
-       │
-       ▼
-  Executor runs YAML directory
-       │
-       ▼
-  View HTML test report
-```
+- **Option 1: Fully automated end-to-end** — the AI agent generates cases → human review → executor runs them. Best for producing cases quickly from scratch.
+- **Option 2: Hand-written cases** — manually author YAML/Excel cases → run them with the executor (`--yamlDir` or `--caseFilePath`). Best when you already have cases.
+- **Option 3: Initial Excel generation + YAML version control (recommended)** — AI generates Excel (`--output-format excel`) → batch-edit in Studio → convert to YAML with the `converter` → review file-by-file with git diff → run with the executor.
 
-### Option 2: Manually Written YAML/Excel + Executor
-
-```text
-Manually write YAML or Excel cases (executor format)
-       │
-       ▼
-  Executor runs cases (--yamlDir or --caseFilePath)
-       │
-       ▼
-  View HTML test report
-```
+> **Why is Option 3 recommended?** Excel is ideal for batch editing (quick browsing, sorting, bulk changes), while YAML is ideal for diffing (one file per case, so git diff shows changes clearly). Edit in Excel first, then convert to YAML for commit — balancing efficiency and traceability. When you need standalone tests, use `yaml2pytest` / `excel2pytest` to generate zero-dependency pytest code.
 
 ## CI/CD Integration (Jenkins)
 
-The executor is a pure CLI tool that communicates results via exit codes, allowing direct integration into Jenkins pipelines.
+The executor is a pure command-line tool that reports results through exit codes (`0` = all passed, `1` = failures present, `2` = config/parse error), so it can be integrated directly into a Jenkins pipeline.
+
+## Anti-Hallucination & Quality Control
+
+AI hallucinations are inevitable; Flow Forge controls quality through multiple mechanisms:
+
+- **Human review node**: cases are only generated after the test plan is confirmed by a human.
+- **URL correction and count validation**: API URLs are corrected by comparing against the source document, and the number of LLM output items is automatically validated and retried (see the [agent anti-hallucination doc](./agent/docs/anti-hallucination.en.md)).
+- **Text-only limitation**: only extractable text is processed; binary/scanned files raise an explicit error rather than silently producing empty results.
+
+## Design Philosophy
+
+- **YAML/Excel as contract**: the agent and executor are decoupled, and users freely choose how to generate cases.
+- **Human review**: cases are only generated after the AI plan is confirmed by a human, keeping quality controllable.
+- **CLI-driven**: the executor is pure CLI with no GUI dependencies, fitting CI/CD.
+- **Self-contained reports**: HTML reports embed styles and scripts inline, requiring no web server.
+- **Extensible processors/plugins**: users can customize case generation. When executing cases, they can apply custom signatures, insert timestamps, and more.
+
+## Plugin & Extension Mechanism
+
+| Module | Extension Point | Description |
+|------|--------|------|
+| [`python/processors/`](./python/docs/processors-and-report.en.md#pre-processors--post-processors) | PreProcessor / PostProcessor | Processing logic before and after requests (HMAC signing, SQL cleanup, path parameters, etc.) |
+| [`agent/plugins/`](./agent/docs/plugins-and-skills.en.md) | CaseAttributeGenerator | Automatically enrich attributes after case generation (data filling, assertion generation, etc.) |
+| `studio/` | PreProcessors / PostProcessors fields | Visually edit and validate processor configs in the editor |
+
+## Running Tests
+
+```bash
+# agent/ tests (all LLM calls are mocked, no API costs)
+cd agent && python -m pytest tests/ -v
+
+# python/ tests
+cd python && python -m pytest tests/ -v
+```
 
 ## Technology Stack
 
 | Component | Technology |
-|-----------|------------|
-| Case Generation Agent | Python 3, OpenAI API, prance (OpenAPI parsing), pymupdf (PDF parsing) |
-| Test Executor | Python 3, requests, openpyxl, pyyaml |
-| Configuration | YAML multi-environment config files |
+|------|------|
+| Test Case Generation Agent | Python 3.12, LangGraph, OpenAI-compatible API, prance (OpenAPI), pymupdf (PDF), context compression |
+| Test Executor and Converter | Python 3.12, requests, openpyxl, pyyaml |
+| Studio Desktop App | Vue 3, Ant Design Vue, Vite, Tauri 2, TypeScript |
+| Configuration Management | YAML multi-environment config files |
 | Report Output | Self-contained HTML (no external CSS/JS) |
 | CI/CD | Jenkins Pipeline, CLI exit codes |
-
-## Design Philosophy
-
-- **YAML/Excel as Contract**: The agent and executor are decoupled through YAML/Excel files. Users can freely choose how to produce test cases.
-- **Human-in-the-Loop**: AI-generated test plans require manual approval before final case generation, ensuring quality control.
-- **CLI-Driven**: The executor is a pure CLI tool with no GUI dependencies, suitable for CI/CD environments.
-- **Self-Contained Reports**: HTML reports embed all styles and scripts inline — open them directly in a browser without a web server.

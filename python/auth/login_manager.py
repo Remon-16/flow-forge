@@ -5,7 +5,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import requests
 
-from core.path_resolver import resolve_path, _Missing
+from resolvers.path_resolver import resolve_path, _Missing
+from resolvers.var_resolver import resolve_placeholders, has_placeholders
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +25,11 @@ class LoginManager:
     ) -> Tuple[Dict[str, Any], Optional[str]]:
         """Resolve #{userParamName} placeholders in headers.
 
-        If headers contain the headTokenName field with a #{userParamName} value,
-        resolves the token via login or cache. Returns (updated_headers, error_msg).
-        error_msg is None on success.
+        Supports both whole-value placeholders (``"#{userParamName}"``) and
+        embedded placeholders (``"Bearer #{userParamName}"``).  Each
+        placeholder is independently resolved via login or cache.
+
+        Returns (updated_headers, error_msg).  error_msg is None on success.
         """
         if not app_config or not headers:
             return headers, None
@@ -39,18 +42,22 @@ class LoginManager:
         if not isinstance(token_value, str):
             return headers, None
 
-        if not token_value.startswith("#{") or not token_value.endswith("}"):
+        if not has_placeholders(token_value):
             return headers, None
 
-        user_param_name = token_value[2:-1]
-        logger.info("Resolving token for user: %s", user_param_name)
+        def token_resolver(var_name: str) -> Optional[str]:
+            token, error = cls._get_or_login(app_config, var_name)
+            if error:
+                logger.warning("Token resolution failed for '%s': %s", var_name, error)
+                return None
+            return token
 
-        token, error = cls._get_or_login(app_config, user_param_name)
-        if error:
-            return headers, error
+        resolved_value = resolve_placeholders(token_value, token_resolver)
+        if resolved_value == token_value:
+            return headers, None
 
         headers = dict(headers)
-        headers[head_token_name] = token
+        headers[head_token_name] = resolved_value
         return headers, None
 
     @classmethod

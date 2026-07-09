@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List
 
-from core.path_resolver import resolve_path, _Missing
+from resolvers.path_resolver import resolve_path, _Missing
 
 logger = logging.getLogger(__name__)
 

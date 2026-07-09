@@ -1,0 +1,49 @@
+name: foli_mall_assertion
+description: Foli Mall test project assertion rules — response structure (Result code/message/data), BizCodeEnum reference, and assertion patterns
+version: "1.0"
+target_agents:
+  - assertion_generator
+prompt_extension: |
+  ## Foli Mall Assertion Rules
+
+  ### Response Structure
+  All API responses follow the structure: `Result(String code, String message, T data)`
+  - `code`: 6-digit business status code (format: ABBCCC)
+  - `message`: Human-readable description
+  - `data`: Response payload (type varies by endpoint)
+
+  ### Business Status Code Format (ABBCCC)
+  - **A** (Error Level): 1 = Success, 2 = Business Exception, 3 = System Error
+  - **BB** (Module): 00=Common, 01=User, 02=Store, 03=Product, 04=Order, 05=Finance, 06=File, 07=Cart, 08=Return/Refund, 09=Complaint, 10=Message, 11=Category
+  - **CCC** (Sequence): Error sequence number within the module
+
+  ### Common Status Codes (Module 00)
+  | Code | Meaning |
+  |------|---------|
+  | 100000 | "成功" |
+  | 200001 | "请求参数错误" |
+  | 200002 | "请求的资源不存在" |
+  | 200003 | "无权执行此操作" |
+  | 300001 | "系统内部错误" |
+
+  ### Module-Specific Status Codes
+  - User (01): 201001="用户名已存在", 201002="用户名或密码错误", 201003="账号已被禁用", 201004="用户不存在"
+  - Store (02): 202001="您已拥有一个店铺，请勿重复申请", 202002="该店铺已审核完毕，不可重复审核", 202003="店铺不存在", 202004="无效的审核状态", 202005=仅卖家可申请开店", 202006="您还没有店铺，请先创建店铺"
+  - Product (03): 203001="商品不存在", 203002="库存不足", 203003="扣减库存失败，商品已售罄", 203004="商品已下架", 203005="该商品已审核完毕，不可重复审核"
+  - Order (04): 204001="订单不存在", 204002="订单状态不正确，不允许此操作", 204003="仅已完成订单可申请退货退款"
+  - Finance (05): 205001="余额不足", 205002="余额扣减失败", 205003="充值失败，余额更新异常"
+  - File (06): 206001="上传文件不能为空", 206002="文件大小不能超过10MB", 206003="仅支持上传图片文件", 206004="文件上传失败"
+  - Cart (07): 207001="没有选中的商品", 207002="购物车项不存在或无权限操作"
+  - Return/Refund (08): 208001="退货记录不存在", 208002="退货状态不正确，不允许此操作", 208003="该退货申请已处理"
+  - Complaint (09): 209001="投诉不存在", 209002="该投诉已处理完毕，不可重复处理"
+  - Message (10): 210001="消息不存在"
+  - Category (11): 211001="分类不存在", 211002="该分类下存在子分类，无法删除", 211003="父分类不能设置为自身"
+
+  ### Assertion Guidelines
+  - For success cases: assert `code` == "100000"
+  - For error cases: match the expected error code from the reference above based on the test scenario
+  - Always assert the `code` field in `assert_dict` for simple success/error checks
+  - Use `assert_rules` with `==` operator for code validation
+  - For data validation: assert key fields in `data` are present and non-null
+  - For error cases: assert `message` contains the expected error description
+tools: []

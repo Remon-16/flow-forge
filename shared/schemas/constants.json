@@ -1,0 +1,10 @@
+{
+  "http_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  "valid_tags":  ["P0", "P1", "P2", "P3"],
+  "tag_levels":  ["P0", "P1", "P2", "P3", "P4"],
+  "required_single":    ["test_id", "relevance_id", "api_name", "method", "url"],
+  "required_biz_step":  ["step_id", "relevance_id", "api_name", "method", "url"],
+  "required_biz_flow":  ["sheet_name", "steps"],
+
+  "url_not_exist_prefix": "<URL not exist>"
+}

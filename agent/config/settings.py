@@ -1,10 +1,74 @@
-"""Load configuration from .env and provide defaults."""
+"""从 YAML 配置文件加载设置并提供默认值。Load settings from YAML config file."""
 
 import os
+import yaml
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Dict, List
 
-from dotenv import load_dotenv
+
+def get_strategy(rules: List[Dict], check: str, default: str = "fail") -> str:
+    """从校验规则列表中查找指定校验的策略。
+    Find the strategy for a given check from the validation rules list.
+
+    Args:
+        rules: 校验规则列表 / List of {"check": str, "strategy": str} dicts.
+        check: 校验名 / Check name to look up.
+        default: 未找到时的默认策略 / Default strategy if not found.
+
+    Returns:
+        策略值 / Strategy value: "fail", "warn", or "skip".
+    """
+    for rule in rules:
+        if rule.get("check") == check:
+            return rule.get("strategy", default)
+    return default
+
+
+def get_url_failure_action(rules: List[Dict], default: str = "discard") -> str:
+    """从校验规则列表中查找 url_check 的 failure_action 子规则。
+    Find the failure_action sub-rule from the url_check rule entry.
+
+    仅当 url_check 的 strategy 为 "warn" 时生效（fail 直接抛异常，skip 无失败用例）。
+    Only meaningful when url_check strategy is "warn".
+
+    Args:
+        rules: 校验规则列表 / List of validation rule dicts.
+        default: 未找到时的默认动作 / Default action if not found.
+
+    Returns:
+        失败处理动作 / Failure action: "discard" | "keep".
+    """
+    for rule in rules:
+        if rule.get("check") == "url_check":
+            action = rule.get("failure_action", default)
+            if action not in ("discard", "keep"):
+                return default
+            return action
+    return default
+
+
+def _parse_validation_rules(rules_raw) -> List[Dict[str, str]]:
+    """解析校验规则，兼容 dict 和 list 两种 YAML 写法。
+    Parse validation rules, supports both dict and list YAML formats.
+
+    dict 格式支持两种写法：
+      - {"url_check": "warn"} → [{"check": "url_check", "strategy": "warn"}]
+      - {"url_check": {"strategy": "warn", "failure_action": "keep"}}
+        → [{"check": "url_check", "strategy": "warn", "failure_action": "keep"}]
+    """
+    if isinstance(rules_raw, list):
+        return rules_raw
+    if isinstance(rules_raw, dict):
+        result = []
+        for check, val in rules_raw.items():
+            if isinstance(val, dict):
+                entry = {"check": check}
+                entry.update(val)
+                result.append(entry)
+            else:
+                result.append({"check": check, "strategy": val})
+        return result
+    return []
 
 
 @dataclass
@@ -15,17 +79,63 @@ class Settings:
     llm_model: str = "gpt-4o"
     llm_temperature: float = 0.3
     llm_max_tokens: int = 4096
+    llm_context_window: int = 128000
+    llm_context_compression_threshold: float = 0.9
+    llm_max_output_tokens: int = 4096
     enable_knowledge: bool = False
     knowledge_dir: str = "./knowledge"
-    llm_doc_max_chars: int = 30000
     max_steps: int = 10
     max_retries: int = 3
+    llm_rate_limit_delay: float = 0.0
+    llm_retry_base_delay: float = 2.0
     output_dir: str = "./output"
-    batch_size: int = 10
+    plugin_batch_size: int = 10
     enable_validation: bool = True
     max_validation_retries: int = 3
     output_format: str = "both"
     max_steps_no_progress: int = 5
+    url_correction_max_retries: int = 3
+    enable_plugins: bool = False
+    plugin_modules: List[str] = field(default_factory=list)
+    llm_max_concurrency: int = 1
+    consecutive_batch_failure_limit: int = 3
+    llm_request_timeout: float = 600.0
+    llm_extra_params: Dict[str, Any] = field(default_factory=dict)
+    agent_lang: str = "zh_CN"
+    enable_skills: bool = True
+    skill_agents: Dict[str, List[str]] = field(default_factory=dict)
+    auto_mode: bool = False
+
+    # 用例生成类型 / Case generation type: both | single | biz
+    case_type: str = "both"
+
+    # 骨架生成分批大小 / Skeleton generation batch size
+    skeleton_batch_size: int = 30
+
+    # 计划生成分块大小（每个分块包含的接口数）/ Plan chunk size (interfaces per chunk)
+    # 已废弃，请使用 plan_single_batch_size + plan_biz_flow_batch_size
+    # Deprecated — use plan_single_batch_size + plan_biz_flow_batch_size instead
+    plan_chunk_size: int = 0
+
+    # 单接口测试点分组大小（-1=不拆分，强模型建议 -1）/ Single API batch size (-1=no split)
+    plan_single_batch_size: int = 8
+
+    # 业务链路每批合并数（-1=不拆分，强模型建议 -1）/ Biz flow batch size (-1=no split)
+    plan_biz_flow_batch_size: int = 3
+
+    # 是否将日志持久化到 output_dir/logs/agent.log / Persist logs to output_dir
+    # 默认关闭，输出文件已较多，有需要的用户自行开启 / Default off, enable on demand
+    logging_log_to_output: bool = False
+
+    # 校验规则列表 / Validation rules list
+    # 每项为 {"check": "<校验名>", "strategy": "fail|warn|skip"}
+    # Each entry: {"check": "<check_name>", "strategy": "fail|warn|skip"}
+    validation_rules: List[Dict[str, str]] = field(default_factory=lambda: [
+        {"check": "skeleton_count", "strategy": "fail"},
+        {"check": "url_check", "strategy": "warn"},
+        {"check": "data_fill_count", "strategy": "fail"},
+        {"check": "assertion_count", "strategy": "fail"},
+    ])
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -35,55 +145,118 @@ class Settings:
             "llm_model": self.llm_model,
             "llm_temperature": self.llm_temperature,
             "llm_max_tokens": self.llm_max_tokens,
+            "llm_context_window": self.llm_context_window,
+            "llm_context_compression_threshold": self.llm_context_compression_threshold,
+            "llm_max_output_tokens": self.llm_max_output_tokens,
             "enable_knowledge": self.enable_knowledge,
             "knowledge_dir": self.knowledge_dir,
-            "llm_doc_max_chars": self.llm_doc_max_chars,
             "max_steps": self.max_steps,
             "max_retries": self.max_retries,
+            "llm_rate_limit_delay": self.llm_rate_limit_delay,
+            "llm_retry_base_delay": self.llm_retry_base_delay,
             "output_dir": self.output_dir,
-            "batch_size": self.batch_size,
+            "plugin_batch_size": self.plugin_batch_size,
             "enable_validation": self.enable_validation,
             "max_validation_retries": self.max_validation_retries,
             "output_format": self.output_format,
             "max_steps_no_progress": self.max_steps_no_progress,
+            "url_correction_max_retries": self.url_correction_max_retries,
+            "enable_plugins": self.enable_plugins,
+            "plugin_modules": self.plugin_modules,
+            "llm_max_concurrency": self.llm_max_concurrency,
+            "consecutive_batch_failure_limit": self.consecutive_batch_failure_limit,
+            "llm_request_timeout": self.llm_request_timeout,
+            "llm_extra_params": self.llm_extra_params,
+            "enable_skills": self.enable_skills,
+            "skill_agents": self.skill_agents,
+            "auto_mode": self.auto_mode,
+            "skeleton_batch_size": self.skeleton_batch_size,
+            "plan_chunk_size": self.plan_chunk_size,
+            "plan_single_batch_size": self.plan_single_batch_size,
+            "plan_biz_flow_batch_size": self.plan_biz_flow_batch_size,
+            "logging_log_to_output": self.logging_log_to_output,
+            "case_type": self.case_type,
+            "validation_rules": self.validation_rules,
         }
 
 
-def load_settings(dotenv_path: str = ".env") -> Settings:
-    """Load settings from .env file, falling back to defaults."""
-    load_dotenv(dotenv_path, override=False)
+def load_settings(yaml_path: str = "env.yaml") -> Settings:
+    """从 YAML 配置文件加载设置。Load settings from YAML config file.
 
-    temperature = float(os.getenv("LLM_TEMPERATURE", "0.3"))
-    max_tokens = int(os.getenv("LLM_MAX_TOKENS", "4096"))
-    max_steps = int(os.getenv("MAX_STEPS", "10"))
-    max_retries = int(os.getenv("MAX_RETRIES", "3"))
-    enable_knowledge = os.getenv("ENABLE_KNOWLEDGE", "false").strip().lower() in (
-        "true", "1", "yes", "on"
-    )
-    llm_doc_max_chars = int(os.getenv("LLM_DOC_MAX_CHARS", "30000"))
-    enable_validation = os.getenv("ENABLE_VALIDATION", "true").strip().lower() in (
-        "true", "1", "yes", "on"
-    )
-    batch_size = int(os.getenv("BATCH_SIZE", "10"))
-    max_validation_retries = int(os.getenv("MAX_VALIDATION_RETRIES", "3"))
-    max_steps_no_progress = int(os.getenv("MAX_STEPS_NO_PROGRESS", "5"))
+    文件不存在时返回默认配置。Returns Settings with defaults when file is missing.
+    """
+    config: Dict[str, Any] = {}
+    if os.path.exists(yaml_path):
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f) or {}
 
-    return Settings(
-        llm_provider=os.getenv("LLM_PROVIDER", "openai"),
-        llm_api_key=os.getenv("LLM_API_KEY", ""),
-        llm_base_url=os.getenv("LLM_BASE_URL", ""),
-        llm_model=os.getenv("LLM_MODEL", "gpt-4o"),
-        llm_temperature=temperature,
-        llm_max_tokens=max_tokens,
-        enable_knowledge=enable_knowledge,
-        knowledge_dir=os.getenv("KNOWLEDGE_DIR", "./knowledge"),
-        llm_doc_max_chars=llm_doc_max_chars,
-        max_steps=max_steps,
-        max_retries=max_retries,
-        output_dir=os.getenv("OUTPUT_DIR", "./output"),
-        batch_size=batch_size,
-        enable_validation=enable_validation,
-        max_validation_retries=max_validation_retries,
-        output_format=os.getenv("OUTPUT_FORMAT", "both"),
-        max_steps_no_progress=max_steps_no_progress,
+    llm = config.get("llm", {})
+    pipeline = config.get("pipeline", {})
+    knowledge = config.get("knowledge", {})
+    validation = config.get("validation", {})
+    output = config.get("output", {})
+    plugins = config.get("plugins", {})
+    skills_cfg = config.get("skills", {})
+    agent_cfg = config.get("agent", {})
+    logging_cfg = config.get("logging", {})
+
+    settings = Settings(
+        llm_provider=llm.get("provider", "openai"),
+        llm_api_key=llm.get("api_key", ""),
+        llm_base_url=llm.get("base_url", ""),
+        llm_model=llm.get("model", "gpt-4o"),
+        llm_temperature=float(llm.get("temperature", 0.3)),
+        llm_max_output_tokens=int(llm.get("max_output_tokens", 4096)),
+        llm_context_window=int(llm.get("context_window", 128000)),
+        llm_context_compression_threshold=float(llm.get("context_compression_threshold", 0.9)),
+        llm_max_concurrency=int(llm.get("max_concurrency", 1)),
+        llm_rate_limit_delay=float(llm.get("rate_limit_delay", 0.0)),
+        llm_retry_base_delay=float(llm.get("retry_base_delay", 2.0)),
+        llm_request_timeout=float(llm.get("request_timeout", 600.0)),
+        llm_extra_params=llm.get("extra_params", {}),
+        enable_knowledge=knowledge.get("enabled", False),
+        knowledge_dir=knowledge.get("dir", "./knowledge"),
+        max_steps=int(pipeline.get("max_steps", 10)),
+        max_retries=int(pipeline.get("max_retries", 3)),
+        max_steps_no_progress=int(pipeline.get("max_steps_no_progress", 5)),
+        consecutive_batch_failure_limit=int(pipeline.get("consecutive_batch_failure_limit", 3)),
+        url_correction_max_retries=int(pipeline.get("url_correction_max_retries", 3)),
+        skeleton_batch_size=int(pipeline.get("skeleton_batch_size", 30)),
+        plan_chunk_size=int(pipeline.get("plan_chunk_size", 0)),
+        validation_rules=_parse_validation_rules(validation.get("rules", {})),
+        enable_validation=validation.get("enabled", True),
+        max_validation_retries=int(validation.get("max_retries", 3)),
+        output_dir=output.get("dir", "./output"),
+        plugin_batch_size=int(pipeline.get("plugin_batch_size", 10)),
+        output_format=output.get("format", "both"),
+        enable_plugins=plugins.get("enabled", False),
+        plugin_modules=plugins.get("modules", []),
+        enable_skills=skills_cfg.get("enabled", True),
+        skill_agents=skills_cfg.get("agents", {}),
+        agent_lang=agent_cfg.get("lang", "zh_CN"),
+        auto_mode=pipeline.get("auto", False),
+        case_type=pipeline.get("case_type", "both"),
+        logging_log_to_output=logging_cfg.get("log_to_output", False),
     )
+
+    # 为 i18n 设置语言（i18n 懒加载时通过 os.environ 读取）
+    # Set language for i18n lazy init via os.environ
+    os.environ["AGENT_LANG"] = settings.agent_lang
+
+    # ---- 向后兼容：plan_chunk_size → plan_single_batch_size + plan_biz_flow_batch_size ----
+    # Backward compat: migrate old plan_chunk_size to the two new config fields
+    _plan_chunk = int(pipeline.get("plan_chunk_size", 0))
+    _plan_single_raw = pipeline.get("plan_single_batch_size")
+    _plan_biz_raw = pipeline.get("plan_biz_flow_batch_size")
+
+    if _plan_single_raw is None and _plan_chunk > 0:
+        settings.plan_single_batch_size = _plan_chunk
+    elif _plan_single_raw is not None:
+        settings.plan_single_batch_size = int(_plan_single_raw)
+
+    if _plan_biz_raw is None and _plan_chunk > 0:
+        settings.plan_biz_flow_batch_size = _plan_chunk
+    elif _plan_biz_raw is not None:
+        settings.plan_biz_flow_batch_size = int(_plan_biz_raw)
+
+    return settings

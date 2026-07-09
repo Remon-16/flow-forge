@@ -1,0 +1,23 @@
+{
+  "snake_to_pascal": {
+    "test_id": "TestID",
+    "api_name": "APIName",
+    "app_name": "AppName",
+    "method": "Method",
+    "url": "URL",
+    "request_head": "RequestHead",
+    "request_body": "RequestBody",
+    "status_code": "StatusCode",
+    "assert_dict": "AssertDict",
+    "assert_rules": "AssertRules",
+    "preprocessors": "PreProcessors",
+    "postprocessors": "PostProcessors",
+    "remark": "Remark",
+    "relevance_id": "RelevanceID",
+    "tag": "Tag",
+    "step_id": "StepID",
+    "inherit": "Inherit"
+  },
+  "json_fields": ["request_head", "request_body", "assert_dict",
+                  "assert_rules", "preprocessors", "postprocessors"]
+}

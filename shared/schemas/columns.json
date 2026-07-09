@@ -1,0 +1,13 @@
+{
+  "api":  ["TestID", "APIName", "AppName", "Method", "URL",
+           "RequestHead", "RequestBody", "StatusCode", "AssertDict",
+           "AssertRules", "PreProcessors", "PostProcessors", "Remark"],
+  "case": ["TestID", "RelevanceID", "Tag",
+           "APIName", "AppName", "Method", "URL",
+           "RequestHead", "RequestBody", "StatusCode", "AssertDict",
+           "AssertRules", "PreProcessors", "PostProcessors", "Remark"],
+  "biz":  ["StepID", "RelevanceID", "Inherit",
+           "APIName", "AppName", "Method", "URL",
+           "RequestHead", "RequestBody", "StatusCode", "AssertDict",
+           "AssertRules", "PreProcessors", "PostProcessors", "Tag", "Remark"]
+}

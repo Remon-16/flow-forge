@@ -43,8 +43,13 @@ def extract_text(file_path: str) -> str:
         try:
             return path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
-            logger.warning("Cannot read %s as text file", file_path)
-            return ""
+            raise ValueError(
+                f"Unsupported binary format: {file_path}. "
+                f"Only text-based formats are supported (txt, md, yaml, json, "
+                f"pdf, docx, doc, html). Binary files (images, etc.) cannot be processed."
+            ) from None
+    except ValueError:
+        raise
     except Exception as e:
         logger.warning("Failed to extract text from %s: %s", file_path, e)
         return ""

@@ -42,6 +42,7 @@ class YamlWriter:
     @staticmethod
     def write_interface(iface: Any, output_dir: str) -> str:
         d = YamlWriter._to_dict(iface)
+        d["case_type"] = "interfaces"
         test_id = d.get("test_id", "unknown")
         safe_name = test_id.replace("/", "_").replace("\\", "_").replace(":", "_")
         file_path = Path(output_dir) / "interfaces" / f"{safe_name}.yaml"

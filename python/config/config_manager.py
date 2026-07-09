@@ -13,13 +13,15 @@ _initialized: bool = False
 _REQUIRED_KEYS = ("envName", "caseFilePath")
 _TOP_LEVEL_KEYS = {
     "scriptType", "envName", "caseFilePath", "maxThread",
-    "reportName", "apiMode",
+    "reportName", "apiMode", "processor_configs",
 }
 _DEFAULTS = {
     "scriptType": "APITest",
     "maxThread": 5,
     "reportName": "APIReport",
     "apiMode": "single",
+    "lang": "zh_CN",
+    "excel_font": "微软雅黑",
 }
 
 
@@ -101,12 +103,6 @@ def get_app(app_name: str) -> Optional[Dict[str, Any]]:
     if not _initialized:
         raise RuntimeError("ConfigManager has not been initialized")
     return _apps.get(app_name)
-
-
-def get_apps() -> Dict[str, Dict[str, Any]]:
-    if not _initialized:
-        raise RuntimeError("ConfigManager has not been initialized")
-    return dict(_apps)
 
 
 def is_initialized() -> bool:

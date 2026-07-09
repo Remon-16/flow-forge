@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 
 import openpyxl
 
+from converter.field_mapping import pascal_to_snake as _pascal_to_snake
+
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +16,8 @@ _BIZ_START_SHEET_INDEX = 2
 
 _SIMPLE_FIELDS = ("APIName", "AppName", "Method", "URL", "StatusCode")
 _JSON_FIELDS = ("RequestHead", "RequestBody")
+# Excel header names (PascalCase) — derived from shared schema
+# Excel 列头名称 (PascalCase) — 从共享 schema 推导
 _SHEET2_REQUIRED = ("TestID", "RelevanceID")
 _BIZ_REQUIRED = ("StepID", "RelevanceID")
 
@@ -125,21 +129,69 @@ class ExcelParser:
             )
 
         for row in raw_steps:
-            trans_val = row.get("Trans")
-            if trans_val not in (None, ""):
-                self._validate_trans(str(trans_val), str(row.get("StepID", "")), sheet_name)
+            inherit_val = row.get("Inherit")
+            if inherit_val not in (None, ""):
+                self._validate_inherit(str(inherit_val), str(row.get("StepID", "")), sheet_name)
 
         merged_steps = self._merge_cases(raw_steps, is_biz=True)
         return {"sheet_name": sheet_name, "steps": merged_steps, "parse_error": None}
 
-    def _validate_trans(self, trans_str: str, step_id: str, sheet_name: str) -> None:
-        stripped = trans_str.strip()
+    def _validate_inherit(self, inherit_str: str, step_id: str, sheet_name: str) -> None:
+        stripped = inherit_str.strip()
         if not stripped:
             return
 
+        # 尝试 JSON 解析（新格式）
+        try:
+            inherit_dict = json.loads(stripped)
+        except (json.JSONDecodeError, ValueError):
+            # 回退旧格式（逗号分隔 key=value）
+            self._validate_inherit_old(stripped, step_id, sheet_name)
+            return
+
+        if not isinstance(inherit_dict, dict):
+            raise ExcelParseError(
+                f"Inherit field must be a JSON object in sheet '{sheet_name}', "
+                f"StepID='{step_id}': {stripped}"
+            )
+
+        for key, value in inherit_dict.items():
+            key = str(key).strip()
+            if not key:
+                raise ExcelParseError(
+                    f"Inherit field has empty key in sheet '{sheet_name}', "
+                    f"StepID='{step_id}'"
+                )
+            value_str = str(value).strip() if value else ""
+            if not value_str:
+                raise ExcelParseError(
+                    f"Inherit field has empty value for key '{key}' in sheet '{sheet_name}', "
+                    f"StepID='{step_id}'"
+                )
+            if _CHINESE_RE.search(value_str):
+                raise ExcelParseError(
+                    f"Inherit field contains Chinese characters in sheet '{sheet_name}', "
+                    f"StepID='{step_id}', key='{key}': {value_str}"
+                )
+            open_brackets = value_str.count("[") - value_str.count("]")
+            if open_brackets != 0:
+                raise ExcelParseError(
+                    f"Inherit field has mismatched brackets '[' ']' in sheet '{sheet_name}', "
+                    f"StepID='{step_id}', key='{key}': {value_str}"
+                )
+            open_parens = value_str.count("(") - value_str.count(")")
+            if open_parens != 0:
+                raise ExcelParseError(
+                    f"Inherit field has mismatched brackets '(' ')' in sheet '{sheet_name}', "
+                    f"StepID='{step_id}', key='{key}': {value_str}"
+                )
+
+    @staticmethod
+    def _validate_inherit_old(stripped: str, step_id: str, sheet_name: str) -> None:
+        """旧格式（逗号分隔 key=value）的验证逻辑，保留向后兼容。"""
         if _CHINESE_RE.search(stripped):
             raise ExcelParseError(
-                f"Trans field contains Chinese characters in sheet '{sheet_name}', "
+                f"Inherit field contains Chinese characters in sheet '{sheet_name}', "
                 f"StepID='{step_id}': {stripped}"
             )
 
@@ -149,7 +201,7 @@ class ExcelParser:
                 continue
             if "=" not in pair:
                 raise ExcelParseError(
-                    f"Trans field format error (expected key=value) in sheet '{sheet_name}', "
+                    f"Inherit field format error (expected key=value) in sheet '{sheet_name}', "
                     f"StepID='{step_id}': '{pair}'"
                 )
             key, value = pair.split("=", 1)
@@ -157,25 +209,25 @@ class ExcelParser:
             value = value.strip()
             if not key:
                 raise ExcelParseError(
-                    f"Trans field has empty key in sheet '{sheet_name}', "
+                    f"Inherit field has empty key in sheet '{sheet_name}', "
                     f"StepID='{step_id}': '{pair}'"
                 )
             if not value:
                 raise ExcelParseError(
-                    f"Trans field has empty value for key '{key}' in sheet '{sheet_name}', "
+                    f"Inherit field has empty value for key '{key}' in sheet '{sheet_name}', "
                     f"StepID='{step_id}'"
                 )
 
             open_brackets = value.count("[") - value.count("]")
             if open_brackets != 0:
                 raise ExcelParseError(
-                    f"Trans field has mismatched brackets '[' ']' in sheet '{sheet_name}', "
+                    f"Inherit field has mismatched brackets '[' ']' in sheet '{sheet_name}', "
                     f"StepID='{step_id}', key='{key}': {value}"
                 )
             open_parens = value.count("(") - value.count(")")
             if open_parens != 0:
                 raise ExcelParseError(
-                    f"Trans field has mismatched brackets '(' ')' in sheet '{sheet_name}', "
+                    f"Inherit field has mismatched brackets '(' ')' in sheet '{sheet_name}', "
                     f"StepID='{step_id}', key='{key}': {value}"
                 )
 
@@ -224,28 +276,53 @@ class ExcelParser:
         if is_biz:
             result["test_id"] = str(tc.get("StepID", ""))
             result["step_id"] = str(tc.get("StepID", ""))
-            trans_raw = tc.get("Trans")
-            result["trans"] = str(trans_raw).strip() if trans_raw not in (None, "") else ""
+            inherit_raw = tc.get("Inherit")
+            if inherit_raw not in (None, ""):
+                inherit_str = str(inherit_raw).strip()
+                try:
+                    parsed = json.loads(inherit_str)
+                    result["inherit"] = parsed if isinstance(parsed, dict) else {}
+                except (json.JSONDecodeError, ValueError):
+                    result["inherit"] = self._inherit_string_to_dict(inherit_str)
+            else:
+                result["inherit"] = {}
         else:
             result["test_id"] = str(tc.get("TestID", ""))
 
         result["tag"] = str(tc.get("Tag", "")) if tc.get("Tag") is not None else ""
         result["remark"] = str(tc.get("Remark", "")) if tc.get("Remark") is not None else ""
 
+        # PreProcessors / PostProcessors
+        for col, key in [("PreProcessors", "preprocessors"), ("PostProcessors", "postprocessors")]:
+            raw = tc.get(col)
+            if raw not in (None, ""):
+                parsed = self._safe_parse_json(
+                    raw, col, tc.get("TestID") or tc.get("StepID")
+                )
+                result[key] = parsed if isinstance(parsed, list) else []
+            else:
+                result[key] = []
+
         return result
 
     @staticmethod
     def _normalize_key(field: str) -> str:
-        mapping = {
-            "APIName": "api_name",
-            "AppName": "app_name",
-            "Method": "method",
-            "URL": "url",
-            "StatusCode": "status_code",
-            "RequestHead": "request_head",
-            "RequestBody": "request_body",
-        }
-        return mapping.get(field, field.lower())
+        return _pascal_to_snake(field)
+
+    @staticmethod
+    def _inherit_string_to_dict(inherit_str: str) -> Dict[str, str]:
+        """将旧格式逗号分隔 inherit 字符串转换为新格式 dict。"""
+        result: Dict[str, str] = {}
+        pairs = [p.strip() for p in inherit_str.split(",")]
+        for pair in pairs:
+            if not pair or "=" not in pair:
+                continue
+            key, value = pair.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if key and value:
+                result[key] = value
+        return result
 
     @staticmethod
     def excel_str_to_dict(s: str) -> Dict[str, Any]:

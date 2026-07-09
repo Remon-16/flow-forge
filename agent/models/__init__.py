@@ -6,7 +6,7 @@ from .schema import (
     TestPlan,
     PlanStep,
 )
-from .state import AgentConfig, ReActTerminationConfig
+from .state import AgentConfig
 
 __all__ = [
     "InterfaceDef",
@@ -16,5 +16,4 @@ __all__ = [
     "TestPlan",
     "PlanStep",
     "AgentConfig",
-    "ReActTerminationConfig",
 ]

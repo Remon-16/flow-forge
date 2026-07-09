@@ -1,91 +1,124 @@
-"""PromptRegistry: load and serve prompts from config/prompts.yaml."""
+"""PromptRegistry — 从 prompts/ 模块加载提示词。
+
+Load and serve prompts from Python modules in the prompts/ directory.
+"""
 
 import logging
-from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-import yaml
-
-from .render import render_prompt
+from . import render_prompt  # noqa: F401 — re-exported for convenience
 
 logger = logging.getLogger(__name__)
 
 
 class PromptRegistry:
-    """Load agent prompts and termination configs from a YAML file.
+    """从 prompts/ 目录的 Python 模块加载提示词。
 
-    Each agent has:
-      - system:  str  — system prompt template
+    Load agent prompts from Python modules. Each agent has:
+      - system: str — system prompt template
       - user_template: str — user message template with {{var}} placeholders
-      - termination: dict (optional) — ReAct termination overrides
     """
 
-    def __init__(self, yaml_path: Optional[str] = None):
-        if yaml_path is None:
-            yaml_path = str(Path(__file__).resolve().parent.parent / "config" / "prompts.yaml")
-        self._path = Path(yaml_path)
-        self._data: Dict[str, Any] = {}
-        self._base_react_rules: str = ""
-        self._default_termination: Dict[str, Any] = {}
+    def __init__(self):
+        self._data: Dict[str, Dict[str, str]] = {}
         self._load()
 
-    # ------------------------------------------------------------------
-    # Load
-    # ------------------------------------------------------------------
     def _load(self):
-        if not self._path.exists():
-            raise FileNotFoundError(f"prompts.yaml not found at {self._path}")
-        with open(self._path, "r", encoding="utf-8") as f:
-            self._data = yaml.safe_load(f) or {}
+        """从 prompts/ 模块导入所有提示词常量。
 
-        self._base_react_rules = self._data.pop("_base_react_rules", None) or {}
-        self._default_termination = self._data.pop("_default_termination", None) or {}
+        Import all prompt constants from prompts/ modules.
+        """
+        from . import api_analyzer
+        from . import case_generation
+        from . import doc_parser
+        from . import plan_generation
+        from . import plan_parser as _plan_parser_mod
+        from . import plan_reviser
+        from . import requirement_analysis
+        from . import skeleton_generation
+        from . import translator
 
-    # ------------------------------------------------------------------
-    # System prompt (base + _base_react_rules auto-appended)
-    # ------------------------------------------------------------------
+        self._data = {
+            "api_analyzer": {
+                "system": api_analyzer.API_ANALYSIS_SYSTEM,
+                "user_template": api_analyzer.API_ANALYSIS_USER,
+            },
+            "requirement_analyzer": {
+                "system": requirement_analysis.REQUIREMENT_ANALYSIS_SYSTEM,
+                "user_template": requirement_analysis.REQUIREMENT_ANALYSIS_USER,
+            },
+            "plan_generator": {
+                "system": plan_generation.PLAN_GENERATION_SYSTEM,
+                "user_template": plan_generation.PLAN_GENERATION_USER,
+            },
+            "plan_reviser": {
+                "system": plan_reviser.PLAN_REVISER_SYSTEM,
+                "user_template": plan_reviser.PLAN_REVISER_USER,
+            },
+            "plan_annotation_intent": {
+                "system": plan_reviser.PLAN_ANNOTATION_INTENT_SYSTEM,
+                "user_template": plan_reviser.PLAN_ANNOTATION_INTENT_USER,
+            },
+            "plan_annotation_update": {
+                "system": plan_reviser.PLAN_ANNOTATION_UPDATE_SYSTEM,
+                "user_template": plan_reviser.PLAN_ANNOTATION_UPDATE_USER,
+            },
+            "plan_annotation_add": {
+                "system": plan_reviser.PLAN_ANNOTATION_ADD_SYSTEM,
+                "user_template": plan_reviser.PLAN_ANNOTATION_ADD_USER,
+            },
+            "plan_parser": {
+                "system": _plan_parser_mod.PLAN_PARSER_SYSTEM,
+                "user_template": _plan_parser_mod.PLAN_PARSER_USER,
+            },
+            "case_generator": {
+                "system": case_generation.CASE_GENERATION_SYSTEM,
+                "user_template": case_generation.CASE_GENERATION_USER,
+            },
+            "single_skeleton_generator": {
+                "system": skeleton_generation.SINGLE_SKELETON_SYSTEM,
+                "user_template": skeleton_generation.SINGLE_SKELETON_USER,
+            },
+            "biz_skeleton_generator": {
+                "system": skeleton_generation.BIZ_SKELETON_SYSTEM,
+                "user_template": skeleton_generation.BIZ_SKELETON_USER,
+            },
+            "doc_parser": {
+                "system": doc_parser.DOC_PARSER_SYSTEM,
+                "user_template": doc_parser.DOC_PARSER_USER,
+            },
+            "case_translator": {
+                "system": translator.TRANSLATOR_SYSTEM,
+                "user_template": translator.TRANSLATOR_USER,
+            },
+        }
+
     def get_system(self, agent_name: str) -> str:
-        """Return the system prompt for *agent_name*.
+        """返回 agent_name 的 system prompt。
 
-        The global ``_base_react_rules`` YAML anchor is automatically
-        appended to every system prompt.
+        Return the system prompt for *agent_name*.
         """
         entry = self._data.get(agent_name)
         if entry is None:
             logger.warning("No prompt config for agent '%s'", agent_name)
             return ""
-        system = entry.get("system", "")
-        if self._base_react_rules:
-            rules_text = yaml.dump(self._base_react_rules, allow_unicode=True, default_flow_style=False)
-            system += "\n\n## 行为约束\n" + rules_text
-        return system
+        return entry.get("system", "")
 
     def get_user_template(self, agent_name: str) -> str:
+        """返回 agent_name 的 user_template。
+
+        Return the user message template for *agent_name*.
+        """
         entry = self._data.get(agent_name)
         if entry is None:
             return ""
         return entry.get("user_template", "")
 
-    def get_termination(self, agent_name: str) -> Dict[str, Any]:
-        """Return termination config merged with defaults.
-
-        Per-agent values override defaults; missing keys fall back to
-        ``_default_termination``.
-        """
-        entry = self._data.get(agent_name)
-        per_agent = (entry or {}).get("termination") or {}
-        merged = dict(self._default_termination)
-        merged.update(per_agent)
-        return merged
-
-    # ------------------------------------------------------------------
-    # Convenience
-    # ------------------------------------------------------------------
     def build_user_message(self, agent_name: str, **kwargs) -> str:
-        """Render the user_template for *agent_name* with the given kwargs."""
+        """渲染 user_template。Render the user_template for *agent_name* with kwargs."""
         template = self.get_user_template(agent_name)
         return render_prompt(template, **kwargs)
 
     def list_agents(self):
-        """Return names of all configured agents (excluding internal keys)."""
-        return [k for k in self._data if not k.startswith("_")]
+        """列出所有已配置的 agent 名称。Return names of all configured agents."""
+        return list(self._data.keys())

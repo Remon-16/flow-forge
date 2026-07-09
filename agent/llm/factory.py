@@ -36,6 +36,7 @@ def create_chat_model(settings: Settings, **overrides) -> BaseChatModel:
             "api_key": settings.llm_api_key,
             "temperature": temperature,
             "max_tokens": max_tokens,
+            "request_timeout": settings.llm_request_timeout,
         }
         if settings.llm_base_url:
             chat_kwargs["base_url"] = settings.llm_base_url

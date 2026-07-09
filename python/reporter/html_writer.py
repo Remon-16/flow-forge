@@ -4,6 +4,8 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List
 
+from i18n import _, get_lang
+
 logger = logging.getLogger(__name__)
 
 
@@ -72,8 +74,9 @@ class HTMLReportWriter:
         s_passed: int, s_failed: int, s_rate: float,
         b_passed: int, b_failed: int, b_rate: float,
     ) -> None:
+        lang_code = get_lang().replace("_", "-")
         parts.append("<!DOCTYPE html>")
-        parts.append("<html lang=\"zh-CN\">")
+        parts.append(f"<html lang=\"{lang_code}\">")
         parts.append("<head>")
         parts.append("<meta charset=\"UTF-8\">")
         parts.append(f"<title>{self.report_name}</title>")
@@ -83,11 +86,11 @@ class HTMLReportWriter:
         parts.append("</head>")
         parts.append("<body>")
 
-        parts.append(f"<h1>{self.report_name} 接口测试报告</h1>")
+        parts.append(f"<h1>{_('report.title_suffix', name=self.report_name)}</h1>")
         parts.append("<div class=\"summary\">")
-        parts.append(f"<p><strong>环境:</strong> {self.env_name}</p>")
-        parts.append(f"<p><strong>测试时间:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>")
-        parts.append(f"<p><strong>总用例数:</strong> {total}</p>")
+        parts.append(f"<p><strong>{_('report.environment')}:</strong> {self.env_name}</p>")
+        parts.append(f"<p><strong>{_('report.test_time')}:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>")
+        parts.append(f"<p><strong>{_('report.total_cases')}:</strong> {total}</p>")
         parts.append("</div>")
 
     def _write_single_section(
@@ -98,11 +101,11 @@ class HTMLReportWriter:
         parts.append("<div class=\"section\">")
         parts.append(
             "<div class=\"section-header\" onclick=\"toggle('" + coll_id + "')\">"
-            "▼ 单接口用例数"
-            f" <span class=\"pass\">通过 {passed}</span>"
-            f" <span class=\"fail\">失败 {failed}</span>"
-            f" 通过率 {rate:.1f}%"
-            "</div>"
+            + _('report.single_section')
+            + f" <span class=\"pass\">{_('report.passed')} {passed}</span>"
+            + f" <span class=\"fail\">{_('report.failed')} {failed}</span>"
+            + f" {_('report.pass_rate')} {rate:.1f}%"
+            + "</div>"
         )
         parts.append(f"<div class=\"section-body\" id=\"{coll_id}\">")
 
@@ -139,6 +142,7 @@ class HTMLReportWriter:
             parts.append("</div></div>")
             return
 
+        self._write_processor_results(parts, result)
         self._write_json_block(parts, "Request Headers", result.get("request_headers"))
         self._write_json_block(parts, "Request Body", result.get("request_body"))
         self._write_json_block(parts, "Response Body", result.get("response_body"))
@@ -154,11 +158,11 @@ class HTMLReportWriter:
         parts.append("<div class=\"section\">")
         parts.append(
             "<div class=\"section-header\" onclick=\"toggle('" + coll_id + "')\">"
-            "▼ 业务用例数"
-            f" <span class=\"pass\">通过 {passed}</span>"
-            f" <span class=\"fail\">失败 {failed}</span>"
-            f" 通过率 {rate:.1f}%"
-            "</div>"
+            + _('report.biz_section')
+            + f" <span class=\"pass\">{_('report.passed')} {passed}</span>"
+            + f" <span class=\"fail\">{_('report.failed')} {failed}</span>"
+            + f" {_('report.pass_rate')} {rate:.1f}%"
+            + "</div>"
         )
         parts.append(f"<div class=\"section-body\" id=\"{coll_id}\">")
 
@@ -181,14 +185,14 @@ class HTMLReportWriter:
         parts.append("<div class=\"case-detail\">")
 
         if parse_error:
-            parts.append(f"<p class=\"error-msg\">解析业务链路用例解析异常，异常参数为: {self._h(parse_error)}</p>")
-            parts.append("<p><strong>业务链路用例执行了 0 条</strong></p>")
+            parts.append(f"<p class=\"error-msg\">{_('report.parse_error', error=self._h(parse_error))}</p>")
+            parts.append(f"<p><strong>{_('report.biz_zero_steps')}</strong></p>")
             parts.append("</div></div>")
             return
 
         flow_chain = result.get("flow_chain", "")
         if flow_chain:
-            parts.append(f"<p><strong>执行链路:</strong> {self._h(flow_chain)}</p>")
+            parts.append(f"<p><strong>{_('report.exec_chain')}:</strong> {self._h(flow_chain)}</p>")
 
         steps = result.get("steps", [])
         if not steps:
@@ -221,6 +225,7 @@ class HTMLReportWriter:
                 parts.append("</div></div>")
                 continue
 
+            self._write_processor_results(parts, step)
             self._write_json_block(parts, "Request Headers", step.get("request_headers"))
             self._write_json_block(parts, "Request Body", step.get("request_body"))
             self._write_json_block(parts, "Response Body", step.get("response_body"))
@@ -229,6 +234,21 @@ class HTMLReportWriter:
             parts.append("</div></div>")
 
         parts.append("</div></div>")
+
+    @staticmethod
+    def _write_processor_results(parts: List[str], result: Dict[str, Any]) -> None:
+        """Render preprocessor / postprocessor execution results."""
+        for label, key in [("PreProcessor", "preprocessor_results"),
+                           ("PostProcessor", "postprocessor_results")]:
+            for pr in result.get(key) or []:
+                status = pr.get("status", "")
+                name = pr.get("name", "unknown")
+                error = pr.get("error", "")
+                if error or status != "ok":
+                    parts.append(
+                        f"<p class=\"error-msg\"><strong>{label} [{name}]:</strong> "
+                        f"{HTMLReportWriter._h(error or status)}</p>"
+                    )
 
     def _write_json_block(self, parts: List[str], title: str, data: Any) -> None:
         parts.append(f"<p><strong>{title}:</strong></p>")
@@ -241,8 +261,11 @@ class HTMLReportWriter:
     def _write_assertions(self, parts: List[str], assertions: List[Dict]) -> None:
         if not assertions:
             return
-        parts.append("<p><strong>断言结果:</strong></p>")
-        parts.append("<table><tr><th>Field</th><th>Expected</th><th>Actual</th><th>Result</th></tr>")
+        parts.append(f"<p><strong>{_('report.assertion_results')}:</strong></p>")
+        parts.append(
+            f"<table><tr><th>{_('report.field')}</th><th>{_('report.expected')}</th>"
+            f"<th>{_('report.actual')}</th><th>{_('report.result')}</th></tr>"
+        )
         for a in assertions:
             a_class = "assert-pass" if a["passed"] else "assert-fail"
             parts.append(

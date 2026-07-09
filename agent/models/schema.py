@@ -18,6 +18,8 @@ class InterfaceDef:
     status_code: int = 200
     assert_dict: Dict[str, Any] = field(default_factory=dict)
     assert_rules: List[str] = field(default_factory=list)
+    preprocessors: List[Dict[str, Any]] = field(default_factory=list)
+    postprocessors: List[Dict[str, Any]] = field(default_factory=list)
     remark: str = ""
 
 
@@ -37,6 +39,8 @@ class SingleTestCase:
     status_code: int = 200
     assert_dict: Dict[str, Any] = field(default_factory=dict)
     assert_rules: List[str] = field(default_factory=list)
+    preprocessors: List[Dict[str, Any]] = field(default_factory=list)
+    postprocessors: List[Dict[str, Any]] = field(default_factory=list)
     remark: str = ""
 
 
@@ -46,7 +50,7 @@ class BizStep:
 
     step_id: str
     relevance_id: str
-    trans: str = ""
+    inherit: Dict[str, str] = field(default_factory=dict)
     api_name: str = ""
     app_name: str = ""
     method: str = "GET"
@@ -56,6 +60,8 @@ class BizStep:
     status_code: int = 200
     assert_dict: Dict[str, Any] = field(default_factory=dict)
     assert_rules: List[str] = field(default_factory=list)
+    preprocessors: List[Dict[str, Any]] = field(default_factory=list)
+    postprocessors: List[Dict[str, Any]] = field(default_factory=list)
     tag: str = "P1"
     remark: str = ""
 

@@ -21,12 +21,15 @@ class SkillRegistry:
       - ``target_agents`` — which agents should receive this skill
     """
 
-    def __init__(self, skills_dir: str = ""):
+    def __init__(self, skills_dir: str = "", flat: bool = False):
         if not skills_dir:
             skills_dir = str(Path(__file__).resolve().parent)
         self._skills: Dict[str, Skill] = {}
-        self._load_all(Path(skills_dir) / "builtin")
-        self._load_all(Path(skills_dir) / "custom")
+        if flat:
+            self._load_all(Path(skills_dir))
+        else:
+            self._load_all(Path(skills_dir) / "builtin")
+            self._load_all(Path(skills_dir) / "custom")
 
     # ------------------------------------------------------------------
     # Load

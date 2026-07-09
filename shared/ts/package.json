@@ -1,0 +1,8 @@
+{
+  "name": "flow-forge-schemas",
+  "version": "1.0.0",
+  "description": "公共测试用例 Schema 定义 — 跨 python/agent/studio 共享。 / Shared test case schema definitions.",
+  "main": "index.ts",
+  "types": "index.ts",
+  "private": true
+}

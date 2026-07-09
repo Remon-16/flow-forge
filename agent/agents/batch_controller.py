@@ -1,554 +1,579 @@
-"""BatchController: orchestrates batch-by-batch test case generation.
+"""BatchController — 基于插件的测试用例分批生成编排器。
 
-At each iteration the controller:
-1. Reads available interfaces and already-generated cases from disk
-2. Uses an LLM call to decide which interfaces to cover in the next batch
-3. Calls CaseGenerator for that batch
-4. Validates (if enabled) and saves to YAML
-5. Loops until all test points are covered
+Plugin-based test case generation orchestrator.
+流程: 骨架生成 → URL校验 → 插件执行（数据填充/断言生成/用户插件） → 输出
 """
 
-import json
 import logging
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
-from agents.base import BaseAgent, ConvergenceError
-from config.settings import Settings
-from models.schema import TestPlan
+from plugins.base import CaseAttributeGenerator
+
+from config.settings import Settings, get_strategy, get_url_failure_action
+from flow_forge_schemas import URL_NOT_EXIST_PREFIX
+from i18n import _
 from writers.yaml_writer import YamlWriter
 
 logger = logging.getLogger(__name__)
 
-_BATCH_DECISION_SYSTEM = (
-    "你是一个测试用例分批生成决策器。你的任务是检查当前生成进度，决定下一批需要生成哪些用例。"
-    "每批生成的用例数量不应超过给定的 batch_size。"
-    "优先覆盖尚未生成用例的接口。如果所有测试点都已覆盖，返回 done。"
-    "只输出 JSON，不要输出其他内容。"
-)
-
-_BATCH_DECISION_USER = (
-    "## 测试计划中的测试点\n"
-    "{test_points_summary}\n\n"
-    "## 已保存的接口定义 (interfaces/)\n"
-    "{saved_interfaces}\n\n"
-    "## 已生成的单接口用例 (single_cases/)\n"
-    "{generated_single}\n\n"
-    "## 已生成的业务链路用例 (biz_flows/)\n"
-    "{generated_biz}\n\n"
-    "## 当前批次限制\n"
-    "batch_size: {batch_size}\n"
-    "待生成类型: {batch_type}\n\n"
-    "请决定本批要生成的内容。输出 JSON 格式：\n"
-    '{{"action": "generate"|"done", '
-    '"batch_type": "single"|"biz", '
-    '"interface_ids": ["id1", "id2"], '
-    '"test_point_ids": ["tp1"], '
-    '"reason": "决策理由"}}'
-)
+_SKELETON_PHASE = "skeletons_generated"
 
 
-class BatchController(BaseAgent):
-    """Orchestrates batch-by-batch test case generation.
+class BatchController:
+    """基于插件的测试用例分批生成编排器。
 
-    Reads from / writes to the YAML output directory. Uses LLM calls
-    at each iteration to decide which interfaces / test points to
-    include in the next batch.
+    Plugin-based test case generation orchestrator.
+    骨架生成后按顺序遍历插件列表，每个插件处理 single/biz 用例。
     """
 
     def __init__(self, settings: Settings):
-        super().__init__(
-            api_key=settings.llm_api_key,
-            model=settings.llm_model,
-            temperature=0.3,
-            max_tokens=settings.llm_max_tokens,
-            max_retries=settings.max_retries,
-            max_steps=settings.max_steps,
-            base_url=settings.llm_base_url,
-        )
-        self._batch_size = settings.batch_size
+        self._batch_size = settings.plugin_batch_size
         self._enable_validation = settings.enable_validation
         self._max_validation_retries = settings.max_validation_retries
         self._max_steps_no_progress = settings.max_steps_no_progress
+        self._url_correction_max_retries = getattr(
+            settings, "url_correction_max_retries", 3
+        )
+        self._consecutive_failure_limit = getattr(
+            settings, "consecutive_batch_failure_limit", 3
+        )
+        self._rate_limit_delay = getattr(settings, "llm_rate_limit_delay", 0.0)
+        # 校验规则列表 / Validation rules list
+        self._validation_rules = getattr(settings, "validation_rules", [])
+        self._url_failure_action = get_url_failure_action(self._validation_rules)
         self._reference_dir = ""
+        self._memory_dir = ""
 
     # ------------------------------------------------------------------
-    # Public entry point
+    # 公开入口 / Public entry point
     # ------------------------------------------------------------------
 
     def run(
         self,
-        plan: TestPlan,
+        plan,
         interfaces: List[Dict],
         output_dir: str,
-        case_generator: Any,
-        validator: Any = None,
+        single_skel_gen: Any,
+        biz_skel_gen: Any,
+        plugins: List[CaseAttributeGenerator],
         user_guidance: str = "",
         reference_dir: str = "",
+        api_doc_text: str = "",
+        api_summary: Optional[List[Dict]] = None,
+        resume: bool = False,
+        memory_dir: str = "",
+        resume_overwrite: bool = False,
+        case_type: str = "both",
     ) -> Dict[str, Any]:
-        """Run batch generation for both single cases and biz flows.
+        """执行完整的用例生成流水线 / Run the full generation pipeline.
 
-        Args:
-            reference_dir: Optional reference directory for incremental
-                updates. Files already on disk are never overwritten —
-                versioned suffixes (_v2, _v3) are appended automatically.
-
-        Returns dict with:
-          - single_cases: list of generated single case dicts
-          - biz_flows: list of generated biz flow dicts
-          - failures: list of cases that failed validation after all retries
+        返回: {"single_cases": [...], "biz_flows": [...], "failures": [...]}
         """
+        # === 初始化 / Setup ===
         self._reference_dir = reference_dir
-
-        all_single: List[Dict] = []
-        all_biz: List[Dict] = []
+        self._memory_dir = memory_dir
         all_failures: List[Dict] = []
 
-        # ---- Phase 1: Single cases ----
-        logger.info("BatchController: starting single-case generation")
-        single_result = self._generate_phase(
-            plan=plan,
-            interfaces=interfaces,
-            output_dir=output_dir,
-            batch_type="single",
-            case_generator=case_generator,
-            validator=validator,
-            user_guidance=user_guidance,
-        )
-        all_single = single_result["cases"]
-        all_failures.extend(single_result["failures"])
+        from graph.checkpoint import CheckpointManager as _CkptMgr
+        ckpt_mgr = _CkptMgr(memory_dir) if memory_dir else None
 
-        # ---- Phase 2: Biz flows ----
-        if plan.biz_flow_scenarios:
-            case_generator.reset_steps()
-            self.reset_steps()
-            logger.info("BatchController: starting biz-flow generation")
-            biz_result = self._generate_phase(
-                plan=plan,
-                interfaces=interfaces,
-                output_dir=output_dir,
-                batch_type="biz",
-                case_generator=case_generator,
-                validator=validator,
-                user_guidance=user_guidance,
+        # 构建阶段列表：骨架 → 每个插件一个阶段
+        # Build phase list: skeleton → one phase per plugin
+        plugin_names = [p.declaration.plugin_name for p in plugins]
+        phases = [_SKELETON_PHASE] + [f"plugin_{n}" for n in plugin_names]
+        self._phases = phases
+
+        # === 断点续跑：加载检查点并恢复状态 / Resume: load checkpoint and restore state ===
+        restart_phase = _SKELETON_PHASE
+        single_cases: List[Dict] = []
+        biz_cases: List[Dict] = []
+
+        if resume and ckpt_mgr and ckpt_mgr.exists():
+            meta = ckpt_mgr.load_meta()
+            if meta:
+                restart_phase, single_cases, biz_cases, all_failures = \
+                    self._restore_from_checkpoint(ckpt_mgr, meta)
+            else:
+                logger.warning(_("batch_controller.resume_invalid"))
+        elif resume:
+            logger.warning(_("batch_controller.resume_none"))
+
+        # === 步骤1：骨架生成 + URL校验 + 纠正 / Step 1: Skeleton generation + URL check + correction ===
+        if restart_phase == _SKELETON_PHASE:
+            logger.info("=" * 60)
+            logger.info(_("batch_controller.step_skeleton"))
+            logger.info("=" * 60)
+            single_cases, biz_cases, all_failures = self._run_skeleton_phase(
+                plan, interfaces, api_doc_text, api_summary,
+                single_skel_gen, biz_skel_gen, user_guidance, case_type,
+                output_dir, all_failures, ckpt_mgr, phases)
+        else:
+            logger.info(_("batch_controller.step_skeleton_skipped"))
+
+        # === 步骤2-N：插件执行（数据填充/断言生成/用户插件）/ Step 2-N: Plugin execution ===
+        single_cases, biz_cases, all_failures = self._run_plugin_phase(
+            plugins, restart_phase, single_cases, biz_cases, all_failures,
+            interfaces, api_summary, api_doc_text, ckpt_mgr, output_dir, phases)
+
+        # === 最终步骤：URL 兜底校验 + YAML 输出 / Final: URL safety-net check + YAML output ===
+        return self._finalize_and_output(
+            single_cases, biz_cases, all_failures, api_doc_text, output_dir)
+
+    # ------------------------------------------------------------------
+    # 步骤实现 / Step implementations
+    # ------------------------------------------------------------------
+
+    def _run_skeleton_phase(
+        self,
+        plan,
+        interfaces: List[Dict],
+        api_doc_text: str,
+        api_summary: Optional[List[Dict]],
+        single_skel_gen: Any,
+        biz_skel_gen: Any,
+        user_guidance: str,
+        case_type: str,
+        output_dir: str,
+        all_failures: List[Dict],
+        ckpt_mgr: Any,
+        phases: List[str],
+    ) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+        """步骤1：骨架生成 + URL 校验 + 纠正 / Step 1: Skeleton generation + URL check + correction.
+
+        Returns (single_cases, biz_cases, all_failures).
+        """
+        # 1a. 单接口用例骨架 / Single case skeletons
+        if case_type in ("both", "single"):
+            logger.info(_("batch_controller.skeleton_generating_single"))
+            single_skels = single_skel_gen.generate(
+                plan, interfaces, api_summary, user_guidance
             )
-            all_biz = biz_result["cases"]
-            all_failures.extend(biz_result["failures"])
+            logger.info(_("batch_controller.skeleton_generated_single", count=len(single_skels)))
+        else:
+            logger.info(_("batch_controller.skeleton_skip_single_case_type", case_type=case_type))
+            single_skels = []
 
-        # Write failure log if any
+        # 1b. 业务链路骨架 / Biz flow skeletons
+        if case_type in ("both", "biz"):
+            logger.info(_("batch_controller.skeleton_generating_biz"))
+            biz_skels = []
+            if hasattr(plan, "biz_flow_scenarios") and plan.biz_flow_scenarios:
+                biz_skels = biz_skel_gen.generate(
+                    plan, interfaces, api_summary, user_guidance
+                )
+                logger.info(_("batch_controller.skeleton_generated_biz", count=len(biz_skels)))
+            else:
+                logger.info(_("batch_controller.skeleton_skip_biz"))
+        else:
+            logger.info(_("batch_controller.skeleton_skip_biz_case_type", case_type=case_type))
+            biz_skels = []
+
+        # 1c. URL 校验 + 纠正 / URL check + correction
+        single_cases, single_failed = self._url_check_and_correct(
+            single_skels, interfaces, api_doc_text, api_summary,
+            single_skel_gen, "single"
+        )
+        biz_cases, biz_failed = self._url_check_and_correct(
+            biz_skels, interfaces, api_doc_text, api_summary,
+            biz_skel_gen, "biz"
+        )
+
+        # 根据 url_failure_action 决定丢弃或保留 / Discard or keep based on url_failure_action
+        if self._url_failure_action == "keep":
+            single_cases, biz_cases = self._handle_url_failures_keep(
+                single_failed, biz_failed, single_cases, biz_cases)
+        else:
+            all_failures = self._handle_url_failures_discard(
+                single_failed, biz_failed, output_dir, all_failures)
+
+        self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE, single_cases, biz_cases,
+                              all_failures, output_dir, phases=phases)
+        return single_cases, biz_cases, all_failures
+
+    def _run_plugin_phase(
+        self,
+        plugins: List[CaseAttributeGenerator],
+        restart_phase: str,
+        single_cases: List[Dict],
+        biz_cases: List[Dict],
+        all_failures: List[Dict],
+        interfaces: List[Dict],
+        api_summary: Optional[List[Dict]],
+        api_doc_text: str,
+        ckpt_mgr: Any,
+        output_dir: str,
+        phases: List[str],
+    ) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+        """步骤2-N：遍历插件逐个执行 / Step 2-N: Iterate plugins and execute each.
+
+        Returns (single_cases, biz_cases, all_failures).
+        """
+        def _idx(p: str) -> int:
+            try:
+                return phases.index(p)
+            except ValueError:
+                return -1
+
+        for plugin in plugins:
+            phase_name = f"plugin_{plugin.declaration.plugin_name}"
+            if _idx(restart_phase) > _idx(phase_name):
+                logger.info(
+                    _("batch_controller.plugin_skipped",
+                      name=plugin.declaration.plugin_name, phase=phase_name),
+                )
+                continue
+
+            decl = plugin.declaration
+            logger.info("=" * 60)
+            logger.info(
+                _("batch_controller.plugin_header",
+                  name=decl.plugin_name, single=decl.applies_to_single, biz=decl.applies_to_biz),
+            )
+            logger.info("=" * 60)
+
+            if decl.applies_to_single and single_cases:
+                single_cases = self._apply_plugin(
+                    plugin, single_cases, interfaces, api_summary, api_doc_text
+                )
+            if decl.applies_to_biz and biz_cases:
+                biz_cases = self._apply_plugin(
+                    plugin, biz_cases, interfaces, api_summary, api_doc_text
+                )
+
+            self._save_checkpoint(ckpt_mgr, phase_name, single_cases, biz_cases,
+                                  all_failures, output_dir, phases=phases)
+
+        return single_cases, biz_cases, all_failures
+
+    # ------------------------------------------------------------------
+    # URL 校验 + 纠正 / URL check + correction
+    # ------------------------------------------------------------------
+
+    def _url_check_and_correct(
+        self,
+        skeletons: List[Dict],
+        interfaces: List[Dict],
+        api_doc_text: str,
+        api_summary: Optional[List[Dict]],
+        agent: Any,
+        batch_type: str,
+    ) -> Tuple[List[Dict], List[Dict]]:
+        """校验骨架 URL 并尝试 LLM 修正 / Validate skeleton URLs and retry correction via LLM.
+
+        Returns (valid_cases, failed_cases).
+        """
+        # 查询 URL 校验策略 / Query URL check strategy
+        url_strategy = get_strategy(self._validation_rules, "url_check")
+
+        # skip 策略：完全跳过 URL 校验 / Skip strategy: bypass entirely
+        if url_strategy == "skip":
+            logger.info(_("batch_controller.url_check_skipped",
+                        count=len(skeletons), type=batch_type))
+            return skeletons, []
+
+        # 无 API 文档文本时跳过 / Skip when no API doc text
+        if not api_doc_text:
+            return skeletons, []
+
+        max_retries = self._url_correction_max_retries
+        current = list(skeletons)
+
+        for retry in range(max_retries + 1):
+            bad_cases = []
+            for case in current:
+                urls = []
+                if batch_type == "single":
+                    urls = [str(case.get("url", "")).strip()]
+                else:
+                    urls = [str(s.get("url", "")).strip() for s in case.get("steps", [])]
+                for url in urls:
+                    if url and url not in api_doc_text:
+                        bad_cases.append(case)
+                        break
+
+            if not bad_cases:
+                logger.info(_("batch_controller.url_passed", count=len(current), type=batch_type))
+                return current, []
+
+            if retry >= max_retries:
+                # fail 策略：抛异常终止 / Fail strategy: raise error
+                if url_strategy == "fail":
+                    raise ValueError(
+                        f"URL check failed for {len(bad_cases)} {batch_type} cases "
+                        f"after {max_retries} retries"
+                    )
+                # warn 策略：拆分为 valid/failed，failed 添加前缀
+                # Warn strategy: split valid/failed, prefix failed URLs
+                bad_ids = set()
+                for c in bad_cases:
+                    key = c.get("test_id") if batch_type == "single" else c.get("sheet_name", "")
+                    bad_ids.add(key)
+                valid, failed = [], []
+                for c in current:
+                    key = c.get("test_id") if batch_type == "single" else c.get("sheet_name", "")
+                    (failed if key in bad_ids else valid).append(c)
+                logger.warning(
+                    _("batch_controller.url_exhausted",
+                      count=len(failed), type=batch_type, retries=max_retries),
+                )
+                return valid, failed
+
+            logger.info(
+                _("batch_controller.url_correction_retry",
+                  retry=retry + 1, max=max_retries, count=len(bad_cases), type=batch_type),
+            )
+
+            try:
+                corrected = agent.correct_urls(bad_cases, interfaces, api_doc_text, api_summary)
+                if corrected:
+                    key_field = "test_id" if batch_type == "single" else "sheet_name"
+                    corrected_map = {c.get(key_field, ""): c for c in corrected}
+                    current = [corrected_map.get(c.get(key_field, ""), c) for c in current]
+            except Exception as e:
+                logger.warning(_("batch_controller.url_correction_llm_error", error=str(e)))
+                if retry >= max_retries - 1:
+                    return self._split_good_bad(current, bad_cases, batch_type)
+
+        return current, []
+
+    @staticmethod
+    def _split_good_bad(
+        skeletons: List[Dict], bad_cases: List[Dict], batch_type: str
+    ) -> Tuple[List[Dict], List[Dict]]:
+        key_field = "test_id" if batch_type == "single" else "sheet_name"
+        bad_ids = {c.get(key_field, "") for c in bad_cases}
+        valid, failed = [], []
+        for c in skeletons:
+            (failed if c.get(key_field, "") in bad_ids else valid).append(c)
+        return valid, failed
+
+    @staticmethod
+    def _final_url_check(cases: List[Dict], api_doc_text: str) -> None:
+        """最终兜底 URL 校验——写入输出前的最后检查，跳过已有前缀的 URL。
+        Last-resort URL check before writing output. Skips URLs that already have
+        the URL_NOT_EXIST_PREFIX to avoid double-prefixing.
+        """
+        for case in cases:
+            if isinstance(case.get("steps"), list):
+                for step in case["steps"]:
+                    url = str(step.get("url", "")).strip()
+                    if url and url not in api_doc_text and not url.startswith(URL_NOT_EXIST_PREFIX):
+                        step["url"] = f"{URL_NOT_EXIST_PREFIX}{url}"
+            else:
+                url = str(case.get("url", "")).strip()
+                if url and url not in api_doc_text and not url.startswith(URL_NOT_EXIST_PREFIX):
+                    case["url"] = f"{URL_NOT_EXIST_PREFIX}{url}"
+
+    def _handle_url_failures_keep(
+        self,
+        single_failed: List[Dict],
+        biz_failed: List[Dict],
+        single_cases: List[Dict],
+        biz_cases: List[Dict],
+    ) -> Tuple[List[Dict], List[Dict]]:
+        """保留 URL 校验失败用例：添加前缀标记并合并回有效列表。
+        Keep URL-check-failed cases: add prefix marker and merge back to valid lists.
+        """
+        for case in (single_failed or []):
+            case["url"] = f"{URL_NOT_EXIST_PREFIX}{case.get('url', '')}"
+        for case in (biz_failed or []):
+            for step in case.get("steps", []):
+                step["url"] = f"{URL_NOT_EXIST_PREFIX}{step.get('url', '')}"
+        if single_failed:
+            logger.info(_("batch_controller.url_failure_keep",
+                          count=len(single_failed), type="single"))
+            single_cases.extend(single_failed)
+        if biz_failed:
+            logger.info(_("batch_controller.url_failure_keep",
+                          count=len(biz_failed), type="biz"))
+            biz_cases.extend(biz_failed)
+        return single_cases, biz_cases
+
+    def _handle_url_failures_discard(
+        self,
+        single_failed: List[Dict],
+        biz_failed: List[Dict],
+        output_dir: str,
+        all_failures: List[Dict],
+    ) -> List[Dict]:
+        """丢弃 URL 校验失败用例：添加前缀标记，写入 failures.yaml。
+        Discard URL-check-failed cases: add prefix marker, write to failures.yaml.
+        """
+        for case in (single_failed or []):
+            case["url"] = f"{URL_NOT_EXIST_PREFIX}{case.get('url', '')}"
+            YamlWriter.write_single_case(case, output_dir)
+            all_failures.append({"case": case, "reason": "URL correction exhausted"})
+        for case in (biz_failed or []):
+            for step in case.get("steps", []):
+                step["url"] = f"{URL_NOT_EXIST_PREFIX}{step.get('url', '')}"
+            YamlWriter.write_biz_flow(case, output_dir)
+            all_failures.append({"case": case, "reason": "URL correction exhausted"})
+        return all_failures
+
+    # ------------------------------------------------------------------
+    # 插件执行 / Plugin execution
+    # ------------------------------------------------------------------
+
+    def _apply_plugin(
+        self,
+        plugin: CaseAttributeGenerator,
+        cases: List[Dict],
+        interfaces: List[Dict],
+        api_summary: List[Dict],
+        api_doc_text: str,
+    ) -> List[Dict]:
+        """对一批用例执行单个插件，含分批和重试 / Run a plugin across all cases with batching and retry."""
+        decl = plugin.declaration
+        batches = self._split_batches(cases)
+        results: List[Dict] = []
+        consecutive_failures = 0
+
+        for i, batch in enumerate(batches):
+            batch_ok = False
+            for attempt in range(decl.max_retries):
+                try:
+                    updated = plugin.generate(batch, interfaces, api_summary, api_doc_text)
+                    results.extend(updated)
+                    batch_ok = True
+                    break
+                except Exception:
+                    if attempt + 1 >= decl.max_retries:
+                        if decl.error_strategy == "fail":
+                            raise
+                        elif decl.error_strategy == "warn":
+                            logger.warning(
+                                _("batch_controller.plugin_failed_after_retries",
+                                  name=decl.plugin_name, retries=decl.max_retries),
+                            )
+                            results.extend(batch)
+                        else:
+                            results.extend(batch)
+                    else:
+                        logger.info(_("batch_controller.plugin_retry",
+                                    name=decl.plugin_name, attempt=attempt + 1, max=decl.max_retries))
+
+            if batch_ok:
+                consecutive_failures = 0
+            else:
+                consecutive_failures += 1
+                if self._check_consecutive_failures(consecutive_failures, f"plugin '{decl.plugin_name}'"):
+                    break
+
+            self._maybe_wait_between_batches(i, len(batches))
+
+        logger.info(_("batch_controller.plugin_result", name=decl.plugin_name, count=len(results)))
+        return results
+
+    # ------------------------------------------------------------------
+    # 辅助方法 / Helpers
+    # ------------------------------------------------------------------
+
+    def _restore_from_checkpoint(
+        self,
+        ckpt_mgr: Any,
+        meta: Dict,
+    ) -> Tuple[str, List[Dict], List[Dict], List[Dict]]:
+        """从有效检查点恢复设置和用例数据 / Restore settings and case data from valid checkpoint.
+
+        Returns (restart_phase, single_cases, biz_cases, all_failures).
+        """
+        from graph.checkpoint import CheckpointManager as _CkptMgr
+
+        restart_phase = _CkptMgr.get_restart_phase(meta)
+        logger.info(_("batch_controller.resume_phase", phase=restart_phase))
+
+        ckpt_settings = meta.get("settings", {})
+        if ckpt_settings:
+            self._batch_size = ckpt_settings.get("batch_size", self._batch_size)
+            self._enable_validation = ckpt_settings.get(
+                "enable_validation", self._enable_validation)
+            self._max_validation_retries = ckpt_settings.get(
+                "max_validation_retries", self._max_validation_retries)
+            self._url_correction_max_retries = ckpt_settings.get(
+                "url_correction_max_retries", self._url_correction_max_retries)
+
+        data = ckpt_mgr.load_data()
+        single_cases: List[Dict] = data.get("single_cases", []) if data else []
+        biz_cases: List[Dict] = data.get("biz_cases", []) if data else []
+        all_failures: List[Dict] = data.get("failures", []) if data else []
+
+        if data:
+            logger.info(_("batch_controller.resume_restored",
+                          single=len(single_cases), biz=len(biz_cases)))
+
+        return restart_phase, single_cases, biz_cases, all_failures
+
+    def _finalize_and_output(
+        self,
+        single_cases: List[Dict],
+        biz_cases: List[Dict],
+        all_failures: List[Dict],
+        api_doc_text: str,
+        output_dir: str,
+    ) -> Dict[str, Any]:
+        """最终 URL 兜底校验 + YAML 输出 / Final URL safety-net check + YAML output."""
+        if api_doc_text:
+            self._final_url_check(single_cases, api_doc_text)
+            self._final_url_check(biz_cases, api_doc_text)
+
+        for case in single_cases:
+            YamlWriter.write_single_case(case, output_dir)
+        for case in biz_cases:
+            YamlWriter.write_biz_flow(case, output_dir)
+
         if all_failures:
+            logger.warning(_("batch_controller.url_failures", count=len(all_failures)))
             YamlWriter.write_failures(all_failures, output_dir)
-            logger.warning("BatchController: %d cases failed after all retries", len(all_failures))
 
         return {
-            "single_cases": all_single,
-            "biz_flows": all_biz,
+            "single_cases": single_cases,
+            "biz_flows": biz_cases,
             "failures": all_failures,
         }
 
-    # ------------------------------------------------------------------
-    # Phase runner
-    # ------------------------------------------------------------------
-
-    def _generate_phase(
-        self,
-        plan: TestPlan,
-        interfaces: List[Dict],
-        output_dir: str,
-        batch_type: str,
-        case_generator: Any,
-        validator: Any,
-        user_guidance: str = "",
-    ) -> Dict[str, Any]:
-        """Run batch loop for one phase (single or biz)."""
-        all_cases: List[Dict] = []
-        all_failures: List[Dict] = []
-        max_iterations = 50  # safety cap
-
-        # Early exit: check if all interfaces already have cases
-        saved_iface_ids = YamlWriter.list_interface_ids(output_dir)
-        covered_ids = YamlWriter.list_covered_interface_ids(output_dir, batch_type)
-        if saved_iface_ids and all(i in covered_ids for i in saved_iface_ids):
-            logger.info("BatchController [%s]: all %d interfaces already covered, skipping phase",
-                        batch_type, len(saved_iface_ids))
-            existing = (
-                YamlWriter.read_single_cases(output_dir)
-                if batch_type == "single"
-                else YamlWriter.read_biz_flows(output_dir)
-            )
-            return {"cases": existing, "failures": []}
-
-        # Enable progress-based step counting
-        self.set_progress_getter(
-            lambda: self._compute_progress(output_dir, batch_type),
-            max_no_progress=self._max_steps_no_progress,
-        )
-        logger.info(
-            "BatchController [%s]: starting with %d/%d interfaces already covered",
-            batch_type, len(set(covered_ids)), len(saved_iface_ids),
+    def _save_checkpoint(self, ckpt_mgr, phase: str, single: List, biz: List,
+                         failures: List, output_dir: str, phases: List[str] = None):
+        """保存检查点数据和元数据 / Save checkpoint data and metadata."""
+        if not ckpt_mgr:
+            return
+        ckpt_mgr.save_data(phase, {
+            "single_cases": single,
+            "biz_cases": biz,
+            "failures": failures,
+        })
+        ckpt_mgr.save_meta(
+            phase, self._collect_settings(),
+            {"single_cases": len(single), "biz_cases": len(biz)},
+            output_dir,
+            phases=phases,
         )
 
-        for iteration in range(1, max_iterations + 1):
-            # Build progress snapshot
-            saved_iface_ids = YamlWriter.list_interface_ids(output_dir)
-            covered_ids = YamlWriter.list_covered_interface_ids(output_dir, batch_type)
-            test_points_summary = self._summarize_test_points(plan, batch_type)
+    def _check_consecutive_failures(self, consecutive: int, label: str) -> bool:
+        limit = self._consecutive_failure_limit
+        if limit < 0:
+            return False
+        if consecutive >= limit:
+            logger.warning(_("batch_controller.consecutive_failures",
+                            label=label, n=consecutive, limit=limit))
+            return True
+        return False
 
-            # Ask LLM to decide next batch
-            decision = self._decide_batch(
-                test_points_summary=test_points_summary,
-                saved_interface_ids=saved_iface_ids,
-                generated_ids=covered_ids,
-                batch_type=batch_type,
-            )
+    def _maybe_wait_between_batches(self, batch_idx: int, total: int):
+        if batch_idx < total - 1 and self._rate_limit_delay > 0:
+            logger.info(_("batch_controller.wait_between_batches", delay=self._rate_limit_delay))
+            time.sleep(self._rate_limit_delay)
 
-            if decision.get("action") == "done":
-                logger.info("BatchController: %s phase complete after %d iterations",
-                            batch_type, iteration)
-                break
+    def _split_batches(self, items: List) -> List[List]:
+        if self._batch_size == -1:
+            return [items]
+        return [items[i:i + self._batch_size] for i in range(0, len(items), self._batch_size)]
 
-            batch_iface_ids = decision.get("interface_ids", [])
-            batch_tp_ids = decision.get("test_point_ids", [])
-
-            if not batch_iface_ids:
-                logger.info("BatchController: no more interfaces to cover for %s", batch_type)
-                break
-
-            # Load the relevant interfaces
-            batch_ifaces = [
-                i for i in interfaces
-                if str(i.get("test_id", "")) in batch_iface_ids
-            ]
-            if not batch_ifaces:
-                batch_ifaces = self._load_interfaces_from_disk(output_dir, batch_iface_ids)
-
-            if not batch_ifaces:
-                batch_ifaces = self._match_interfaces_fuzzy(
-                    interfaces, batch_iface_ids, output_dir,
-                )
-
-            if not batch_ifaces:
-                remaining_iface_ids = [
-                    i for i in saved_iface_ids if i not in covered_ids
-                ]
-                logger.warning(
-                    "BatchController: no matching interfaces for %s, "
-                    "falling back to %d remaining",
-                    batch_iface_ids, len(remaining_iface_ids),
-                )
-                batch_ifaces = [
-                    i for i in interfaces
-                    if str(i.get("test_id", "")) in remaining_iface_ids
-                ][:self._batch_size]
-
-            if not batch_ifaces:
-                logger.warning(
-                    "BatchController: still no interfaces, skipping batch"
-                )
-                continue
-
-            # Resolve test points
-            batch_tps = self._resolve_test_points(
-                plan, batch_iface_ids, batch_tp_ids, batch_type, batch_ifaces,
-            )
-
-            logger.info(
-                "BatchController [%s] batch %d: %d interfaces, %d test points",
-                batch_type, iteration, len(batch_ifaces), len(batch_tps),
-            )
-
-            # Generate
-            case_generator.reset_steps()
-            try:
-                generated = case_generator.generate_batch(
-                    interfaces=batch_ifaces,
-                    test_points=batch_tps,
-                    batch_type=batch_type,
-                    user_guidance=user_guidance,
-                )
-            except ConvergenceError as e:
-                logger.warning(
-                    "BatchController: convergence reached for %s batch %d: %s",
-                    batch_type, iteration, e,
-                )
-                break
-            except Exception as e:
-                logger.exception(
-                    "BatchController: generation failed for batch %d", iteration,
-                )
-                continue
-
-            if not generated:
-                logger.warning("BatchController: empty generation result for batch %d", iteration)
-                continue
-
-            cases = generated if isinstance(generated, list) else (
-                generated.get("single_cases") or generated.get("biz_flows") or []
-            )
-
-            # Validate
-            if validator and self._enable_validation:
-                valid, invalid, errors = validator.validate(cases, "single" if batch_type == "single" else "biz_flow")
-
-                if invalid:
-                    logger.info("BatchController: %d/%d cases invalid, retrying...",
-                                len(invalid), len(cases))
-                    retry_valid, still_invalid, summary = validator.validate_with_retry(
-                        case_generator=case_generator,
-                        invalid_cases=invalid,
-                        interfaces=batch_ifaces,
-                        test_points=batch_tps,
-                        batch_type=batch_type,
-                        max_retries=self._max_validation_retries,
-                    )
-                    cases = valid + retry_valid
-                    for entry in summary:
-                        if entry["retries"] >= self._max_validation_retries:
-                            all_failures.append(entry)
-
-            # Save
-            for case in cases:
-                if batch_type == "single":
-                    YamlWriter.write_single_case(case, output_dir)
-                else:
-                    YamlWriter.write_biz_flow(case, output_dir)
-
-            all_cases.extend(cases)
-            logger.info("BatchController: saved %d %s cases (total: %d)",
-                        len(cases), batch_type, len(all_cases))
-
-        # Also load any cases that were already on disk before this run
-        if batch_type == "single":
-            existing = YamlWriter.read_single_cases(output_dir)
-        else:
-            existing = YamlWriter.read_biz_flows(output_dir)
-
-        # Merge: prefer newly generated over existing (by test_id)
-        merged = {self._case_key(c, batch_type): c for c in existing}
-        for c in all_cases:
-            merged[self._case_key(c, batch_type)] = c
-
-        return {"cases": list(merged.values()), "failures": all_failures}
-
-    # ------------------------------------------------------------------
-    # LLM batch decision
-    # ------------------------------------------------------------------
-
-    def _decide_batch(
-        self,
-        test_points_summary: str,
-        saved_interface_ids: List[str],
-        generated_ids: List[str],
-        batch_type: str,
-    ) -> Dict[str, Any]:
-        """Decide what to generate in the next batch.
-
-        Always computes remaining interfaces first:
-        - If none remaining → done.
-        - If remaining fits in one batch → use fallback (no LLM needed).
-        - Otherwise → ask LLM to prioritize.
-        """
-        remaining = [i for i in saved_interface_ids if i not in generated_ids]
-
-        if not remaining:
-            logger.info("BatchController: all interfaces covered for %s", batch_type)
-            return {"action": "done"}
-
-        if len(remaining) <= self._batch_size:
-            logger.info(
-                "BatchController: %d remaining interfaces fit in batch_size=%d, "
-                "using fallback (no LLM call)",
-                len(remaining), self._batch_size,
-            )
-            return {"action": "generate", "interface_ids": remaining, "test_point_ids": []}
-
-        prompt = _BATCH_DECISION_USER.format(
-            test_points_summary=test_points_summary,
-            saved_interfaces=json.dumps(saved_interface_ids, ensure_ascii=False),
-            generated_single=json.dumps(generated_ids, ensure_ascii=False)
-            if batch_type == "single" else "[]",
-            generated_biz=json.dumps(generated_ids, ensure_ascii=False)
-            if batch_type == "biz" else "[]",
-            batch_size=self._batch_size,
-            batch_type=batch_type,
-        )
-
-        try:
-            result = self.call_llm_json(prompt, _BATCH_DECISION_SYSTEM)
-            return result if isinstance(result, dict) else {}
-        except Exception:
-            logger.warning("BatchController: decision LLM call failed, falling back to auto-select")
-            return self._fallback_decision(saved_interface_ids, generated_ids)
-
-    def _fallback_decision(
-        self, saved_interface_ids: List[str], generated_ids: List[str]
-    ) -> Dict[str, Any]:
-        """Simple rule-based fallback when the LLM decision call fails."""
-        remaining = [i for i in saved_interface_ids if i not in generated_ids]
-        if not remaining:
-            return {"action": "done"}
-        batch = remaining[: self._batch_size]
-        return {"action": "generate", "interface_ids": batch, "test_point_ids": []}
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    def _compute_progress(self, output_dir: str, batch_type: str) -> str:
-        """Build a stable progress string for progress-based step counting.
-
-        Returns something like 'single-[20:200]' meaning 20 of 200
-        interfaces covered by generated cases.
-        """
-        covered = YamlWriter.list_covered_interface_ids(output_dir, batch_type)
-        interfaces = YamlWriter.list_interface_ids(output_dir)
-        covered_unique = len(set(covered))
-        return f"{batch_type}-[{covered_unique}:{len(interfaces)}]"
-
-    @staticmethod
-    def _summarize_test_points(plan: TestPlan, batch_type: str) -> str:
-        """Build a compact summary of test points for the decision prompt."""
-        parts = []
-        if batch_type == "single":
-            for api_id, points in plan.single_test_points.items():
-                parts.append(f"{api_id}: {len(points)} test points")
-                for p in points:
-                    parts.append(f"  - [{p.tag}] {p.test_id}: {p.description}")
-        else:
-            for scenario in plan.biz_flow_scenarios:
-                parts.append(
-                    f"- {scenario.get('name', '')}: {scenario.get('description', '')}"
-                )
-        return "\n".join(parts) if parts else "(none)"
-
-    @staticmethod
-    def _resolve_test_points(
-        plan: TestPlan,
-        iface_ids: List[str],
-        tp_ids: List[str],
-        batch_type: str,
-        interfaces: Optional[List[Dict]] = None,
-    ) -> List[Dict]:
-        """Get the test point dicts relevant to the given interface ids.
-
-        Tries exact test_id match first, then falls back to api_name/url
-        matching via the provided interface dicts. If all strategies fail,
-        returns all available test points rather than nothing.
-        """
-        result = []
-        if batch_type == "single":
-            for api_id in iface_ids:
-                points = plan.single_test_points.get(api_id, [])
-                if not points and interfaces:
-                    points = BatchController._match_test_points_by_interface(
-                        plan, api_id, interfaces
-                    )
-                if not points:
-                    continue
-                for p in points:
-                    d = {
-                        "test_id": p.test_id,
-                        "description": p.description,
-                        "tag": p.tag,
-                        "scenario_type": p.scenario_type,
-                    }
-                    if not tp_ids or p.test_id in tp_ids:
-                        result.append(d)
-
-        # Fallback: if no test points matched, return ALL available
-        if not result and batch_type == "single":
-            for api_id, points in plan.single_test_points.items():
-                for p in points:
-                    d = {
-                        "test_id": p.test_id,
-                        "description": p.description,
-                        "tag": p.tag,
-                        "scenario_type": p.scenario_type,
-                    }
-                    if not tp_ids or p.test_id in tp_ids:
-                        result.append(d)
-
-        return result
-
-    @staticmethod
-    def _match_test_points_by_interface(
-        plan: TestPlan,
-        api_id: str,
-        interfaces: List[Dict],
-    ) -> List:
-        """Try to match test points by looking up the interface's api_name/url."""
-        iface = next((i for i in interfaces if str(i.get("test_id", "")) == api_id), None)
-        if not iface:
-            return []
-        candidates = [
-            iface.get("api_name", ""),
-            iface.get("name", ""),
-        ]
-        url = iface.get("url", "")
-        if url:
-            # Try URL path segments as keys
-            parts = [p for p in url.strip("/").split("/") if p]
-            for part in parts:
-                candidates.append(f"api_{part}")
-                candidates.append(part)
-        for candidate in candidates:
-            if candidate and candidate in plan.single_test_points:
-                return plan.single_test_points[candidate]
-        return []
-
-    @staticmethod
-    def _load_interfaces_from_disk(output_dir: str, ids: List[str]) -> List[Dict]:
-        """Load specific interfaces from the YAML directory."""
-        all_ifaces = YamlWriter.read_interfaces(output_dir)
-        return [i for i in all_ifaces if str(i.get("test_id", "")) in ids]
-
-    @staticmethod
-    def _match_interfaces_fuzzy(
-        interfaces: List[Dict], ids: List[str], output_dir: str,
-    ) -> List[Dict]:
-        """Try matching interfaces by api_name, url, or partial test_id.
-
-        Used as a fallback when exact test_id matching fails (e.g. the
-        LLM returned interface identifiers that don't exactly match any
-        stored interface's test_id field).
-        """
-        all_ifaces = list(interfaces)
-        if not all_ifaces:
-            all_ifaces = YamlWriter.read_interfaces(output_dir)
-
-        result: List[Dict] = []
-        seen: set = set()
-        for iface in all_ifaces:
-            iface_id = str(iface.get("test_id", ""))
-            api_name = str(iface.get("api_name", iface.get("name", "")))
-            url = str(iface.get("url", ""))
-            for target in ids:
-                if iface_id in seen:
-                    break
-                if iface_id == target:
-                    result.append(iface)
-                    seen.add(iface_id)
-                    break
-                if api_name and target in api_name:
-                    result.append(iface)
-                    seen.add(iface_id)
-                    break
-                if url and target in url:
-                    result.append(iface)
-                    seen.add(iface_id)
-                    break
-                if target and target in iface_id:
-                    result.append(iface)
-                    seen.add(iface_id)
-                    break
-        return result
-
-    @staticmethod
-    def _case_key(case, batch_type: str) -> str:
-        if batch_type == "single":
-            if isinstance(case, dict):
-                return str(case.get("test_id", ""))
-            return str(getattr(case, "test_id", ""))
-        if isinstance(case, dict):
-            return str(case.get("sheet_name", ""))
-        return str(getattr(case, "sheet_name", ""))
+    def _collect_settings(self) -> Dict[str, Any]:
+        return {
+            "batch_size": self._batch_size,
+            "enable_validation": self._enable_validation,
+            "max_validation_retries": self._max_validation_retries,
+            "url_correction_max_retries": self._url_correction_max_retries,
+            "validation_rules": self._validation_rules,
+        }

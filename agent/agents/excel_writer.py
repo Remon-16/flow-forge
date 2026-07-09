@@ -11,26 +11,9 @@ from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
 from models.schema import BizFlow, InterfaceDef, SingleTestCase
+from flow_forge_schemas import API_COLUMNS as _API_COLUMNS, CASE_COLUMNS as _CASE_COLUMNS, BIZ_COLUMNS as _BIZ_COLUMNS
 
 logger = logging.getLogger(__name__)
-
-# Column headers matching executor's ExcelParser expectations
-_API_COLUMNS = [
-    "TestID", "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Remark",
-]
-
-_CASE_COLUMNS = [
-    "TestID", "RelevanceID", "Tag",
-    "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Remark",
-]
-
-_BIZ_COLUMNS = [
-    "StepID", "RelevanceID", "Trans",
-    "APIName", "AppName", "Method", "URL",
-    "RequestHead", "RequestBody", "StatusCode", "AssertDict", "AssertRules", "Tag", "Remark",
-]
 
 _HEADER_FONT = Font(name="微软雅黑", bold=True, size=11)
 _HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
@@ -132,6 +115,8 @@ class ExcelWriter:
                 g("status_code", 200),
                 json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
                 json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
+                json.dumps(g("preprocessors"), ensure_ascii=False) if g("preprocessors") else "",
+                json.dumps(g("postprocessors"), ensure_ascii=False) if g("postprocessors") else "",
                 g("remark"),
             ])
 
@@ -153,6 +138,8 @@ class ExcelWriter:
                 g("status_code", 200),
                 json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
                 json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
+                json.dumps(g("preprocessors"), ensure_ascii=False) if g("preprocessors") else "",
+                json.dumps(g("postprocessors"), ensure_ascii=False) if g("postprocessors") else "",
                 g("remark"),
             ])
 
@@ -165,7 +152,7 @@ class ExcelWriter:
             ExcelWriter._write_row(ws, row_idx, [
                 g("step_id"),
                 g("relevance_id"),
-                g("trans"),
+                json.dumps(g("inherit"), ensure_ascii=False) if g("inherit") else "",
                 g("api_name"),
                 g("app_name"),
                 g("method"),
@@ -175,6 +162,8 @@ class ExcelWriter:
                 g("status_code", 200),
                 json.dumps(g("assert_dict"), ensure_ascii=False) if g("assert_dict") else "",
                 json.dumps(g("assert_rules"), ensure_ascii=False) if g("assert_rules") else "",
+                json.dumps(g("preprocessors"), ensure_ascii=False) if g("preprocessors") else "",
+                json.dumps(g("postprocessors"), ensure_ascii=False) if g("postprocessors") else "",
                 g("tag", "P1"),
                 g("remark"),
             ])

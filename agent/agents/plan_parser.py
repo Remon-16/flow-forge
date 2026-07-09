@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class PlanParser(BaseAgent):
     """Parse a confirmed Markdown test plan into structured TestPlan."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, skill_extensions: List[str] = None):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -28,10 +28,23 @@ class PlanParser(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
+            skill_extensions=skill_extensions,
         )
 
-    def parse(self, plan_md: str) -> TestPlan:
-        """Parse plan markdown into a structured TestPlan."""
+    def parse(
+        self, plan_md: str, interfaces: Optional[List[Dict[str, Any]]] = None
+    ) -> TestPlan:
+        """Parse plan markdown into a structured TestPlan.
+
+        Args:
+            plan_md: The plan markdown text.
+            interfaces: Optional pre-validated interface definitions.  Used as
+                fallback when the LLM / regex cannot extract api_definitions
+                from the markdown text.
+        """
         # Extract business summary (first ## section content)
         business_summary = self._extract_section(
             plan_md, r"##\s*(?:1\.)?\s*业务理解", r"##\s"
@@ -45,47 +58,109 @@ class PlanParser(BaseAgent):
         plan.business_summary = business_summary or plan.business_summary
         plan.mermaid_flows = mermaid_flows
 
+        # Fallback: if LLM/regex failed to extract api_definitions,
+        # use the provided interfaces (already validated)
+        if not plan.api_definitions and interfaces:
+            plan.api_definitions = [
+                InterfaceDef(
+                    test_id=iface.get("test_id", ""),
+                    api_name=iface.get("api_name", ""),
+                    app_name=iface.get("app_name", ""),
+                    method=iface.get("method", "GET"),
+                    url=iface.get("url", ""),
+                )
+                for iface in interfaces
+            ]
+
         return plan
 
     def _llm_parse(self, plan_md: str) -> TestPlan:
-        """Use LLM to extract structured test points from the plan."""
-        system_msg = """你是一个专业的测试计划解析器。从 Markdown 测试计划中提取结构化信息。
+        """Use LLM to extract structured test points from the plan.
 
-请以 JSON 格式返回，格式如下：
-```json
-{
-  "api_definitions": [
-    {
-      "test_id": "api_xxx",
-      "api_name": "接口名",
-      "app_name": "应用名",
-      "method": "GET",
-      "url": "/api/xxx"
-    }
-  ],
-  "single_test_points": {
-    "api_xxx": [
-      {"test_id": "TP_001", "description": "测试点描述", "tag": "P0", "scenario_type": "positive"}
-    ]
-  },
-  "biz_flow_scenarios": [
-    {
-      "name": "业务场景名",
-      "description": "场景描述",
-      "steps": ["Step01: 登录", "Step02: 查询"]
-    }
-  ]
-}
-```
-"""
+        For large plans, splits by ``##`` section headers and processes
+        each section independently, then merges results.
+        """
+        from prompts.plan_parser import (
+            PLAN_PARSER_SYSTEM as system_msg,
+            PLAN_PARSER_USER,
+            PLAN_CHUNK_NOTICE,
+        )
+        from prompts.render import render_prompt
 
-        prompt = f"请解析以下测试计划，提取结构化信息：\n\n{plan_md[:10000]}"
+        # Check if plan fits in a single call
+        test_prompt = render_prompt(PLAN_PARSER_USER, plan_md=plan_md)
+        input_tokens = self._estimate_input_tokens(system_msg, test_prompt)
 
-        try:
-            result = self.call_llm_json(prompt, system_msg)
-        except Exception as e:
-            logger.warning("LLM plan parsing failed: %s, using regex fallback", e)
-            result = self._regex_parse(plan_md)
+        if input_tokens < self._context_window * self._compression_threshold:
+            try:
+                result = self.call_llm_json(test_prompt, system_msg)
+                return self._build_testplan(result)
+            except Exception as e:
+                logger.warning("LLM plan parsing failed: %s, using regex fallback", e)
+                result = self._regex_parse(plan_md)
+                return self._build_testplan(result)
+
+        # Large plan — split by sections
+        logger.info("Plan too large (%d tokens), splitting by sections", input_tokens)
+        sections = re.split(r"\n(?=##\s)", plan_md)
+        if len(sections) <= 1:
+            # Can't split further — truncate and try
+            truncated = plan_md[:int(self._context_window * 0.7 * 4)]
+            try:
+                result = self.call_llm_json(
+                    render_prompt(PLAN_PARSER_USER, plan_md=truncated),
+                    system_msg,
+                )
+                return self._build_testplan(result)
+            except Exception as e:
+                logger.warning("LLM plan parsing failed: %s", e)
+                result = self._regex_parse(plan_md)
+                return self._build_testplan(result)
+
+        # Process sections in chunks
+        all_results = []
+        for i in range(0, len(sections), 3):
+            chunk = "\n".join(sections[i:i + 3])
+            chunk_prompt = (
+                f"{PLAN_CHUNK_NOTICE.format(part=i // 3 + 1)}\n\n"
+                f"{render_prompt(PLAN_PARSER_USER, plan_md=chunk)}"
+            )
+            try:
+                result = self.call_llm_json(chunk_prompt, system_msg)
+                all_results.append(result)
+            except Exception as e:
+                logger.warning("Chunk %d parsing failed: %s", i // 3 + 1, e)
+                all_results.append(self._regex_parse(chunk))
+
+        merged = self._merge_plan_results(all_results)
+        return self._build_testplan(merged)
+
+    def _merge_plan_results(self, results: list) -> dict:
+        """Merge parsed plan results from multiple chunks."""
+        merged: dict = {
+            "api_definitions": [],
+            "single_test_points": {},
+            "biz_flow_scenarios": [],
+        }
+        seen_api = set()
+        for r in results:
+            for ad in r.get("api_definitions", []):
+                key = (ad.get("test_id", ""), ad.get("url", ""))
+                if key not in seen_api:
+                    seen_api.add(key)
+                    merged["api_definitions"].append(ad)
+            for api_id, points in r.get("single_test_points", {}).items():
+                if api_id not in merged["single_test_points"]:
+                    merged["single_test_points"][api_id] = []
+                seen_tps = {tp.get("test_id") for tp in merged["single_test_points"][api_id]}
+                for tp in points:
+                    if tp.get("test_id") not in seen_tps:
+                        merged["single_test_points"][api_id].append(tp)
+            for scenario in r.get("biz_flow_scenarios", []):
+                merged["biz_flow_scenarios"].append(scenario)
+        return merged
+
+    def _build_testplan(self, result: dict) -> TestPlan:
 
         api_defs = []
         for ad in result.get("api_definitions", []):

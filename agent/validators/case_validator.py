@@ -20,11 +20,13 @@ def _get_field(obj, field, default=None):
 
 _VAR_REF_RE = re.compile(r"#\{([^}]+)\}")
 
-_REQUIRED_SINGLE = ["test_id", "relevance_id", "api_name", "method", "url"]
-_REQUIRED_BIZ_STEP = ["step_id", "relevance_id", "api_name", "method", "url"]
-_REQUIRED_BIZ_FLOW = ["sheet_name", "steps"]
-_VALID_HTTP_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH"}
-_VALID_TAGS = {"P0", "P1", "P2", "P3"}
+from flow_forge_schemas import (
+    REQUIRED_SINGLE as _REQUIRED_SINGLE,
+    REQUIRED_BIZ_STEP as _REQUIRED_BIZ_STEP,
+    REQUIRED_BIZ_FLOW as _REQUIRED_BIZ_FLOW,
+    VALID_HTTP_METHODS as _VALID_HTTP_METHODS,
+    VALID_TAGS as _VALID_TAGS,
+)
 
 
 class CaseValidator(BaseAgent):
@@ -91,9 +93,9 @@ class CaseValidator(BaseAgent):
                 for si, step in enumerate(steps):
                     step_errors = self._validate_one_biz_step(step, si)
                     errors.extend(step_errors)
-                    step_trans = str(_get_field(step, "trans", ""))
-                    if step_trans:
-                        errors.extend(self._check_trans_refs(step_trans, steps))
+                    step_inherit = str(_get_field(step, "inherit", ""))
+                    if step_inherit:
+                        errors.extend(self._check_inherit_refs(step_inherit, steps))
 
         return errors
 
@@ -205,26 +207,39 @@ class CaseValidator(BaseAgent):
         return []
 
     @staticmethod
-    def _check_trans_refs(trans: str, steps: List[Dict]) -> List[str]:
+    def _check_inherit_refs(inherit, steps: List[Dict]) -> List[str]:
         errors = []
-        var_refs = re.findall(r"#\{([^}]+)\}", trans)
         step_ids = {str(_get_field(s, "step_id", "")) for s in steps}
 
-        for pair in trans.split(","):
-            pair = pair.strip()
-            if not pair or "=" not in pair:
-                continue
-            key, value = pair.split("=", 1)
-            key = key.strip()
-            value = value.strip()
+        def _check_entry(key: str, value: str) -> None:
             if not value:
-                errors.append(f"Trans key '{key}' has empty value")
-                continue
+                errors.append(f"Inherit key '{key}' has empty value")
+                return
             dot_idx = value.find(".")
             if dot_idx > 0:
                 ref_step = value[:dot_idx]
                 if ref_step not in step_ids:
-                    errors.append(f"Trans key '{key}' references unknown StepID '{ref_step}'")
+                    errors.append(f"Inherit key '{key}' references unknown StepID '{ref_step}'")
+
+        # 新格式：dict
+        if isinstance(inherit, dict):
+            for key, value in inherit.items():
+                key = str(key).strip()
+                value_str = str(value).strip() if value else ""
+                _check_entry(key, value_str)
+            return errors
+
+        # 旧格式回退：逗号分隔字符串
+        if isinstance(inherit, str) and inherit.strip():
+            for pair in inherit.split(","):
+                pair = pair.strip()
+                if not pair or "=" not in pair:
+                    continue
+                key, value = pair.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                _check_entry(key, value)
+
         return errors
 
     def validate_with_retry(

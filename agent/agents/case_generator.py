@@ -15,8 +15,10 @@ from models.schema import (
     SingleTestCase,
     TestPlan,
 )
+from prompts import KNOWLEDGE_SECTION_HEADER
 from prompts.case_generation import CASE_GENERATION_SYSTEM, CASE_GENERATION_USER
 from prompts.render import render_prompt
+from i18n import get_language_name
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +61,7 @@ def _normalize_interfaces(items: List[Any]) -> List[Dict[str, Any]]:
 class CaseGenerator(BaseAgent):
     """Generate concrete test cases from a confirmed test plan."""
 
-    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None):
+    def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None, skill_extensions: List[str] = None):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -68,6 +70,10 @@ class CaseGenerator(BaseAgent):
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
+            skill_extensions=skill_extensions,
         )
         self._knowledge = knowledge
 
@@ -102,10 +108,20 @@ class CaseGenerator(BaseAgent):
             docs = self._knowledge.search("test case generation concrete values", n_results=3)
             if docs:
                 knowledge_context = "\n---\n".join(docs)
-                prompt += f"\n\n## 知识库参考\n{knowledge_context}"
+                prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}{knowledge_context}"
 
-        logger.info("Generating test cases from plan...")
-        result = self.call_llm_json(prompt, CASE_GENERATION_SYSTEM)
+        # Token check
+        input_tokens = self._estimate_input_tokens(CASE_GENERATION_SYSTEM, prompt)
+        if input_tokens > self._context_window * self._compression_threshold:
+            logger.warning(
+                "Case generation input is large (%d tokens). "
+                "Consider using generate_batch() for batch processing.",
+                input_tokens,
+            )
+
+        logger.info("Generating test cases from plan (~%d tokens)...", input_tokens)
+        system_msg = render_prompt(CASE_GENERATION_SYSTEM, language=get_language_name())
+        result = self.call_llm_json(prompt, system_msg)
 
         single_cases = self._parse_single_cases(result.get("single_cases", []))
         biz_flows = self._parse_biz_flows(result.get("biz_flows", []))
@@ -148,7 +164,7 @@ class CaseGenerator(BaseAgent):
                     steps.append(BizStep(
                         step_id=str(s.get("step_id", "")),
                         relevance_id=str(s.get("relevance_id", "")),
-                        trans=str(s.get("trans", "")),
+                        inherit=str(s.get("inherit", "")),
                         api_name=str(s.get("api_name", "")),
                         app_name=str(s.get("app_name", "")),
                         method=str(s.get("method", "GET")).upper(),
@@ -203,19 +219,19 @@ class CaseGenerator(BaseAgent):
         error_context = ""
         if previous_errors:
             error_context = (
-                "\n\n## 上次生成校验失败，请修正以下问题\n"
+                "\n\n## Previous generation validation failed, please fix the following issues\n"
                 + json.dumps(previous_errors, ensure_ascii=False, indent=2)
-                + "\n请确保 JSON 格式正确，所有必填字段完整。"
+                + "\nPlease ensure JSON format is correct and all required fields are complete."
             )
 
         if batch_type == "single":
             system = CASE_GENERATION_SYSTEM
             prompt = (
-                f"## 本批接口定义\n```json\n{json.dumps(iface_dicts, ensure_ascii=False, indent=2)}\n```\n\n"
-                f"## 本批测试点\n```json\n{tp_summary}\n```\n\n"
-                f"## 用户指导\n{user_guidance or '(无)'}\n"
+                f"## Batch Interface Definitions\n```json\n{json.dumps(iface_dicts, ensure_ascii=False, indent=2)}\n```\n\n"
+                f"## Batch Test Points\n```json\n{tp_summary}\n```\n\n"
+                f"## User Guidance\n{user_guidance or '(none)'}\n"
                 f"{error_context}\n\n"
-                f"请生成以上接口的单接口测试用例，只生成一个 JSON 对象，包含 single_cases 字段。"
+                f"Please generate single API test cases for the above interfaces. Output only one JSON object containing the single_cases field."
             )
 
             result = self.call_llm_json(prompt, system)
@@ -231,12 +247,12 @@ class CaseGenerator(BaseAgent):
 
             system = CASE_GENERATION_SYSTEM
             prompt = (
-                f"## 本批接口定义\n```json\n{json.dumps(iface_dicts, ensure_ascii=False, indent=2)}\n```\n\n"
-                f"## 本批业务链路场景\n```json\n{json.dumps(scenarios, ensure_ascii=False, indent=2)}\n```\n\n"
-                f"## 用户指导\n{user_guidance or '(无)'}\n"
+                f"## Batch Interface Definitions\n```json\n{json.dumps(iface_dicts, ensure_ascii=False, indent=2)}\n```\n\n"
+                f"## Batch Business Flow Scenarios\n```json\n{json.dumps(scenarios, ensure_ascii=False, indent=2)}\n```\n\n"
+                f"## User Guidance\n{user_guidance or '(none)'}\n"
                 f"{error_context}\n\n"
-                f"请生成以上业务链路的测试用例，每个链路包含多个步骤。"
-                f"只生成一个 JSON 对象，包含 biz_flows 字段。"
+                f"Please generate test cases for the above business flows. Each flow contains multiple steps."
+                f"Output only one JSON object containing the biz_flows field."
             )
 
             result = self.call_llm_json(prompt, system)
@@ -249,17 +265,17 @@ class CaseGenerator(BaseAgent):
         parts = []
 
         if plan.business_summary:
-            parts.append(f"## 业务理解\n{plan.business_summary}")
+            parts.append(f"## Business Understanding\n{plan.business_summary}")
 
         if plan.api_definitions:
-            parts.append("\n## 接口定义")
+            parts.append("\n## API Definitions")
             for ad in plan.api_definitions:
                 parts.append(
                     f"- {ad.test_id}: {ad.method} {ad.url} ({ad.api_name})"
                 )
 
         if plan.single_test_points:
-            parts.append("\n## 单接口测试点")
+            parts.append("\n## Single API Test Points")
             for api_id, points in plan.single_test_points.items():
                 parts.append(f"\n### {api_id}")
                 for p in points:
@@ -268,12 +284,12 @@ class CaseGenerator(BaseAgent):
                     )
 
         if plan.mermaid_flows:
-            parts.append("\n## 业务流程图")
+            parts.append("\n## Business Flow Diagrams")
             for name, diagram in plan.mermaid_flows.items():
                 parts.append(f"\n### {name}\n```mermaid\n{diagram}\n```")
 
         if plan.biz_flow_scenarios:
-            parts.append("\n## 业务链路场景")
+            parts.append("\n## Business Flow Scenarios")
             for scenario in plan.biz_flow_scenarios:
                 parts.append(
                     f"- {scenario.get('name', '')}: {scenario.get('description', '')}"

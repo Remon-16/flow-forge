@@ -15,63 +15,16 @@ from typing import Any, Dict, List
 from agents.base import BaseAgent
 from config.settings import Settings
 from models.schema import InterfaceDef
+from prompts.doc_parser import (
+    DOC_CHUNK_NOTICE,
+    DOC_DEFAULT_FILE_TYPE_HINT,
+    DOC_PARSER_SYSTEM,
+    DOC_PARSER_USER,
+)
+from i18n import get_language_name
+from prompts.render import render_prompt
 
 logger = logging.getLogger(__name__)
-
-DOC_PARSER_SYSTEM = """你是一个 API 文档解析专家。你的任务是从非结构化的文档文本中提取 API 接口定义。
-
-提取规则：
-1. 识别所有 API 端点（HTTP 方法 + URL 路径）
-2. 对每个端点，提取以下信息：
-   - test_id: 自动生成，格式为 api_{path}_{method}，例如 api_user_login_post
-   - api_name: 接口名称/描述
-   - app_name: 所属应用/模块名，若无法判断填 "default"
-   - method: HTTP 方法 (GET/POST/PUT/DELETE/PATCH)
-   - url: URL 路径
-   - request_head: 请求头，JSON 对象，如 {"Content-Type": "application/json"}
-   - request_body: 请求体参数，JSON 对象，列出字段名和示例值
-   - status_code: 预期成功状态码，默认 200
-   - assert_dict: 断言检查项，JSON 对象，如 {"status_code": 200}
-   - remark: 备注/补充说明
-
-3. 对于无法确定的字段，使用合理的默认值
-4. 如果文档中描述了请求参数，用 "字段名": "示例值" 的格式填入 request_body
-5. 如果文档中描述了响应字段，将其加入 assert_dict 作为检查项
-
-请以严格的 JSON 数组格式返回，每个元素是一个接口定义：
-```json
-[
-  {
-    "test_id": "api_user_login_post",
-    "api_name": "用户登录",
-    "app_name": "user_management",
-    "method": "POST",
-    "url": "/api/user/login",
-    "request_head": {"Content-Type": "application/json"},
-    "request_body": {"username": "string", "password": "string"},
-    "status_code": 200,
-    "assert_dict": {"status_code": 200, "data.token": "not_empty"},
-    "remark": "用户登录接口"
-  }
-]
-```
-
-只返回 JSON 数组，不要包含其他文字说明。"""
-
-DOC_PARSER_USER = """请从以下 API 文档内容中提取所有接口定义。
-
-## 文件名
-{file_name}
-
-## 文档内容
-{raw_text}
-
-## 提示
-- 文件类型提示: {file_type_hint}
-- 请仔细阅读全文，不要遗漏任何接口
-- 如果文档内容看起来不包含 API 定义，请返回空数组 []
-
-请返回 JSON 数组格式的接口定义列表。"""
 
 
 class DocParserAgent:
@@ -91,6 +44,12 @@ class DocParserAgent:
             max_retries=2,
             max_steps=1,
             base_url=settings.llm_base_url,
+            context_window=settings.llm_context_window,
+            max_output_tokens=settings.llm_max_output_tokens,
+            compression_threshold=settings.llm_context_compression_threshold,
+            rate_limit_delay=settings.llm_rate_limit_delay,
+            retry_base_delay=settings.llm_retry_base_delay,
+            max_concurrency=settings.llm_max_concurrency,
         )
 
     def parse(
@@ -113,27 +72,71 @@ class DocParserAgent:
             logger.warning("DocParserAgent received empty text, returning []")
             return []
 
-        max_chars = self._settings.llm_doc_max_chars
-        if len(raw_text) > max_chars:
-            logger.info(
-                "Document text too long (%d chars), truncating to %d chars",
-                len(raw_text), max_chars,
-            )
-            raw_text = raw_text[:max_chars] + "\n\n[... 文本已截断 ...]"
+        # 渲染系统提示词中的 {{language}} 占位符 / Render {{language}} placeholder in system prompt
+        system_msg = render_prompt(DOC_PARSER_SYSTEM, language=get_language_name())
 
-        prompt = DOC_PARSER_USER.format(
+        test_prompt = render_prompt(
+            DOC_PARSER_USER,
             file_name=file_name or "unknown",
             raw_text=raw_text,
-            file_type_hint=file_type_hint or "未知格式",
+            file_type_hint=file_type_hint or DOC_DEFAULT_FILE_TYPE_HINT,
+        )
+        input_tokens = self._agent._estimate_input_tokens(system_msg, test_prompt)
+
+        if input_tokens < self._agent._context_window * self._agent._compression_threshold:
+            # Single round
+            try:
+                result = self._agent.call_llm_json(test_prompt, system_msg)
+                return self._parse_response(result)
+            except Exception as e:
+                logger.error("DocParserAgent LLM call failed: %s", e)
+                return []
+
+        # Token-aware chunking
+        logger.info(
+            "Doc text (%d chars, ~%d tokens) exceeds threshold, chunking",
+            len(raw_text), input_tokens,
+        )
+        return self._agent._process_long_text(
+            text=raw_text,
+            system_msg=system_msg,
+            chunk_processor=lambda chunk, _: self._parse_chunk(chunk, file_name, file_type_hint),
+            result_merger=self._merge_parsed_interfaces,
+            chunk_notice=DOC_CHUNK_NOTICE,
         )
 
+    def _parse_chunk(
+        self, chunk: str, file_name: str, file_type_hint: str
+    ) -> list:
+        """Parse a single chunk of the document."""
+        system_msg = render_prompt(DOC_PARSER_SYSTEM, language=get_language_name())
+        prompt = render_prompt(
+            DOC_PARSER_USER,
+            file_name=file_name or "unknown",
+            raw_text=chunk,
+            file_type_hint=file_type_hint or DOC_DEFAULT_FILE_TYPE_HINT,
+        )
         try:
-            result = self._agent.call_llm_json(prompt, DOC_PARSER_SYSTEM)
+            result = self._agent.call_llm_json(prompt, system_msg)
+            return self._parse_response(result)
         except Exception as e:
-            logger.error("DocParserAgent LLM call failed: %s", e)
+            logger.warning("DocParserAgent chunk parse failed: %s", e)
             return []
 
-        return self._parse_response(result)
+    @staticmethod
+    def _merge_parsed_interfaces(results: list, _system_msg: str) -> list:
+        """Merge interface lists from multiple chunks, deduplicating by test_id."""
+        seen = set()
+        merged = []
+        for r in results:
+            if isinstance(r, list):
+                for iface in r:
+                    tid = iface.test_id if hasattr(iface, "test_id") else ""
+                    if tid not in seen:
+                        seen.add(tid)
+                        merged.append(iface)
+        logger.info("Merged %d unique interfaces from %d chunks", len(merged), len(results))
+        return merged
 
     def _parse_response(self, raw: Any) -> List[InterfaceDef]:
         """Normalize LLM JSON response into InterfaceDef objects.
