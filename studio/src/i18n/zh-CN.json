@@ -131,15 +131,15 @@
     "col": "列"
   },
   "header": {
-    "title": "Flow Forge — 测试用例编辑器",
+    "title": "Flow Forge Studio",
     "excelEditor": "Excel 编辑器",
     "yamlEditor": "YAML 编辑器",
     "backHome": "返回首页"
   },
   "loading": "正在加载文件...",
   "home": {
-    "title": "Flow Forge 测试用例编辑器",
-    "subtitle": "选择编辑器模式，开始编辑测试用例",
+    "title": "Flow Forge Studio",
+    "subtitle": "",
     "excelTitle": "Excel 编辑器",
     "excelDesc": "编辑 .xlsx 格式的测试用例文件。适合中小型项目，支持接口定义、单接口用例和业务链路用例的表格化编辑。",
     "yamlTitle": "YAML 编辑器",

@@ -131,15 +131,15 @@
     "col": "Col"
   },
   "header": {
-    "title": "Flow Forge — Test Case Editor",
+    "title": "Flow Forge Studio",
     "excelEditor": "Excel Editor",
     "yamlEditor": "YAML Editor",
     "backHome": "Back to Home"
   },
   "loading": "Loading file...",
   "home": {
-    "title": "Flow Forge Test Case Editor",
-    "subtitle": "Choose an editor mode to start editing test cases",
+    "title": "Flow Forge Studio",
+    "subtitle": "",
     "excelTitle": "Excel Editor",
     "excelDesc": "Edit test case files in .xlsx format. Ideal for small to medium projects, with tabular editing for API definitions, single-API cases, and business flow cases.",
     "yamlTitle": "YAML Editor",
