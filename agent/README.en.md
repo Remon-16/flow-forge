@@ -48,8 +48,11 @@ python main.py --requirement docs/req.md --api docs/api.yaml --case-type biz
 # Auto mode: skip all human review (ideal for nightly batch generation after tuning)
 python main.py --requirement docs/req.md --api docs/api.yaml --auto
 
-# Resume from an existing output directory
+# Resume from an existing output directory (automatically loads the original run config)
 python main.py --resume --output output_20240101_120000
+
+# Resume with partial config overrides (warns if overrides affect already-completed stages)
+python main.py --resume --output output_20240101_120000 --case-type single -p "new guidance"
 
 # Case field translation safety-net tool (use when a weak model outputs mixed Chinese/English)
 python translate_cases.py output/cases/ --target-lang zh_CN

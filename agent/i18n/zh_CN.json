@@ -27,6 +27,12 @@
   "resume.loading_state": "[Resume] 从 {dir} 加载中间结果...",
   "cli.output_auto_versioned": "输出目录已有内容，自动使用: {dir}",
   "cli.resume_overwrite_enabled": "--resume-overwrite 已设置，将覆盖输出目录",
+  "resume.interactive_mode": "[Resume] 下一阶段 '{stage}' 需要人工审核，进入交互模式...",
+  "resume.save_config": "已保存运行配置到 {path}",
+  "resume.load_config": "[Resume] 从 {path} 加载运行配置",
+  "resume.config_missing": "[Resume] 未找到 run_config.json，使用命令行参数作为默认值",
+  "resume.cli_override_warning": "[Resume] 命令行参数覆盖已保存配置: {config_key} = {new_value} (原值: {old_value})",
+  "resume.config_override_stale": "[Resume] 警告: '{config_key}' 影响已完成的阶段 '{stage}'，当前覆盖可能无效",
 
   "cli.no_api_key": "错误: LLM_API_KEY 未设置。请在 env.yaml 中配置。\n  cp env.example.yaml env.yaml\n  # 编辑 env.yaml 并填入 API 密钥",
   "cli.session_log_dir": "[Session] 日志目录: {path}",

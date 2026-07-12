@@ -5,6 +5,7 @@ Shared helpers and module-level dependency injection for all nodes.
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -124,6 +125,49 @@ def save_pipeline_state(memory_dir: str, stage: str) -> None:
             json.dump(state, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logger.warning("Failed to save pipeline state: %s", e)
+
+
+def save_run_config(memory_dir: str, config: dict) -> None:
+    """保存运行配置到 memory/run_config.json 供 resume 恢复。
+
+    Save run configuration to memory/run_config.json for resume restoration.
+    Written at pipeline start so later --resume calls can restore original
+    CLI arguments and settings.
+    """
+    if not memory_dir:
+        return
+    try:
+        path = Path(memory_dir) / "run_config.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"version": 1, "timestamp": datetime.now().isoformat(), **config}
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        logger.info(_("resume.save_config", path=str(path)))
+    except Exception as e:
+        logger.warning("Failed to save run_config.json: %s", e)
+
+
+def load_run_config(memory_dir: str) -> dict:
+    """从 memory/run_config.json 加载已保存的运行配置。
+
+    Load saved run configuration. Returns empty dict if file missing or
+    corrupt — this ensures backward compatibility with older pipelines
+    that were created before run_config.json existed.
+    """
+    if not memory_dir:
+        return {}
+    path = Path(memory_dir) / "run_config.json"
+    if not path.exists():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        logger.info(_("resume.load_config", path=str(path)))
+        return data
+    except Exception:
+        return {}
 
 
 def fmt_size(path: str) -> str:

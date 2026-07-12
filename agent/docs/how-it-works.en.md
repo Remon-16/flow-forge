@@ -96,7 +96,7 @@ python main.py --resume --output output_20240101_120000 --auto
 | Flag | Purpose | When to Use |
 |------|------|---------|
 | `--auto` | Skip human interaction and run the full pipeline | First-time nightly batch generation |
-| `--resume` | Resume from the last interruption (full pipeline supported) | Continue after a power loss / error |
+| `--resume` | Resume from the last interruption (full pipeline supported), automatically loads the original run configuration | Continue after a power loss / error |
 | `--resume --auto` | Resume + auto-approve remaining reviews | Unattended recovery after a power loss |
 
 > **Prerequisites**: Before using auto mode, tune your skills (business rules) and plugin configuration first, and consider passing additional business guidance via `--prompt` to ensure the quality of automatic generation.

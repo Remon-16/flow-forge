@@ -213,6 +213,20 @@ logging:
 
 命令示例见 [agent/README.md 快速开始](../README.md)；自动模式与断点续写见 [how-it-works.md](./how-it-works.md#自动模式auto-mode)。
 
+### 断点续写时的配置行为 / Config Behavior on Resume
+
+首次运行时，所有 CLI 参数和配置会自动保存到 `{output_dir}/memory/run_config.json`。恢复时：
+
+- **默认行为**：使用已保存的配置作为默认值（对已完成的阶段保持不变）
+- **CLI 覆盖**：`--resume` 时提供的 CLI 参数会覆盖已保存的配置，但仅对**尚未执行**的阶段生效
+- **过期覆盖警告**：如果 CLI 覆盖影响到的阶段已经执行完毕，系统会发出 `[Resume] 警告` 日志提示用户当前覆盖可能无效
+
+示例：计划已生成完毕后，`--resume` 时添加 `-p "新指导"` 不会影响已生成的计划，系统会提示该覆盖可能无效。
+
+> 向后兼容：对于没有 `run_config.json` 的旧流水线，恢复时完全使用 CLI 参数（与之前行为一致）。
+
+**配置保存范围**：`case_type`、`user_guidance`（对应 `-p`）、`output_format`、`batch_size`、`auto_mode`、`parse_mode`、`output_dir`、`api_path`、`requirement_paths`、`debug_snapshots`、`parser_path`、`reference_dir`。
+
 ---
 
 ## translate_cases.py — 用例字段翻译工具

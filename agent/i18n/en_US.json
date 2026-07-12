@@ -27,6 +27,12 @@
   "resume.loading_state": "[Resume] Loading intermediate results from {dir}...",
   "cli.output_auto_versioned": "Output directory has existing content, auto-using: {dir}",
   "cli.resume_overwrite_enabled": "--resume-overwrite set, will overwrite output directory",
+  "resume.interactive_mode": "[Resume] Next stage '{stage}' requires human review, entering interactive mode...",
+  "resume.save_config": "Saved run configuration to {path}",
+  "resume.load_config": "[Resume] Loaded run configuration from {path}",
+  "resume.config_missing": "[Resume] run_config.json not found, using CLI arguments as defaults",
+  "resume.cli_override_warning": "[Resume] CLI argument overrides saved config: {config_key} = {new_value} (was: {old_value})",
+  "resume.config_override_stale": "[Resume] Warning: '{config_key}' affects already-completed stage '{stage}', override may have no effect",
 
   "cli.no_api_key": "Error: LLM_API_KEY not set. Configure it in env.yaml.\n  cp env.example.yaml env.yaml\n  # Edit env.yaml and add your API key",
   "cli.session_log_dir": "[Session] Log directory: {path}",

@@ -48,8 +48,11 @@ python main.py --requirement docs/req.md --api docs/api.yaml --case-type biz
 # 自动模式：跳过所有人工审核（适合调试完毕后夜间批量生成）
 python main.py --requirement docs/req.md --api docs/api.yaml --auto
 
-# 从已有输出目录断点恢复
+# 从已有输出目录断点恢复（自动加载首次运行时的配置）
 python main.py --resume --output output_20240101_120000
+
+# 恢复时覆盖部分配置（若覆盖影响已完成阶段，会输出警告）
+python main.py --resume --output output_20240101_120000 --case-type single -p "新的指导"
 
 # 用例字段翻译兜底工具（弱模型输出中英混杂时使用）
 python translate_cases.py output/cases/ --target-lang zh_CN

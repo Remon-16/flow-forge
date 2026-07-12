@@ -213,6 +213,20 @@ Main entry point: `python main.py`. Full argument list (matching `cli/parser.py`
 
 For command examples, see the [agent/README Quick Start](../README.en.md); for auto mode and resume/checkpoint recovery, see [how-it-works.md](./how-it-works.en.md#auto-mode).
 
+### Config Behavior on Resume
+
+On the first run, all CLI arguments and settings are automatically saved to `{output_dir}/memory/run_config.json`. When resuming:
+
+- **Default behavior**: The saved configuration is used as defaults (completed stages are unaffected)
+- **CLI overrides**: CLI arguments provided during `--resume` override the saved config, but only apply to stages that **have not yet run**
+- **Stale override warnings**: If a CLI override would affect an already-completed stage, the system emits a `[Resume] Warning` log indicating the override may have no effect
+
+Example: if the plan has already been generated, adding `-p "new guidance"` during `--resume` will not affect the generated plan — the system will warn that the override is stale.
+
+> Backward compatibility: For older pipelines without `run_config.json`, resume falls back to CLI arguments entirely (same behavior as before).
+
+**Saved config scope**: `case_type`, `user_guidance` (CLI `-p`), `output_format`, `batch_size`, `auto_mode`, `parse_mode`, `output_dir`, `api_path`, `requirement_paths`, `debug_snapshots`, `parser_path`, `reference_dir`.
+
 ---
 
 ## translate_cases.py — Case Field Translation Tool

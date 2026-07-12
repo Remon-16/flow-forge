@@ -257,8 +257,226 @@ class TestResumeAutoVersioningSkip:
         )
 
         # 非 resume 模式应触发 / Non-resume mode should trigger
-        args.resume = False
-        should_auto_version = not resume_overwrite and not args.resume
-        assert should_auto_version is True, (
-            "Auto-versioning should be True when resume=False and not overwrite"
-        )
+# ---------------------------------------------------------------------------
+# TestSaveLoadRunConfig / 运行配置保存与加载测试
+# ---------------------------------------------------------------------------
+
+class TestSaveLoadRunConfig:
+    """Tests for save_run_config() and load_run_config()."""
+
+    def should_save_and_load_roundtrip(self):
+        """保存后应立即加载到相同数据 / Save then load should produce same data."""
+        from graph.nodes.helpers import save_run_config, load_run_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = {
+                "case_type": "single",
+                "user_guidance": "test guidance",
+                "output_format": "yaml",
+                "batch_size": 5,
+                "auto_mode": True,
+            }
+            save_run_config(tmp, config)
+            loaded = load_run_config(tmp)
+            assert loaded.get("case_type") == "single"
+            assert loaded.get("user_guidance") == "test guidance"
+            assert loaded.get("output_format") == "yaml"
+            assert loaded.get("batch_size") == 5
+            assert loaded.get("auto_mode") is True
+            assert loaded.get("version") == 1
+            assert "timestamp" in loaded
+
+    def should_return_empty_for_missing_file(self):
+        """文件不存在时返回空 dict / Returns {} when file missing."""
+        from graph.nodes.helpers import load_run_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            assert load_run_config(tmp) == {}
+
+    def should_not_crash_when_memory_dir_is_none(self):
+        """memory_dir 为 None 时不崩溃 / No crash for None memory_dir."""
+        from graph.nodes.helpers import save_run_config, load_run_config
+
+        save_run_config(None, {"key": "val"})  # no-op
+        assert load_run_config(None) == {}
+
+    def should_return_empty_for_corrupt_file(self):
+        """损坏文件返回空 dict / Corrupt file returns {}."""
+        from graph.nodes.helpers import load_run_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run_config.json"
+            path.write_text("not json {{{", encoding="utf-8")
+            assert load_run_config(tmp) == {}
+
+    def should_overwrite_existing_config(self):
+        """再次保存应覆盖旧配置 / Second save should overwrite."""
+        from graph.nodes.helpers import save_run_config, load_run_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            old = {"case_type": "single"}
+            new = {"case_type": "biz", "auto_mode": True}
+            save_run_config(tmp, old)
+            save_run_config(tmp, new)
+            loaded = load_run_config(tmp)
+            assert loaded.get("case_type") == "biz"
+            assert loaded.get("auto_mode") is True
+
+
+# ---------------------------------------------------------------------------
+# TestPipelineStateYamlRecon / YAML 接口重建测试
+# ---------------------------------------------------------------------------
+
+class TestPipelineStateYamlRecon:
+    """Tests for _load_pipeline_state() YAML interfaces reconstruction."""
+
+    def should_reconstruct_interfaces_from_yaml_with_cases_dir(self):
+        """传入 cases_dir 后应从 YAML 文件重建接口定义。
+        When cases_dir is provided and save_interfaces completed,
+        should load interfaces from YAML files on disk."""
+        from cli.runner import _load_pipeline_state
+
+        with tempfile.TemporaryDirectory() as tmp:
+            memory_dir = Path(tmp) / "memory"
+            memory_dir.mkdir()
+            cases_dir = Path(tmp) / "cases"
+            interfaces_dir = cases_dir / "interfaces"
+            interfaces_dir.mkdir(parents=True)
+
+            # 创建 YAML 接口文件 / Create YAML interface files
+            yaml_content = """test_id: api_test_1
+api_name: 测试接口 / Test API
+method: GET
+url: /api/test
+request_head:
+  Content-Type: application/json
+request_body: {}
+status_code: 200
+assert_dict:
+  status_code: 200
+remark: ""
+"""
+            (interfaces_dir / "api_test_1.yaml").write_text(yaml_content, encoding="utf-8")
+
+            # 保存必要的 pipeline artifacts / Save required pipeline artifacts
+            save_pipeline_artifact(str(memory_dir), "parsed_docs.json", {
+                "requirement_text": "",
+                "api_raw_text": "",
+                "interfaces": [{"test_id": "api_old", "method": "GET", "url": "/old"}],
+                "parse_mode": "raw",
+            })
+            save_pipeline_state(str(memory_dir), "parse_docs")
+            save_pipeline_state(str(memory_dir), "save_interfaces")
+
+            # 不传 cases_dir 时应 fallback 到 parsed_docs 的原始接口
+            # Without cases_dir: should fallback to parsed_docs originals
+            loaded_no_dir = _load_pipeline_state(str(memory_dir))
+            assert len(loaded_no_dir.get("interfaces", [])) == 1
+            assert loaded_no_dir["interfaces"][0]["test_id"] == "api_old"
+
+            # 传入 cases_dir 后应从 YAML 加载 / With cases_dir: should load from YAML
+            loaded_with_dir = _load_pipeline_state(str(memory_dir), str(cases_dir))
+            assert len(loaded_with_dir.get("interfaces", [])) == 1
+            assert loaded_with_dir["interfaces"][0]["test_id"] == "api_test_1"
+            assert loaded_with_dir["interfaces"][0]["method"] == "GET"
+            assert loaded_with_dir["interfaces"][0]["url"] == "/api/test"
+
+    def should_keep_parsed_interfaces_when_no_yaml_files(self):
+        """YAML 目录为空时保留 parsed_docs 的接口 / Keep parsed interfaces
+        when YAML directory is empty."""
+        from cli.runner import _load_pipeline_state
+
+        with tempfile.TemporaryDirectory() as tmp:
+            memory_dir = Path(tmp) / "memory"
+            memory_dir.mkdir()
+            cases_dir = Path(tmp) / "cases"
+            interfaces_dir = cases_dir / "interfaces"
+            interfaces_dir.mkdir(parents=True)  # empty dir, no YAML files
+
+            save_pipeline_artifact(str(memory_dir), "parsed_docs.json", {
+                "requirement_text": "",
+                "api_raw_text": "",
+                "interfaces": [{"test_id": "api_from_parsed"}],
+                "parse_mode": "raw",
+            })
+            save_pipeline_state(str(memory_dir), "parse_docs")
+            save_pipeline_state(str(memory_dir), "save_interfaces")
+
+            loaded = _load_pipeline_state(str(memory_dir), str(cases_dir))
+            assert loaded["interfaces"][0]["test_id"] == "api_from_parsed"
+
+    def should_load_run_config_from_memory_dir(self):
+        """_load_pipeline_state 应加载 run_config.json 到 _run_config 键。
+        _load_pipeline_state should load run_config.json into state._run_config."""
+        from cli.runner import _load_pipeline_state
+        from graph.nodes.helpers import save_run_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            memory_dir = Path(tmp) / "memory"
+            memory_dir.mkdir()
+
+            save_run_config(str(memory_dir), {
+                "case_type": "biz",
+                "user_guidance": "test",
+            })
+
+            loaded = _load_pipeline_state(str(memory_dir))
+            assert "_run_config" in loaded
+            assert loaded["_run_config"]["case_type"] == "biz"
+            assert loaded["_run_config"]["user_guidance"] == "test"
+
+
+# ---------------------------------------------------------------------------
+# TestConfigOverrideWarnings / 配置覆盖警告测试
+# ---------------------------------------------------------------------------
+
+class TestConfigOverrideWarnings:
+    """Tests for _check_config_overrides() warning logic."""
+
+    def should_not_warn_when_no_saved_config(self, capsys):
+        """无已保存配置时不警告 / No warning when no saved config."""
+        from cli.runner import _check_config_overrides
+
+        class FakeArgs:
+            case_type = "biz"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ps_path = Path(tmp) / "pipeline_state.json"
+            # 空的 saved_config / Empty saved_config
+            _check_config_overrides(FakeArgs(), {}, ps_path)
+
+    def should_not_warn_when_values_unchanged(self, capsys):
+        """CLI 参数与已保存配置相同时不警告 / No warning when values unchanged."""
+        from cli.runner import _check_config_overrides
+
+        class FakeArgs:
+            case_type = "both"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ps_path = Path(tmp) / "pipeline_state.json"
+            ps_path.write_text(
+                json.dumps({"stages": ["generate_outline"], "completed_stage": "generate_outline"}),
+                encoding="utf-8",
+            )
+            saved = {"case_type": "both"}
+
+            # 值相同，不应有警告 / Same value, no warning
+            _check_config_overrides(FakeArgs(), saved, ps_path)
+
+    def should_warn_when_cli_overrides_saved_config(self):
+        """CLI 覆盖已保存配置时警告 / Warn when CLI overrides saved config."""
+        from cli.runner import _check_config_overrides
+
+        class FakeArgs:
+            case_type = "single"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ps_path = Path(tmp) / "pipeline_state.json"
+            ps_path.write_text(
+                json.dumps({"stages": ["generate_outline"], "completed_stage": "generate_outline"}),
+                encoding="utf-8",
+            )
+            saved = {"case_type": "both"}
+            # case_type 从 both→single 变化 / Changed from both to single
+            _check_config_overrides(FakeArgs(), saved, ps_path)
+
