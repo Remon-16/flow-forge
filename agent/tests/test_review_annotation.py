@@ -61,7 +61,7 @@ class _FakeIntentAgent:
 
     def call_llm_json(self, prompt: str, system: str):
         self.calls += 1
-        return self._actions
+        return {"actions": self._actions}
 
 
 # ---------------------------------------------------------------------------

@@ -38,31 +38,33 @@ For each annotation, determine the user's intent:
 - "add": The user wants to insert new content near the selected location.
 - "noop": The annotation is informational, unclear, or requires no change.
 
-Output a JSON array — one entry per annotation:
+Output a JSON object with an "actions" array — one entry per annotation:
 
 ```json
-[
-  {
-    "section_key": "<key of the section this annotation belongs to>",
-    "action": "delete" | "update" | "add" | "noop",
-    "reasoning": "Brief explanation (1 sentence)"
-  }
-]
+{
+  "actions": [
+    {
+      "section_key": "<key of the section this annotation belongs to>",
+      "action": "delete | update | add | noop",
+      "reasoning": "Brief explanation (1 sentence)"
+    }
+  ]
+}
 ```
 
 Do NOT generate any content in this step. Only classify the intent.
-Output MUST be a valid JSON array. No extra text outside the array.
+Output MUST be a valid JSON object. No extra text outside the object.
 You MUST write all reasoning text in {{language}}.
 """
 
 PLAN_ANNOTATION_INTENT_USER = """\
-Analyze the following annotations and output the intent JSON array.
+Analyze the following annotations and output the intent JSON object.
 
 ## Sections and Annotations
 
 {{sections_with_annotations}}
 
-Output the JSON array now.
+Output the JSON object now.
 """
 
 

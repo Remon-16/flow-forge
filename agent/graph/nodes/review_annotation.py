@@ -417,6 +417,8 @@ def _phase1_intent_analysis(
 
             try:
                 actions = agent.call_llm_json(prompt, system_rendered)
+                # 从 JSON 对象中提取 actions 数组 / Extract actions array from JSON object
+                actions = actions.get("actions", [])
             except Exception as e:
                 attempts += 1
                 if attempts > max_retries:
