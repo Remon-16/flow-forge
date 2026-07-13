@@ -7,6 +7,11 @@ annotation binding, and section mapping.
 
 import pytest
 
+from graph.nodes.review import (
+    _detect_section_level,
+    _parse_plan_to_sections,
+    _scan_headings,
+)
 from graph.nodes.review_annotation import (
     _apply_actions_to_section,
     _bind_actions_to_batch,
@@ -16,7 +21,6 @@ from graph.nodes.review_annotation import (
     _map_annotations_to_sections,
     _phase1_intent_analysis,
     _remove_annotation_target,
-    _scan_headings,
     _validate_intent_actions,
 )
 
@@ -556,4 +560,156 @@ class TestPhase1Binding:
         assert actions[0]["annotation"]["review_comment"] == "删除"
         assert actions[1]["action"] == "update"
         assert actions[1]["annotation"]["review_comment"] == "修改"
+
+
+# ============================================================================
+# TestDetectSectionLevel — 主分段级别检测 / Section level detection
+# ============================================================================
+
+
+class TestDetectSectionLevel:
+    """Tests for _detect_section_level() — heading-level heuristic."""
+
+    def should_detect_level_2_for_original_h2_format(self):
+        """原始 ## N. 格式 → 返回 2 / Original ## N. format → returns 2."""
+        plan = "## 1. Overview\n\ntext\n\n## 2. API Points\n\ntext"
+        assert _detect_section_level(plan) == 2
+
+    def should_detect_level_3_for_revised_h3_format(self):
+        """修订后 ### N. 格式 → 返回 3 / Revised ### N. format → returns 3."""
+        plan = (
+            "## Revised Plan\n\n"
+            "### 1. 商业理解\n\ntext\n\n"
+            "### 2. 单接口测试点\n\ntext\n\n"
+            "### 3. 商业流程测试\n\ntext"
+        )
+        assert _detect_section_level(plan) == 3
+
+    def should_return_shallowest_repeated_level(self):
+        """多个级别重复时, 返回最浅的 / Multiple repeated levels → return shallowest."""
+        plan = (
+            "## A\n\ntext\n\n## B\n\ntext\n\n"
+            "### C\n\ntext\n\n### D\n\ntext\n\n"
+            "#### E\n\ntext\n\n#### F\n\ntext"
+        )
+        # Level 2 appears 2x, Level 3 appears 2x, Level 4 appears 2x
+        # Shallowest is 2
+        assert _detect_section_level(plan) == 2
+
+    def should_return_min_when_all_levels_unique(self):
+        """每个级别仅一个标题 → 返回最浅级别 / All levels unique → return shallowest."""
+        plan = "# Title\n\n## Section\n\n### Sub\n\n#### Subsub"
+        assert _detect_section_level(plan) == 1
+
+    def should_return_default_for_no_headings(self):
+        """无标题 → 返回 2 (默认) / No headings → return 2 (default)."""
+        plan = "This is just plain text.\n\nNo headings at all."
+        assert _detect_section_level(plan) == 2
+
+    def should_skip_level_appearing_once_when_deeper_repeats(self):
+        """浅层标题仅出现一次, 跳过 → 用下一个重复的级别 / Shallow level single → skip."""
+        plan = (
+            "# Solo Title\n\n"
+            "## 1. Section A\n\ntext\n\n"
+            "## 2. Section B\n\ntext"
+        )
+        # Level 1 appears 1x (skipped), Level 2 appears 2x → return 2
+        assert _detect_section_level(plan) == 2
+
+
+# ============================================================================
+# TestParsePlanToSectionsFlexible — 灵活解析 / Flexible section parsing
+# ============================================================================
+
+
+class TestParsePlanToSectionsFlexible:
+    """Tests for _parse_plan_to_sections() — heading-level adaptive parsing."""
+
+    OUTLINE_BASIC = {
+        "api_groups": [
+            {"group_name": "Auth"},
+            {"group_name": "Products"},
+        ],
+        "biz_flows": [
+            {"name": "Purchase Flow"},
+        ],
+    }
+
+    def should_split_by_detected_h2_level(self):
+        """按检测到的 ## 级别正确切分原始格式 / Split by detected ## level."""
+        plan = (
+            "## 1. Business Understanding\n\nContext text\n\n"
+            "## 2. Single Interface Test Points\n\n"
+            "### Auth\n\nTest case 1\n\n"
+            "### Products\n\nTest case 2\n\n"
+            "## 3. Business Flow Testing\n\n"
+            "### Purchase Flow\n\nFlow test\n\n"
+            "## 4. Flowchart\n\n```mermaid\ngraph\n```"
+        )
+        result = _parse_plan_to_sections(plan, self.OUTLINE_BASIC)
+        assert result["global"], "global should not be empty"
+        assert len(result["sections"]) >= 2, "should have at least 2 sections"
+
+    def should_split_by_detected_h3_level(self):
+        """按检测到的 ### 级别正确切分修订后格式 / Split by detected ### level."""
+        plan = (
+            "## 修订后的测试计划\n\n"
+            "### 1. 商业理解\n\n上下文文本\n\n"
+            "### 2. 单接口测试点\n\n"
+            "#### Auth\n\n测试用例1\n\n"
+            "#### Products\n\n测试用例2\n\n"
+            "### 3. 商业流程测试\n\n"
+            "#### Purchase Flow\n\n流程测试\n\n"
+            "### 4. 流程图\n\n```mermaid\ngraph\n```"
+        )
+        result = _parse_plan_to_sections(plan, self.OUTLINE_BASIC)
+        assert result["global"], "global should not be empty"
+        assert len(result["sections"]) >= 2, "should have at least 2 sections"
+
+    def should_classify_by_zh_keywords(self):
+        """中文关键词正确分类 / Correct classification by Chinese keywords."""
+        plan = (
+            "### 1. 商业理解\n\ncontext\n\n"
+            "### 2. 单接口测试点\n\n"
+            "#### Auth\n\ncase 1\n\n"
+            "### 3. 商业流程测试\n\nflow text\n\n"
+            "### 4. 流程图\n\nmermaid"
+        )
+        result = _parse_plan_to_sections(plan, self.OUTLINE_BASIC)
+        sections = result["sections"]
+        api_sections = [s for s in sections if s["type"] == "api_group"]
+        biz_sections = [s for s in sections if s["type"] == "biz_flow"]
+        assert len(api_sections) >= 1, "should find at least 1 API section"
+        assert len(biz_sections) >= 1, "should find at least 1 biz section"
+        # 验证 global 包含商业理解和流程图
+        # Verify global contains business understanding and flowchart
+        assert "商业理解" in result["global"] or "context" in result["global"]
+
+    def should_classify_by_en_keywords(self):
+        """英文关键词正确分类 / Correct classification by English keywords."""
+        plan = (
+            "## 1. Business Understanding\n\ncontext\n\n"
+            "## 2. Single Interface Test Points\n\n"
+            "### Auth\n\ncase 1\n\n"
+            "## 3. Business Flow Testing\n\nflow text\n\n"
+            "## 4. Flowchart\n\nmermaid"
+        )
+        result = _parse_plan_to_sections(plan, self.OUTLINE_BASIC)
+        sections = result["sections"]
+        api_sections = [s for s in sections if s["type"] == "api_group"]
+        biz_sections = [s for s in sections if s["type"] == "biz_flow"]
+        assert len(api_sections) >= 1, "should find at least 1 API section"
+        assert len(biz_sections) >= 1, "should find at least 1 biz section"
+
+    def should_handle_empty_plan(self):
+        """空 plan 优雅处理 / Graceful handling of empty plan."""
+        result = _parse_plan_to_sections("", None)
+        assert result == {"global": "", "sections": []}
+
+    def should_handle_plain_text_without_headings(self):
+        """无标题纯文本 → 全部归入 global / No headings → all content in global."""
+        plan = "This is a simple test plan with no markdown headings."
+        result = _parse_plan_to_sections(plan, None)
+        assert result["sections"] == []
+        assert "simple test plan" in result["global"]
 

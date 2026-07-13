@@ -30,6 +30,7 @@ from .review import (
     _find_section_by_key,
     _load_or_parse_sections,
     _save_plan_sections,
+    _scan_headings,
 )
 
 logger = logging.getLogger(__name__)
@@ -150,24 +151,6 @@ def _section_key_for_line(sections: dict, plan_md: str, line_number) -> Any:
 # ---------------------------------------------------------------------------
 # 动态定位辅助 / Dynamic block-location helpers (no hard-coded heading levels)
 # ---------------------------------------------------------------------------
-
-_HEADING_RE = re.compile(r"(?m)^(#{1,6})[ \t]+\S")
-
-
-def _scan_headings(content: str) -> List[tuple]:
-    """扫描所有 Markdown 标题 / Scan all markdown headings.
-
-    Returns [(offset, level, line_text), ...] — 级别由 # 数量决定, 不写死。
-    """
-    headings = []
-    for m in _HEADING_RE.finditer(content):
-        offset = m.start()
-        level = len(m.group(1))
-        line_end = content.find("\n", offset)
-        if line_end == -1:
-            line_end = len(content)
-        headings.append((offset, level, content[offset:line_end]))
-    return headings
 
 
 def _line_start_offset(text: str, line_number: int) -> int:

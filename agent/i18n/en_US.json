@@ -143,6 +143,7 @@
   "review.invalid_input": "Invalid input. Please enter y, n, or r.",
   "review.annotation_chunked": "\n  → Using chunked annotation revision (3-phase)...\n  Mapped: {matched} annotations → {sections} sections",
   "review.no_sections_matched": "No sections matched annotations — cannot perform revision",
+  "review.sections_cache_cleared": "Stale plan_sections.json cache cleared",
   "review.phase1_batching": "  Phase 1: {batches} intent analysis batch(es), {total} annotations total",
   "review.phase2_deleted": "  Phase 2: deleted {count} block(s) in code (zero LLM calls)",
   "review.phase3_generating": "  Phase 3: generating revision for {name} ({type}), estimated output {estimated} tokens",

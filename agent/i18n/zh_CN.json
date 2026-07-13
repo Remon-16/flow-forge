@@ -143,6 +143,7 @@
   "review.invalid_input": "无效输入，请输入 y、n 或 r。",
   "review.annotation_chunked": "\n  → 正在使用分块精准修订模式 (三阶段)...\n  定位: {matched} 条批注 → {sections} 个区块",
   "review.no_sections_matched": "未找到批注对应的区块, 无法执行修订",
+  "review.sections_cache_cleared": "已清除过期的 plan_sections.json 缓存",
   "review.phase1_batching": "  Phase 1: {batches} 批意图分析, 共 {total} 条批注",
   "review.phase2_deleted": "  Phase 2: 代码删除 {count} 处, 零 LLM 调用",
   "review.phase3_generating": "  Phase 3: 为 {name} ({type}) 生成修订内容, 预估输出 {estimated} tokens",

@@ -11,6 +11,7 @@ Shared section management utilities used by both revision paths.
 import json
 import logging
 import re
+from collections import Counter
 from pathlib import Path
 from typing import List, Optional
 
@@ -142,6 +143,12 @@ def revise_plan_node(state: GraphState) -> GraphState:
             plan_path = Path(memory_dir) / "plan.md"
             plan_path.parent.mkdir(parents=True, exist_ok=True)
             plan_path.write_text(revised, encoding="utf-8")
+            # 删除过期的分块缓存, 迫使下次 r 模式从 plan.md 重新解析
+            # Remove stale section cache so annotation mode re-parses from plan.md
+            sections_path = Path(memory_dir) / "plan_sections.json"
+            if sections_path.exists():
+                sections_path.unlink()
+                logger.info(_("review.sections_cache_cleared"))
         except Exception as e:
             logger.warning(_("plan_gen.save_error", error=str(e)))
 
@@ -149,69 +156,198 @@ def revise_plan_node(state: GraphState) -> GraphState:
 
 
 # ============================================================================
+# 共享工具: Markdown 标题扫描 / Shared Utilities: Markdown Heading Scanner
+# ============================================================================
+
+_HEADING_RE = re.compile(r"(?m)^(#{1,6})[ \t]+\S")
+
+
+def _scan_headings(content: str) -> List[tuple]:
+    """扫描所有 Markdown 标题 / Scan all markdown headings.
+
+    Returns [(offset, level, line_text), ...] — 级别由 # 数量决定, 不写死。
+    Returns [(offset, level, line_text), ...] — level is dynamic, not hard-coded.
+    """
+    headings = []
+    for m in _HEADING_RE.finditer(content):
+        offset = m.start()
+        level = len(m.group(1))
+        line_end = content.find("\n", offset)
+        if line_end == -1:
+            line_end = len(content)
+        headings.append((offset, level, content[offset:line_end]))
+    return headings
+
+
+# ============================================================================
 # 共享工具: Section 管理 / Shared Utilities: Section Management
 # ============================================================================
+
+# 区块分类关键词 / Section classification keywords
+_GLOBAL_KEYWORDS = [
+    "商业理解", "Business Understanding",
+    "流程图", "Flowchart", "Mermaid",
+]
+_API_KEYWORDS = [
+    "单接口测试点", "Single Interface Test Points",
+    "接口测试", "Interface Test",
+]
+_BIZ_KEYWORDS = [
+    "商业流程测试", "Business Flow Testing",
+    "流程测试", "Flow Testing",
+]
+
+
+def _classify_section(heading_text: str) -> str:
+    """根据标题文本关键词分类区块类型 / Classify section by heading keywords.
+
+    Returns "global", "api", "biz", or "unknown".
+    """
+    for kw in _GLOBAL_KEYWORDS:
+        if kw in heading_text:
+            return "global"
+    for kw in _API_KEYWORDS:
+        if kw in heading_text:
+            return "api"
+    for kw in _BIZ_KEYWORDS:
+        if kw in heading_text:
+            return "biz"
+    return "unknown"
+
+
+def _detect_section_level(plan_md: str) -> int:
+    """检测文档的主分段标题级别 / Detect primary sectioning heading level.
+
+    规则: 出现次数 > 1 的最浅（# 最少）标题级别。
+    Rule: shallowest (fewest #) heading level that appears more than once.
+    Returns 2 as fallback when no suitable level found.
+    """
+    headings = _scan_headings(plan_md)
+    if not headings:
+        return 2
+    level_counts = Counter(h[1] for h in headings)
+    for level in sorted(level_counts.keys()):
+        if level_counts[level] > 1:
+            return level
+    # 所有级别都只出现一次 → 用最浅级别
+    # All levels appear only once → use shallowest
+    return min(level_counts.keys())
 
 
 def _load_or_parse_sections(
     memory_dir: str, plan_md: str, outline: Optional[dict],
 ) -> dict:
-    """加载 plan_sections.json, 如不存在则解析 plan.md。
+    """加载 plan_sections.json, 如过期或不存在则解析 plan.md。
 
-    Load saved section structure, or parse plan.md if not available.
+    Load saved section structure; if stale or missing, parse plan.md instead.
     """
     if memory_dir:
-        path = Path(memory_dir) / "plan_sections.json"
-        if path.exists():
-            try:
-                return json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
-                pass
-    # 回退: 从 plan.md 解析 / Fallback: parse plan.md
+        cache_path = Path(memory_dir) / "plan_sections.json"
+        if cache_path.exists():
+            plan_path = Path(memory_dir) / "plan.md"
+            # plan.md 比缓存新 → 缓存过期, 重新解析
+            # plan.md newer than cache → stale, re-parse from plan.md
+            if (not plan_path.exists()
+                    or cache_path.stat().st_mtime >= plan_path.stat().st_mtime):
+                try:
+                    return json.loads(cache_path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            # else: 缓存过期, 走 fallback 解析
+            # else: cache is stale, fall through to parse plan.md
     return _parse_plan_to_sections(plan_md, outline)
 
 
 def _parse_plan_to_sections(plan_md: str, outline: Optional[dict]) -> dict:
     """从 plan.md 文本解析为 sections 结构 / Parse plan.md into sections.
 
-    按 ## 标题分割为 global、api、biz 三部分, 并映射到 outline 中的 group/flow 名称。
+    自适应标题级别 — 不硬编码 ## 或 ###。
+    Heading-level adaptive — no hard-coded ## or ### levels.
+
+    流程 / Flow:
+    1. _detect_section_level() 检测主分段级别 L
+    2. 按 #{L} 标题切分文档 / Split document by #{L} headings
+    3. 用关键词分类每个区块 (global / api_group / biz_flow)
+    4. 区块内部按 #{L+1,} 标题拆分并映射到 outline
     """
     sections: List[dict] = []
-    raw_sections = re.split(r"\n(?=##\s)", plan_md)
 
-    global_parts = []
-    api_parts = []
-    biz_parts = []
+    section_level = _detect_section_level(plan_md)
+    subsplit_level = section_level + 1
 
-    for sec in raw_sections:
-        stripped = sec.strip()
+    raw_parts = re.split(rf"\n(?=#{{{section_level}}}\s)", plan_md)
+
+    # 第一个 part 是 section_level 标题之前的内容, 归入 global 前导文本
+    # First part is content before the first section_level heading → global preamble
+    global_preamble = ""
+
+    api_parts: List[str] = []
+    biz_parts: List[str] = []
+    global_parts: List[str] = []
+
+    for i, part in enumerate(raw_parts):
+        stripped = part.strip()
         if not stripped:
             continue
-        if stripped.startswith("## 1.") or stripped.startswith("## 4."):
-            global_parts.append(stripped)
-        elif stripped.startswith("## 2."):
-            # 按 ### 分割 / Split by ### subsections
-            subs = re.split(r"\n(?=###\s)", stripped)
-            for sub in subs:
-                sub = sub.strip()
-                # 跳过仅含 section 标题的部分 / Skip section header-only parts
-                if sub and sub.startswith("###"):
-                    api_parts.append(sub)
-        elif stripped.startswith("## 3."):
-            subs = re.split(r"\n(?=###\s)", stripped)
-            for sub in subs:
-                sub = sub.strip()
-                # 跳过仅含 section 标题的部分 / Skip section header-only parts
-                if sub and sub.startswith("###"):
-                    biz_parts.append(sub)
 
-    global_content = "\n\n".join(global_parts)
+        # 提取该 part 的首个标题行用于分类
+        # Extract first heading line of this part for classification
+        first_line = stripped.split("\n", 1)[0].strip()
+        heading_match = re.match(r"^#{1,6}\s+(.+)", first_line)
+        heading_text = heading_match.group(1) if heading_match else ""
+        part_level = len(heading_match.group(0).split()[0]) if heading_match else 0
+
+        # 跳过不是以 section_level 标题开头的 part (前导内容)
+        # Skip parts that don't start with section_level heading (preamble)
+        if part_level != section_level and i == 0:
+            global_preamble = stripped
+            continue
+
+        sec_type = _classify_section(heading_text)
+
+        if sec_type == "global":
+            global_parts.append(stripped)
+        elif sec_type == "api":
+            # 按 #{subsplit_level,} 标题拆分子区块
+            # Split by #{subsplit_level,} headings into subsections
+            subs = re.split(rf"\n(?=#{{{subsplit_level},}}\s)", stripped)
+            for sub in subs:
+                sub = sub.strip()
+                if sub:
+                    api_parts.append(sub)
+        elif sec_type == "biz":
+            subs = re.split(rf"\n(?=#{{{subsplit_level},}}\s)", stripped)
+            for sub in subs:
+                sub = sub.strip()
+                if sub:
+                    biz_parts.append(sub)
+        elif sec_type == "unknown":
+            # 按位置推断: 第一个 → global, 中间的 → api 或 biz
+            # Position-based fallback: first → global, middle → api/biz
+            if i <= 1:
+                global_parts.append(stripped)
+            elif outline and outline.get("api_groups"):
+                subs = re.split(rf"\n(?=#{{{subsplit_level},}}\s)", stripped)
+                for sub in subs:
+                    sub = sub.strip()
+                    if sub:
+                        api_parts.append(sub)
+            else:
+                subs = re.split(rf"\n(?=#{{{subsplit_level},}}\s)", stripped)
+                for sub in subs:
+                    sub = sub.strip()
+                    if sub:
+                        biz_parts.append(sub)
+
+    # 拼接 global 内容: 前导文本 + 明确标记为 global 的区块
+    # Assemble global: preamble + explicitly classified global sections
+    all_global = [global_preamble] + global_parts
+    global_content = "\n\n".join(p for p in all_global if p.strip())
 
     # 映射 API groups / Map to outline API groups
     api_groups = outline.get("api_groups", []) if outline else []
     group_names = [g.get("group_name", "") for g in api_groups]
     for i, part in enumerate(api_parts):
-        # 匹配 outline group name / Match to outline group name
         matched_name = ""
         for name in group_names:
             if name and name in part:
