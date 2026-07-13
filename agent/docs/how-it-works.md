@@ -57,8 +57,9 @@ graph TD
 | `n` | 文字反馈 | 输入修改意见文本，智能体据此修订计划，再次回到审核 |
 | `r` | 按批注文件修改 | 智能体读取 `memory/plan_comments.json` 中的结构化批注（由 [Studio 的 Markdown 计划批注器](../../studio/README.md) 生成），据此修订计划 |
 
-- `n`（文字反馈）走文本修订路径：计划较小可直接整体修订；计划过大则回退到"影响分析 + 仅重生成受影响块"。
-- `r`（批注修改）走三阶段批注修订：意图分析 → 删除 → 逐块内容生成。
+- `n`（文字反馈）走 Chunk 级修订：Section 影响分析（LLM 判断涉及哪些顶层 Section）→ Chunk 意图分析（LLM 判断具体哪个 Chunk 需要什么操作）→ 执行操作（与 r 模式共用代码）。
+- `r`（批注修改）走 Chunk 级修订：批注→Chunk 映射（代码级）→ 意图分析（LLM → noop/fix/delete_chunk/add_chunk）→ 执行 Chunk 操作（fix 从 outline 重生成 / delete_chunk 删除 / add_chunk 新增）。业务流 Chunk 的 fix 先重画 Mermaid 图，再生成计划文本。
+- 测试计划的 Chunk 结构（分块）在轮廓生成时就已确定（`plan_sections.json`），后续修订始终以它为权威数据源，不再从 `plan.md` 反向解析。
 - 反馈循环支持多轮，直到用户输入 `y` 批准。
 - 接口分析阶段（第 2 步）若出现关键不确定性，也会中断询问，用户可输入文字反馈或 `skip` 跳过。
 

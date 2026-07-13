@@ -26,6 +26,7 @@ JSON structure:
   "business_summary": "Brief business understanding (1-2 sentences)",
   "api_groups": [
     {
+      "chunk_id": "api_auth",
       "group_name": "Human-readable group name",
       "api_ids": ["api_xxx", "api_yyy"],
       "test_focus": "Key testing concerns for this group (1 sentence)"
@@ -33,6 +34,7 @@ JSON structure:
   ],
   "biz_flows": [
     {
+      "chunk_id": "biz_user_register",
       "name": "Flow name",
       "description": "What this flow tests (1-2 sentences)",
       "involved_apis": ["api_xxx", "api_yyy"]
@@ -40,6 +42,13 @@ JSON structure:
   ]
 }
 ```
+
+IMPORTANT — chunk_id rules:
+- Every api_group and biz_flow MUST have a unique "chunk_id"
+- chunk_id must be ASCII-only: lowercase letters, digits, underscores (a-z, 0-9, _)
+- Prefix api_group chunk_ids with "api_" (e.g. "api_auth")
+- Prefix biz_flow chunk_ids with "biz_" (e.g. "biz_user_register")
+- Keep chunk_ids short but descriptive (max 40 characters)
 
 Remember: You MUST write ALL field values (group_name, test_focus, name, description, business_summary) in {{language}}. 
 """

@@ -93,17 +93,17 @@ Below is the test plan outline that provides the overall structure:
 {{outline}}
 ```
 
-Your task: generate the "Business Understanding" and "Flowchart (Mermaid)" sections.
+Your task: generate ONLY the "Business Understanding" section.
 
 Requirements:
 - Business Understanding: 2-3 paragraphs describing the overall business context, key testing objectives, and scope
-- Flowchart (Mermaid): Use Mermaid syntax to draw sequence diagrams for key business processes identified in the outline
+- Do NOT generate Mermaid diagrams or flowcharts — those are generated separately per business flow
 
 You MUST write the entire output in {{language}}. Do NOT use any other language.
-Output as standard Markdown (not JSON).
+Output as standard Markdown (not JSON), starting with the heading "## 1. Business Understanding".
 """
 
-PLAN_CHUNK_GLOBAL_USER = """Generate the global overview sections for a test plan.
+PLAN_CHUNK_GLOBAL_USER = """Generate the global overview section for a test plan.
 
 ## Test Plan Outline
 ```json
@@ -125,9 +125,8 @@ PLAN_CHUNK_GLOBAL_USER = """Generate the global overview sections for a test pla
 ## Existing Reference Cases
 {{reference_summary}}
 
-Please generate:
-1. ## 1. Business Understanding
-2. ## 4. Flowchart (Mermaid)
+Please generate ONLY the "## 1. Business Understanding" section.
+Do NOT generate Mermaid diagrams or any other sections.
 
 Output in Markdown format.
 """
@@ -209,4 +208,43 @@ PLAN_CHUNK_BIZ_SECTION_USER = """Generate the business flow test section(s).
 {{user_guidance}}
 
 Please generate the "## 3. Business Flow Testing" section for the flow(s) listed in the system prompt. Include step-by-step test scenarios with data dependencies.
+"""
+
+
+# ============================================================================
+# 逐流 Mermaid 图生成 / Per-flow Mermaid diagram generation
+# ============================================================================
+
+PLAN_CHUNK_MERMAID_SYSTEM = """You are a professional test planning expert. Generate a Mermaid sequence diagram for ONE specific business flow.
+
+## Business Flow
+- Name: {{flow_name}}
+- Description: {{flow_description}}
+- Involved APIs: {{flow_api_ids}}
+
+## Global Context (Business Understanding)
+{{global_context}}
+
+Requirements:
+- Generate ONLY a Mermaid sequence diagram (```mermaid ... ```) that illustrates this flow
+- Use participant names derived from the API names or business roles
+- Show the sequence of API calls in the correct order
+- Include data flow between participants where relevant
+
+You MUST write labels and titles in {{language}}.
+Output ONLY the mermaid code block. No extra text, no headings.
+"""
+
+PLAN_CHUNK_MERMAID_USER = """Generate a Mermaid sequence diagram for this business flow.
+
+## Business Flow
+- Name: {{flow_name}}
+- Description: {{flow_description}}
+
+## API Definitions for this Flow
+```json
+{{interface_defs}}
+```
+
+Output only the Mermaid code block.
 """

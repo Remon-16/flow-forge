@@ -121,6 +121,20 @@
   "plan_gen.case_type_skip_api_sections": "跳过单接口测试点生成 (case_type=biz)",
   "plan_gen.case_type_skip_biz_sections": "跳过业务链路测试生成 (case_type=single)",
 
+  "plan_gen.mermaid_generated": "已生成业务流 Mermaid 图: {flow}",
+
+  "review.manual_edit_hint": "提示: 如需手动编辑计划, 请编辑 {path} 后按 y 批准",
+  "review.reloaded_from_disk": "已从磁盘重新加载计划 ({path}), 包含手动编辑",
+  "review.reload_error": "从磁盘重新加载计划失败: {error}",
+  "review.fixed_global": "已重新生成 Business Understanding",
+  "review.deleted_chunk": "已删除 chunk: {key}",
+  "review.fixed_chunk": "已修复 chunk: {key}",
+  "review.chunk_not_found": "未找到 chunk: {key}",
+  "review.noop_chunk": "无需要执行的操作",
+  "review.no_section_affected": "用户反馈未匹配任何顶层 section, 计划不变",
+  "review.section_impact_result": "Section 影响分析: global={global_sec}, single_api={single}, biz_flows={biz}",
+  "review.no_chunk_affected": "用户反馈未匹配任何 chunk, 计划不变",
+
   "review.prompt_clarify": "\n是否需要澄清以上问题？(输入修改意见 / skip 跳过): ",
   "review.prompt_approve": "\n是否批准此测试计划？\n  y = 批准，继续执行用例生成\n  n = 提出文字修改意见\n  r = 按批注文件修改（需先在 Studio 中对 plan.md 添加批注）\n请输入 (y/n/r): ",
   "review.approved": "\n计划已批准，继续执行用例生成...",

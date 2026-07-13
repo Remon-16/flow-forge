@@ -1,60 +1,54 @@
-"""计划修订提示词 — 根据用户文字反馈或行级批注修改测试计划。
+"""计划修订提示词 — Chunk 级意图分析与 section 影响分析。
 
-Plan revision prompts for modifying test plans based on user feedback or annotations.
+Plan revision prompts for chunk-level intent analysis and section impact analysis.
 """
 
-PLAN_REVISER_SYSTEM = """You are a professional test plan revision expert. The user has reviewed the test plan you generated and provided feedback.
-Revise the plan according to the user's feedback while keeping all unmentioned parts unchanged.
-The revised plan MUST maintain the complete structure: Business Understanding, Single Interface Test Points, Business Flow Testing, Mermaid Flowchart.
-You MUST write the revised plan entirely in {{language}}. Do NOT use any other language."""
-
-PLAN_REVISER_USER = """## Original Test Plan
-{{original_plan}}
-
-## User Feedback
-{{feedback}}
-
-## Requirement Analysis Results (Reference)
-```json
-{{requirement_analysis}}
-```
-
-## Interface Analysis Summaries
-```json
-{{api_summary}}
-```
-
-Please generate the revised complete test plan."""
-
 PLAN_ANNOTATION_INTENT_SYSTEM = """\
-You are a test plan revision analyst. You will receive one or more sections of a
-test plan, each paired with user annotations at specific locations within them.
+You are a test plan revision analyst. For each user annotation, determine ONE action.
 
-For each annotation, determine the user's intent:
-
-- "delete": The user wants to remove the selected content entirely.
-- "update": The user wants to modify/replace the selected content while keeping
-  the surrounding structure unchanged.
-- "add": The user wants to insert new content near the selected location.
-- "noop": The annotation is informational, unclear, or requires no change.
-
-Output a JSON object with an "actions" array — one entry per annotation:
-
-```json
+Output a JSON OBJECT (not an array) with this structure:
 {
   "actions": [
-    {
-      "section_key": "<key of the section this annotation belongs to>",
-      "action": "delete | update | add | noop",
-      "reasoning": "Brief explanation (1 sentence)"
-    }
+    {"section_key": "<chunk_id>", "action": "<action>", "reasoning": "<1 sentence>"}
   ]
 }
-```
+
+Available actions — use EXACTLY these string values:
+
+- "noop": The annotation is informational, unclear, or cannot be matched to any
+  existing chunk. No change is needed.
+
+- "fix": The user wants to ADD, MODIFY, or DELETE content WITHIN an existing
+  chunk — but the chunk itself stays. The chunk will be regenerated from its
+  original outline entry with the annotation text as guidance.
+  Examples: "Add a timeout test for this API", "Change all P1 to P2",
+  "Remove the boundary test cases from this section"
+  DO NOT use this to delete an entire chunk or create a new chunk.
+
+- "delete_chunk": The user wants to COMPLETELY REMOVE an entire API group or
+  business flow. The chunk and its outline entry will be deleted.
+  Examples: "Delete the Auth group entirely", "Remove the User Registration flow"
+  DO NOT use this for partial deletions within a chunk — use "fix" instead.
+
+- "add_chunk": The user wants to CREATE a new API group or business flow that
+  does NOT currently exist. A new outline entry and chunk will be generated.
+  Examples: "Add a payment API group", "Add a refund business flow"
+  When using this action, ALSO include a "section" field:
+  "single_api" for a new API group, or "biz_flows" for a new business flow.
+
+CRITICAL RULES:
+1. Output a JSON OBJECT with an "actions" array — NEVER output a bare array []
+2. Each annotation maps to exactly ONE action
+3. "fix" vs "delete_chunk": If the user only wants to change/remove PART of a
+   chunk's content, use "fix". Only use "delete_chunk" when the ENTIRE chunk
+   should be removed.
+4. "fix" vs "add_chunk": If the user wants to add content INSIDE an existing
+   chunk, use "fix". Only use "add_chunk" when creating an entirely NEW chunk.
+5. For "add_chunk", always include the "section" field indicating where the new
+   chunk belongs: "single_api" or "biz_flows".
 
 Do NOT generate any content in this step. Only classify the intent.
 Output MUST be a valid JSON object. No extra text outside the object.
-You MUST write all reasoning text in {{language}}.
 """
 
 PLAN_ANNOTATION_INTENT_USER = """\
@@ -69,109 +63,95 @@ Output the JSON object now.
 
 
 # ============================================================================
-# 内容生成: 修改现有区块 / Content generation: modify existing section
+# n 模式 Section 影响分析 / Section Impact Analysis for Text Feedback
 # ============================================================================
 
-PLAN_ANNOTATION_UPDATE_SYSTEM = """\
-You are a test plan revision expert. Revise the given section based on user
-annotations. Apply ONLY the modifications described — keep ALL unmentioned
-content exactly as-is (same wording, same structure, same order).
+PLAN_SECTION_IMPACT_SYSTEM = """\
+You are a test plan revision analyst. Analyze the user's text feedback and determine
+which top-level sections of the test plan need to be modified.
 
-The annotations describe what to MODIFY or REPLACE within this section.
-Do NOT add new sections or test scenarios unless explicitly asked.
+The test plan has these top-level sections:
+- "global": Business Understanding (always present)
+- "single_api": Single Interface Test Points
+- "biz_flows": Business Flow Testing (multi-step business scenarios)
 
-Output ONLY the complete revised section as Markdown. Do NOT wrap in JSON.
-Do NOT add explanatory text before or after the Markdown.
-You MUST write all content in {{language}}.
-"""
-
-PLAN_ANNOTATION_UPDATE_USER = """\
-Modify the following section according to the annotations.
-
-## Current Section Content
-{{section_content}}
-
-## Annotations
-{{annotations_list}}
-
-Output the complete revised section (Markdown only).
-"""
-
-
-# ============================================================================
-# 内容生成: 新增内容到区块 / Content generation: add content to section
-# ============================================================================
-
-PLAN_ANNOTATION_ADD_SYSTEM = """\
-You are a test plan revision expert. Insert new content into the given section
-based on user annotations. Keep ALL existing content exactly as-is — only ADD
-the requested new test points, scenarios, or subsections.
-
-Place the new content at an appropriate location within the section (near the
-annotated position). Preserve the existing heading hierarchy.
-
-Output ONLY the complete section with the new content inserted, as Markdown.
-Do NOT wrap in JSON. Do NOT add explanatory text.
-You MUST write all content in {{language}}.
-"""
-
-PLAN_ANNOTATION_ADD_USER = """\
-Insert new content into the following section as described.
-
-## Current Section Content
-{{section_content}}
-
-## Add Requests
-{{annotations_list}}
-
-Output the complete section with the new content inserted (Markdown only).
-"""
-
-
-# ============================================================================
-# 修订影响分析提示词 / Revision impact analysis prompt
-# ============================================================================
-
-PLAN_REVISION_ANALYSIS_SYSTEM = """You are a test plan revision analyst. Your task is to analyze the user's feedback and determine which parts of the test plan need to be updated.
-
-Below is the CURRENT test plan outline:
-```json
-{{outline}}
-```
-
-Based on the user's feedback, determine:
-
-1. Whether the outline itself needs to be updated (e.g., new/deleted API groups, new/deleted business flows)
-2. Which API groups (by group_name) are affected by the feedback
-3. Which business flows (by name) are affected by the feedback
-
-Output ONLY valid JSON, no markdown, no extra text:
-
-```json
+Output a JSON OBJECT (not an array):
 {
-  "outline_needs_update": true,
-  "new_outline": { ... },
-  "affected_groups": ["group_name_1"],
-  "affected_flows": ["flow_name_1"],
-  "change_summary": "Brief description of what changed"
+  "global": true/false,
+  "single_api": true/false,
+  "biz_flows": true/false
 }
-```
 
-- If outline_needs_update is false, omit the "new_outline" field
-- affected_groups: list of group_name values from the outline that need regeneration
-- affected_flows: list of flow name values from the outline that need regeneration
-- If no groups/flows are affected, use empty lists
+Rules:
+- If the feedback is vague, general, or asks for a complete rewrite, return true for ALL
+- Only return false for a section if you are CERTAIN it does not need modification
+- "global" typically needs change if the user wants to adjust business context or overview
+- "single_api" needs change if the user mentions API tests, single endpoints, or groups
+- "biz_flows" needs change if the user mentions flows, scenarios, Mermaid, or multi-step
+
+CRITICAL: Output a JSON OBJECT, not an array. No extra text outside the object.
 """
 
-PLAN_REVISION_ANALYSIS_USER = """Analyze the impact of the following feedback on the test plan.
+PLAN_SECTION_IMPACT_USER = """\
+Analyze which sections of the test plan need to be modified based on this feedback.
 
-## Current Outline
-```json
-{{outline}}
-```
+## Case Type Constraint
+{{case_type}}
+(If case_type is "single", biz_flows should always be false.
+ If case_type is "biz", single_api should always be false.
+ If case_type is "both", all sections are available.)
 
 ## User Feedback
 {{feedback}}
 
-Output the impact analysis JSON.
+Output the JSON object now.
+"""
+
+
+# ============================================================================
+# n 模式 Chunk 意图分析 / Chunk Intent Analysis for Text Feedback
+# ============================================================================
+
+PLAN_TEXT_CHUNK_INTENT_SYSTEM = """\
+You are a test plan revision analyst. Determine which chunks (sections of the plan)
+need modification based on user text feedback.
+
+Below is a list of chunks in this section. For each relevant chunk, determine ONE action:
+
+Available actions — use EXACTLY these string values:
+- "noop": This chunk does NOT need any change
+- "fix": The user's feedback requires ADDING, MODIFYING, or DELETING content WITHIN this
+  chunk — but the chunk itself stays. It will be regenerated with the feedback as guidance.
+- "delete_chunk": The user wants to COMPLETELY REMOVE this chunk from the plan.
+- "add_chunk": The user wants to CREATE a new chunk (API group or business flow).
+  When using this, include a "section" field: "single_api" or "biz_flows".
+
+Output a JSON OBJECT (not an array):
+{
+  "actions": [
+    {"chunk_id": "<chunk_id>", "action": "<action>", "reasoning": "<1 sentence>"}
+  ]
+}
+
+CRITICAL RULES:
+1. Output a JSON OBJECT — NEVER output a bare array []
+2. Only include chunks that need changes. Skip chunks that don't need modification.
+3. For "add_chunk", include the "section" field and a suggested "name" for the new chunk.
+   Use "chunk_id": "_new_1", "_new_2" etc. for add_chunk actions.
+4. "fix" vs "delete_chunk": partial changes → fix. Remove entirely → delete_chunk.
+5. "fix" vs "add_chunk": changes inside existing chunk → fix. New chunk → add_chunk.
+
+Do NOT generate any content. Only classify intent.
+"""
+
+PLAN_TEXT_CHUNK_INTENT_USER = """\
+Analyze which chunks need modification based on the user's feedback.
+
+## User Feedback
+{{feedback}}
+
+## Chunks in this Section
+{{chunks_list}}
+
+Output the JSON object with actions for the affected chunks.
 """

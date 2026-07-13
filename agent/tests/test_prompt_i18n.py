@@ -262,10 +262,7 @@ class TestDiscoveredTemplates:
             # prompts/plan_outline.py
             "plan_outline.PLAN_OUTLINE_SYSTEM",
             # prompts/plan_reviser.py
-            "plan_reviser.PLAN_REVISER_SYSTEM",
-            "plan_reviser.PLAN_ANNOTATION_INTENT_SYSTEM",
-            "plan_reviser.PLAN_ANNOTATION_UPDATE_SYSTEM",
-            "plan_reviser.PLAN_ANNOTATION_ADD_SYSTEM",
+            "plan_generation.PLAN_CHUNK_MERMAID_SYSTEM",
             # prompts/skeleton_generation.py (f-string)
             "skeleton_generation.SINGLE_SKELETON_SYSTEM",
             "skeleton_generation.BIZ_SKELETON_SYSTEM",

@@ -146,6 +146,12 @@ def run_interactive(
             result = _handle_api_clarification(graph, config, _resume)
 
         elif pending == "human_confirm":
+            # 提示 plan.md 路径, 用户可手动编辑 / Show plan.md path for manual editing
+            memory_dir = state.values.get("memory_dir", "")
+            if memory_dir:
+                plan_path = Path(memory_dir) / "plan.md"
+                if plan_path.exists():
+                    logger.info(_("review.manual_edit_hint", path=str(plan_path.resolve())))
             choice = input(_("review.prompt_approve")).strip().lower()
             if choice == "y":
                 logger.info(_("review.approved"))

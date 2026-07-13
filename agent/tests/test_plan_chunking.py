@@ -149,8 +149,10 @@ class TestPlanChunking:
                 {"test_id": "api_2", "api_name": "API2", "method": "POST", "url": "/2", "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200, "assert_dict": {}, "remark": ""},
             ]
 
+            # Phase A + Mermaid(1 flow) + Phase B(2 groups) + Phase C(1 batch) = 5 calls
             outputs = [
                 "GLOBAL_CONTEXT",
+                "MERMAID_FLOW",           # Mermaid for biz flow
                 "FIRST_GROUP_SECTION",
                 "SECOND_GROUP_SECTION",
                 "BIZ_FLOW_SECTION",
@@ -209,8 +211,8 @@ class TestPlanChunking:
             interfaces = [
                 {"test_id": "api_a", "api_name": "A", "method": "GET", "url": "/a", "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200, "assert_dict": {}, "remark": ""},
             ]
-            # Phase A (global) + Phase C (1 biz batch) = 2 calls
-            agent.call_llm = MagicMock(side_effect=["GLOBAL_CONTEXT", "BIZ_FLOW_SECTION"])
+            # Phase A (global) + Mermaid(1 flow) + Phase C (1 biz batch) = 3 calls
+            agent.call_llm = MagicMock(side_effect=["GLOBAL_CONTEXT", "MERMAID_FLOW", "BIZ_FLOW_SECTION"])
 
             plan_md = agent.generate_from_outline(
                 outline=outline,

@@ -95,8 +95,15 @@ def _make_partial_biz_plan(plan, batch_scenarios: List[Dict]) -> Any:
     if hasattr(plan, "business_summary"):
         partial.business_summary = plan.business_summary
     partial.biz_flow_scenarios = batch_scenarios
-    if hasattr(plan, "mermaid_flows"):
-        partial.mermaid_flows = plan.mermaid_flows
+    # 仅包含当前批次相关的 Mermaid 图（按 flow name 匹配）
+    # Only include Mermaid diagrams relevant to this batch (matched by flow name)
+    batch_flow_names = {s.get("name", "") for s in batch_scenarios}
+    if hasattr(plan, "mermaid_flows") and plan.mermaid_flows:
+        partial.mermaid_flows = {
+            name: diagram
+            for name, diagram in plan.mermaid_flows.items()
+            if name in batch_flow_names
+        }
     else:
         partial.mermaid_flows = {}
     return partial

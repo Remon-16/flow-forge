@@ -57,8 +57,9 @@ Step 8, "Human Review," is a mandatory interrupt. After the CLI displays the gen
 | `n` | Text feedback | Enter revision notes as text; the agent revises the plan accordingly and returns to review |
 | `r` | Revise from annotation file | The agent reads the structured annotations in `memory/plan_comments.json` (produced by [Studio's Markdown Plan Annotator](../../studio/README.en.md)) and revises the plan accordingly |
 
-- `n` (text feedback) takes the text-revision path: a small plan can be revised as a whole; an oversized plan falls back to "impact analysis + regenerating only the affected chunks."
-- `r` (annotation-based revision) takes the three-phase annotation revision path: intent analysis → deletion → chunk-by-chunk content generation.
+- `n` (text feedback) uses chunk-level revision: Section Impact Analysis (LLM determines which top-level sections are affected) → Chunk Intent Analysis (LLM determines which chunks need which operations) → Execute (shared code path with r mode).
+- `r` (annotation-based revision) uses chunk-level revision: Annotation-to-Chunk mapping (code-level) → Intent Analysis (LLM → noop/fix/delete_chunk/add_chunk) → Execute Chunk Actions (fix regenerates from outline / delete_chunk removes / add_chunk creates new). For business flow chunks, fix regenerates the Mermaid diagram first, then the plan text.
+- The test plan's chunk structure is determined during outline generation (`plan_sections.json`), which serves as the authoritative data source for all subsequent revisions — no more reverse-parsing from `plan.md`.
 - The feedback loop supports multiple rounds until the user enters `y` to approve.
 - If critical uncertainties arise during the API analysis stage (step 2), it will also interrupt to ask; the user can enter text feedback or `skip` to bypass it.
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent
@@ -20,6 +21,8 @@ from prompts.plan_generation import (
     PLAN_CHUNK_BIZ_SECTION_USER,
     PLAN_CHUNK_GLOBAL_SYSTEM,
     PLAN_CHUNK_GLOBAL_USER,
+    PLAN_CHUNK_MERMAID_SYSTEM,
+    PLAN_CHUNK_MERMAID_USER,
     PLAN_GENERATION_SYSTEM,
     PLAN_GENERATION_USER,
 )
@@ -167,6 +170,8 @@ class PlanGenerator(BaseAgent):
         )
         system_msg = render_prompt(PLAN_OUTLINE_SYSTEM, language=get_language_name())
         outline = self.call_llm_json(prompt, system_msg)
+        # 确保每条记录都有唯一的 chunk_id / Ensure every entry has a unique chunk_id
+        outline = _normalize_chunk_ids(outline)
         logger.info(
             _("plan_gen.outline_result",
               groups=len(outline.get("api_groups", [])),
@@ -243,7 +248,8 @@ class PlanGenerator(BaseAgent):
         api_summary_json = json.dumps(api_summary or [], ensure_ascii=False, indent=2)
         outline_json = json.dumps(outline, ensure_ascii=False, indent=2)
 
-        # Phase A: 生成 Business Understanding + Mermaid（全局视角）
+        # Phase A: 生成 Business Understanding（仅全局上下文, 不含 Mermaid）
+        # Phase A: Generate Business Understanding only (no Mermaid — per-flow below)
         global_context = self._phase_a_global(
             outline_json=outline_json,
             requirement_json=requirement_json,
@@ -252,6 +258,20 @@ class PlanGenerator(BaseAgent):
             reference_summary=reference_summary,
             plan_parts=plan_parts,
         )
+
+        # 逐流生成 Mermaid 图 / Per-flow Mermaid generation
+        # 仅 both / biz 模式生成 / Only generate for both or biz mode
+        mermaid_chunks: Dict[str, str] = {}
+        if case_type in ("both", "biz"):
+            for flow in biz_flows:
+                self._generate_mermaid_for_flow(
+                    flow=flow,
+                    iface_by_id=iface_by_id,
+                    outline_json=outline_json,
+                    global_context=global_context,
+                    plan_parts=plan_parts,
+                )
+            mermaid_chunks = plan_parts.get("mermaid_chunks", {})
 
         # Phase B: 按 API group 生成测试点 section
         # 仅 both / single 模式生成 / Only generate for both or single mode
@@ -295,6 +315,7 @@ class PlanGenerator(BaseAgent):
             biz_batches=biz_batches,
             biz_sections=biz_sections,
             global_context=global_context,
+            mermaid_chunks=mermaid_chunks,
         )
 
         # ====================================================================
@@ -359,6 +380,53 @@ class PlanGenerator(BaseAgent):
         plan_parts["global_context"] = global_context
         logger.info(_("plan_gen.phase_a_done"))
         return global_context
+
+    def _generate_mermaid_for_flow(
+        self,
+        flow: Dict[str, Any],
+        iface_by_id: Dict[str, dict],
+        outline_json: str,
+        global_context: str,
+        plan_parts: Dict[str, Any],
+    ) -> str:
+        """为单个业务流生成 Mermaid 序列图 / Generate Mermaid diagram for one biz flow.
+
+        Mermaid 内容存入 plan_parts["mermaid_chunks"][chunk_id]，
+        后续 _save_sections_artifact 将其合并到对应 biz chunk。
+        Mermaid content stored in plan_parts["mermaid_chunks"][chunk_id],
+        later merged into the biz chunk by _save_sections_artifact.
+        """
+        chunk_id = flow.get("chunk_id", "")
+        flow_name = flow.get("name", "")
+
+        # Resume 检查 / Resume check
+        mermaid_chunks = plan_parts.get("mermaid_chunks", {})
+        if chunk_id in mermaid_chunks:
+            return mermaid_chunks[chunk_id]
+
+        api_ids = flow.get("involved_apis", [])
+        flow_ifaces = [iface_by_id[aid] for aid in api_ids if aid in iface_by_id]
+
+        prompt = render_prompt(
+            PLAN_CHUNK_MERMAID_USER,
+            flow_name=flow_name,
+            flow_description=flow.get("description", ""),
+            interface_defs=json.dumps(flow_ifaces, ensure_ascii=False, indent=2),
+        )
+        system_msg = render_prompt(
+            PLAN_CHUNK_MERMAID_SYSTEM,
+            flow_name=flow_name,
+            flow_description=flow.get("description", ""),
+            flow_api_ids=", ".join(api_ids),
+            global_context=global_context,
+            language=get_language_name(),
+        )
+        self.reset_steps()
+        mermaid_content = self.call_llm(prompt, system_msg)
+
+        plan_parts.setdefault("mermaid_chunks", {})[chunk_id] = mermaid_content
+        logger.info(_("plan_gen.mermaid_generated", flow=flow_name))
+        return mermaid_content
 
     def _phase_b_api_sections(
         self,
@@ -514,44 +582,63 @@ class PlanGenerator(BaseAgent):
         biz_batches: List[List[dict]],
         biz_sections: Dict[str, str],
         global_context: str,
+        mermaid_chunks: Dict[str, str] | None = None,
     ):
         """保存分块结构到 plan_sections.json / Save section structure for revision.
 
         转换 plan_parts (flat dicts) 为有序 sections 数组并持久化。
+        Mermaid 内容直接存入对应 biz chunk 的 mermaid 字段。
+        Mermaid content stored directly in the biz chunk's mermaid field.
         """
         if not memory_dir:
             return
 
         from graph.nodes.helpers import save_pipeline_artifact
 
+        mermaid_map = mermaid_chunks or {}
         _sections = []
-        # API groups / 接口分组
+        # API groups / 接口分组 (使用 chunk_id)
+        # API groups (use chunk_id as key)
         for group in api_groups:
-            key = f"api_{group.get('group_name', '')}"
-            content = api_sections.get(key, "")
+            chunk_id = group.get("chunk_id", "")
+            # _phase_b_api_sections 用 f"api_{group_name}" 作 key
+            # _phase_b_api_sections uses f"api_{group_name}" as key
+            section_key = f"api_{group.get('group_name', '')}"
+            content = api_sections.get(section_key, "")
             if content and content.strip():
                 _sections.append({
-                    "key": key,
-                    "type": "api_group",
+                    "chunk_id": f"api_{chunk_id}" if chunk_id else section_key,
+                    "key": f"api_{chunk_id}" if chunk_id else section_key,
+                    "type": "api",
                     "name": group.get("group_name", ""),
+                    "section": "single_api",
                     "content": content,
                 })
-        # Biz flows / 业务流 (按 batches 顺序)
+        # Biz flows / 业务流 (使用 chunk_id, 绑定 Mermaid)
+        # Biz flows (use chunk_id, bind Mermaid)
         for j, batch in enumerate(biz_batches):
             if not batch:
                 continue
-            if len(batch) == 1:
-                key = f"biz_{batch[0].get('name', '')}"
-            else:
-                key = f"biz_batch_{j}"
-            content = biz_sections.get(key, "")
-            if content and content.strip():
-                _sections.append({
-                    "key": key,
-                    "type": "biz_flow",
-                    "name": ", ".join(f.get("name", "?") for f in batch),
-                    "content": content,
-                })
+            for flow in batch:
+                chunk_id = flow.get("chunk_id", f"flow_{j}")
+                biz_key = f"biz_{chunk_id}"
+                # _phase_c_biz_sections 用 f"biz_{flow_name}" 或 f"biz_batch_{j}" 作 key
+                # _phase_c_biz_sections uses f"biz_{flow_name}" or f"biz_batch_{j}" as key
+                if len(batch) == 1:
+                    section_key = f"biz_{flow.get('name', '')}"
+                else:
+                    section_key = f"biz_batch_{j}"
+                content = biz_sections.get(section_key, "")
+                if content and content.strip():
+                    _sections.append({
+                        "chunk_id": biz_key,
+                        "key": biz_key,
+                        "type": "biz",
+                        "name": flow.get("name", ""),
+                        "section": "biz_flows",
+                        "content": content,
+                        "mermaid": mermaid_map.get(chunk_id, ""),
+                    })
         save_pipeline_artifact(memory_dir, "plan_sections.json", {
             "global": global_context,
             "sections": _sections,
@@ -582,3 +669,68 @@ def _serialize_interfaces(interfaces: List[Any]) -> List[Dict[str, Any]]:
                 "remark": getattr(iface, "remark", ""),
             })
     return result
+
+
+def _name_to_chunk_id(name: str, prefix: str = "") -> str:
+    """将中文/英文名称转为安全的 ASCII chunk_id / Convert name to safe ASCII chunk_id.
+
+    移除非 ASCII 字符，空格/特殊符号替换为下划线，小写。
+    Remove non-ASCII chars, replace spaces/symbols with underscores, lowercase.
+    """
+    import unicodedata
+    # 尝试拼音首字母提取 / Try extracting first letters of pinyin
+    # 对于纯中文名，尝试用 unicodedata 规范化后取 ASCII 部分
+    # For pure Chinese names, normalize and extract ASCII portions
+    normalized = unicodedata.normalize('NFKD', name)
+    ascii_part = normalized.encode('ascii', 'ignore').decode('ascii')
+    if ascii_part.strip():
+        safe = re.sub(r'[^a-zA-Z0-9]+', '_', ascii_part).strip('_').lower()
+    else:
+        # 纯中文名 / Pure Chinese name — just strip and lowercase anything usable
+        safe = re.sub(r'[^a-zA-Z0-9]+', '_', name).strip('_').lower()
+    # 清理多余的连续下划线 / Collapse multiple underscores
+    safe = re.sub(r'_+', '_', safe)
+    if prefix and not safe.startswith(prefix):
+        safe = prefix + safe
+    return safe or (prefix + "chunk")
+
+
+def _normalize_chunk_ids(outline: Dict[str, Any]) -> Dict[str, Any]:
+    """确保轮廓中所有条目有唯一 chunk_id / Ensure every outline entry has a unique chunk_id.
+
+    若 LLM 未生成 chunk_id 则自动补全; 去重冲突检测。
+    Auto-generates missing chunk_ids; detects and resolves collisions.
+    """
+    seen: set = set()
+
+    for i, group in enumerate(outline.get("api_groups", [])):
+        cid = group.get("chunk_id", "").strip()
+        if not cid:
+            cid = _name_to_chunk_id(group.get("group_name", f"group_{i}"), prefix="api_")
+        if not cid.startswith("api_"):
+            cid = "api_" + cid
+        # 去重 / Deduplicate
+        original = cid
+        suffix = 0
+        while cid in seen:
+            suffix += 1
+            cid = f"{original}_{suffix}"
+        seen.add(cid)
+        group["chunk_id"] = cid
+
+    for j, flow in enumerate(outline.get("biz_flows", [])):
+        cid = flow.get("chunk_id", "").strip()
+        if not cid:
+            cid = _name_to_chunk_id(flow.get("name", f"flow_{j}"), prefix="biz_")
+        if not cid.startswith("biz_"):
+            cid = "biz_" + cid
+        # 去重 / Deduplicate
+        original = cid
+        suffix = 0
+        while cid in seen:
+            suffix += 1
+            cid = f"{original}_{suffix}"
+        seen.add(cid)
+        flow["chunk_id"] = cid
+
+    return outline

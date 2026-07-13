@@ -64,11 +64,29 @@ def human_confirm_node(state: GraphState) -> GraphState:
             _sl().log_node_end("human_confirm")
         return state
 
+    # 打印 plan.md 路径, 方便用户手动编辑 / Print plan.md path for manual editing
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        plan_path = Path(memory_dir) / "plan.md"
+        if plan_path.exists():
+            logger.info(_("review.manual_edit_hint", path=str(plan_path.resolve())))
+
     decision = interrupt(_("review.interrupt_title"))
 
     if decision == "approved":
         state["plan_confirmed"] = True
         state["plan_feedback"] = ""
+        # 从磁盘重新加载 plan.md (含用户手动编辑) / Reload plan.md from disk
+        if memory_dir:
+            plan_path = Path(memory_dir) / "plan.md"
+            if plan_path.exists():
+                try:
+                    disk_content = plan_path.read_text(encoding="utf-8")
+                    if disk_content.strip():
+                        state["plan_md"] = disk_content
+                        logger.info(_("review.reloaded_from_disk", path=str(plan_path.resolve())))
+                except Exception as e:
+                    logger.warning(_("review.reload_error", error=str(e)))
     else:
         state["plan_confirmed"] = False
         state["plan_feedback"] = decision
@@ -143,12 +161,8 @@ def revise_plan_node(state: GraphState) -> GraphState:
             plan_path = Path(memory_dir) / "plan.md"
             plan_path.parent.mkdir(parents=True, exist_ok=True)
             plan_path.write_text(revised, encoding="utf-8")
-            # 删除过期的分块缓存, 迫使下次 r 模式从 plan.md 重新解析
-            # Remove stale section cache so annotation mode re-parses from plan.md
-            sections_path = Path(memory_dir) / "plan_sections.json"
-            if sections_path.exists():
-                sections_path.unlink()
-                logger.info(_("review.sections_cache_cleared"))
+            # plan_sections.json 已由 r/n 模式内部更新, 此处不再删除
+            # plan_sections.json is updated by r/n mode internally; never deleted
         except Exception as e:
             logger.warning(_("plan_gen.save_error", error=str(e)))
 
@@ -253,8 +267,6 @@ def _load_or_parse_sections(
                     return json.loads(cache_path.read_text(encoding="utf-8"))
                 except Exception:
                     pass
-            # else: 缓存过期, 走 fallback 解析
-            # else: cache is stale, fall through to parse plan.md
     return _parse_plan_to_sections(plan_md, outline)
 
 
@@ -398,10 +410,29 @@ def _find_section_by_key(sections: dict, key: str) -> Optional[dict]:
 
 
 def _assemble_plan(sections: dict) -> str:
-    """从分块结构拼接完整 plan.md / Assemble plan.md from section structure."""
-    parts = [sections.get("global", "")]
+    """从分块结构拼接纯 Markdown plan.md / Assemble clean plan.md from section structure.
+
+    biz 类型 chunk 如有 mermaid 字段, 拼在 content 前面。
+    For biz-type chunks, prepend mermaid content before plan text.
+    """
+    parts: List[str] = [sections.get("global", "")]
+    in_biz = False
     for sec in sections.get("sections", []):
+        sec_type = sec.get("type", "")
         content = sec.get("content", "")
+
+        # 第一个 biz 类型前插入 section 标题 / Insert section heading before first biz
+        if sec_type in ("biz", "biz_flow") and not in_biz:
+            in_biz = True
+
+        # biz chunk: Mermaid 在前, 计划文本在后 / Mermaid first, then plan text
+        mermaid = sec.get("mermaid", "")
+        if mermaid and mermaid.strip():
+            if content.strip():
+                content = mermaid.strip() + "\n\n" + content.strip()
+            else:
+                content = mermaid.strip()
+
         if content.strip():
             parts.append(content)
     return "\n\n".join(filter(None, parts))
