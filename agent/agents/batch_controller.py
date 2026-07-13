@@ -38,13 +38,16 @@ class BatchController:
         self._url_doc_match_strategy = getattr(
             settings, "url_doc_match_strategy", "warn"
         )
+        self._url_doc_match_enabled = getattr(
+            settings, "url_doc_match_enabled", True
+        )
         self._consecutive_failure_limit = getattr(
             settings, "consecutive_batch_failure_limit", 3
         )
         self._rate_limit_delay = getattr(settings, "llm_rate_limit_delay", 0.0)
         # 校验规则列表 / Validation rules list
-        self._case_gen_rules = getattr(settings, "case_gen_rules", [])
-        self._url_failure_action = get_url_failure_action(self._case_gen_rules)
+        self._case_gen_validation = getattr(settings, "case_gen_validation", [])
+        self._url_failure_action = get_url_failure_action(self._case_gen_validation)
         self._reference_dir = ""
         self._memory_dir = ""
 
@@ -267,13 +270,19 @@ class BatchController:
         Returns (valid_cases, failed_cases).
         """
         # 查询 URL 校验策略 / Query URL check strategy
-        # 优先使用 case_gen_rules 中的 url_check 策略，否则回退到 url_doc_match_strategy
-        # Prefer url_check from case_gen_rules, fall back to url_doc_match_strategy
-        url_check_in_rules = any(r.get("check") == "url_check" for r in self._case_gen_rules)
+        # 优先使用 case_gen_validation 中的 url_check 策略，否则回退到 url_doc_match_strategy
+        # Prefer url_check from case_gen_validation, fall back to url_doc_match_strategy
+        url_check_in_rules = any(r.get("check") == "url_check" for r in self._case_gen_validation)
         if url_check_in_rules:
-            url_strategy = get_strategy(self._case_gen_rules, "url_check")
+            url_strategy = get_strategy(self._case_gen_validation, "url_check")
         else:
             url_strategy = self._url_doc_match_strategy
+
+        # 未启用 URL 文档匹配校验 / Not enabled: skip entirely
+        if not self._url_doc_match_enabled:
+            logger.info(_("batch_controller.url_check_disabled",
+                        count=len(skeletons), type=batch_type))
+            return skeletons, []
 
         # skip 策略：完全跳过 URL 校验 / Skip strategy: bypass entirely
         if url_strategy == "skip":
@@ -503,6 +512,10 @@ class BatchController:
                 "url_doc_match_max_retries", self._url_doc_match_max_retries)
             self._url_doc_match_strategy = ckpt_settings.get(
                 "url_doc_match_strategy", self._url_doc_match_strategy)
+            self._url_doc_match_enabled = ckpt_settings.get(
+                "url_doc_match_enabled", self._url_doc_match_enabled)
+            if "case_gen_validation" in ckpt_settings:
+                self._case_gen_validation = ckpt_settings["case_gen_validation"]
 
         data = ckpt_mgr.load_data()
         single_cases: List[Dict] = data.get("single_cases", []) if data else []
@@ -587,5 +600,6 @@ class BatchController:
             "case_format_max_retries": self._case_format_max_retries,
             "url_doc_match_max_retries": self._url_doc_match_max_retries,
             "url_doc_match_strategy": self._url_doc_match_strategy,
-            "case_gen_rules": self._case_gen_rules,
+            "url_doc_match_enabled": self._url_doc_match_enabled,
+            "case_gen_validation": self._case_gen_validation,
         }

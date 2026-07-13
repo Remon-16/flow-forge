@@ -25,7 +25,7 @@ def _make_settings(**kwargs):
     """创建测试用 Settings / Create a minimal Settings object for testing."""
     s = Settings(llm_api_key="test")
     s.skeleton_batch_size = kwargs.get("skeleton_batch_size", 30)
-    s.case_gen_rules = kwargs.get("case_gen_rules", [
+    s.case_gen_validation = kwargs.get("case_gen_validation", [
         {"check": "skeleton_count", "strategy": "fail"},
     ])
     return s

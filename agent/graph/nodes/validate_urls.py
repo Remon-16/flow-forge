@@ -40,6 +40,12 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
 
     max_retries = _h._settings.url_doc_match_max_retries
     url_strategy = getattr(_h._settings, "url_doc_match_strategy", "warn")
+    url_enabled = getattr(_h._settings, "url_doc_match_enabled", True)
+
+    # 未启用 URL 文档匹配校验：跳过 / Not enabled: skip entirely
+    if not url_enabled:
+        logger.info(_("url_check.disabled"))
+        return state
 
     # skip 策略：完全跳过 URL 校验 / Skip strategy: bypass entirely
     if url_strategy == "skip":

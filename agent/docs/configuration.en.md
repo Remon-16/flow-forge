@@ -101,52 +101,59 @@ See the [Knowledge Base section in how-it-works.md](./how-it-works.en.md#knowled
 
 ```yaml
 validation:
-  # ··· Case format validation ···
-  case_format_enabled: true            # Enable case format validation (was enabled)
-  case_format_max_retries: 3           # Case format validation retry limit
+  # ··· URL doc-match validation ···
+  url_doc_match_validation:
+    enable: true                        # Enable URL doc-match validation
+    max_retries: 3                      # URL correction retry limit
+    rules:
+      - check: url_check                # URL existence check
+        strategy: warn                  # Strategy after correction exhausted: fail | warn | skip
 
-  # ··· URL doc-match correction ···
-  url_doc_match_rules:
-    max_retries: 3                     # URL correction retry limit (was url_doc_match_max_retries)
-    strategy: warn                     # Strategy after correction exhausted: fail | warn | skip
-
-  # ··· Case generation validation rules ···
-  case_gen_rules:
-    - check: skeleton_count
-      strategy: warn
-    - check: url_check
-      strategy: warn
-      failure_action: keep   # url_check only: discard (send to failures.yaml) | keep (retain and continue plugin processing)
-    - check: data_fill_count
-      strategy: warn
-    - check: assertion_count
-      strategy: warn
+  # ··· Case generation validation ···
+  case_gen_validation:
+    enable: true                        # Enable case format validation (was case_format_enabled)
+    max_retries: 3                      # Case format validation retry limit (was case_format_max_retries)
+    rules:
+      - check: skeleton_count
+        strategy: warn
+      - check: url_check
+        strategy: warn
+        failure_action: keep   # url_check only: discard (send to failures.yaml) | keep (retain and continue plugin processing)
+      - check: data_fill_count
+        strategy: warn
+      - check: assertion_count
+        strategy: warn
 ```
 
 **Strategy values**: `fail` (abort and retry) | `warn` (warn and continue) | `skip` (bypass).
+
+**Backward compatibility**: Old formats (`case_format_enabled`, `case_format_max_retries`, `url_doc_match_rules`, `case_gen_rules` as flat keys) still work — the system auto-detects both old and new formats.
 
 **Both YAML forms are supported** (via `_parse_validation_rules` in `config/settings.py`):
 
 ```yaml
 # List format
-case_gen_rules:
-  - check: url_check
-    strategy: warn
-    failure_action: keep
+case_gen_validation:
+  rules:
+    - check: url_check
+      strategy: warn
+      failure_action: keep
 
 # Dict format (shorthand)
-case_gen_rules:
-  skeleton_count: fail
-  url_check: warn
+case_gen_validation:
+  rules:
+    skeleton_count: fail
+    url_check: warn
 
 # Dict format (nested, can include failure_action)
-case_gen_rules:
-  url_check:
-    strategy: warn
-    failure_action: keep
+case_gen_validation:
+  rules:
+    url_check:
+      strategy: warn
+      failure_action: keep
 ```
 
-> **Code defaults vs. example**: When `case_gen_rules` is not configured, the code defaults `skeleton_count` / `data_fill_count` / `assertion_count` to `fail` and `url_check` to `warn` (`settings.py`). `env.example.yaml` shows all of them as `warn` for demonstration only — the effective values come from your configuration or the code defaults.
+> **Code defaults vs. example**: When `case_gen_validation` is not configured, the code defaults `skeleton_count` / `data_fill_count` / `assertion_count` to `fail` and `url_check` to `warn` (`settings.py`). `env.example.yaml` shows all of them as `warn` for demonstration only — the effective values come from your configuration or the code defaults.
 
 For the detailed behavior of each validation check and URL correction, see [anti-hallucination.md](./anti-hallucination.en.md).
 
@@ -215,10 +222,11 @@ Main entry point: `python main.py`. Full argument list (matching `cli/parser.py`
 | `--consecutive-batch-failure-limit N` | Overrides `pipeline.consecutive_batch_failure_limit` (consecutive batch failure limit) |
 | `--skeleton-batch-size N` | Overrides `pipeline.skeleton_batch_size` (skeleton generation batch size) |
 | `--plan-single-batch-size N` | Overrides `pipeline.plan_single_batch_size` (single-API test point group size) |
-| `--url-doc-match-max-retries N` | Overrides `validation.url_doc_match_rules.max_retries` (URL-to-document match retry limit) |
-| `--url-doc-match-strategy {fail,warn,skip}` | Overrides `validation.url_doc_match_rules.strategy` (URL correction exhaustion strategy) |
-| `--case-format-max-retries N` | Overrides `validation.case_format_max_retries` (case format validation retry limit) |
-| `--validation` / `--no-validation` | Enable/disable validation (overrides `validation.case_format_enabled`) |
+| `--url-doc-match-max-retries N` | Overrides `validation.url_doc_match_validation.max_retries` (URL-to-document match retry limit, 0 = no retries) |
+| `--url-doc-match-strategy {fail,warn,skip}` | URL correction exhaustion strategy (default from `env.yaml`) |
+| `--case-format-max-retries N` | Overrides `validation.case_gen_validation.max_retries` (case format validation retry limit, 0 = no retries) |
+| `--validation` / `--no-validation` | Enable/disable case format validation (overrides `validation.case_gen_validation.enable`) |
+| `--url-doc-match-enabled` / `--no-url-doc-match-enabled` | Enable/disable URL doc-match validation (overrides `validation.url_doc_match_validation.enable`) |
 | `--knowledge` / `--no-knowledge` | Enable/disable knowledge base (overrides `knowledge.enabled`) |
 | `--plugins` / `--no-plugins` | Enable/disable plugins (overrides `plugins.enabled`) |
 | `--skills` / `--no-skills` | Enable/disable skills (overrides `skills.enabled`) |

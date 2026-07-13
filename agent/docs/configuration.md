@@ -101,52 +101,59 @@ knowledge:
 
 ```yaml
 validation:
-  # ··· 用例格式校验 / Case format validation ···
-  case_format_enabled: true            # 启用用例格式校验（原名 enabled）
-  case_format_max_retries: 3           # 用例格式校验重试次数
+  # ··· URL 文档匹配校验 / URL doc-match validation ···
+  url_doc_match_validation:
+    enable: true                        # 启用 URL 文档匹配校验
+    max_retries: 3                      # URL 纠错重试次数
+    rules:
+      - check: url_check                # URL 存在性校验
+        strategy: warn                  # 纠错耗尽后策略: fail | warn | skip
 
-  # ··· URL 文档匹配纠错 / URL doc-match correction ···
-  url_doc_match_rules:
-    max_retries: 3                     # URL 纠错重试次数（原 url_doc_match_max_retries）
-    strategy: warn                     # 纠错耗尽后策略: fail | warn | skip
-
-  # ··· 用例生成阶段校验规则 / Case generation validation rules ···
-  case_gen_rules:
-    - check: skeleton_count
-      strategy: warn
-    - check: url_check
-      strategy: warn
-      failure_action: keep   # 仅 url_check：discard（丢弃到 failures.yaml）| keep（保留继续插件处理）
-    - check: data_fill_count
-      strategy: warn
-    - check: assertion_count
-      strategy: warn
+  # ··· 用例生成阶段校验 / Case generation validation ···
+  case_gen_validation:
+    enable: true                        # 启用用例格式校验（原 case_format_enabled）
+    max_retries: 3                      # 用例格式校验重试次数（原 case_format_max_retries）
+    rules:
+      - check: skeleton_count
+        strategy: warn
+      - check: url_check
+        strategy: warn
+        failure_action: keep   # 仅 url_check：discard（丢弃到 failures.yaml）| keep（保留继续插件处理）
+      - check: data_fill_count
+        strategy: warn
+      - check: assertion_count
+        strategy: warn
 ```
 
 **策略值**：`fail`（终止并重试）| `warn`（警告继续）| `skip`（跳过）。
+
+**向后兼容**：旧格式（`case_format_enabled`、`case_format_max_retries`、`url_doc_match_rules`、`case_gen_rules` 等平铺 key）仍然生效，系统会自动识别新旧格式。
 
 **两种 YAML 写法均支持**（`config/settings.py` 的 `_parse_validation_rules`）：
 
 ```yaml
 # 列表格式
-case_gen_rules:
-  - check: url_check
-    strategy: warn
-    failure_action: keep
+case_gen_validation:
+  rules:
+    - check: url_check
+      strategy: warn
+      failure_action: keep
 
 # 字典格式（简写）
-case_gen_rules:
-  skeleton_count: fail
-  url_check: warn
+case_gen_validation:
+  rules:
+    skeleton_count: fail
+    url_check: warn
 
 # 字典格式（嵌套，可带 failure_action）
-case_gen_rules:
-  url_check:
-    strategy: warn
-    failure_action: keep
+case_gen_validation:
+  rules:
+    url_check:
+      strategy: warn
+      failure_action: keep
 ```
 
-> **代码默认值 vs 示例**：不配置 `case_gen_rules` 时，代码默认 `skeleton_count` / `data_fill_count` / `assertion_count` 为 `fail`、`url_check` 为 `warn`（`settings.py`）。`env.example.yaml` 中演示为全部 `warn`，仅作演示，实际以你配置或代码默认为准。
+> **代码默认值 vs 示例**：不配置 `case_gen_validation` 时，代码默认 `skeleton_count` / `data_fill_count` / `assertion_count` 为 `fail`、`url_check` 为 `warn`（`settings.py`）。`env.example.yaml` 中演示为全部 `warn`，仅作演示，实际以你配置或代码默认为准。
 
 关于各校验项与 URL 纠错的详细行为，见 [anti-hallucination.md](./anti-hallucination.md)。
 
@@ -215,10 +222,11 @@ logging:
 | `--consecutive-batch-failure-limit N` | 覆盖 `pipeline.consecutive_batch_failure_limit`（连续批次失败上限） |
 | `--skeleton-batch-size N` | 覆盖 `pipeline.skeleton_batch_size`（骨架生成分批大小） |
 | `--plan-single-batch-size N` | 覆盖 `pipeline.plan_single_batch_size`（单接口测试点分组大小） |
-| `--url-doc-match-max-retries N` | 覆盖 `validation.url_doc_match_rules.max_retries`（URL 与文档原文匹配重试上限） |
-| `--url-doc-match-strategy {fail,warn,skip}` | 覆盖 `validation.url_doc_match_rules.strategy`（URL 纠错耗尽后策略） |
-| `--case-format-max-retries N` | 覆盖 `validation.case_format_max_retries`（用例格式校验重试次数） |
-| `--validation` / `--no-validation` | 启用/禁用校验（覆盖 `validation.case_format_enabled`） |
+| `--url-doc-match-max-retries N` | 覆盖 `validation.url_doc_match_validation.max_retries`（URL 与文档原文匹配重试上限，0 = 不重试） |
+| `--url-doc-match-strategy {fail,warn,skip}` | 覆盖 URL 纠错耗尽后策略（默认取自 `env.yaml`） |
+| `--case-format-max-retries N` | 覆盖 `validation.case_gen_validation.max_retries`（用例格式校验重试次数，0 = 不重试） |
+| `--validation` / `--no-validation` | 启用/禁用用例格式校验（覆盖 `validation.case_gen_validation.enable`） |
+| `--url-doc-match-enabled` / `--no-url-doc-match-enabled` | 启用/禁用 URL 文档匹配校验（覆盖 `validation.url_doc_match_validation.enable`） |
 | `--knowledge` / `--no-knowledge` | 启用/禁用知识库（覆盖 `knowledge.enabled`） |
 | `--plugins` / `--no-plugins` | 启用/禁用插件（覆盖 `plugins.enabled`） |
 | `--skills` / `--no-skills` | 启用/禁用技能（覆盖 `skills.enabled`） |

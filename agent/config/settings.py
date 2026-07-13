@@ -6,25 +6,25 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 
-def get_strategy(rules: List[Dict], check: str, default: str = "fail") -> str:
+def get_strategy(validation_rules: List[Dict], check: str, default: str = "fail") -> str:
     """从校验规则列表中查找指定校验的策略。
     Find the strategy for a given check from the validation rules list.
 
     Args:
-        rules: 校验规则列表 / List of {"check": str, "strategy": str} dicts.
+        validation_rules: 校验规则列表 / List of {"check": str, "strategy": str} dicts.
         check: 校验名 / Check name to look up.
         default: 未找到时的默认策略 / Default strategy if not found.
 
     Returns:
         策略值 / Strategy value: "fail", "warn", or "skip".
     """
-    for rule in rules:
+    for rule in validation_rules:
         if rule.get("check") == check:
             return rule.get("strategy", default)
     return default
 
 
-def get_url_failure_action(rules: List[Dict], default: str = "discard") -> str:
+def get_url_failure_action(validation_rules: List[Dict], default: str = "discard") -> str:
     """从校验规则列表中查找 url_check 的 failure_action 子规则。
     Find the failure_action sub-rule from the url_check rule entry.
 
@@ -32,13 +32,13 @@ def get_url_failure_action(rules: List[Dict], default: str = "discard") -> str:
     Only meaningful when url_check strategy is "warn".
 
     Args:
-        rules: 校验规则列表 / List of validation rule dicts.
+        validation_rules: 校验规则列表 / List of validation rule dicts.
         default: 未找到时的默认动作 / Default action if not found.
 
     Returns:
         失败处理动作 / Failure action: "discard" | "keep".
     """
-    for rule in rules:
+    for rule in validation_rules:
         if rule.get("check") == "url_check":
             action = rule.get("failure_action", default)
             if action not in ("discard", "keep"):
@@ -123,10 +123,13 @@ class Settings:
     # 默认关闭，输出文件已较多，有需要的用户自行开启 / Default off, enable on demand
     logging_log_to_output: bool = False
 
+    # URL 文档匹配校验开关 / Enable URL doc-match validation
+    url_doc_match_enabled: bool = True
+
     # 校验规则列表 / Validation rules list
     # 每项为 {"check": "<校验名>", "strategy": "fail|warn|skip"}
     # Each entry: {"check": "<check_name>", "strategy": "fail|warn|skip"}
-    case_gen_rules: List[Dict[str, str]] = field(default_factory=lambda: [
+    case_gen_validation: List[Dict[str, str]] = field(default_factory=lambda: [
         {"check": "skeleton_count", "strategy": "fail"},
         {"check": "url_check", "strategy": "warn"},
         {"check": "data_fill_count", "strategy": "fail"},
@@ -171,24 +174,162 @@ class Settings:
             "plan_biz_flow_batch_size": self.plan_biz_flow_batch_size,
             "logging_log_to_output": self.logging_log_to_output,
             "case_type": self.case_type,
-            "case_gen_rules": self.case_gen_rules,
+            "url_doc_match_enabled": self.url_doc_match_enabled,
+            "case_gen_validation": self.case_gen_validation,
         }
 
 
+def _read_url_doc_match_enabled(validation: Dict) -> bool:
+    """读取 URL 文档匹配校验开关 / Read URL doc-match validation enable flag.
+
+    优先级 / Priority:
+      1. url_doc_match_validation.enable（新路径 / new path）
+      2. url_doc_match_rules.enable（旧路径 / old path）
+      3. 默认 True / Default True
+    """
+    # 新路径 / New path
+    block = validation.get("url_doc_match_validation", {})
+    if isinstance(block, dict):
+        enable = block.get("enable")
+        if enable is not None:
+            return bool(enable)
+    # 旧路径 / Old path
+    old_block = validation.get("url_doc_match_rules", {})
+    if isinstance(old_block, dict):
+        enable = old_block.get("enable")
+        if enable is not None:
+            return bool(enable)
+    return True
+
+
 def _read_url_doc_match_max_retries(validation: Dict) -> int:
-    """从 url_doc_match_rules block 或平铺键读取 max_retries / Read from block or flat key."""
-    block = validation.get("url_doc_match_rules", {})
+    """读取 URL 文档匹配重试次数 / Read URL doc-match max retries.
+
+    优先级 / Priority:
+      1. url_doc_match_validation.max_retries（新路径 / new path）
+      2. url_doc_match_rules.max_retries（旧 block 路径 / old block path）
+      3. url_doc_match_max_retries（旧平铺 key / old flat key）
+      4. 默认 3 / Default 3
+    """
+    # 新路径 / New path
+    block = validation.get("url_doc_match_validation", {})
     if isinstance(block, dict) and "max_retries" in block:
         return int(block["max_retries"])
+    # 旧 block 路径 / Old block path
+    old_block = validation.get("url_doc_match_rules", {})
+    if isinstance(old_block, dict) and "max_retries" in old_block:
+        return int(old_block["max_retries"])
+    # 旧平铺 key / Old flat key
     return int(validation.get("url_doc_match_max_retries", 3))
 
 
 def _read_url_doc_match_strategy(validation: Dict) -> str:
-    """从 url_doc_match_rules block 读取 strategy / Read strategy from block."""
-    block = validation.get("url_doc_match_rules", {})
+    """读取 URL 文档匹配策略 / Read URL doc-match strategy.
+
+    优先级 / Priority:
+      1. url_doc_match_validation.rules 列表中 url_check 的 strategy
+      2. url_doc_match_validation.strategy（block 级平铺 / block-level flat）
+      3. url_doc_match_rules.rules 列表中 url_check 的 strategy
+      4. url_doc_match_rules.strategy（旧 block 级平铺 / old block-level flat）
+      5. 默认 "warn" / Default "warn"
+    """
+    # 新路径：从 rules 列表中查找 url_check / New path: find url_check in rules list
+    block = validation.get("url_doc_match_validation", {})
     if isinstance(block, dict):
-        return block.get("strategy", "warn")
+        rules = block.get("rules", [])
+        if isinstance(rules, list):
+            for rule in rules:
+                if isinstance(rule, dict) and rule.get("check") == "url_check":
+                    return rule.get("strategy", "warn")
+        # 新 block 级平铺 / New block-level flat
+        if "strategy" in block:
+            return block["strategy"]
+    # 旧路径 / Old path
+    old_block = validation.get("url_doc_match_rules", {})
+    if isinstance(old_block, dict):
+        rules = old_block.get("rules", [])
+        if isinstance(rules, list):
+            for rule in rules:
+                if isinstance(rule, dict) and rule.get("check") == "url_check":
+                    return rule.get("strategy", "warn")
+        if "strategy" in old_block:
+            return old_block["strategy"]
     return "warn"
+
+
+def _read_case_gen_enabled(validation: Dict) -> bool:
+    """读取用例格式校验开关 / Read case format validation enable flag.
+
+    优先级 / Priority:
+      1. case_gen_validation.enable（新路径 / new path）
+      2. case_gen_rules.enable（旧 block 路径 / old block path）
+      3. case_format_enabled（旧平铺 key / old flat key）
+      4. 默认 True / Default True
+    """
+    # 新路径 / New path
+    block = validation.get("case_gen_validation", {})
+    if isinstance(block, dict):
+        enable = block.get("enable")
+        if enable is not None:
+            return bool(enable)
+    # 旧 block 路径 / Old block path
+    old_block = validation.get("case_gen_rules", {})
+    if isinstance(old_block, dict):
+        enable = old_block.get("enable")
+        if enable is not None:
+            return bool(enable)
+    # 旧平铺 key / Old flat key
+    return bool(validation.get("case_format_enabled", True))
+
+
+def _read_case_gen_max_retries(validation: Dict) -> int:
+    """读取用例格式校验重试次数 / Read case format validation max retries.
+
+    优先级 / Priority:
+      1. case_gen_validation.max_retries（新路径 / new path）
+      2. case_gen_rules.max_retries（旧 block 路径 / old block path）
+      3. case_format_max_retries（旧平铺 key / old flat key）
+      4. 默认 3 / Default 3
+    """
+    # 新路径 / New path
+    block = validation.get("case_gen_validation", {})
+    if isinstance(block, dict) and "max_retries" in block:
+        return int(block["max_retries"])
+    # 旧 block 路径 / Old block path
+    old_block = validation.get("case_gen_rules", {})
+    if isinstance(old_block, dict) and "max_retries" in old_block:
+        return int(old_block["max_retries"])
+    # 旧平铺 key / Old flat key
+    return int(validation.get("case_format_max_retries", 3))
+
+
+def _extract_case_gen_rules_raw(validation: Dict):
+    """提取 case_gen 校验规则原始数据 / Extract case gen validation rules raw data.
+
+    优先级 / Priority:
+      1. case_gen_validation.rules（新路径 / new path）
+      2. case_gen_validation 直接作为列表/dict（兼容 / compat）
+      3. case_gen_rules.rules（旧 block 路径 / old block path）
+      4. case_gen_rules 直接作为列表/dict（旧格式 / old format）
+      5. 默认 {} / Default {}
+    """
+    # 新路径 / New path
+    block = validation.get("case_gen_validation", {})
+    if isinstance(block, dict):
+        if "rules" in block:
+            return block["rules"]
+        # 如果 block 不含 rules key 但也不是列表，可能整个 block 就是规则本身
+    elif isinstance(block, list):
+        return block
+    # 旧路径 / Old path
+    old_block = validation.get("case_gen_rules", {})
+    if isinstance(old_block, dict):
+        if "rules" in old_block:
+            return old_block["rules"]
+        return old_block
+    if isinstance(old_block, list):
+        return old_block
+    return {}
 
 
 def load_settings(yaml_path: str = "env.yaml") -> Settings:
@@ -233,11 +374,14 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         consecutive_batch_failure_limit=int(pipeline.get("consecutive_batch_failure_limit", 3)),
         skeleton_batch_size=int(pipeline.get("skeleton_batch_size", 30)),
         plan_single_batch_size=int(pipeline.get("plan_single_batch_size", 8)),
-        case_gen_rules=_parse_validation_rules(validation.get("case_gen_rules", {})),
-        case_format_enabled=validation.get("case_format_enabled", True),
-        case_format_max_retries=int(validation.get("case_format_max_retries", 3)),
-        # 读取 url_doc_match_rules 结构化 block（新格式），回退到平铺键（旧格式兼容）
-        # Read url_doc_match_rules structured block (new format), fall back to flat keys (old compat)
+        # 校验规则（新路径 case_gen_validation.rules，回退旧路径）
+        # Validation rules (new path case_gen_validation.rules, fallback old paths)
+        case_gen_validation=_parse_validation_rules(_extract_case_gen_rules_raw(validation)),
+        case_format_enabled=_read_case_gen_enabled(validation),
+        case_format_max_retries=_read_case_gen_max_retries(validation),
+        # URL 文档匹配（新路径 url_doc_match_validation，回退旧路径 url_doc_match_rules）
+        # URL doc-match (new path url_doc_match_validation, fallback old path url_doc_match_rules)
+        url_doc_match_enabled=_read_url_doc_match_enabled(validation),
         url_doc_match_max_retries=_read_url_doc_match_max_retries(validation),
         url_doc_match_strategy=_read_url_doc_match_strategy(validation),
         output_dir=output.get("dir", "./output"),

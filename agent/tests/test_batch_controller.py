@@ -394,7 +394,7 @@ class TestUrlFailureAction:
     def test_keep_merges_failed(self):
         """failure_action=keep: 失败用例合并回 single_cases / Failed cases merged back."""
         settings = _make_settings(url_doc_match_max_retries=0)
-        settings.case_gen_rules = [
+        settings.case_gen_validation = [
             {"check": "url_check", "strategy": "warn", "failure_action": "keep"},
         ]
         controller = BatchController(settings)
@@ -427,7 +427,7 @@ class TestUrlFailureAction:
         from flow_forge_schemas import URL_NOT_EXIST_PREFIX
 
         settings = _make_settings(url_doc_match_max_retries=0)
-        settings.case_gen_rules = [
+        settings.case_gen_validation = [
             {"check": "url_check", "strategy": "warn", "failure_action": "keep"},
         ]
         controller = BatchController(settings)

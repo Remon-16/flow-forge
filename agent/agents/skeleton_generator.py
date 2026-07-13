@@ -308,7 +308,7 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
         # 骨架分批大小 / Skeleton batch size
         self._skeleton_batch_size = getattr(settings, "skeleton_batch_size", 30)
         # 校验规则列表 / Validation rules list
-        self._case_gen_rules = getattr(settings, "case_gen_rules", [])
+        self._case_gen_validation = getattr(settings, "case_gen_validation", [])
         # 用例格式校验重试次数 / Case format validation retry count
         self._case_format_max_retries = getattr(settings, "case_format_max_retries", 3)
 
@@ -367,7 +367,7 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
             render_prompt(SINGLE_SKELETON_SYSTEM, language=get_language_name()),
             "single_skeletons", expected_count,
             "single case skeletons",
-            get_strategy(self._case_gen_rules, "skeleton_count"),
+            get_strategy(self._case_gen_validation, "skeleton_count"),
             max_retries=self._case_format_max_retries,
         )
 
@@ -403,7 +403,7 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
 
         # 3. 逐批调用 LLM / Call LLM for each batch
         all_skeletons: List[Dict] = []
-        strategy = get_strategy(self._case_gen_rules, "skeleton_count")
+        strategy = get_strategy(self._case_gen_validation, "skeleton_count")
         for i, batch_grouped in enumerate(batches):
             batch_expected = sum(len(pts) for pts in batch_grouped.values())
             label = f"single batch {i+1}/{len(batches)}"
@@ -514,7 +514,7 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
 
         # URL 修正对数量偏差容忍度更高，使用 warn 策略
         # URL correction is more tolerant of count mismatch
-        strategy = get_strategy(self._case_gen_rules, "url_check")
+        strategy = get_strategy(self._case_gen_validation, "url_check")
 
         for attempt in range(self._case_format_max_retries + 1):
             result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)
@@ -583,7 +583,7 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
         # 骨架分批大小 / Skeleton batch size
         self._skeleton_batch_size = getattr(settings, "skeleton_batch_size", 30)
         # 校验规则列表 / Validation rules list
-        self._case_gen_rules = getattr(settings, "case_gen_rules", [])
+        self._case_gen_validation = getattr(settings, "case_gen_validation", [])
         # 用例格式校验重试次数 / Case format validation retry count
         self._case_format_max_retries = getattr(settings, "case_format_max_retries", 3)
 
@@ -639,7 +639,7 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
             render_prompt(BIZ_SKELETON_SYSTEM, language=get_language_name()),
             "biz_skeletons", expected_count,
             "biz flow skeletons",
-            get_strategy(self._case_gen_rules, "skeleton_count"),
+            get_strategy(self._case_gen_validation, "skeleton_count"),
             max_retries=self._case_format_max_retries,
         )
 
@@ -660,7 +660,7 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
         )
 
         all_skeletons: List[Dict] = []
-        strategy = get_strategy(self._case_gen_rules, "skeleton_count")
+        strategy = get_strategy(self._case_gen_validation, "skeleton_count")
         for i in range(0, len(scenarios), self._skeleton_batch_size):
             batch_scenarios = scenarios[i:i + self._skeleton_batch_size]
             batch_idx = i // self._skeleton_batch_size + 1
@@ -770,7 +770,7 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
 
         logger.info(_("skel_gen.correcting_biz_urls", count=len(bad_cases)))
         expected_count = len(bad_cases)
-        strategy = get_strategy(self._case_gen_rules, "url_check")
+        strategy = get_strategy(self._case_gen_validation, "url_check")
 
         for attempt in range(self._case_format_max_retries + 1):
             result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)

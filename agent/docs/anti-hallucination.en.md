@@ -16,7 +16,7 @@ The agent only accepts text input. Image/scanned content in PDFs will not be ext
 
 After skeleton generation, data filling, assertion generation, and URL correction, the number of LLM output items is automatically validated against the input. On a count mismatch, it retries automatically (using `temperature > 0` to produce varied outputs).
 
-Each validation check supports three strategy levels in `validation.case_gen_rules`:
+Each validation check supports three strategy levels in `validation.case_gen_validation.rules`:
 
 | Strategy | Behavior |
 |------|------|
@@ -46,13 +46,13 @@ For the config syntax (list/dict formats) and code defaults, see the [validation
 
 The interface URL is the field most prone to LLM hallucination. The agent validates whether a URL actually exists in the source document at three points:
 
-1. **Source-level validation** (after API analysis): Compares each LLM-extracted interface URL against the source document one by one; URLs that don't match trigger LLM correction retries (up to `url_doc_match_rules.max_retries` times).
+1. **Source-level validation** (after API analysis): Compares each LLM-extracted interface URL against the source document one by one; URLs that don't match trigger LLM correction retries (up to `url_doc_match_validation.max_retries` times).
 2. **Skeleton-level validation** (after skeleton generation): Checks whether each URL in the skeleton exists in the source document; those that don't match are handled according to the `url_check` strategy, and LLM correction may be invoked.
 3. **Final safety-net validation** (before writing YAML): A last quick string-existence check that only flags, without correcting.
 
 ### url_check Strategy and Failure Handling
 
-`url_check` configures its strategy (`skip`/`warn`/`fail`) in `validation.case_gen_rules`; when the strategy is `warn`, a `failure_action` sub-rule can be attached:
+`url_check` configures its strategy (`skip`/`warn`/`fail`) in `validation.case_gen_validation.rules`; when the strategy is `warn`, a `failure_action` sub-rule can be attached:
 
 | failure_action | Behavior |
 |----------------|------|
@@ -83,9 +83,9 @@ See [plugins-and-skills.md](./plugins-and-skills.en.md) for details.
 
 All automatic retries are bounded by configured limits to avoid infinite loops:
 
-- `case_format_max_retries`: number of retries when case format validation fails (`validation` section)
-- `url_doc_match_rules.max_retries`: number of URL-to-document match retries (`validation` section, was `url_doc_match_max_retries`)
-- `url_doc_match_rules.strategy`: strategy after URL correction exhaustion (`validation` section, `fail` | `warn` | `skip`)
+- `case_gen_validation.max_retries`: number of retries when case format validation fails (`validation` section, was `case_format_max_retries`)
+- `url_doc_match_validation.max_retries`: number of URL-to-document match retries (`validation` section, was `url_doc_match_rules.max_retries`)
+- `url_doc_match_validation.rules[url_check].strategy`: strategy after URL correction exhaustion (`validation` section, `fail` | `warn` | `skip`)
 - `consecutive_batch_failure_limit`: consecutive batch failure limit (`-1` = never stop)
 
 Once a limit is reached, it is handled according to the corresponding strategy (abort / warn and continue / flag).

@@ -22,6 +22,19 @@ from .parser import build_parser
 
 logger = logging.getLogger(__name__)
 
+
+def _first(*values):
+    """返回第一个非 None 值 / Return the first non-None value.
+
+    用于 CLI > saved_config > env.yaml 优先级链。
+    Used for CLI > saved_config > env.yaml priority chain.
+    """
+    for v in values:
+        if v is not None:
+            return v
+    return None
+
+
 # 配置项与受影响阶段的映射 / Config key to affected stage mapping
 _CONFIG_STAGE_DEPENDENCIES: dict = {
     "parse_mode": ["parse_docs"],
@@ -53,6 +66,8 @@ _CLI_ARG_TO_CONFIG_KEY: dict = {
     "url_doc_match_strategy": "url_doc_match_strategy",
     "consecutive_batch_failure_limit": "consecutive_batch_failure_limit",
     "max_steps_no_progress": "max_steps_no_progress",
+    "url_doc_match_enabled": "url_doc_match_enabled",
+    "lang": "lang",
 }
 
 
@@ -261,16 +276,18 @@ def main() -> int:
             logger.info(_("resume.config_missing"))
 
         # 从已保存配置中提取默认值 / Extract defaults from saved config
-        _case_type = args.case_type or saved_config.get("case_type") or settings.case_type
-        _output_format = args.output_format or saved_config.get("output_format") or settings.output_format
-        _plugin_batch_size = args.plugin_batch_size or saved_config.get("plugin_batch_size") or settings.plugin_batch_size
-        _auto_mode = args.auto or saved_config.get("auto_mode", settings.auto_mode)
-        _parse_mode = args.parse_mode or saved_config.get("parse_mode", "raw")
-        _user_guidance = args.prompt or saved_config.get("user_guidance", "")
-        _parser_path = args.parser_path or saved_config.get("parser_path", "")
-        _reference_dir = args.reference_dir or saved_config.get("reference_dir", "")
-        _debug_snapshots = args.debug_snapshots or saved_config.get("debug_snapshots", False)
-        _api_path = args.api or saved_config.get("api_path", "")
+        # 使用 _first() 确保 0 和空字符串等合法值不被覆盖
+        # Use _first() so legitimate 0/empty values aren't overridden
+        _case_type = _first(args.case_type, saved_config.get("case_type"), settings.case_type)
+        _output_format = _first(args.output_format, saved_config.get("output_format"), settings.output_format)
+        _plugin_batch_size = _first(args.plugin_batch_size, saved_config.get("plugin_batch_size"), settings.plugin_batch_size)
+        _auto_mode = _first(args.auto, saved_config.get("auto_mode"), settings.auto_mode)
+        _parse_mode = _first(args.parse_mode, saved_config.get("parse_mode"), "raw")
+        _user_guidance = _first(args.prompt, saved_config.get("user_guidance"), "")
+        _parser_path = _first(args.parser_path, saved_config.get("parser_path"), "")
+        _reference_dir = _first(args.reference_dir, saved_config.get("reference_dir"), "")
+        _debug_snapshots = _first(args.debug_snapshots, saved_config.get("debug_snapshots"), False)
+        _api_path = _first(args.api, saved_config.get("api_path"), "")
 
         # If no pipeline_state.json, fall back to legacy resume (batch_controller only)
         ps_path = Path(str(_memory_dir)) / "pipeline_state.json"
@@ -407,7 +424,7 @@ def main() -> int:
         logger.info(_("cli.requirement_required"))
         return 2
 
-    auto_mode = args.auto or settings.auto_mode
+    auto_mode = _first(args.auto, settings.auto_mode)
     if auto_mode:
         logger.info(_("auto.pipeline_start"))
 
@@ -416,6 +433,28 @@ def main() -> int:
 
     if args.prompt:
         logger.info(_("cli.user_guidance", guidance=args.prompt))
+
+    # --- 解析 CLI 对校验和语言等配置的覆盖 / Resolve CLI overrides ---
+    # 用例格式校验开关 / Case format validation toggle
+    if args.no_validation:
+        _case_format_enabled = False
+    elif args.validation:
+        _case_format_enabled = True
+    else:
+        _case_format_enabled = settings.case_format_enabled
+
+    # URL 文档匹配校验开关 / URL doc-match validation toggle
+    if args.no_url_doc_match_enabled:
+        _url_doc_match_enabled = False
+    elif args.url_doc_match_enabled:
+        _url_doc_match_enabled = True
+    else:
+        _url_doc_match_enabled = settings.url_doc_match_enabled
+
+    # 语言设置 / Language setting
+    if args.lang is not None:
+        import os as _os
+        _os.environ["AGENT_LANG"] = args.lang
 
     output_dir = args.output or settings.output_dir
     cases_dir, memory_dir = ensure_output_structure(Path(output_dir))
@@ -436,35 +475,35 @@ def main() -> int:
         "cases_dir": str(cases_dir),
         "memory_dir": str(memory_dir),
         "debug_snapshots": args.debug_snapshots,
-        "output_format": args.output_format or settings.output_format,
-        "batch_size": args.plugin_batch_size or settings.plugin_batch_size,
-        "case_format_enabled": settings.case_format_enabled,
-        "case_format_max_retries": settings.case_format_max_retries,
+        "output_format": _first(args.output_format, settings.output_format),
+        "batch_size": _first(args.plugin_batch_size, settings.plugin_batch_size),
+        "case_format_enabled": _case_format_enabled,
+        "case_format_max_retries": _first(args.case_format_max_retries, settings.case_format_max_retries),
         "plan_only": False,
-        "user_guidance": args.prompt or "",
-        "reference_dir": args.reference_dir or "",
+        "user_guidance": _first(args.prompt, ""),
+        "reference_dir": _first(args.reference_dir, ""),
         "parse_mode": args.parse_mode,
-        "parser_path": args.parser_path or "",
+        "parser_path": _first(args.parser_path, ""),
         "auto_mode": auto_mode,
-        "case_type": args.case_type or settings.case_type,
+        "case_type": _first(args.case_type, settings.case_type),
     }
     config = {"configurable": {"thread_id": thread_id}}
 
     # 保存运行配置供后续 resume 使用
     # Save run config for future resume
     _run_config = {
-        "case_type": args.case_type or settings.case_type,
-        "user_guidance": args.prompt or "",
-        "output_format": args.output_format or settings.output_format,
-        "batch_size": args.plugin_batch_size or settings.plugin_batch_size,
+        "case_type": _first(args.case_type, settings.case_type),
+        "user_guidance": _first(args.prompt, ""),
+        "output_format": _first(args.output_format, settings.output_format),
+        "batch_size": _first(args.plugin_batch_size, settings.plugin_batch_size),
         "auto_mode": auto_mode,
         "parse_mode": args.parse_mode,
         "output_dir": output_dir,
         "api_path": args.api,
         "requirement_paths": list(args.requirement),
         "debug_snapshots": args.debug_snapshots,
-        "parser_path": args.parser_path or "",
-        "reference_dir": args.reference_dir or "",
+        "parser_path": _first(args.parser_path, ""),
+        "reference_dir": _first(args.reference_dir, ""),
     }
     save_run_config(str(memory_dir), _run_config)
 
