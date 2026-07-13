@@ -40,7 +40,6 @@ class DocParserAgent:
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             temperature=0.1,
-            max_tokens=settings.llm_max_tokens,
             max_retries=2,
             max_steps=1,
             base_url=settings.llm_base_url,

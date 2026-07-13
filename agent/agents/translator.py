@@ -44,7 +44,6 @@ class CaseTranslator(BaseAgent):
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_output_tokens,
             base_url=settings.llm_base_url,
             context_window=settings.llm_context_window,
             max_output_tokens=settings.llm_max_output_tokens,

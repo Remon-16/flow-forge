@@ -15,10 +15,10 @@ def _make_settings(**kwargs):
     s = Settings()
     s.llm_api_key = "test"
     s.plugin_batch_size = kwargs.get("batch_size", 2)
-    s.enable_validation = kwargs.get("enable_validation", False)
-    s.max_validation_retries = kwargs.get("max_validation_retries", 1)
+    s.case_format_enabled = kwargs.get("case_format_enabled", False)
+    s.case_format_max_retries = kwargs.get("case_format_max_retries", 1)
     s.max_steps_no_progress = kwargs.get("max_steps_no_progress", 10)
-    s.url_correction_max_retries = kwargs.get("url_correction_max_retries", 3)
+    s.url_doc_match_max_retries = kwargs.get("url_doc_match_max_retries", 3)
     s.consecutive_batch_failure_limit = kwargs.get("consecutive_batch_failure_limit", 3)
     s.llm_rate_limit_delay = kwargs.get("llm_rate_limit_delay", 0.0)
     return s
@@ -279,7 +279,7 @@ class TestUrlCheckAndCorrect:
 
     def should_split_failed_when_correction_exhausted(self):
         settings = _make_settings()
-        settings.url_correction_max_retries = 0
+        settings.url_doc_match_max_retries = 0
         controller = BatchController(settings)
         mock_agent = MagicMock()
 
@@ -363,7 +363,7 @@ class TestUrlFailureAction:
         """默认 behaviour: 失败用例进入 all_failures 列表 / Failed cases go to all_failures."""
         from flow_forge_schemas import URL_NOT_EXIST_PREFIX
 
-        settings = _make_settings(url_correction_max_retries=0)
+        settings = _make_settings(url_doc_match_max_retries=0)
         # 默认 url_check strategy=warn，无 failure_action → discard
         controller = BatchController(settings)
 
@@ -393,8 +393,8 @@ class TestUrlFailureAction:
 
     def test_keep_merges_failed(self):
         """failure_action=keep: 失败用例合并回 single_cases / Failed cases merged back."""
-        settings = _make_settings(url_correction_max_retries=0)
-        settings.validation_rules = [
+        settings = _make_settings(url_doc_match_max_retries=0)
+        settings.case_gen_rules = [
             {"check": "url_check", "strategy": "warn", "failure_action": "keep"},
         ]
         controller = BatchController(settings)
@@ -426,8 +426,8 @@ class TestUrlFailureAction:
         """failure_action=keep: URL 仍有 <URL not exist> 前缀 / URL still has prefix."""
         from flow_forge_schemas import URL_NOT_EXIST_PREFIX
 
-        settings = _make_settings(url_correction_max_retries=0)
-        settings.validation_rules = [
+        settings = _make_settings(url_doc_match_max_retries=0)
+        settings.case_gen_rules = [
             {"check": "url_check", "strategy": "warn", "failure_action": "keep"},
         ]
         controller = BatchController(settings)

@@ -29,11 +29,11 @@ class DataFillingPlugin(CaseAttributeGenerator):
 
         self._single_filler = SingleDataFiller(
             settings, knowledge, skill_extensions=_exts,
-            validation_rules=settings.validation_rules,
+            case_gen_rules=settings.case_gen_rules,
         )
         self._biz_filler = BizDataFiller(
             settings, knowledge, skill_extensions=_exts,
-            validation_rules=settings.validation_rules,
+            case_gen_rules=settings.case_gen_rules,
         )
         self._user_guidance = ""
 

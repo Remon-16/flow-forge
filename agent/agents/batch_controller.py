@@ -29,19 +29,22 @@ class BatchController:
 
     def __init__(self, settings: Settings):
         self._batch_size = settings.plugin_batch_size
-        self._enable_validation = settings.enable_validation
-        self._max_validation_retries = settings.max_validation_retries
+        self._case_format_enabled = settings.case_format_enabled
+        self._case_format_max_retries = settings.case_format_max_retries
         self._max_steps_no_progress = settings.max_steps_no_progress
-        self._url_correction_max_retries = getattr(
-            settings, "url_correction_max_retries", 3
+        self._url_doc_match_max_retries = getattr(
+            settings, "url_doc_match_max_retries", 3
+        )
+        self._url_doc_match_strategy = getattr(
+            settings, "url_doc_match_strategy", "warn"
         )
         self._consecutive_failure_limit = getattr(
             settings, "consecutive_batch_failure_limit", 3
         )
         self._rate_limit_delay = getattr(settings, "llm_rate_limit_delay", 0.0)
         # 校验规则列表 / Validation rules list
-        self._validation_rules = getattr(settings, "validation_rules", [])
-        self._url_failure_action = get_url_failure_action(self._validation_rules)
+        self._case_gen_rules = getattr(settings, "case_gen_rules", [])
+        self._url_failure_action = get_url_failure_action(self._case_gen_rules)
         self._reference_dir = ""
         self._memory_dir = ""
 
@@ -264,7 +267,13 @@ class BatchController:
         Returns (valid_cases, failed_cases).
         """
         # 查询 URL 校验策略 / Query URL check strategy
-        url_strategy = get_strategy(self._validation_rules, "url_check")
+        # 优先使用 case_gen_rules 中的 url_check 策略，否则回退到 url_doc_match_strategy
+        # Prefer url_check from case_gen_rules, fall back to url_doc_match_strategy
+        url_check_in_rules = any(r.get("check") == "url_check" for r in self._case_gen_rules)
+        if url_check_in_rules:
+            url_strategy = get_strategy(self._case_gen_rules, "url_check")
+        else:
+            url_strategy = self._url_doc_match_strategy
 
         # skip 策略：完全跳过 URL 校验 / Skip strategy: bypass entirely
         if url_strategy == "skip":
@@ -276,7 +285,7 @@ class BatchController:
         if not api_doc_text:
             return skeletons, []
 
-        max_retries = self._url_correction_max_retries
+        max_retries = self._url_doc_match_max_retries
         current = list(skeletons)
 
         for retry in range(max_retries + 1):
@@ -486,12 +495,14 @@ class BatchController:
         ckpt_settings = meta.get("settings", {})
         if ckpt_settings:
             self._batch_size = ckpt_settings.get("batch_size", self._batch_size)
-            self._enable_validation = ckpt_settings.get(
-                "enable_validation", self._enable_validation)
-            self._max_validation_retries = ckpt_settings.get(
-                "max_validation_retries", self._max_validation_retries)
-            self._url_correction_max_retries = ckpt_settings.get(
-                "url_correction_max_retries", self._url_correction_max_retries)
+            self._case_format_enabled = ckpt_settings.get(
+                "case_format_enabled", self._case_format_enabled)
+            self._case_format_max_retries = ckpt_settings.get(
+                "case_format_max_retries", self._case_format_max_retries)
+            self._url_doc_match_max_retries = ckpt_settings.get(
+                "url_doc_match_max_retries", self._url_doc_match_max_retries)
+            self._url_doc_match_strategy = ckpt_settings.get(
+                "url_doc_match_strategy", self._url_doc_match_strategy)
 
         data = ckpt_mgr.load_data()
         single_cases: List[Dict] = data.get("single_cases", []) if data else []
@@ -572,8 +583,9 @@ class BatchController:
     def _collect_settings(self) -> Dict[str, Any]:
         return {
             "batch_size": self._batch_size,
-            "enable_validation": self._enable_validation,
-            "max_validation_retries": self._max_validation_retries,
-            "url_correction_max_retries": self._url_correction_max_retries,
-            "validation_rules": self._validation_rules,
+            "case_format_enabled": self._case_format_enabled,
+            "case_format_max_retries": self._case_format_max_retries,
+            "url_doc_match_max_retries": self._url_doc_match_max_retries,
+            "url_doc_match_strategy": self._url_doc_match_strategy,
+            "case_gen_rules": self._case_gen_rules,
         }

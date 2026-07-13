@@ -38,7 +38,14 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
     if _sl():
         _sl().log_node_start("validate_interface_urls", "url_check")
 
-    max_retries = _h._settings.url_correction_max_retries
+    max_retries = _h._settings.url_doc_match_max_retries
+    url_strategy = getattr(_h._settings, "url_doc_match_strategy", "warn")
+
+    # skip 策略：完全跳过 URL 校验 / Skip strategy: bypass entirely
+    if url_strategy == "skip":
+        logger.info(_("url_check.skipped"))
+        return state
+
     bad_interfaces = []
     url_errors = []
 
@@ -116,6 +123,12 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
         for err in url_errors:
             logger.info(_("url_check.cannot_correct_item", test_id=err["test_id"], method=err["method"], url=err["url"]))
         state["url_validation_errors"] = url_errors
+        # fail 策略：纠错耗尽后终止流水线 / Fail strategy: abort pipeline
+        if url_strategy == "fail":
+            raise ValueError(
+                f"URL correction failed for {len(url_errors)} interface(s) "
+                f"after {max_retries} retries"
+            )
     else:
         logger.info(_("url_check.corrected_count", count=corrected_count))
 

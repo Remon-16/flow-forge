@@ -78,7 +78,6 @@ class Settings:
     llm_base_url: str = ""
     llm_model: str = "gpt-4o"
     llm_temperature: float = 0.3
-    llm_max_tokens: int = 4096
     llm_context_window: int = 128000
     llm_context_compression_threshold: float = 0.9
     llm_max_output_tokens: int = 4096
@@ -90,11 +89,12 @@ class Settings:
     llm_retry_base_delay: float = 2.0
     output_dir: str = "./output"
     plugin_batch_size: int = 10
-    enable_validation: bool = True
-    max_validation_retries: int = 3
+    case_format_enabled: bool = True
+    case_format_max_retries: int = 3
     output_format: str = "both"
     max_steps_no_progress: int = 5
-    url_correction_max_retries: int = 3
+    url_doc_match_max_retries: int = 3
+    url_doc_match_strategy: str = "warn"
     enable_plugins: bool = False
     plugin_modules: List[str] = field(default_factory=list)
     llm_max_concurrency: int = 1
@@ -112,16 +112,12 @@ class Settings:
     # 骨架生成分批大小 / Skeleton generation batch size
     skeleton_batch_size: int = 30
 
-    # 计划生成分块大小（每个分块包含的接口数）/ Plan chunk size (interfaces per chunk)
-    # 已废弃，请使用 plan_single_batch_size + plan_biz_flow_batch_size
-    # Deprecated — use plan_single_batch_size + plan_biz_flow_batch_size instead
-    plan_chunk_size: int = 0
-
     # 单接口测试点分组大小（-1=不拆分，强模型建议 -1）/ Single API batch size (-1=no split)
     plan_single_batch_size: int = 8
 
-    # 业务链路每批合并数（-1=不拆分，强模型建议 -1）/ Biz flow batch size (-1=no split)
-    plan_biz_flow_batch_size: int = 3
+    # 业务链路每批合并数 / Biz flow batch size
+    # 预留：逐流 Mermaid 生成要求必须为 1 / Reserved: per-flow Mermaid requires 1
+    plan_biz_flow_batch_size: int = 1
 
     # 是否将日志持久化到 output_dir/logs/agent.log / Persist logs to output_dir
     # 默认关闭，输出文件已较多，有需要的用户自行开启 / Default off, enable on demand
@@ -130,7 +126,7 @@ class Settings:
     # 校验规则列表 / Validation rules list
     # 每项为 {"check": "<校验名>", "strategy": "fail|warn|skip"}
     # Each entry: {"check": "<check_name>", "strategy": "fail|warn|skip"}
-    validation_rules: List[Dict[str, str]] = field(default_factory=lambda: [
+    case_gen_rules: List[Dict[str, str]] = field(default_factory=lambda: [
         {"check": "skeleton_count", "strategy": "fail"},
         {"check": "url_check", "strategy": "warn"},
         {"check": "data_fill_count", "strategy": "fail"},
@@ -144,7 +140,6 @@ class Settings:
             "llm_base_url": self.llm_base_url,
             "llm_model": self.llm_model,
             "llm_temperature": self.llm_temperature,
-            "llm_max_tokens": self.llm_max_tokens,
             "llm_context_window": self.llm_context_window,
             "llm_context_compression_threshold": self.llm_context_compression_threshold,
             "llm_max_output_tokens": self.llm_max_output_tokens,
@@ -156,11 +151,12 @@ class Settings:
             "llm_retry_base_delay": self.llm_retry_base_delay,
             "output_dir": self.output_dir,
             "plugin_batch_size": self.plugin_batch_size,
-            "enable_validation": self.enable_validation,
-            "max_validation_retries": self.max_validation_retries,
+            "case_format_enabled": self.case_format_enabled,
+            "case_format_max_retries": self.case_format_max_retries,
             "output_format": self.output_format,
             "max_steps_no_progress": self.max_steps_no_progress,
-            "url_correction_max_retries": self.url_correction_max_retries,
+            "url_doc_match_max_retries": self.url_doc_match_max_retries,
+            "url_doc_match_strategy": self.url_doc_match_strategy,
             "enable_plugins": self.enable_plugins,
             "plugin_modules": self.plugin_modules,
             "llm_max_concurrency": self.llm_max_concurrency,
@@ -171,13 +167,28 @@ class Settings:
             "skill_agents": self.skill_agents,
             "auto_mode": self.auto_mode,
             "skeleton_batch_size": self.skeleton_batch_size,
-            "plan_chunk_size": self.plan_chunk_size,
             "plan_single_batch_size": self.plan_single_batch_size,
             "plan_biz_flow_batch_size": self.plan_biz_flow_batch_size,
             "logging_log_to_output": self.logging_log_to_output,
             "case_type": self.case_type,
-            "validation_rules": self.validation_rules,
+            "case_gen_rules": self.case_gen_rules,
         }
+
+
+def _read_url_doc_match_max_retries(validation: Dict) -> int:
+    """从 url_doc_match_rules block 或平铺键读取 max_retries / Read from block or flat key."""
+    block = validation.get("url_doc_match_rules", {})
+    if isinstance(block, dict) and "max_retries" in block:
+        return int(block["max_retries"])
+    return int(validation.get("url_doc_match_max_retries", 3))
+
+
+def _read_url_doc_match_strategy(validation: Dict) -> str:
+    """从 url_doc_match_rules block 读取 strategy / Read strategy from block."""
+    block = validation.get("url_doc_match_rules", {})
+    if isinstance(block, dict):
+        return block.get("strategy", "warn")
+    return "warn"
 
 
 def load_settings(yaml_path: str = "env.yaml") -> Settings:
@@ -220,12 +231,15 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         max_retries=int(pipeline.get("max_retries", 3)),
         max_steps_no_progress=int(pipeline.get("max_steps_no_progress", 5)),
         consecutive_batch_failure_limit=int(pipeline.get("consecutive_batch_failure_limit", 3)),
-        url_correction_max_retries=int(pipeline.get("url_correction_max_retries", 3)),
         skeleton_batch_size=int(pipeline.get("skeleton_batch_size", 30)),
-        plan_chunk_size=int(pipeline.get("plan_chunk_size", 0)),
-        validation_rules=_parse_validation_rules(validation.get("rules", {})),
-        enable_validation=validation.get("enabled", True),
-        max_validation_retries=int(validation.get("max_retries", 3)),
+        plan_single_batch_size=int(pipeline.get("plan_single_batch_size", 8)),
+        case_gen_rules=_parse_validation_rules(validation.get("case_gen_rules", {})),
+        case_format_enabled=validation.get("case_format_enabled", True),
+        case_format_max_retries=int(validation.get("case_format_max_retries", 3)),
+        # 读取 url_doc_match_rules 结构化 block（新格式），回退到平铺键（旧格式兼容）
+        # Read url_doc_match_rules structured block (new format), fall back to flat keys (old compat)
+        url_doc_match_max_retries=_read_url_doc_match_max_retries(validation),
+        url_doc_match_strategy=_read_url_doc_match_strategy(validation),
         output_dir=output.get("dir", "./output"),
         plugin_batch_size=int(pipeline.get("plugin_batch_size", 10)),
         output_format=output.get("format", "both"),
@@ -242,21 +256,5 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
     # 为 i18n 设置语言（i18n 懒加载时通过 os.environ 读取）
     # Set language for i18n lazy init via os.environ
     os.environ["AGENT_LANG"] = settings.agent_lang
-
-    # ---- 向后兼容：plan_chunk_size → plan_single_batch_size + plan_biz_flow_batch_size ----
-    # Backward compat: migrate old plan_chunk_size to the two new config fields
-    _plan_chunk = int(pipeline.get("plan_chunk_size", 0))
-    _plan_single_raw = pipeline.get("plan_single_batch_size")
-    _plan_biz_raw = pipeline.get("plan_biz_flow_batch_size")
-
-    if _plan_single_raw is None and _plan_chunk > 0:
-        settings.plan_single_batch_size = _plan_chunk
-    elif _plan_single_raw is not None:
-        settings.plan_single_batch_size = int(_plan_single_raw)
-
-    if _plan_biz_raw is None and _plan_chunk > 0:
-        settings.plan_biz_flow_batch_size = _plan_chunk
-    elif _plan_biz_raw is not None:
-        settings.plan_biz_flow_batch_size = int(_plan_biz_raw)
 
     return settings

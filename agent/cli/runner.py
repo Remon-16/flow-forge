@@ -28,7 +28,7 @@ _CONFIG_STAGE_DEPENDENCIES: dict = {
     "parser_path": ["parse_docs"],
     "case_type": ["generate_outline", "generate_plan", "parse_plan", "batch_controller"],
     "user_guidance": ["generate_outline", "generate_plan"],
-    "batch_size": ["batch_controller"],
+    "plugin_batch_size": ["batch_controller"],
     "output_format": ["write_output"],
     "auto_mode": ["analyze_api", "human_confirm"],
     "reference_dir": ["generate_outline", "generate_plan"],
@@ -39,11 +39,20 @@ _CLI_ARG_TO_CONFIG_KEY: dict = {
     "case_type": "case_type",
     "prompt": "user_guidance",
     "output_format": "output_format",
-    "batch_size": "batch_size",
+    "plugin_batch_size": "plugin_batch_size",
     "auto": "auto_mode",
     "parse_mode": "parse_mode",
     "parser_path": "parser_path",
     "reference_dir": "reference_dir",
+    "max_steps": "max_steps",
+    "max_retries": "max_retries",
+    "skeleton_batch_size": "skeleton_batch_size",
+    "plan_single_batch_size": "plan_single_batch_size",
+    "case_format_max_retries": "case_format_max_retries",
+    "url_doc_match_max_retries": "url_doc_match_max_retries",
+    "url_doc_match_strategy": "url_doc_match_strategy",
+    "consecutive_batch_failure_limit": "consecutive_batch_failure_limit",
+    "max_steps_no_progress": "max_steps_no_progress",
 }
 
 
@@ -254,7 +263,7 @@ def main() -> int:
         # 从已保存配置中提取默认值 / Extract defaults from saved config
         _case_type = args.case_type or saved_config.get("case_type") or settings.case_type
         _output_format = args.output_format or saved_config.get("output_format") or settings.output_format
-        _batch_size = args.batch_size or saved_config.get("batch_size") or settings.plugin_batch_size
+        _plugin_batch_size = args.plugin_batch_size or saved_config.get("plugin_batch_size") or settings.plugin_batch_size
         _auto_mode = args.auto or saved_config.get("auto_mode", settings.auto_mode)
         _parse_mode = args.parse_mode or saved_config.get("parse_mode", "raw")
         _user_guidance = args.prompt or saved_config.get("user_guidance", "")
@@ -321,7 +330,7 @@ def main() -> int:
             "case_type": _case_type,
             "user_guidance": _user_guidance,
             "output_format": _output_format,
-            "batch_size": _batch_size,
+            "plugin_batch_size": _plugin_batch_size,
             "auto_mode": _auto_mode,
             "parse_mode": _parse_mode,
             "output_dir": output_dir,
@@ -342,9 +351,9 @@ def main() -> int:
             "memory_dir": str(_memory_dir),
             "debug_snapshots": _debug_snapshots,
             "output_format": _output_format,
-            "batch_size": _batch_size,
-            "enable_validation": settings.enable_validation,
-            "max_validation_retries": settings.max_validation_retries,
+            "batch_size": _plugin_batch_size,
+            "case_format_enabled": settings.case_format_enabled,
+            "case_format_max_retries": settings.case_format_max_retries,
             "plan_only": False,
             "requirement_text": loaded.get("requirement_text", ""),
             "interfaces": loaded.get("interfaces", []),
@@ -428,9 +437,9 @@ def main() -> int:
         "memory_dir": str(memory_dir),
         "debug_snapshots": args.debug_snapshots,
         "output_format": args.output_format or settings.output_format,
-        "batch_size": args.batch_size or settings.plugin_batch_size,
-        "enable_validation": settings.enable_validation,
-        "max_validation_retries": settings.max_validation_retries,
+        "batch_size": args.plugin_batch_size or settings.plugin_batch_size,
+        "case_format_enabled": settings.case_format_enabled,
+        "case_format_max_retries": settings.case_format_max_retries,
         "plan_only": False,
         "user_guidance": args.prompt or "",
         "reference_dir": args.reference_dir or "",
@@ -447,7 +456,7 @@ def main() -> int:
         "case_type": args.case_type or settings.case_type,
         "user_guidance": args.prompt or "",
         "output_format": args.output_format or settings.output_format,
-        "batch_size": args.batch_size or settings.plugin_batch_size,
+        "batch_size": args.plugin_batch_size or settings.plugin_batch_size,
         "auto_mode": auto_mode,
         "parse_mode": args.parse_mode,
         "output_dir": output_dir,

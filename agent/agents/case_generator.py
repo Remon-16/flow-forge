@@ -66,7 +66,6 @@ class CaseGenerator(BaseAgent):
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,

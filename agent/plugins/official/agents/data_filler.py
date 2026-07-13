@@ -31,13 +31,12 @@ class SingleDataFiller(BaseAgent):
         settings: Settings,
         knowledge: Optional[KnowledgeSearch] = None,
         skill_extensions=None,
-        validation_rules: Optional[List[Dict]] = None,
+        case_gen_rules: Optional[List[Dict]] = None,
     ):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
@@ -49,10 +48,12 @@ class SingleDataFiller(BaseAgent):
         self._knowledge = knowledge
         # 校验规则列表（优先用传入参数，否则从 settings 取）
         # Validation rules list (use explicit param first, fallback to settings)
-        self._validation_rules = (
-            validation_rules if validation_rules is not None
-            else getattr(settings, "validation_rules", [])
+        self._case_gen_rules = (
+            case_gen_rules if case_gen_rules is not None
+            else getattr(settings, "case_gen_rules", [])
         )
+        # 用例格式校验重试次数 / Case format validation retry count
+        self._case_format_max_retries = getattr(settings, "case_format_max_retries", 3)
 
     def fill_batch(
         self,
@@ -155,7 +156,8 @@ class SingleDataFiller(BaseAgent):
         return _count_validate(
             self, prompt, SINGLE_DATA_FILLING_SYSTEM,
             "cases", expected_count, "single data fill",
-            get_strategy(self._validation_rules, "data_fill_count"),
+            get_strategy(self._case_gen_rules, "data_fill_count"),
+            max_retries=self._case_format_max_retries,
         )
 
 
@@ -169,13 +171,12 @@ class BizDataFiller(BaseAgent):
         settings: Settings,
         knowledge: Optional[KnowledgeSearch] = None,
         skill_extensions=None,
-        validation_rules: Optional[List[Dict]] = None,
+        case_gen_rules: Optional[List[Dict]] = None,
     ):
         super().__init__(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
@@ -187,10 +188,12 @@ class BizDataFiller(BaseAgent):
         self._knowledge = knowledge
         # 校验规则列表（优先用传入参数，否则从 settings 取）
         # Validation rules list (use explicit param first, fallback to settings)
-        self._validation_rules = (
-            validation_rules if validation_rules is not None
-            else getattr(settings, "validation_rules", [])
+        self._case_gen_rules = (
+            case_gen_rules if case_gen_rules is not None
+            else getattr(settings, "case_gen_rules", [])
         )
+        # 用例格式校验重试次数 / Case format validation retry count
+        self._case_format_max_retries = getattr(settings, "case_format_max_retries", 3)
 
     def fill_batch(
         self,
@@ -297,5 +300,6 @@ class BizDataFiller(BaseAgent):
         return _count_validate(
             self, prompt, BIZ_DATA_FILLING_SYSTEM,
             "biz_flows", expected_count, "biz data fill",
-            get_strategy(self._validation_rules, "data_fill_count"),
+            get_strategy(self._case_gen_rules, "data_fill_count"),
+            max_retries=self._case_format_max_retries,
         )

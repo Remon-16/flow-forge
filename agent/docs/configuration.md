@@ -68,16 +68,12 @@ pipeline:
   max_retries: 3                     # LLM 调用最大重试次数
   max_steps_no_progress: 5           # 进度无变化最大步数
   consecutive_batch_failure_limit: 3 # 连续批次失败上限（-1=永不停止）
-  url_correction_max_retries: 3      # URL 纠错重试上限
   skeleton_batch_size: 30            # 骨架生成分批大小（每批测试点数）
   plan_single_batch_size: 8          # 单接口测试点分组大小（-1=不拆分，强模型建议 -1）
-  plan_biz_flow_batch_size: 3        # 业务链路每批合并数（-1=不拆分，强模型建议 -1）
   case_type: both                    # 用例生成类型：both | single | biz
   plugin_batch_size: 10              # 插件处理批次大小（-1=不分批）
   auto: false                        # 自动模式：跳过人工审核（夜间批量生成建议开启）
 ```
-
-> **已废弃项**：旧配置 `plan_chunk_size` 已废弃，由 `plan_single_batch_size` + `plan_biz_flow_batch_size` 取代。仅为向后兼容保留自动迁移，请勿在新配置中使用。
 
 #### 用例类型选择（case_type）
 
@@ -101,13 +97,21 @@ knowledge:
 
 详见 [how-it-works.md 的知识库章节](./how-it-works.md#知识库)。
 
-### validation — 用例校验
+### validation — 校验与纠错
 
 ```yaml
 validation:
-  enabled: true
-  max_retries: 3
-  rules:
+  # ··· 用例格式校验 / Case format validation ···
+  case_format_enabled: true            # 启用用例格式校验（原名 enabled）
+  case_format_max_retries: 3           # 用例格式校验重试次数
+
+  # ··· URL 文档匹配纠错 / URL doc-match correction ···
+  url_doc_match_rules:
+    max_retries: 3                     # URL 纠错重试次数（原 url_doc_match_max_retries）
+    strategy: warn                     # 纠错耗尽后策略: fail | warn | skip
+
+  # ··· 用例生成阶段校验规则 / Case generation validation rules ···
+  case_gen_rules:
     - check: skeleton_count
       strategy: warn
     - check: url_check
@@ -125,24 +129,24 @@ validation:
 
 ```yaml
 # 列表格式
-rules:
+case_gen_rules:
   - check: url_check
     strategy: warn
     failure_action: keep
 
 # 字典格式（简写）
-rules:
+case_gen_rules:
   skeleton_count: fail
   url_check: warn
 
 # 字典格式（嵌套，可带 failure_action）
-rules:
+case_gen_rules:
   url_check:
     strategy: warn
     failure_action: keep
 ```
 
-> **代码默认值 vs 示例**：不配置 `rules` 时，代码默认 `skeleton_count` / `data_fill_count` / `assertion_count` 为 `fail`、`url_check` 为 `warn`（`settings.py`）。`env.example.yaml` 中演示为全部 `warn`，仅作演示，实际以你配置或代码默认为准。
+> **代码默认值 vs 示例**：不配置 `case_gen_rules` 时，代码默认 `skeleton_count` / `data_fill_count` / `assertion_count` 为 `fail`、`url_check` 为 `warn`（`settings.py`）。`env.example.yaml` 中演示为全部 `warn`，仅作演示，实际以你配置或代码默认为准。
 
 关于各校验项与 URL 纠错的详细行为，见 [anti-hallucination.md](./anti-hallucination.md)。
 
@@ -204,7 +208,21 @@ logging:
 | `--resume-overwrite` | 恢复时覆盖已有输出 |
 | `--auto` | 自动模式：跳过所有人工审核 |
 | `--case-type {single,biz,both}` | 用例生成类型（默认 `both`） |
-| `--batch-size N` | 覆盖 `pipeline.plugin_batch_size`（插件处理批次大小）；默认取自 `env.yaml`。注意：这是**插件批次**，非计划分块 |
+| `--plugin-batch-size N` | 覆盖 `pipeline.plugin_batch_size`（插件处理批次大小）；默认取自 `env.yaml`。注意：这是**插件批次**，非计划分块 |
+| `--max-steps N` | 覆盖 `pipeline.max_steps`（最大智能体步数） |
+| `--max-retries N` | 覆盖 `pipeline.max_retries`（LLM 调用最大重试次数） |
+| `--max-steps-no-progress N` | 覆盖 `pipeline.max_steps_no_progress`（进度无变化最大步数） |
+| `--consecutive-batch-failure-limit N` | 覆盖 `pipeline.consecutive_batch_failure_limit`（连续批次失败上限） |
+| `--skeleton-batch-size N` | 覆盖 `pipeline.skeleton_batch_size`（骨架生成分批大小） |
+| `--plan-single-batch-size N` | 覆盖 `pipeline.plan_single_batch_size`（单接口测试点分组大小） |
+| `--url-doc-match-max-retries N` | 覆盖 `validation.url_doc_match_rules.max_retries`（URL 与文档原文匹配重试上限） |
+| `--url-doc-match-strategy {fail,warn,skip}` | 覆盖 `validation.url_doc_match_rules.strategy`（URL 纠错耗尽后策略） |
+| `--case-format-max-retries N` | 覆盖 `validation.case_format_max_retries`（用例格式校验重试次数） |
+| `--validation` / `--no-validation` | 启用/禁用校验（覆盖 `validation.case_format_enabled`） |
+| `--knowledge` / `--no-knowledge` | 启用/禁用知识库（覆盖 `knowledge.enabled`） |
+| `--plugins` / `--no-plugins` | 启用/禁用插件（覆盖 `plugins.enabled`） |
+| `--skills` / `--no-skills` | 启用/禁用技能（覆盖 `skills.enabled`） |
+| `--lang {zh_CN,en_US}` | 覆盖 `agent.lang`（界面语言） |
 | `--debug-snapshots` | 保存调试快照（`interfaces.json` + `extracted_texts.json`） |
 | `--debug` | 启用调试日志（完整 LLM I/O 写入 session `debug.log`） |
 | `--env PATH` | 配置文件路径（默认 `env.yaml`） |
@@ -225,7 +243,7 @@ logging:
 
 > 向后兼容：对于没有 `run_config.json` 的旧流水线，恢复时完全使用 CLI 参数（与之前行为一致）。
 
-**配置保存范围**：`case_type`、`user_guidance`（对应 `-p`）、`output_format`、`batch_size`、`auto_mode`、`parse_mode`、`output_dir`、`api_path`、`requirement_paths`、`debug_snapshots`、`parser_path`、`reference_dir`。
+**配置保存范围**：`case_type`、`user_guidance`（对应 `-p`）、`output_format`、`plugin_batch_size`、`auto_mode`、`parse_mode`、`output_dir`、`api_path`、`requirement_paths`、`debug_snapshots`、`parser_path`、`reference_dir`。
 
 ---
 

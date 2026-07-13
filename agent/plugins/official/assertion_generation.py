@@ -29,11 +29,11 @@ class AssertionGenerationPlugin(CaseAttributeGenerator):
 
         self._single_gen = SingleAssertionGenerator(
             settings, knowledge, skill_extensions=_exts,
-            validation_rules=settings.validation_rules,
+            case_gen_rules=settings.case_gen_rules,
         )
         self._biz_gen = BizAssertionGenerator(
             settings, knowledge, skill_extensions=_exts,
-            validation_rules=settings.validation_rules,
+            case_gen_rules=settings.case_gen_rules,
         )
         self._user_guidance = ""
 

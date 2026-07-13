@@ -29,8 +29,8 @@ class GraphState(TypedDict, total=False):
     debug_snapshots: bool       # Save optional debug snapshots
     output_format: str          # "yaml" | "excel" | "both"
     batch_size: int             # Max cases per batch
-    enable_validation: bool     # Whether to run case validation
-    max_validation_retries: int # Max validation retries
+    case_format_enabled: bool     # Whether to run case validation
+    case_format_max_retries: int # Max case format validation retries
     case_type: str              # "both" | "single" | "biz"
 
     # === 文档解析 / Document parsing ===

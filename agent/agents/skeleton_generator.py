@@ -142,6 +142,7 @@ def _count_validate(
     expected_count: int,
     label: str,
     strategy: str = "fail",
+    max_retries: int = None,
 ) -> List[Dict]:
     """调用 LLM 并校验返回数量，按策略处理不匹配。
     Call LLM, extract list from JSON, validate count with configurable strategy.
@@ -154,6 +155,7 @@ def _count_validate(
         expected_count: 预期数量 / Expected number of items.
         label: 日志标签 / Human-readable label for log messages.
         strategy: "fail"（抛异常）/ "warn"（警告继续）/ "skip"（跳过校验）。
+        max_retries: 最大重试次数 / Max retries. None → 回退到 agent._max_retries.
 
     Returns:
         从 JSON 响应中提取的列表 / List of items from the JSON response.
@@ -164,6 +166,10 @@ def _count_validate(
     items = []
     agent.reset_steps()  # 每批重置步数计数器 / Reset step counter per batch
 
+    # 解析重试次数 / Resolve retry count
+    if max_retries is None:
+        max_retries = agent._max_retries
+
     # 跳过校验：调用一次直接返回，不重试 / Skip validation: one call, no retries
     if strategy == "skip":
         result = agent.call_llm_json(prompt, system_msg)
@@ -171,7 +177,7 @@ def _count_validate(
         logger.info(_("skel_gen.count_check_skipped", label=label, count=len(items)))
         return items
 
-    for attempt in range(agent._max_retries + 1):
+    for attempt in range(max_retries + 1):
         result = agent.call_llm_json(prompt, system_msg)
         items = result.get(json_key, [])
         if len(items) == expected_count:
@@ -179,7 +185,7 @@ def _count_validate(
             return items
         logger.warning(
             _("skel_gen.count_mismatch", label=label,
-              attempt=attempt + 1, total=agent._max_retries + 1,
+              attempt=attempt + 1, total=max_retries + 1,
               expected=expected_count, actual=len(items)),
         )
 
@@ -188,7 +194,7 @@ def _count_validate(
     if strategy == "warn":
         logger.warning(
             _("skel_gen.count_mismatch_final", label=label,
-              retries=agent._max_retries + 1, expected=expected_count, actual=last_count),
+              retries=max_retries + 1, expected=expected_count, actual=last_count),
         )
         return items
     # 严格模式：抛异常 / Strict mode: raise error
@@ -290,7 +296,6 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
@@ -303,7 +308,9 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
         # 骨架分批大小 / Skeleton batch size
         self._skeleton_batch_size = getattr(settings, "skeleton_batch_size", 30)
         # 校验规则列表 / Validation rules list
-        self._validation_rules = getattr(settings, "validation_rules", [])
+        self._case_gen_rules = getattr(settings, "case_gen_rules", [])
+        # 用例格式校验重试次数 / Case format validation retry count
+        self._case_format_max_retries = getattr(settings, "case_format_max_retries", 3)
 
     # ------------------------------------------------------------------
     # 公共入口 / Public entry point
@@ -360,7 +367,8 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
             render_prompt(SINGLE_SKELETON_SYSTEM, language=get_language_name()),
             "single_skeletons", expected_count,
             "single case skeletons",
-            get_strategy(self._validation_rules, "skeleton_count"),
+            get_strategy(self._case_gen_rules, "skeleton_count"),
+            max_retries=self._case_format_max_retries,
         )
 
     # ------------------------------------------------------------------
@@ -395,7 +403,7 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
 
         # 3. 逐批调用 LLM / Call LLM for each batch
         all_skeletons: List[Dict] = []
-        strategy = get_strategy(self._validation_rules, "skeleton_count")
+        strategy = get_strategy(self._case_gen_rules, "skeleton_count")
         for i, batch_grouped in enumerate(batches):
             batch_expected = sum(len(pts) for pts in batch_grouped.values())
             label = f"single batch {i+1}/{len(batches)}"
@@ -411,6 +419,7 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
                 self, batch_prompt,
                 render_prompt(SINGLE_SKELETON_SYSTEM, language=get_language_name()),
                 "single_skeletons", batch_expected, label, strategy,
+                max_retries=self._case_format_max_retries,
             )
             all_skeletons.extend(skeletons)
 
@@ -505,9 +514,9 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
 
         # URL 修正对数量偏差容忍度更高，使用 warn 策略
         # URL correction is more tolerant of count mismatch
-        strategy = get_strategy(self._validation_rules, "url_check")
+        strategy = get_strategy(self._case_gen_rules, "url_check")
 
-        for attempt in range(self._max_retries + 1):
+        for attempt in range(self._case_format_max_retries + 1):
             result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)
             corrected = result.get("cases") or result.get("single_skeletons") or []
             if not corrected:
@@ -562,7 +571,6 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
@@ -575,7 +583,9 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
         # 骨架分批大小 / Skeleton batch size
         self._skeleton_batch_size = getattr(settings, "skeleton_batch_size", 30)
         # 校验规则列表 / Validation rules list
-        self._validation_rules = getattr(settings, "validation_rules", [])
+        self._case_gen_rules = getattr(settings, "case_gen_rules", [])
+        # 用例格式校验重试次数 / Case format validation retry count
+        self._case_format_max_retries = getattr(settings, "case_format_max_retries", 3)
 
     # ------------------------------------------------------------------
     # 公共入口 / Public entry point
@@ -629,7 +639,8 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
             render_prompt(BIZ_SKELETON_SYSTEM, language=get_language_name()),
             "biz_skeletons", expected_count,
             "biz flow skeletons",
-            get_strategy(self._validation_rules, "skeleton_count"),
+            get_strategy(self._case_gen_rules, "skeleton_count"),
+            max_retries=self._case_format_max_retries,
         )
 
     # ------------------------------------------------------------------
@@ -649,7 +660,7 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
         )
 
         all_skeletons: List[Dict] = []
-        strategy = get_strategy(self._validation_rules, "skeleton_count")
+        strategy = get_strategy(self._case_gen_rules, "skeleton_count")
         for i in range(0, len(scenarios), self._skeleton_batch_size):
             batch_scenarios = scenarios[i:i + self._skeleton_batch_size]
             batch_idx = i // self._skeleton_batch_size + 1
@@ -670,6 +681,7 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
                 self, batch_prompt,
                 render_prompt(BIZ_SKELETON_SYSTEM, language=get_language_name()),
                 "biz_skeletons", batch_expected, label, strategy,
+                max_retries=self._case_format_max_retries,
             )
             all_skeletons.extend(skeletons)
 
@@ -758,9 +770,9 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
 
         logger.info(_("skel_gen.correcting_biz_urls", count=len(bad_cases)))
         expected_count = len(bad_cases)
-        strategy = get_strategy(self._validation_rules, "url_check")
+        strategy = get_strategy(self._case_gen_rules, "url_check")
 
-        for attempt in range(self._max_retries + 1):
+        for attempt in range(self._case_format_max_retries + 1):
             result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)
             corrected = (
                 result.get("cases")

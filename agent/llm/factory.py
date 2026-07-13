@@ -26,7 +26,7 @@ def create_chat_model(settings: Settings, **overrides) -> BaseChatModel:
     provider = settings.llm_provider.lower()
     model = overrides.get("model", settings.llm_model)
     temperature = overrides.get("temperature", settings.llm_temperature)
-    max_tokens = overrides.get("max_tokens", settings.llm_max_tokens)
+    max_tokens = overrides.get("max_tokens", settings.llm_max_output_tokens)
 
     if provider == "openai":
         from langchain_openai import ChatOpenAI

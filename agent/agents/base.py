@@ -66,7 +66,6 @@ class BaseAgent:
         api_key: str,
         model: str = "gpt-4o",
         temperature: float = 0.3,
-        max_tokens: int = 4096,
         max_retries: int = 3,
         max_steps: int = 10,
         base_url: str = "",
@@ -102,7 +101,6 @@ class BaseAgent:
         self._client = BaseAgent._shared_client
         self._model = model
         self._temperature = temperature
-        self._max_tokens = max_tokens
         self._max_retries = max_retries
         self._max_steps = max_steps
         self._rate_limit_delay = (
