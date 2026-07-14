@@ -1,7 +1,16 @@
-"""Abstract base classes and registry for Pre/Post processors."""
+"""Abstract base classes and registry for Pre/Post processors.
 
+提供了 PreProcessor / PostProcessor 抽象基类、自动注册机制，
+以及外部资源插件（DB/Redis/MQ）的共享包装器创建工具。
+Provides PreProcessor/PostProcessor ABCs, auto-registration, and shared
+wrapper-creation utilities for external resource plugins (DB/Redis/MQ).
+"""
+
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Type
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Global registries (populated automatically via __init_subclass__)
@@ -29,11 +38,111 @@ def _register_post_processor(cls: Type["PostProcessor"]) -> None:
 # ---------------------------------------------------------------------------
 
 class ProcessorError(Exception):
-    """Controlled error from a processor — message flows into the test report."""
+    """处理器抛出的可控错误——消息会出现在测试报告中。
+    Controlled error from a processor — message flows into the test report."""
 
     def __init__(self, message: str, processor_name: str = ""):
         super().__init__(message)
         self.processor_name = processor_name
+
+
+# ---------------------------------------------------------------------------
+# Shared utilities
+# ---------------------------------------------------------------------------
+
+def _mask_password(url: str) -> str:
+    """掩码 URL 中的密码，用于安全日志输出。
+    Mask password in a connection URL for safe logging.
+
+    适用于 db_url、redis_url、mq_url 等包含 user:password@host 格式的 URL。
+    Works for db_url, redis_url, mq_url, etc. in user:password@host format.
+    """
+    try:
+        # 格式: scheme://user:password@host:port/path
+        # Format: scheme://user:password@host:port/path
+        if "@" in url and "://" in url:
+            prefix = url.split("://", 1)[0]
+            rest = url.split("://", 1)[1]
+            if ":" in rest and "@" in rest:
+                user_pass, host_part = rest.split("@", 1)
+                if ":" in user_pass:
+                    user, _pass = user_pass.split(":", 1)
+                    return f"{prefix}://{user}:***@{host_part}"
+    except Exception:
+        pass
+    return url
+
+
+def _create_external_plugin_wrappers(
+    cls: Type,
+    plugin_registry: Dict[str, Type],
+) -> None:
+    """为外部资源插件（DB/Redis/MQ/RocketMQ）自动创建 Pre/PostProcessor 包装类。
+    Auto-create PreProcessor/PostProcessor wrapper classes for external resource
+    plugins (DB/Redis/MQ/RocketMQ).
+
+    此函数封装了 type() 动态创建包装类的通用逻辑，避免在每个插件模块中重复。
+    This function encapsulates the common type()-based wrapper creation logic,
+    avoiding duplication across plugin modules.
+
+    工作流程 / Workflow:
+    1. 验证 cls.name 存在且非空 / Validate cls.name is set and non-empty
+    2. 将 cls 注册到 plugin_registry[name] / Register cls in plugin_registry[name]
+    3. 用 type() 动态创建 PreProcessor 子类，process() → cls().before_request()
+    4. 用 type() 动态创建 PostProcessor 子类，process() → cls().after_response()
+    5. type() 自动触发 __init_subclass__ → 注册到全局 _PRE/_POST_PROCESSOR_REGISTRY
+
+    Args:
+        cls: 用户编写的插件子类（BaseDBPlugin/BaseRedisPlugin/... 的子类）。
+             User-defined plugin subclass.
+        plugin_registry: 类别专属注册表（如 _DB_PLUGIN_REGISTRY）。
+                         Category-specific registry dict.
+    """
+    name = getattr(cls, "name", None)
+    if not name:
+        raise TypeError(
+            f"{cls.__name__} must define a 'name' class attribute. "
+            f"请在 {cls.__name__} 上定义 'name' 类属性。"
+        )
+    plugin_registry[name] = cls
+
+    # ── 动态创建 PreProcessor 包装类 ────────────────────────────────────
+    # Dynamically create PreProcessor wrapper class
+    # 委托到 cls().before_request / Delegate to cls().before_request
+    pre_cls = type(
+        f"{cls.__name__}PreWrapper",
+        (PreProcessor,),
+        {
+            "name": name,
+            "_plugin_cls": cls,
+            "process": lambda self, h, b, cc, gc: cls().before_request(h, b, cc, gc),
+            "can_process": lambda self, case: cls().can_process(case),
+        },
+    )
+    # type() 创建 PreProcessor 子类 → 触发 PreProcessor.__init_subclass__
+    # → _register_pre_processor(pre_cls)
+
+    # ── 动态创建 PostProcessor 包装类 ───────────────────────────────────
+    # Dynamically create PostProcessor wrapper class
+    # 委托到 cls().after_response / Delegate to cls().after_response
+    post_cls = type(
+        f"{cls.__name__}PostWrapper",
+        (PostProcessor,),
+        {
+            "name": name,
+            "_plugin_cls": cls,
+            "process": lambda self, rh, rb, rsh, rsb, cc, gc: (
+                cls().after_response(rh, rb, rsh, rsb, cc, gc)
+            ),
+        },
+    )
+    # type() 创建 PostProcessor 子类 → 触发 PostProcessor.__init_subclass__
+    # → _register_post_processor(post_cls)
+
+    logger.info(
+        "Registered plugin '%s' → PreProcessor=%s, PostProcessor=%s",
+        name, pre_cls.__name__, post_cls.__name__,
+    )
 
 
 # ---------------------------------------------------------------------------

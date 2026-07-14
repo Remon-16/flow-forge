@@ -86,6 +86,9 @@ processor_configs:
 | `response-time` | Post | 记录响应状态码和内容长度，超过阈值时 WARNING |
 | `print-demo-post` | Post | 调试用，INFO 级别打印响应摘要 |
 | `return-order-db` | Pre + Post | 🌟 数据库处理器示例 — 前置 INSERT 订单，后置 print 退货记录（详见数据库处理器章节） |
+| `cache-handler` | Pre + Post | 🌟 Redis 缓存处理示例 — 前置写缓存，后置清缓存（详见 Redis 处理器章节） |
+| `order-publish` | Pre + Post | 🌟 MQ 订单发布示例（Kombu）— 前置发布消息，后置消费验证（详见 MQ 处理器章节） |
+| `rocketmq-order` | Pre | 🌟 RocketMQ 订单消息示例 — 前置发送消息到 RocketMQ 主题（详见 RocketMQ 处理器章节） |
 
 ### URL 路径参数解析
 
@@ -181,6 +184,55 @@ postprocessors:
 > **配置说明**：数据库连接通过 `env-local.yml` 的 `processor_configs.<name>.db_url` 配置（SQLAlchemy connection URL 格式）。不需要在用例 YAML 中暴露敏感信息。
 >
 > **依赖安装**：`pip install sqlalchemy pymysql`（MySQL）；其他数据库需安装对应驱动（如 `psycopg2`、`cx_Oracle`）。
+
+### Redis 处理器（BaseRedisPlugin）
+
+对于需要 Redis 缓存操作的前置/后置场景（如"请求前写缓存、请求后清理"），可使用 `BaseRedisPlugin` 基类（`processors/redis.py`）。它基于 **redis-py** 提供：
+
+- **连接池管理**：redis-py 内置 `ConnectionPool`，线程安全、懒加载、按 `redis_url` 缓存客户端
+- **自动注册**：`__init_subclass__` 自动创建 PreProcessor / PostProcessor 包装类
+
+使用方式与 `BaseDBPlugin` 相同：继承 → 设置 `name` → 实现 `before_request()` / `after_response()`。
+
+**内置示例**：`cache-handler`（`processors/builtin/redis/cache_handler.py`）— 前置 SET 缓存数据，后置 DEL 清理。
+
+> **配置说明**：Redis 连接通过 `processor_configs.<name>.redis_url` 配置。
+> **依赖安装**：`pip install redis`
+
+### MQ 处理器 — Kombu 多 MQ 抽象（BaseMQPlugin）
+
+对于需要消息队列操作的前置/后置场景，可使用 `BaseMQPlugin` 基类（`processors/mq.py`）。它基于 **Kombu**（Celery 的传输层）提供多 MQ 抽象——类似 SQLAlchemy 对数据库的作用：
+
+- **多 MQ 支持**：一个 `mq_url` 连接字符串切换 RabbitMQ / Redis / Amazon SQS / MongoDB 等
+- **连接管理**：Kombu `Connection` 自带连接池，线程安全、懒加载、按 `mq_url` 缓存
+- **自动注册**：`__init_subclass__` 自动创建 PreProcessor / PostProcessor 包装类
+- **便捷方法**：`_publish()` 发布消息、`_get_message()` 消费消息
+
+支持的协议：
+
+| 协议 | `mq_url` 示例 | MQ 系统 |
+|------|-------------|--------|
+| `amqp://` | `amqp://guest:guest@localhost:5672//` | RabbitMQ |
+| `redis://` | `redis://localhost:6379/0` | Redis (as broker) |
+| `sqs://` | `sqs://AWS_KEY:AWS_SECRET@` | Amazon SQS |
+| `memory://` | `memory://` | 测试用（无需外部服务） |
+
+**内置示例**：`order-publish`（`processors/builtin/mq/order_publish.py`）— 前置 publish 订单事件，后置 consume 验证。
+
+> **依赖安装**：`pip install kombu`
+
+### RocketMQ 处理器（BaseRocketMQPlugin）
+
+Apache RocketMQ 在国内是主流 MQ，因其协议特殊（Kombu 不支持），单独提供 `BaseRocketMQPlugin` 基类（`processors/rocketmq.py`）。使用 `rocketmq-client-python` 官方客户端：
+
+- **连接管理**：`_RocketMQManager` 按 `(namesrv_addr, group_id)` 缓存 Producer，线程安全
+- **便捷方法**：`_send_message()` 同步发送消息
+- **自动注册**：与 DB/Redis/MQ 相同模式
+
+**内置示例**：`rocketmq-order`（`processors/builtin/rocketmq/order_message.py`）— 前置发送订单事件到 RocketMQ 主题。
+
+> **配置说明**：连接通过 `processor_configs.<name>.namesrv_addr`、`group_id`、`topic` 配置。
+> **依赖安装**：`pip install rocketmq-client-python`（需要 C++ 编译环境）
 
 ### 执行流程
 

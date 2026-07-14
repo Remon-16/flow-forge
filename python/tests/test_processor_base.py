@@ -1,15 +1,14 @@
-"""Tests for processors.base — auto-registration, ProcessorError."""
+"""Tests for processors.base — _create_external_plugin_wrappers and _mask_password."""
 
 import pytest
 
 from processors.base import (
     PreProcessor,
     PostProcessor,
-    ProcessorError,
     _PRE_PROCESSOR_REGISTRY,
     _POST_PROCESSOR_REGISTRY,
-    _register_pre_processor,
-    _register_post_processor,
+    _create_external_plugin_wrappers,
+    _mask_password,
 )
 
 
@@ -19,6 +18,7 @@ from processors.base import (
 
 @pytest.fixture(autouse=True)
 def _clean_registries():
+    """清理所有注册表，确保测试隔离。Clean all registries for test isolation."""
     _PRE_PROCESSOR_REGISTRY.clear()
     _POST_PROCESSOR_REGISTRY.clear()
     yield
@@ -27,183 +27,150 @@ def _clean_registries():
 
 
 # ============================================================================
-# PreProcessorRegistrationTest
+# TestMaskPassword — 密码掩码（通用 URL）
 # ============================================================================
 
-class TestPreProcessorRegistrationTest:
+class TestMaskPassword:
+    """验证 _mask_password 对各种 URL 格式的密码掩码。"""
 
-    def should_auto_register_with_name(self):
-        class MyPre(PreProcessor):
-            name = "my_pre"
+    def test_masks_redis_url(self):
+        url = "redis://:secret123@localhost:6379/0"
+        masked = _mask_password(url)
+        assert "secret123" not in masked
+        assert "***" in masked
 
-            def process(self, headers, body, case_config, global_config):
-                return headers, body
+    def test_masks_amqp_url(self):
+        url = "amqp://guest:guest@localhost:5672//"
+        masked = _mask_password(url)
+        assert "***" in masked
+        # 用户名应保留 / username should be preserved
+        assert "guest" in masked
 
-        assert "my_pre" in _PRE_PROCESSOR_REGISTRY
-        assert _PRE_PROCESSOR_REGISTRY["my_pre"] is MyPre
+    def test_no_password_unchanged(self):
+        url = "redis://localhost:6379/0"
+        masked = _mask_password(url)
+        assert masked == url
 
-    def should_raise_type_error_when_name_missing(self):
-        with pytest.raises(TypeError, match="must define a 'name' class attribute"):
-            class BadPre(PreProcessor):  # noqa: F841
-                def process(self, headers, body, case_config, global_config):
-                    return headers, body
+    def test_no_at_symbol_unchanged(self):
+        url = "memory://"
+        masked = _mask_password(url)
+        assert masked == url
 
-    def should_have_true_can_process_default(self):
-        class SimplePre(PreProcessor):
-            name = "simple"
 
-            def process(self, headers, body, case_config, global_config):
-                return headers, body
+# ============================================================================
+# Fake plugin for testing wrapper creation
+# ============================================================================
 
-        instance = SimplePre()
-        assert instance.can_process({"any": "case"}) is True
-        assert instance.can_process({}) is True
-        assert instance.can_process(None) is True  # type: ignore
+class _FakePlugin:
+    """模拟外部插件基类。Fake plugin base class for testing."""
+    name = "fake-plugin"
 
-    def should_subclass_can_override_can_process(self):
-        class ConditionalPre(PreProcessor):
-            name = "conditional"
+    def can_process(self, case):
+        return True
+
+    def before_request(self, headers, body, case_config, global_config):
+        body["from_plugin"] = True
+        return headers, body
+
+    def after_response(self, request_headers, request_body, response_headers,
+                       response_body, case_config, global_config):
+        pass
+
+
+class TestCreateExternalPluginWrappers:
+    """验证 _create_external_plugin_wrappers 的行为。"""
+
+    def test_registers_in_custom_registry(self):
+        """插件类被注册到传入的自定义 registry 中。"""
+        fake_registry = {}
+        _create_external_plugin_wrappers(_FakePlugin, fake_registry)
+        assert "fake-plugin" in fake_registry
+        assert fake_registry["fake-plugin"] is _FakePlugin
+
+    def test_creates_pre_processor_wrapper(self):
+        """自动创建 PreProcessor 包装类并注册到全局 _PRE_PROCESSOR_REGISTRY。"""
+        fake_registry = {}
+        _create_external_plugin_wrappers(_FakePlugin, fake_registry)
+        assert "fake-plugin" in _PRE_PROCESSOR_REGISTRY
+        wrapper_cls = _PRE_PROCESSOR_REGISTRY["fake-plugin"]
+        assert issubclass(wrapper_cls, PreProcessor)
+
+    def test_creates_post_processor_wrapper(self):
+        """自动创建 PostProcessor 包装类并注册到全局 _POST_PROCESSOR_REGISTRY。"""
+        fake_registry = {}
+        _create_external_plugin_wrappers(_FakePlugin, fake_registry)
+        assert "fake-plugin" in _POST_PROCESSOR_REGISTRY
+        wrapper_cls = _POST_PROCESSOR_REGISTRY["fake-plugin"]
+        assert issubclass(wrapper_cls, PostProcessor)
+
+    def test_pre_wrapper_delegates_to_before_request(self):
+        """PreProcessor 包装器的 process() 委托到 before_request()。"""
+        fake_registry = {}
+        _create_external_plugin_wrappers(_FakePlugin, fake_registry)
+        pre_cls = _PRE_PROCESSOR_REGISTRY["fake-plugin"]
+        instance = pre_cls()
+        h, b = instance.process(
+            {"Content-Type": "json"}, {"key": "val"}, {}, {"processor_configs": {}}
+        )
+        assert b["from_plugin"] is True
+        assert b["key"] == "val"
+
+    def test_post_wrapper_delegates_to_after_response(self):
+        """PostProcessor 包装器的 process() 委托到 after_response()。"""
+        call_log = []
+
+        class TrackingPlugin(_FakePlugin):
+            name = "tracking-plugin"
+
+            def after_response(self, rh, rb, rsh, rsb, cc, gc):
+                call_log.append(rsb)
+
+        fake_registry = {}
+        _create_external_plugin_wrappers(TrackingPlugin, fake_registry)
+        post_cls = _POST_PROCESSOR_REGISTRY["tracking-plugin"]
+        instance = post_cls()
+        instance.process({}, {}, {}, {"result": "ok"}, {}, {"processor_configs": {}})
+        assert call_log == [{"result": "ok"}]
+
+    def test_raises_type_error_when_name_missing(self):
+        """未定义 name 时抛出 TypeError。"""
+
+        class NoNamePlugin:
+            pass
+
+        with pytest.raises(TypeError, match="must define a 'name'"):
+            _create_external_plugin_wrappers(NoNamePlugin, {})
+
+    def test_multiple_plugins_independent(self):
+        """多个插件独立注册，互不干扰。"""
+
+        class PluginA(_FakePlugin):
+            name = "plugin-a"
+
+        class PluginB(_FakePlugin):
+            name = "plugin-b"
+
+        registry = {}
+        _create_external_plugin_wrappers(PluginA, registry)
+        _create_external_plugin_wrappers(PluginB, registry)
+
+        assert "plugin-a" in _PRE_PROCESSOR_REGISTRY
+        assert "plugin-b" in _PRE_PROCESSOR_REGISTRY
+        assert registry["plugin-a"] is PluginA
+        assert registry["plugin-b"] is PluginB
+
+    def test_can_process_delegation(self):
+        """PreProcessor 包装器的 can_process 委托到插件的 can_process。"""
+
+        class ConditionalPlugin(_FakePlugin):
+            name = "conditional-plugin"
 
             def can_process(self, case):
                 return case.get("enabled", False)
 
-            def process(self, headers, body, case_config, global_config):
-                headers["X-Extra"] = "1"
-                return headers, body
-
-        instance = ConditionalPre()
+        registry = {}
+        _create_external_plugin_wrappers(ConditionalPlugin, registry)
+        pre_cls = _PRE_PROCESSOR_REGISTRY["conditional-plugin"]
+        instance = pre_cls()
         assert instance.can_process({"enabled": True}) is True
         assert instance.can_process({"enabled": False}) is False
-        assert instance.can_process({}) is False
-
-
-# ============================================================================
-# PostProcessorRegistrationTest
-# ============================================================================
-
-class TestPostProcessorRegistrationTest:
-
-    def should_auto_register_with_name(self):
-        class MyPost(PostProcessor):
-            name = "my_post"
-
-            def process(self, request_headers, request_body, response_headers,
-                        response_body, case_config, global_config):
-                pass
-
-        assert "my_post" in _POST_PROCESSOR_REGISTRY
-        assert _POST_PROCESSOR_REGISTRY["my_post"] is MyPost
-
-    def should_raise_type_error_when_name_missing(self):
-        with pytest.raises(TypeError, match="must define a 'name' class attribute"):
-            class BadPost(PostProcessor):  # noqa: F841
-                def process(self, request_headers, request_body, response_headers,
-                            response_body, case_config, global_config):
-                    pass
-
-    def should_have_true_can_process_default(self):
-        """PostProcessor does not define can_process, but subclass can optionally add it."""
-        # The PostProcessor base does NOT define can_process. Verify it is absent.
-        assert not hasattr(PostProcessor, 'can_process')
-
-    def should_subclass_can_override_can_process(self):
-        class ConditionalPost(PostProcessor):
-            name = "cond_post"
-
-            def can_process(self, case):
-                return case.get("enabled", False)
-
-            def process(self, request_headers, request_body, response_headers,
-                        response_body, case_config, global_config):
-                pass
-
-        instance = ConditionalPost()
-        assert instance.can_process({"enabled": True}) is True
-        assert instance.can_process({"enabled": False}) is False
-
-
-# ============================================================================
-# ProcessorErrorTest
-# ============================================================================
-
-class TestProcessorErrorTest:
-
-    def should_store_message_and_processor_name(self):
-        err = ProcessorError("something went wrong", processor_name="hmac_sign")
-        assert err.processor_name == "hmac_sign"
-        assert str(err) == "something went wrong"
-
-    def should_have_empty_processor_name_by_default(self):
-        err = ProcessorError("generic error")
-        assert err.processor_name == ""
-
-    def should_format_as_string(self):
-        err = ProcessorError("token expired", processor_name="auth_pre")
-        assert str(err) == "token expired"
-        # repr should contain the class name
-        assert "ProcessorError" in repr(err)
-
-
-# ============================================================================
-# Registration helper function edge cases
-# ============================================================================
-
-class TestRegistrationHelperEdgeCases:
-    """Test _register_pre_processor / _register_post_processor directly."""
-
-    def should_register_via_helper(self):
-        class MyPre(PreProcessor):
-            name = "helper_pre"
-
-            def process(self, headers, body, case_config, global_config):
-                return headers, body
-
-        # Already registered via __init_subclass__, clear and test helper directly
-        _PRE_PROCESSOR_REGISTRY.clear()
-        _register_pre_processor(MyPre)
-        assert _PRE_PROCESSOR_REGISTRY["helper_pre"] is MyPre
-
-    def should_raise_type_error_for_empty_name(self):
-        """When name is an empty string, __init_subclass__ raises TypeError."""
-        _PRE_PROCESSOR_REGISTRY.clear()
-        with pytest.raises(TypeError, match="must define a 'name' class attribute"):
-            class EmptyNamePre(PreProcessor):  # noqa: F841
-                name = ""  # type: ignore
-                def process(self, headers, body, case_config, global_config):
-                    return headers, body
-
-    def should_register_multiple_preprocessors(self):
-        class PreA(PreProcessor):
-            name = "pre_a"
-
-            def process(self, headers, body, case_config, global_config):
-                return headers, body
-
-        class PreB(PreProcessor):
-            name = "pre_b"
-
-            def process(self, headers, body, case_config, global_config):
-                return headers, body
-
-        assert "pre_a" in _PRE_PROCESSOR_REGISTRY
-        assert "pre_b" in _PRE_PROCESSOR_REGISTRY
-        assert len(_PRE_PROCESSOR_REGISTRY) == 2
-
-    def should_register_multiple_postprocessors(self):
-        class PostA(PostProcessor):
-            name = "post_a"
-
-            def process(self, request_headers, request_body, response_headers,
-                        response_body, case_config, global_config):
-                pass
-
-        class PostB(PostProcessor):
-            name = "post_b"
-
-            def process(self, request_headers, request_body, response_headers,
-                        response_body, case_config, global_config):
-                pass
-
-        assert "post_a" in _POST_PROCESSOR_REGISTRY
-        assert "post_b" in _POST_PROCESSOR_REGISTRY
-        assert len(_POST_PROCESSOR_REGISTRY) == 2

@@ -1,9 +1,9 @@
-"""处理器选择器：为测试用例分配前置/后置处理器。
-Processor selector: assigns pre/post-processors to test cases.
+"""处理器选择器：为测试用例分配前置/后置处理器（DB/Redis/MQ/RocketMQ）。
+Processor selector: assigns pre/post-processors (DB/Redis/MQ/RocketMQ) to test cases.
 
-根据已填充数据的用例和接口定义，由 LLM 决定哪些 DB 处理器应被添加。
+根据已填充数据的用例和接口定义，由 LLM 决定哪些处理器应被添加。
 Based on data-filled cases and interface definitions, the LLM decides which
-DB processors to assign to each case.
+processors (DB/Redis/MQ/RocketMQ) to assign to each case.
 """
 
 import json

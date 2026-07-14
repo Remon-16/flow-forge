@@ -170,10 +170,11 @@ class TestDbProcessorsSkill:
         ext = skill_data["prompt_extension"]
         assert "NEVER invent" in ext
 
-    def test_prompt_contains_overwrite_notice(self, skill_data):
-        """prompt_extension 应包含 DB 处理器优先的说明。"""
+    def test_prompt_no_overwrite_notice(self, skill_data):
+        """prompt_extension 不应包含 OVERWRITE 规则（已移至提示词外）。"""
         ext = skill_data["prompt_extension"]
-        assert "OVERWRITE" in ext or "WINS" in ext
+        assert "OVERWRITE" not in ext
+        assert "WINS" not in ext
 
     def test_prompt_contains_processor_template(self, skill_data):
         """prompt_extension 应包含模板标记（供用户复制扩展）。"""
@@ -214,3 +215,133 @@ class TestPrompts:
         """业务流用户提示词应包含 {{cases}} 模板变量。"""
         from plugins.official.prompts.processor_selection import BIZ_PROCESSOR_USER
         assert "{{cases}}" in BIZ_PROCESSOR_USER
+
+    def test_no_hardcoded_processor_names_in_single(self):
+        """单接口系统提示词不应包含硬编码的处理器名称。"""
+        from plugins.official.prompts.processor_selection import SINGLE_PROCESSOR_SYSTEM
+        assert "return-order-db" not in SINGLE_PROCESSOR_SYSTEM
+        assert "<processor-name>" in SINGLE_PROCESSOR_SYSTEM
+
+    def test_no_hardcoded_processor_names_in_biz(self):
+        """业务流系统提示词不应包含硬编码的处理器名称。"""
+        from plugins.official.prompts.processor_selection import BIZ_PROCESSOR_SYSTEM
+        assert "return-order-db" not in BIZ_PROCESSOR_SYSTEM
+        assert "<processor-name>" in BIZ_PROCESSOR_SYSTEM
+
+    def test_no_overwrite_rule_in_prompts(self):
+        """提示词不应包含 OVERWRITE 规则。"""
+        from plugins.official.prompts.processor_selection import (
+            SINGLE_PROCESSOR_SYSTEM,
+            BIZ_PROCESSOR_SYSTEM,
+        )
+        assert "OVERWRITE" not in SINGLE_PROCESSOR_SYSTEM
+        assert "OVERWRITE" not in BIZ_PROCESSOR_SYSTEM
+
+    def test_optional_rule_exists(self):
+        """提示词应包含处理器是可选的说明。"""
+        from plugins.official.prompts.processor_selection import (
+            SINGLE_PROCESSOR_SYSTEM,
+            BIZ_PROCESSOR_SYSTEM,
+        )
+        assert "OPTIONAL" in SINGLE_PROCESSOR_SYSTEM
+        assert "OPTIONAL" in BIZ_PROCESSOR_SYSTEM
+
+    def test_no_modify_other_fields_rule(self):
+        """提示词应包含不得修改其他字段的约束。"""
+        from plugins.official.prompts.processor_selection import (
+            SINGLE_PROCESSOR_SYSTEM,
+            BIZ_PROCESSOR_SYSTEM,
+        )
+        assert "Do NOT modify" in SINGLE_PROCESSOR_SYSTEM
+        assert "Do NOT modify" in BIZ_PROCESSOR_SYSTEM
+
+
+# ============================================================================
+# TestRedisProcessorsSkill — Redis 处理器 skill 验证
+# ============================================================================
+
+class TestRedisProcessorsSkill:
+    """验证 redis_processors.yaml skill 文件。"""
+
+    @pytest.fixture
+    def skill_data(self):
+        import yaml
+        skill_path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "plugins", "official", "skills", "redis_processors.yaml",
+        )
+        with open(skill_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    def test_skill_has_required_fields(self, skill_data):
+        assert skill_data["name"] == "redis_processors"
+        assert "description" in skill_data
+        assert "prompt_extension" in skill_data
+
+    def test_target_agent_is_processor_selector(self, skill_data):
+        assert "processor_selector" in skill_data["target_agents"]
+
+    def test_prompt_contains_cache_handler(self, skill_data):
+        ext = skill_data["prompt_extension"]
+        assert "cache-handler" in ext
+
+    def test_no_output_format_section(self, skill_data):
+        ext = skill_data["prompt_extension"]
+        assert "How to output" not in ext
+
+
+# ============================================================================
+# TestMqProcessorsSkill — MQ 处理器 skill 验证
+# ============================================================================
+
+class TestMqProcessorsSkill:
+    """验证 mq_processors.yaml skill 文件。"""
+
+    @pytest.fixture
+    def skill_data(self):
+        import yaml
+        skill_path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "plugins", "official", "skills", "mq_processors.yaml",
+        )
+        with open(skill_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    def test_skill_has_required_fields(self, skill_data):
+        assert skill_data["name"] == "mq_processors"
+        assert "description" in skill_data
+        assert "prompt_extension" in skill_data
+
+    def test_target_agent_is_processor_selector(self, skill_data):
+        assert "processor_selector" in skill_data["target_agents"]
+
+    def test_prompt_contains_order_publish(self, skill_data):
+        ext = skill_data["prompt_extension"]
+        assert "order-publish" in ext
+
+
+# ============================================================================
+# TestRocketmqProcessorsSkill — RocketMQ 处理器 skill 验证
+# ============================================================================
+
+class TestRocketmqProcessorsSkill:
+    """验证 rocketmq_processors.yaml skill 文件。"""
+
+    @pytest.fixture
+    def skill_data(self):
+        import yaml
+        skill_path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "plugins", "official", "skills", "rocketmq_processors.yaml",
+        )
+        with open(skill_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    def test_skill_has_required_fields(self, skill_data):
+        assert skill_data["name"] == "rocketmq_processors"
+        assert "description" in skill_data
+        assert "prompt_extension" in skill_data
+
+    def test_prompt_contains_rocketmq_order(self, skill_data):
+        ext = skill_data["prompt_extension"]
+        assert "rocketmq-order" in ext

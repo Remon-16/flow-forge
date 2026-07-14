@@ -13,16 +13,11 @@ import logging
 import threading
 from abc import ABC
 from typing import Any, Dict, Optional, Tuple, Type
-from urllib.parse import quote as url_quote
 
 from processors.base import (
-    PreProcessor,
-    PostProcessor,
     ProcessorError,
-    _register_pre_processor,
-    _register_post_processor,
-    _PRE_PROCESSOR_REGISTRY,
-    _POST_PROCESSOR_REGISTRY,
+    _create_external_plugin_wrappers,
+    _mask_password,
 )
 
 logger = logging.getLogger(__name__)
@@ -111,24 +106,6 @@ class _EngineManager:
         return cls._engines[db_url]
 
 
-def _mask_password(db_url: str) -> str:
-    """掩码 db_url 中的密码，用于日志输出。
-    Mask password in db_url for safe logging."""
-    try:
-        # 格式: dialect+driver://user:password@host:port/db
-        # Format: dialect+driver://user:password@host:port/db
-        if "@" in db_url and "://" in db_url:
-            prefix = db_url.split("://", 1)[0]
-            rest = db_url.split("://", 1)[1]
-            if ":" in rest and "@" in rest:
-                user_pass, host_part = rest.split("@", 1)
-                user, _pass = user_pass.split(":", 1)
-                return f"{prefix}://{user}:***@{host_part}"
-    except Exception:
-        pass
-    return db_url
-
-
 # ============================================================================
 # DB 插件注册表 / DB plugin registry
 # ============================================================================
@@ -139,54 +116,12 @@ _DB_PLUGIN_REGISTRY: Dict[str, Type["BaseDBPlugin"]] = {}
 
 def _register_db_plugin(cls: Type["BaseDBPlugin"]) -> None:
     """注册 BaseDBPlugin 子类并自动创建 PreProcessor / PostProcessor 包装类。
-    Register a BaseDBPlugin subclass and auto-create wrapper classes."""
-    name = getattr(cls, "name", None)
-    if not name:
-        raise TypeError(
-            f"BaseDBPlugin subclass {cls.__name__} must define a 'name' class attribute"
-        )
-    _DB_PLUGIN_REGISTRY[name] = cls
+    Register a BaseDBPlugin subclass and auto-create Pre/Post wrapper classes.
 
-    # ── 动态创建 PreProcessor 包装类 ────────────────────────────────────
-    # Dynamically create PreProcessor wrapper class
-    pre_cls = type(
-        f"{cls.__name__}PreWrapper",
-        (PreProcessor,),
-        {
-            "name": name,
-            "_db_plugin_cls": cls,
-            # 委托到 BaseDBPlugin.before_request
-            # Delegate to BaseDBPlugin.before_request
-            "process": lambda self, h, b, cc, gc: cls().before_request(h, b, cc, gc),
-            "can_process": lambda self, case: cls().can_process(case),
-        },
-    )
-    # type() 创建 PreProcessor 子类时，会自动触发 PreProcessor.__init_subclass__，
-    # 从而调用 _register_pre_processor(pre_cls)，将包装类注册到 _PRE_PROCESSOR_REGISTRY。
-    # type() triggers PreProcessor.__init_subclass__ → _register_pre_processor(pre_cls)
-
-    # ── 动态创建 PostProcessor 包装类 ───────────────────────────────────
-    # Dynamically create PostProcessor wrapper class
-    post_cls = type(
-        f"{cls.__name__}PostWrapper",
-        (PostProcessor,),
-        {
-            "name": name,
-            "_db_plugin_cls": cls,
-            # 委托到 BaseDBPlugin.after_response
-            # Delegate to BaseDBPlugin.after_response
-            "process": lambda self, rh, rb, rsh, rsb, cc, gc: (
-                cls().after_response(rh, rb, rsh, rsb, cc, gc)
-            ),
-        },
-    )
-    # 同理，自动注册到 _POST_PROCESSOR_REGISTRY
-    # Similarly auto-registered in _POST_PROCESSOR_REGISTRY
-
-    logger.info(
-        "Registered DB plugin '%s' → PreProcessor=%s, PostProcessor=%s",
-        name, pre_cls.__name__, post_cls.__name__,
-    )
+    委托到共享 helper _create_external_plugin_wrappers，避免重复代码。
+    Delegates to shared helper _create_external_plugin_wrappers to avoid duplication.
+    """
+    _create_external_plugin_wrappers(cls, _DB_PLUGIN_REGISTRY)
 
 
 # ============================================================================

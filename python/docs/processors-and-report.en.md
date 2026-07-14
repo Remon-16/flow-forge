@@ -86,6 +86,9 @@ processor_configs:
 | `response-time` | Post | Logs the response status code and content length; warns when a threshold is exceeded |
 | `print-demo-post` | Post | Debug helper; logs the response summary at INFO level |
 | `return-order-db` | Pre + Post | 🌟 DB processor example — pre-inserts an order, post-prints the return record (see Database Processors section) |
+| `cache-handler` | Pre + Post | 🌟 Redis cache handler example — pre-set cache, post-delete (see Redis Processors section) |
+| `order-publish` | Pre + Post | 🌟 MQ order publish example (Kombu) — pre-publish message, post-consume verify (see MQ Processors section) |
+| `rocketmq-order` | Pre | 🌟 RocketMQ order message example — pre-send message to RocketMQ topic (see RocketMQ Processors section) |
 
 ### URL Path Parameter Resolution
 
@@ -181,6 +184,55 @@ postprocessors:
 > **Configuration**: Database connection is configured via `processor_configs.<name>.db_url` in `env-local.yml` (SQLAlchemy connection URL format). No sensitive info in test case YAML.
 >
 > **Dependencies**: `pip install sqlalchemy pymysql` (MySQL); install the corresponding driver for other databases (e.g., `psycopg2`, `cx_Oracle`).
+
+### Redis Processors (BaseRedisPlugin)
+
+For scenarios requiring Redis cache operations before/after requests (e.g., "set cache before request, clean up after"), use the `BaseRedisPlugin` base class (`processors/redis.py`). Built on **redis-py**, it provides:
+
+- **Connection pooling**: redis-py's built-in `ConnectionPool` — thread-safe, lazy-loaded, cached by `redis_url`
+- **Auto-registration**: `__init_subclass__` auto-creates PreProcessor / PostProcessor wrapper classes
+
+Usage follows the same pattern as `BaseDBPlugin`: subclass → set `name` → implement `before_request()` / `after_response()`.
+
+**Built-in example**: `cache-handler` (`processors/builtin/redis/cache_handler.py`) — pre SET cache data, post DEL cleanup.
+
+> **Configuration**: Redis connection via `processor_configs.<name>.redis_url`.
+> **Dependencies**: `pip install redis`
+
+### MQ Processors — Kombu Multi-MQ Abstraction (BaseMQPlugin)
+
+For scenarios requiring message queue operations, use the `BaseMQPlugin` base class (`processors/mq.py`). Built on **Kombu** (Celery's transport layer), it provides multi-MQ abstraction — like SQLAlchemy for databases:
+
+- **Multi-MQ support**: One `mq_url` connection string for RabbitMQ / Redis / Amazon SQS / MongoDB
+- **Connection management**: Kombu `Connection` with built-in pooling — thread-safe, lazy-loaded, cached by `mq_url`
+- **Auto-registration**: `__init_subclass__` auto-creates PreProcessor / PostProcessor wrapper classes
+- **Convenience methods**: `_publish()` for message publishing, `_get_message()` for message consuming
+
+Supported protocols:
+
+| Protocol | `mq_url` example | MQ System |
+|------|-------------|--------|
+| `amqp://` | `amqp://guest:guest@localhost:5672//` | RabbitMQ |
+| `redis://` | `redis://localhost:6379/0` | Redis (as broker) |
+| `sqs://` | `sqs://AWS_KEY:AWS_SECRET@` | Amazon SQS |
+| `memory://` | `memory://` | Testing (no external service needed) |
+
+**Built-in example**: `order-publish` (`processors/builtin/mq/order_publish.py`) — pre publish order event, post consume verify.
+
+> **Dependencies**: `pip install kombu`
+
+### RocketMQ Processors (BaseRocketMQPlugin)
+
+Apache RocketMQ is widely used. Its protocol differs from AMQP/Redis (not supported by Kombu), so a separate `BaseRocketMQPlugin` is provided (`processors/rocketmq.py`). Uses the `rocketmq-client-python` official client:
+
+- **Connection management**: `_RocketMQManager` caches Producer by `(namesrv_addr, group_id)`, thread-safe
+- **Convenience method**: `_send_message()` for synchronous message sending
+- **Auto-registration**: Same pattern as DB/Redis/MQ
+
+**Built-in example**: `rocketmq-order` (`processors/builtin/rocketmq/order_message.py`) — pre send order event to RocketMQ topic.
+
+> **Configuration**: Connection via `processor_configs.<name>.namesrv_addr`, `group_id`, `topic`.
+> **Dependencies**: `pip install rocketmq-client-python` (requires C++ build environment)
 
 ### Execution Flow
 

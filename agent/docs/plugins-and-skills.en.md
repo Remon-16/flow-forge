@@ -24,10 +24,8 @@ plugins:
 | Plugin | Purpose | Scope |
 |------|------|----------|
 | `data_filling` | Fills request data into case skeletons (`request_head`, `request_body`, `status_code`, `tag`) | Single-API + business flow |
-| `processor_selection` | Assigns DB pre/post-processors to filled cases (`preprocessors`, `postprocessors`) | Single-API + business flow |
+| `processor_selection` | Assigns pre/post-processors (DB / Redis / MQ / RocketMQ) to filled cases (`preprocessors`, `postprocessors`) | Single-API + business flow |
 | `assertion_generation` | Generates assertions for filled cases (`assert_dict`, `assert_rules`) | Single-API + business flow |
-
-> **Processor priority**: DB processors (pre-processors) OVERWRITE LLM-filled field values at runtime. If `request_body.order_id` is set by both the LLM and a DB preprocessor, the DB processor's value wins.
 
 Remove unwanted plugins from `plugins.modules`, or replace them with custom implementations.
 
@@ -114,6 +112,10 @@ Skills can be injected into **all** agents (including main pipeline agents and p
 | `boundary_test.yaml` | `skills/builtin/` | Injects boundary-value testing hints into `case_generator` |
 | `foli_mall_data_filling.yaml` | `plugins/official/skills/` | Data filling rules for the Foli Mall project |
 | `db_processors.yaml` | `plugins/official/skills/` | Available DB pre/post-processor list (users can extend via template) |
+| `redis_processors.yaml` | `plugins/official/skills/` | Available Redis cache processor list |
+| `mq_processors.yaml` | `plugins/official/skills/` | Available MQ processor list (Kombu: RabbitMQ/Redis/SQS) |
+| `rocketmq_processors.yaml` | `plugins/official/skills/` | Available RocketMQ processor list |
+| `utility_processors.yaml` | `plugins/official/skills/` | Utility processor reference (HMAC signing, timestamp, debug, etc.) |
 | `foli_mall_assertion.yaml` | `plugins/official/skills/` | Assertion rules for the Foli Mall project |
 
 ### Enabling / Disabling
@@ -122,6 +124,20 @@ Skill injection uses two-layer control:
 
 - **Global disable**: `skills.enabled: false` → all skill injection stops; plugins still run normally.
 - **Fine-grained control**: edit `skills.agents` to comment out or remove unwanted agent or skill entries.
+
+### Multi-Skill Configuration
+
+An agent can load multiple skill files; the system concatenates them into the LLM's system prompt. Users activate processor categories as needed:
+
+```yaml
+skills:
+  agents:
+    processor_selector:
+      - db_processors        # DB processors
+      - redis_processors     # Redis processors
+      # - mq_processors      # MQ processors (Kombu)
+      # - rocketmq_processors # RocketMQ processors
+```
 
 ### Usage Recommendations
 

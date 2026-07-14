@@ -24,10 +24,8 @@ plugins:
 | 插件 | 作用 | 适用范围 |
 |------|------|----------|
 | `data_filling` | 为用例骨架填充请求数据（`request_head`、`request_body`、`status_code`、`tag`） | 单接口 + 业务链路 |
-| `processor_selection` | 为已填充用例分配 DB 前置/后置处理器（`preprocessors`、`postprocessors`） | 单接口 + 业务链路 |
+| `processor_selection` | 为已填充用例分配前置/后置处理器（DB / Redis / MQ / RocketMQ） | 单接口 + 业务链路 |
 | `assertion_generation` | 为已填充用例生成断言（`assert_dict`、`assert_rules`） | 单接口 + 业务链路 |
-
-> **处理器优先级**：DB 处理器（前置处理器）在运行时**覆盖** LLM 填写的同名字段值。即如果 `request_body.order_id` 被 LLM 填写了占位值，而 DB 前置处理器也写入了 `order_id`，最终以 DB 处理器的值为准。
 
 在 `plugins.modules` 中删减不需要的插件，或用自定义实现替换。
 
@@ -114,6 +112,10 @@ Skill 可注入到**所有** Agent（含主流水线 Agent 和插件内部 Agent
 | `boundary_test.yaml` | `skills/builtin/` | 为 `case_generator` 注入边界值测试提示 |
 | `foli_mall_data_filling.yaml` | `plugins/official/skills/` | Foli Mall 项目的数据填充规则 |
 | `db_processors.yaml` | `plugins/official/skills/` | 可用的 DB 前后置处理器列表（用户可按模板扩展） |
+| `redis_processors.yaml` | `plugins/official/skills/` | 可用的 Redis 缓存处理器列表 |
+| `mq_processors.yaml` | `plugins/official/skills/` | 可用的 MQ 处理器列表（Kombu: RabbitMQ/Redis/SQS） |
+| `rocketmq_processors.yaml` | `plugins/official/skills/` | 可用的 RocketMQ 处理器列表 |
+| `utility_processors.yaml` | `plugins/official/skills/` | 工具类处理器参考（HMAC 签名、时间戳、调试等） |
 | `foli_mall_assertion.yaml` | `plugins/official/skills/` | Foli Mall 项目的断言规则 |
 
 ### 启用 / 禁用
@@ -122,6 +124,20 @@ Skill 注入采用两层控制：
 
 - **全局关闭**：`skills.enabled: false` → 所有 Skill 注入停止，插件正常运行。
 - **精细控制**：编辑 `skills.agents`，注释/删除不需要的 Agent 或 Skill 条目。
+
+### 多 Skill 配置示例
+
+一个 Agent 可以加载多个 Skill 文件，系统会将它们合并注入到 LLM 系统提示词中。用户可以按需激活不同的处理器类别：
+
+```yaml
+skills:
+  agents:
+    processor_selector:
+      - db_processors        # DB 处理器
+      - redis_processors     # Redis 处理器
+      # - mq_processors      # MQ 处理器（Kombu）
+      # - rocketmq_processors # RocketMQ 处理器
+```
 
 ### 使用建议
 

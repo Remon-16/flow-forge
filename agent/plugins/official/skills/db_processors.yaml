@@ -1,5 +1,5 @@
 name: db_processors
-description: "Available DB-backed pre/post-processors. Users: add your own processors following the template below. 可用的数据库前后置处理器列表，用户可按模板添加自定义处理器。"
+description: "DB-backed pre/post-processors for test data setup and cleanup. 数据库前后置处理器，用于测试数据的创建与清理。"
 version: "1.0"
 target_agents:
   - processor_selector
@@ -9,12 +9,10 @@ prompt_extension: |
   You can assign the following database-backed processors to test cases.
   Add them to `preprocessors` and/or `postprocessors` arrays of each case.
 
-  ⚠️ CRITICAL RULES — READ BEFORE ASSIGNING:
+  ⚠️ RULES:
   1. ONLY use processor names listed below. NEVER invent or guess names.
-  2. DB processor values OVERWRITE LLM-filled values at runtime. If a field
-     exists in both `request_body` and a DB preprocessor, the DB WINS.
-  3. If no processor is relevant to a case, output empty arrays: `[]`.
-  4. `config` can be `{}` when defaults are acceptable.
+  2. Processors are OPTIONAL. Only assign when a case needs data setup/teardown.
+  3. `config` can be `{}` when defaults are acceptable.
 
   ---
 
@@ -45,29 +43,4 @@ prompt_extension: |
     ```
 
   ---
-
-  ### How to output processor assignments
-
-  In the JSON output, each case must include `preprocessors` and `postprocessors`:
-  ```json
-  {
-    "test_id": "TC_001",
-    "preprocessors": [{"name": "return-order-db", "config": {}}],
-    "postprocessors": [{"name": "return-order-db", "config": {}}]
-  }
-  ```
-
-  For business flows, assign processors per step:
-  ```json
-  {
-    "sheet_name": "Return Order Flow",
-    "steps": [
-      {
-        "step_id": "Step01",
-        "preprocessors": [{"name": "return-order-db", "config": {}}],
-        "postprocessors": []
-      }
-    ]
-  }
-  ```
 tools: []

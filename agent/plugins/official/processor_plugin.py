@@ -1,14 +1,15 @@
-"""处理器分配官方插件 — 为已填充数据的用例分配 DB 前置/后置处理器。
+"""处理器分配官方插件 — 为已填充数据的用例分配前置/后置处理器（DB/Redis/MQ/RocketMQ）。
 
-Official processor assignment plugin: assigns DB pre/post-processors to data-filled cases.
+Official processor assignment plugin: assigns pre/post-processors (DB/Redis/MQ/RocketMQ)
+to data-filled cases.
 
 此插件在 DataFillingPlugin 之后、AssertionGenerationPlugin 之前运行。
-通过 Skill 告知 LLM 可用的 DB 处理器列表，让 LLM 为每个用例决定
-需要哪些 preprocessors / postprocessors。
+通过 Skill 告知 LLM 可用的处理器列表（DB/Redis/MQ/RocketMQ），
+让 LLM 为每个用例决定需要哪些 preprocessors / postprocessors。
 
 This plugin runs after DataFillingPlugin and before AssertionGenerationPlugin.
-It uses Skills to inform the LLM about available DB processors, and the LLM
-decides which preprocessors/postprocessors to assign to each case.
+It uses Skills to inform the LLM about available processors (DB/Redis/MQ/RocketMQ),
+and the LLM decides which preprocessors/postprocessors to assign to each case.
 """
 
 import logging
@@ -32,6 +33,7 @@ class ProcessorPlugin(CaseAttributeGenerator):
 
     Assigns preprocessors and postprocessors to test cases.
     包装 SingleProcessorSelector 和 BizProcessorSelector。
+    Wraps SingleProcessorSelector and BizProcessorSelector.
     """
 
     def __init__(self, settings: Settings, knowledge: Optional[KnowledgeSearch] = None):

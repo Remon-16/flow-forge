@@ -1,0 +1,44 @@
+name: redis_processors
+description: "Redis-backed pre/post-processors for cache operations. Redis 前后置处理器，用于缓存操作。"
+version: "1.0"
+target_agents:
+  - processor_selector
+prompt_extension: |
+  ## Available Redis Processors
+
+  You can assign Redis-backed processors to test cases.
+  Add them to `preprocessors` and/or `postprocessors` arrays.
+
+  ⚠️ RULES:
+  1. ONLY use processor names listed below. NEVER invent or guess names.
+  2. Processors are OPTIONAL. Only assign when a case needs cache setup/teardown.
+  3. `config` can be `{}` when defaults are acceptable.
+
+  ---
+
+  ### Processor: cache-handler                                ← COPY this block to add a new processor
+
+  - **Applies to**: Pre (before request) + Post (after response)
+  - **Pre — before_request**: Sets test cache entries in Redis (SET key value)
+    so the API can read cached data (e.g., product list, order status).
+  - **Post — after_response**: Deletes the test cache entries (DEL key)
+    for cleanup.
+  - **Use when**: The test case calls an API that reads from Redis cache.
+    Look for cache-dependent endpoints (product listings, status queries, etc.).
+  - **Config fields** (all optional, in `case_config`):
+    | Field | Type | Default | Description |
+    |-------|------|---------|-------------|
+    | default_prefix | str | "test:cache:" | Cache key prefix |
+    | ttl_seconds | int | 3600 | TTL for test cache entries |
+  - **YAML example**:
+    ```yaml
+    preprocessors:
+      - name: cache-handler
+        config: {}
+    postprocessors:
+      - name: cache-handler
+        config: {}
+    ```
+
+  ---
+tools: []
