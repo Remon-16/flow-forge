@@ -15,6 +15,7 @@ plugins:
   enabled: true          # Global switch: when false, no plugins are loaded
   modules:               # Executed in declaration order
     - plugins.official.data_filling.DataFillingPlugin
+    - plugins.official.processor_plugin.ProcessorPlugin
     - plugins.official.assertion_generation.AssertionGenerationPlugin
 ```
 
@@ -23,7 +24,10 @@ plugins:
 | Plugin | Purpose | Scope |
 |------|------|----------|
 | `data_filling` | Fills request data into case skeletons (`request_head`, `request_body`, `status_code`, `tag`) | Single-API + business flow |
+| `processor_selection` | Assigns DB pre/post-processors to filled cases (`preprocessors`, `postprocessors`) | Single-API + business flow |
 | `assertion_generation` | Generates assertions for filled cases (`assert_dict`, `assert_rules`) | Single-API + business flow |
+
+> **Processor priority**: DB processors (pre-processors) OVERWRITE LLM-filled field values at runtime. If `request_body.order_id` is set by both the LLM and a DB preprocessor, the DB processor's value wins.
 
 Remove unwanted plugins from `plugins.modules`, or replace them with custom implementations.
 
@@ -101,7 +105,7 @@ skills:
 Skills can be injected into **all** agents (including main pipeline agents and plugin-internal agents):
 
 - **Main pipeline agents**: `requirement_analyzer`, `api_analyzer`, `plan_generator`, `plan_parser`, `case_generator`, `skeleton_generator`; skills are stored in `skills/builtin/`.
-- **Plugin agents**: `data_filler`, `assertion_generator`; skills are stored in `plugins/official/skills/`.
+- **Plugin agents**: `data_filler`, `processor_selector`, `assertion_generator`; skills are stored in `plugins/official/skills/`.
 
 ### Built-in Skills
 
@@ -109,6 +113,7 @@ Skills can be injected into **all** agents (including main pipeline agents and p
 |-----------|------|------|
 | `boundary_test.yaml` | `skills/builtin/` | Injects boundary-value testing hints into `case_generator` |
 | `foli_mall_data_filling.yaml` | `plugins/official/skills/` | Data filling rules for the Foli Mall project |
+| `db_processors.yaml` | `plugins/official/skills/` | Available DB pre/post-processor list (users can extend via template) |
 | `foli_mall_assertion.yaml` | `plugins/official/skills/` | Assertion rules for the Foli Mall project |
 
 ### Enabling / Disabling

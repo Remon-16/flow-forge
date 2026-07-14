@@ -243,6 +243,8 @@
   "plugin.data_fill.biz": "正在为 {count} 个业务链路骨架填充数据...",
   "plugin.assertion_gen.single": "正在为 {count} 个单接口用例生成断言...",
   "plugin.assertion_gen.biz": "正在为 {count} 个业务链路生成断言...",
+  "plugin.processor_selection.single": "正在为 {count} 个单接口用例分配处理器...",
+  "plugin.processor_selection.biz": "正在为 {count} 个业务链路分配处理器...",
   "ifaces.no_interfaces_to_save": "没有接口需要保存",
   "ifaces.save_failed": "保存接口失败: %s",
   "ifaces.dir_not_found": "接口目录不存在: %s",

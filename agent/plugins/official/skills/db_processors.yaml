@@ -1,0 +1,73 @@
+name: db_processors
+description: "Available DB-backed pre/post-processors. Users: add your own processors following the template below. 可用的数据库前后置处理器列表，用户可按模板添加自定义处理器。"
+version: "1.0"
+target_agents:
+  - processor_selector
+prompt_extension: |
+  ## Available DB Processors
+
+  You can assign the following database-backed processors to test cases.
+  Add them to `preprocessors` and/or `postprocessors` arrays of each case.
+
+  ⚠️ CRITICAL RULES — READ BEFORE ASSIGNING:
+  1. ONLY use processor names listed below. NEVER invent or guess names.
+  2. DB processor values OVERWRITE LLM-filled values at runtime. If a field
+     exists in both `request_body` and a DB preprocessor, the DB WINS.
+  3. If no processor is relevant to a case, output empty arrays: `[]`.
+  4. `config` can be `{}` when defaults are acceptable.
+
+  ---
+
+  ### Processor: return-order-db                                ← COPY this block to add a new processor
+
+  - **Applies to**: Pre (before request) + Post (after response)
+  - **Pre — before_request**: Inserts a test order (fm_order + fm_order_item)
+    with status=3 (received) into the database. Injects the new `order_id`
+    into the request body so the return/refund API can use it.
+  - **Post — after_response**: Queries the fm_return_refund table for the
+    return record created by the API and prints it (demo mode).
+    In production, you should DELETE the test data instead of printing.
+  - **Use when**: The test case calls a return/refund API (POST /api/return_refund
+    or similar) that requires an existing received order. Look at the URL
+    and method to decide if this processor is needed.
+  - **Config fields** (all optional, in `case_config`):
+    | Field | Type | Default | Description |
+    |-------|------|---------|-------------|
+    | order_status | int | 3 | Order status to set (3=received) |
+  - **YAML example**:
+    ```yaml
+    preprocessors:
+      - name: return-order-db
+        config: {}
+    postprocessors:
+      - name: return-order-db
+        config: {}
+    ```
+
+  ---
+
+  ### How to output processor assignments
+
+  In the JSON output, each case must include `preprocessors` and `postprocessors`:
+  ```json
+  {
+    "test_id": "TC_001",
+    "preprocessors": [{"name": "return-order-db", "config": {}}],
+    "postprocessors": [{"name": "return-order-db", "config": {}}]
+  }
+  ```
+
+  For business flows, assign processors per step:
+  ```json
+  {
+    "sheet_name": "Return Order Flow",
+    "steps": [
+      {
+        "step_id": "Step01",
+        "preprocessors": [{"name": "return-order-db", "config": {}}],
+        "postprocessors": []
+      }
+    ]
+  }
+  ```
+tools: []

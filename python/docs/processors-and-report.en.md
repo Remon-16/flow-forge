@@ -85,6 +85,7 @@ processor_configs:
 | `hmac-verify` | Post | HMAC-SHA256 response signature verification; pairs with `hmac-sign` |
 | `response-time` | Post | Logs the response status code and content length; warns when a threshold is exceeded |
 | `print-demo-post` | Post | Debug helper; logs the response summary at INFO level |
+| `return-order-db` | Pre + Post | 🌟 DB processor example — pre-inserts an order, post-prints the return record (see Database Processors section) |
 
 ### URL Path Parameter Resolution
 
@@ -128,6 +129,58 @@ class MyPreProcessor(PreProcessor):
         # Modify headers / body
         return headers, body
 ```
+
+### Database Processors (BaseDBPlugin)
+
+For scenarios that need database operations before/after requests (e.g., "create test data before request, clean up after"), use the `BaseDBPlugin` base class (`processors/db.py`). Built on **SQLAlchemy**, it provides:
+
+- **Multi-database support**: MySQL, PostgreSQL, SQLite, Oracle, MSSQL, etc., switched via `db_url` connection string
+- **Connection pooling**: SQLAlchemy's built-in `QueuePool` — thread-safe, lazy-loaded, cached by `db_url`
+- **Auto-registration**: `__init_subclass__` auto-creates PreProcessor / PostProcessor wrapper classes
+
+Usage:
+
+1. Subclass `BaseDBPlugin`, set `name` class attribute
+2. Implement `before_request()` (pre) and/or `after_response()` (post)
+3. Place the `.py` file in `processors/builtin/db/`
+4. Configure `db_url` in `env-local.yml` under `processor_configs`
+
+```python
+from processors.db import BaseDBPlugin
+from sqlalchemy import text
+
+class MyDBPlugin(BaseDBPlugin):
+    name = "my-db-processor"
+
+    def before_request(self, headers, body, case_config, global_config):
+        with self._get_connection(global_config) as conn:
+            conn.execute(text("INSERT INTO ..."))
+            conn.commit()
+            body["new_id"] = ...
+        return headers, body
+
+    def after_response(self, req_h, req_b, resp_h, resp_b, cc, gc):
+        with self._get_connection(gc) as conn:
+            rows = conn.execute(text("SELECT ...")).fetchall()
+            print("Result:", rows)
+```
+
+Reference in test case YAML (same as regular processors):
+
+```yaml
+preprocessors:
+  - name: my-db-processor
+    config: {}
+postprocessors:
+  - name: my-db-processor
+    config: {}
+```
+
+**Built-in example**: `return-order-db` (`processors/builtin/db/return_order.py`) — return/refund scenario: pre-inserts order data, post-prints return record.
+
+> **Configuration**: Database connection is configured via `processor_configs.<name>.db_url` in `env-local.yml` (SQLAlchemy connection URL format). No sensitive info in test case YAML.
+>
+> **Dependencies**: `pip install sqlalchemy pymysql` (MySQL); install the corresponding driver for other databases (e.g., `psycopg2`, `cx_Oracle`).
 
 ### Execution Flow
 

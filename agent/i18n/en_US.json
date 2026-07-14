@@ -243,6 +243,8 @@
   "plugin.data_fill.biz": "Filling data for {count} biz flow skeletons...",
   "plugin.assertion_gen.single": "Generating assertions for {count} single cases...",
   "plugin.assertion_gen.biz": "Generating assertions for {count} biz flows...",
+  "plugin.processor_selection.single": "Assigning processors for {count} single cases...",
+  "plugin.processor_selection.biz": "Assigning processors for {count} biz flows...",
   "ifaces.no_interfaces_to_save": "No interfaces to save",
   "ifaces.save_failed": "Failed to save interface: %s",
   "ifaces.dir_not_found": "Interfaces directory not found: %s",

@@ -85,6 +85,7 @@ processor_configs:
 | `hmac-verify` | Post | HMAC-SHA256 响应签名校验，与 `hmac-sign` 配对 |
 | `response-time` | Post | 记录响应状态码和内容长度，超过阈值时 WARNING |
 | `print-demo-post` | Post | 调试用，INFO 级别打印响应摘要 |
+| `return-order-db` | Pre + Post | 🌟 数据库处理器示例 — 前置 INSERT 订单，后置 print 退货记录（详见数据库处理器章节） |
 
 ### URL 路径参数解析
 
@@ -128,6 +129,58 @@ class MyPreProcessor(PreProcessor):
         # 修改 headers / body
         return headers, body
 ```
+
+### 数据库处理器（BaseDBPlugin）
+
+对于需要数据库操作的前置/后置场景（如"请求前造测试数据、请求后清理"），可使用 `BaseDBPlugin` 基类（`processors/db.py`）。它基于 **SQLAlchemy** 提供：
+
+- **多数据库支持**：MySQL、PostgreSQL、SQLite、Oracle、MSSQL 等，通过 `db_url` 连接字符串切换
+- **连接池管理**：SQLAlchemy 内置 `QueuePool`，线程安全、懒加载、按 `db_url` 缓存
+- **自动注册**：`__init_subclass__` 自动创建 PreProcessor / PostProcessor 包装类
+
+使用方式：
+
+1. 继承 `BaseDBPlugin`，设置 `name` 类属性
+2. 实现 `before_request()`（前置）和/或 `after_response()`（后置）
+3. 将 `.py` 文件放入 `processors/builtin/db/` 目录
+4. 在 `env-local.yml` 的 `processor_configs` 中配置 `db_url`
+
+```python
+from processors.db import BaseDBPlugin
+from sqlalchemy import text
+
+class MyDBPlugin(BaseDBPlugin):
+    name = "my-db-processor"
+
+    def before_request(self, headers, body, case_config, global_config):
+        with self._get_connection(global_config) as conn:
+            conn.execute(text("INSERT INTO ..."))
+            conn.commit()
+            body["new_id"] = ...
+        return headers, body
+
+    def after_response(self, req_h, req_b, resp_h, resp_b, cc, gc):
+        with self._get_connection(gc) as conn:
+            rows = conn.execute(text("SELECT ...")).fetchall()
+            print("Result:", rows)
+```
+
+用例 YAML 中引用（与普通处理器相同）：
+
+```yaml
+preprocessors:
+  - name: my-db-processor
+    config: {}
+postprocessors:
+  - name: my-db-processor
+    config: {}
+```
+
+**内置示例**：`return-order-db`（`processors/builtin/db/return_order.py`）— 退货单场景，前置 INSERT 订单数据，后置 print 退货记录。
+
+> **配置说明**：数据库连接通过 `env-local.yml` 的 `processor_configs.<name>.db_url` 配置（SQLAlchemy connection URL 格式）。不需要在用例 YAML 中暴露敏感信息。
+>
+> **依赖安装**：`pip install sqlalchemy pymysql`（MySQL）；其他数据库需安装对应驱动（如 `psycopg2`、`cx_Oracle`）。
 
 ### 执行流程
 

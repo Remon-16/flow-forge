@@ -15,6 +15,7 @@ plugins:
   enabled: true          # 全局开关：false 时不加载任何插件
   modules:               # 按声明顺序依次执行
     - plugins.official.data_filling.DataFillingPlugin
+    - plugins.official.processor_plugin.ProcessorPlugin
     - plugins.official.assertion_generation.AssertionGenerationPlugin
 ```
 
@@ -23,7 +24,10 @@ plugins:
 | 插件 | 作用 | 适用范围 |
 |------|------|----------|
 | `data_filling` | 为用例骨架填充请求数据（`request_head`、`request_body`、`status_code`、`tag`） | 单接口 + 业务链路 |
+| `processor_selection` | 为已填充用例分配 DB 前置/后置处理器（`preprocessors`、`postprocessors`） | 单接口 + 业务链路 |
 | `assertion_generation` | 为已填充用例生成断言（`assert_dict`、`assert_rules`） | 单接口 + 业务链路 |
+
+> **处理器优先级**：DB 处理器（前置处理器）在运行时**覆盖** LLM 填写的同名字段值。即如果 `request_body.order_id` 被 LLM 填写了占位值，而 DB 前置处理器也写入了 `order_id`，最终以 DB 处理器的值为准。
 
 在 `plugins.modules` 中删减不需要的插件，或用自定义实现替换。
 
@@ -101,7 +105,7 @@ skills:
 Skill 可注入到**所有** Agent（含主流水线 Agent 和插件内部 Agent）：
 
 - **主流水线 Agent**：`requirement_analyzer`、`api_analyzer`、`plan_generator`、`plan_parser`、`case_generator`、`skeleton_generator`；Skill 存放于 `skills/builtin/`。
-- **插件 Agent**：`data_filler`、`assertion_generator`；Skill 存放于 `plugins/official/skills/`。
+- **插件 Agent**：`data_filler`、`processor_selector`、`assertion_generator`；Skill 存放于 `plugins/official/skills/`。
 
 ### 内置 Skill
 
@@ -109,6 +113,7 @@ Skill 可注入到**所有** Agent（含主流水线 Agent 和插件内部 Agent
 |-----------|------|------|
 | `boundary_test.yaml` | `skills/builtin/` | 为 `case_generator` 注入边界值测试提示 |
 | `foli_mall_data_filling.yaml` | `plugins/official/skills/` | Foli Mall 项目的数据填充规则 |
+| `db_processors.yaml` | `plugins/official/skills/` | 可用的 DB 前后置处理器列表（用户可按模板扩展） |
 | `foli_mall_assertion.yaml` | `plugins/official/skills/` | Foli Mall 项目的断言规则 |
 
 ### 启用 / 禁用
