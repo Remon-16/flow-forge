@@ -135,7 +135,7 @@
   "review.section_impact_result": "Section 影响分析: global={global_sec}, single_api={single}, biz_flows={biz}",
   "review.no_chunk_affected": "用户反馈未匹配任何 chunk, 计划不变",
 
-  "review.prompt_clarify": "\n是否需要澄清以上问题？(输入修改意见 / skip 跳过): ",
+  "review.prompt_clarify": "\n是否补充相关信息？(输入内容 / skip 跳过): ",
   "review.prompt_approve": "\n是否批准此测试计划？\n  y = 批准，继续执行用例生成\n  n = 提出文字修改意见\n  r = 按批注文件修改（需先在 Studio 中对 plan.md 添加批注）\n请输入 (y/n/r): ",
   "review.approved": "\n计划已批准，继续执行用例生成...",
   "review.describe_changes": "请描述需要修改的内容: ",

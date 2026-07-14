@@ -115,6 +115,8 @@ Skill 可注入到**所有** Agent（含主流水线 Agent 和插件内部 Agent
 | `redis_processors.yaml` | `plugins/official/skills/` | 可用的 Redis 缓存处理器列表 |
 | `mq_processors.yaml` | `plugins/official/skills/` | 可用的 MQ 处理器列表（Kombu: RabbitMQ/Redis/SQS） |
 | `rocketmq_processors.yaml` | `plugins/official/skills/` | 可用的 RocketMQ 处理器列表 |
+| `kafka_processors.yaml` | `plugins/official/skills/` | 可用的 Kafka 处理器列表 |
+| `pulsar_processors.yaml` | `plugins/official/skills/` | 可用的 Pulsar 处理器列表 |
 | `utility_processors.yaml` | `plugins/official/skills/` | 工具类处理器参考（HMAC 签名、时间戳、调试等） |
 | `foli_mall_assertion.yaml` | `plugins/official/skills/` | Foli Mall 项目的断言规则 |
 
@@ -137,6 +139,8 @@ skills:
       - redis_processors     # Redis 处理器
       # - mq_processors      # MQ 处理器（Kombu）
       # - rocketmq_processors # RocketMQ 处理器
+      # - kafka_processors   # Kafka 处理器
+      # - pulsar_processors  # Pulsar 处理器
 ```
 
 ### 使用建议

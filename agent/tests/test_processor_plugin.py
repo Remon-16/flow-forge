@@ -345,3 +345,65 @@ class TestRocketmqProcessorsSkill:
     def test_prompt_contains_rocketmq_order(self, skill_data):
         ext = skill_data["prompt_extension"]
         assert "rocketmq-order" in ext
+
+
+# ============================================================================
+# TestKafkaProcessorsSkill — Kafka 处理器 skill 验证
+# ============================================================================
+
+class TestKafkaProcessorsSkill:
+    """验证 kafka_processors.yaml skill 文件。"""
+
+    @pytest.fixture
+    def skill_data(self):
+        import yaml
+        skill_path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "plugins", "official", "skills", "kafka_processors.yaml",
+        )
+        with open(skill_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    def test_skill_has_required_fields(self, skill_data):
+        """Skill 应包含 name, description, version, target_agents, prompt_extension。"""
+        assert skill_data["name"] == "kafka_processors"
+        assert "description" in skill_data
+        assert "prompt_extension" in skill_data
+
+    def test_target_agent_is_processor_selector(self, skill_data):
+        """target_agents 应包含 processor_selector。"""
+        assert "processor_selector" in skill_data["target_agents"]
+
+    def test_prompt_contains_kafka_order_event(self, skill_data):
+        """prompt_extension 应包含 kafka-order-event 处理器描述。"""
+        ext = skill_data["prompt_extension"]
+        assert "kafka-order-event" in ext
+
+
+# ============================================================================
+# TestPulsarProcessorsSkill — Pulsar 处理器 skill 验证
+# ============================================================================
+
+class TestPulsarProcessorsSkill:
+    """验证 pulsar_processors.yaml skill 文件。"""
+
+    @pytest.fixture
+    def skill_data(self):
+        import yaml
+        skill_path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "plugins", "official", "skills", "pulsar_processors.yaml",
+        )
+        with open(skill_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    def test_skill_has_required_fields(self, skill_data):
+        """Skill 应包含 name, description, version, target_agents, prompt_extension。"""
+        assert skill_data["name"] == "pulsar_processors"
+        assert "description" in skill_data
+        assert "prompt_extension" in skill_data
+
+    def test_prompt_contains_pulsar_order_event(self, skill_data):
+        """prompt_extension 应包含 pulsar-order-event 处理器描述。"""
+        ext = skill_data["prompt_extension"]
+        assert "pulsar-order-event" in ext

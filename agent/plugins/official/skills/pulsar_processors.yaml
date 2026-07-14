@@ -1,0 +1,42 @@
+name: pulsar_processors
+description: "Pulsar-backed pre/post-processors for message sending. Pulsar 前后置处理器，用于消息发送。"
+version: "1.0"
+target_agents:
+  - processor_selector
+prompt_extension: |
+  ## Available Pulsar Processors
+
+  You can assign Pulsar-backed processors to test cases.
+  Add them to `preprocessors` and/or `postprocessors` arrays.
+
+  ⚠️ RULES:
+  1. ONLY use processor names listed below. NEVER invent or guess names.
+  2. Processors are OPTIONAL. Only assign when a case needs message sending.
+  3. `config` can be `{}` when defaults are acceptable.
+
+  ---
+
+  ### Processor: pulsar-order-event                                ← COPY this block to add a new processor
+
+  - **Applies to**: Pre (before request)
+  - **Pre — before_request**: Sends an order event message to a Pulsar topic.
+    Used in microservice architectures where API calls should trigger
+    downstream services via Pulsar.
+  - **Post — after_response**: Prints send confirmation (Pulsar consumption
+    is handled by dedicated consumer services).
+  - **Use when**: The test case involves an API that should trigger
+    Pulsar message sending (order events, status changes, etc.).
+    Common in microservice architectures using Pulsar.
+  - **Config fields** (all optional, in `case_config`):
+    | Field | Type | Default | Description |
+    |-------|------|---------|-------------|
+    | topic | str | "order-topic" | Pulsar topic name |
+  - **YAML example**:
+    ```yaml
+    preprocessors:
+      - name: pulsar-order-event
+        config: {}
+    ```
+
+  ---
+tools: []

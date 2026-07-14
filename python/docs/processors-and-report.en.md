@@ -89,6 +89,8 @@ processor_configs:
 | `cache-handler` | Pre + Post | 🌟 Redis cache handler example — pre-set cache, post-delete (see Redis Processors section) |
 | `order-publish` | Pre + Post | 🌟 MQ order publish example (Kombu) — pre-publish message, post-consume verify (see MQ Processors section) |
 | `rocketmq-order` | Pre | 🌟 RocketMQ order message example — pre-send message to RocketMQ topic (see RocketMQ Processors section) |
+| `kafka-order-event` | Pre | 🌟 Kafka order event example — pre-send message to Kafka topic (see Kafka Processors section) |
+| `pulsar-order-event` | Pre | 🌟 Pulsar order event example — pre-send message to Pulsar topic (see Pulsar Processors section) |
 
 ### URL Path Parameter Resolution
 
@@ -233,6 +235,32 @@ Apache RocketMQ is widely used. Its protocol differs from AMQP/Redis (not suppor
 
 > **Configuration**: Connection via `processor_configs.<name>.namesrv_addr`, `group_id`, `topic`.
 > **Dependencies**: `pip install rocketmq-client-python` (requires C++ build environment)
+
+### Kafka Processors (BaseKafkaPlugin)
+
+For scenarios requiring Kafka message sending before/after requests, use the `BaseKafkaPlugin` base class (`processors/kafka.py`). Built on **confluent-kafka** (Confluent's official Python client), it provides:
+
+- **Connection management**: `_KafkaProducerManager` caches Producer by `(bootstrap_servers, client_id)`, thread-safe
+- **Convenience method**: `_send_message()` for synchronous message sending
+- **Auto-registration**: Same pattern as DB/Redis/MQ/RocketMQ
+
+**Built-in example**: `kafka-order-event` (`processors/builtin/kafka/order_event.py`) — pre send order event to Kafka topic.
+
+> **Configuration**: Connection via `processor_configs.<name>.bootstrap_servers`, `topic`.
+> **Dependencies**: `pip install confluent-kafka`
+
+### Pulsar Processors (BasePulsarPlugin)
+
+For scenarios requiring Pulsar message sending before/after requests, use the `BasePulsarPlugin` base class (`processors/pulsar.py`). Built on **pulsar-client** (Apache Pulsar's official Python client), it provides:
+
+- **Connection management**: `_PulsarClientManager` caches Client by `service_url`, thread-safe
+- **Convenience method**: `_send_message()` for synchronous message sending
+- **Auto-registration**: Same pattern as DB/Redis/MQ/RocketMQ/Kafka
+
+**Built-in example**: `pulsar-order-event` (`processors/builtin/pulsar/order_event.py`) — pre send order event to Pulsar topic.
+
+> **Configuration**: Connection via `processor_configs.<name>.service_url`, `topic`.
+> **Dependencies**: `pip install pulsar-client`
 
 ### Execution Flow
 

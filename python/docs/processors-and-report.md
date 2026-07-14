@@ -89,6 +89,8 @@ processor_configs:
 | `cache-handler` | Pre + Post | 🌟 Redis 缓存处理示例 — 前置写缓存，后置清缓存（详见 Redis 处理器章节） |
 | `order-publish` | Pre + Post | 🌟 MQ 订单发布示例（Kombu）— 前置发布消息，后置消费验证（详见 MQ 处理器章节） |
 | `rocketmq-order` | Pre | 🌟 RocketMQ 订单消息示例 — 前置发送消息到 RocketMQ 主题（详见 RocketMQ 处理器章节） |
+| `kafka-order-event` | Pre | 🌟 Kafka 订单事件示例 — 前置发送消息到 Kafka topic（详见 Kafka 处理器章节） |
+| `pulsar-order-event` | Pre | 🌟 Pulsar 订单事件示例 — 前置发送消息到 Pulsar topic（详见 Pulsar 处理器章节） |
 
 ### URL 路径参数解析
 
@@ -233,6 +235,32 @@ Apache RocketMQ 在国内是主流 MQ，因其协议特殊（Kombu 不支持）�
 
 > **配置说明**：连接通过 `processor_configs.<name>.namesrv_addr`、`group_id`、`topic` 配置。
 > **依赖安装**：`pip install rocketmq-client-python`（需要 C++ 编译环境）
+
+### Kafka 处理器（BaseKafkaPlugin）
+
+对于需要 Kafka 消息发送的前置/后置场景，可使用 `BaseKafkaPlugin` 基类（`processors/kafka.py`）。它基于 **confluent-kafka**（Confluent 官方 Python 客户端）提供：
+
+- **连接管理**：`_KafkaProducerManager` 按 `(bootstrap_servers, client_id)` 缓存 Producer，线程安全
+- **便捷方法**：`_send_message()` 同步发送消息
+- **自动注册**：与 DB/Redis/MQ/RocketMQ 相同模式
+
+**内置示例**：`kafka-order-event`（`processors/builtin/kafka/order_event.py`）— 前置发送订单事件到 Kafka topic。
+
+> **配置说明**：连接通过 `processor_configs.<name>.bootstrap_servers`、`topic` 配置。
+> **依赖安装**：`pip install confluent-kafka`
+
+### Pulsar 处理器（BasePulsarPlugin）
+
+对于需要 Pulsar 消息发送的前置/后置场景，可使用 `BasePulsarPlugin` 基类（`processors/pulsar.py`）。它基于 **pulsar-client**（Apache Pulsar 官方 Python 客户端）提供：
+
+- **连接管理**：`_PulsarClientManager` 按 `service_url` 缓存 Client，线程安全
+- **便捷方法**：`_send_message()` 同步发送消息
+- **自动注册**：与 DB/Redis/MQ/RocketMQ/Kafka 相同模式
+
+**内置示例**：`pulsar-order-event`（`processors/builtin/pulsar/order_event.py`）— 前置发送订单事件到 Pulsar topic。
+
+> **配置说明**：连接通过 `processor_configs.<name>.service_url`、`topic` 配置。
+> **依赖安装**：`pip install pulsar-client`
 
 ### 执行流程
 

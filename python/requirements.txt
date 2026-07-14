@@ -11,3 +11,7 @@ redis>=5.0.0
 kombu>=5.3.0
 # RocketMQ 处理器支持 / RocketMQ processor support
 rocketmq-client-python>=2.0.0
+# Kafka 处理器支持（confluent-kafka 官方客户端）/ Kafka processor support
+confluent-kafka>=2.0.0
+# Pulsar 处理器支持（Apache Pulsar 官方客户端）/ Pulsar processor support
+pulsar-client>=3.0.0

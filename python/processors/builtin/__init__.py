@@ -4,3 +4,5 @@ from . import db       # 数据库处理器 / DB processors
 from . import redis    # Redis 处理器 / Redis processors
 from . import mq       # MQ 处理器（Kombu 多 MQ 抽象） / MQ processors (Kombu)
 from . import rocketmq # RocketMQ 处理器 / RocketMQ processors
+from . import kafka    # Kafka 处理器 / Kafka processors
+from . import pulsar   # Pulsar 处理器 / Pulsar processors

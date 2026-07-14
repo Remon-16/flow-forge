@@ -1,0 +1,43 @@
+name: kafka_processors
+description: "Kafka-backed pre/post-processors for message producing. Kafka 前后置处理器，用于消息发送。"
+version: "1.0"
+target_agents:
+  - processor_selector
+prompt_extension: |
+  ## Available Kafka Processors
+
+  You can assign Kafka-backed processors to test cases.
+  Add them to `preprocessors` and/or `postprocessors` arrays.
+
+  ⚠️ RULES:
+  1. ONLY use processor names listed below. NEVER invent or guess names.
+  2. Processors are OPTIONAL. Only assign when a case needs message producing.
+  3. `config` can be `{}` when defaults are acceptable.
+
+  ---
+
+  ### Processor: kafka-order-event                                ← COPY this block to add a new processor
+
+  - **Applies to**: Pre (before request)
+  - **Pre — before_request**: Produces an order event message to a Kafka topic.
+    Used in microservice architectures where API calls should trigger
+    downstream services via Kafka.
+  - **Post — after_response**: Prints send confirmation (Kafka consumption
+    is handled by dedicated consumer services).
+  - **Use when**: The test case involves an API that should trigger
+    Kafka message producing (order events, status changes, etc.).
+    Common in microservice architectures using Kafka.
+  - **Config fields** (all optional, in `case_config`):
+    | Field | Type | Default | Description |
+    |-------|------|---------|-------------|
+    | topic | str | "order-topic" | Kafka topic name |
+    | key | str | "" | Message key for partition routing |
+  - **YAML example**:
+    ```yaml
+    preprocessors:
+      - name: kafka-order-event
+        config: {}
+    ```
+
+  ---
+tools: []

@@ -115,6 +115,8 @@ Skills can be injected into **all** agents (including main pipeline agents and p
 | `redis_processors.yaml` | `plugins/official/skills/` | Available Redis cache processor list |
 | `mq_processors.yaml` | `plugins/official/skills/` | Available MQ processor list (Kombu: RabbitMQ/Redis/SQS) |
 | `rocketmq_processors.yaml` | `plugins/official/skills/` | Available RocketMQ processor list |
+| `kafka_processors.yaml` | `plugins/official/skills/` | Available Kafka processor list |
+| `pulsar_processors.yaml` | `plugins/official/skills/` | Available Pulsar processor list |
 | `utility_processors.yaml` | `plugins/official/skills/` | Utility processor reference (HMAC signing, timestamp, debug, etc.) |
 | `foli_mall_assertion.yaml` | `plugins/official/skills/` | Assertion rules for the Foli Mall project |
 
@@ -137,6 +139,8 @@ skills:
       - redis_processors     # Redis processors
       # - mq_processors      # MQ processors (Kombu)
       # - rocketmq_processors # RocketMQ processors
+      # - kafka_processors   # Kafka processors
+      # - pulsar_processors  # Pulsar processors
 ```
 
 ### Usage Recommendations
