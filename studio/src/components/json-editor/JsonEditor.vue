@@ -153,7 +153,10 @@ function updateNodeValue(idx: number, value: unknown) {
     <!-- Tree editor -->
     <div class="json-editor-tree">
       <div v-if="nodes.length === 0" style="color: #999; text-align: center; padding: 20px;">
-        {{ pasteText ? t('jsonEditor.parseError') : '{}' }}
+        <template v-if="pasteText">
+          {{ t('jsonEditor.parseError') }}
+        </template>
+        <p v-else style="margin-bottom: 8px;">{{ t('jsonEditor.emptyHint') }}</p>
       </div>
 
       <JsonNodeComponent
@@ -170,7 +173,6 @@ function updateNodeValue(idx: number, value: unknown) {
       />
 
       <a-button
-        v-if="nodes.length > 0"
         size="small"
         type="dashed"
         block

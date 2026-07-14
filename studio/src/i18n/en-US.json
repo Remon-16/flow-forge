@@ -82,6 +82,7 @@
     "details": "Details",
     "editDetails": "Edit Details",
     "noData": "No data",
+    "emptyHint": "No fields yet. Click \"+ Add Field\" below to start, or paste a JSON string above and click \"Parse\".",
     "parseError": "JSON parse failed. Check the format."
   },
   "validator": {

@@ -82,6 +82,7 @@
     "details": "详情",
     "editDetails": "编辑详情",
     "noData": "暂无数据",
+    "emptyHint": "暂无字段，请点击下方「添加字段」按钮开始填写，或在上方粘贴 JSON 字符串后点击「解析」",
     "parseError": "JSON 解析失败，请检查格式"
   },
   "validator": {
