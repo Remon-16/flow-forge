@@ -1,6 +1,17 @@
 use serde::Serialize;
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::process::{Command, Stdio};
+use std::thread;
+use tauri::{
+    menu::{MenuBuilder, MenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Emitter, Manager, State,
+};
+
+mod agent_manager;
+use agent_manager::{AgentHandle, AgentManager};
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -187,11 +198,158 @@ fn list_dir_all(dir_path: String) -> Result<Vec<FileEntry>, String> {
     walk(Path::new(&dir_path))
 }
 
+// ============================================================================
+// Agent subprocess commands / Agent 子进程命令
+// ============================================================================
+
+#[derive(Clone, Serialize)]
+struct AgentLinePayload {
+    task_id: String,
+    line: String,
+}
+
+/// 检查是否有 agent 子进程在运行。
+/// Check whether any agent subprocess is running.
+#[tauri::command]
+fn has_running_agents(
+    state: State<'_, AgentManager>,
+) -> Result<bool, String> {
+    state.has_running()
+}
+
+/// 终止所有 agent 子进程并退出应用。
+/// Kill all agent subprocesses and exit the app.
+#[tauri::command]
+fn force_quit_app(
+    state: State<'_, AgentManager>,
+    app: AppHandle,
+) -> Result<(), String> {
+    // 终止所有 agent / Kill all agents
+    state.kill_all()?;
+    // 退出应用 / Exit the app
+    app.exit(0);
+    Ok(())
+}
+
+#[tauri::command]
+fn spawn_agent(
+    app: AppHandle,
+    state: State<'_, AgentManager>,
+    task_id: String,
+    working_dir: String,
+    python_exe: String,
+    args: Vec<String>,
+) -> Result<(), String> {
+    // 构建完整的命令行参数 / Build full command-line args
+    // argv: [python_exe, main.py, --studio, ...user_args]
+    let mut full_args: Vec<String> = vec![
+        "main.py".to_string(),
+        "--studio".to_string(),
+    ];
+    full_args.extend(args);
+
+    // 启动子进程 / Spawn the subprocess
+    let mut child = Command::new(&python_exe)
+        .args(&full_args)
+        .current_dir(&working_dir)
+        .stdout(Stdio::piped())
+        .stdin(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn agent process: {}", e))?;
+
+    let stdin = child.stdin.take()
+        .ok_or_else(|| "Failed to open stdin for agent process".to_string())?;
+
+    // stdout 后台读取线程 / stdout background reader thread
+    let stdout = child.stdout.take()
+        .ok_or_else(|| "Failed to open stdout for agent process".to_string())?;
+    let app_stdout = app.clone();
+    let tid_stdout = task_id.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            match line {
+                Ok(l) => {
+                    let _ = app_stdout.emit("agent-stdout",
+                        AgentLinePayload { task_id: tid_stdout.clone(), line: l });
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    // stderr 后台读取线程 / stderr background reader thread
+    let stderr = child.stderr.take()
+        .ok_or_else(|| "Failed to open stderr for agent process".to_string())?;
+    let app_stderr = app.clone();
+    let tid_stderr = task_id.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            match line {
+                Ok(l) => {
+                    let _ = app_stderr.emit("agent-stderr",
+                        AgentLinePayload { task_id: tid_stderr.clone(), line: l });
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    // 存储进程句柄 / Store process handle
+    state.insert(task_id.clone(), AgentHandle { child, stdin })?;
+
+    // 进程退出监听（不能用 state 因为 'static 要求）
+    // Process exit watcher (can't use state in thread due to 'static requirement)
+    // 改用 Arc 包装 state / Use Arc to share state across threads
+    // 注意: Tauri State 已经按引用管理，退出检测通过前端轮询 check_agent_running 来实现
+    // Note: Exit detection is done by frontend polling check_agent_running
+
+    Ok(())
+}
+
+#[tauri::command]
+fn send_to_agent(
+    state: State<'_, AgentManager>,
+    task_id: String,
+    command: String,
+) -> Result<(), String> {
+    state.send_command(&task_id, &command)
+}
+
+#[tauri::command]
+fn kill_agent(
+    state: State<'_, AgentManager>,
+    task_id: String,
+) -> Result<(), String> {
+    state.kill(&task_id)
+}
+
+#[tauri::command]
+fn check_agent_running(
+    state: State<'_, AgentManager>,
+    task_id: String,
+) -> Result<bool, String> {
+    // 先尝试清理已退出的进程 / First try to clean up exited processes
+    let code = state.cleanup(&task_id)?;
+    match code {
+        Some(c) if c < 0 => Ok(false),  // 未找到 / Not found
+        Some(_) => Ok(false),            // 已退出 / Exited
+        None => Ok(true),                // 仍运行 / Still running
+    }
+}
+
+// ============================================================================
+// App entry point / 应用入口
+// ============================================================================
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(agent_manager::AgentManager::new())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -200,6 +358,53 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // 系统托盘 / System tray
+            let show_item = MenuItem::with_id(app, "show", "显示 Flow Forge", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let tray_menu = MenuBuilder::new(app)
+                .items(&[&show_item, &quit_item])
+                .build()?;
+
+            TrayIconBuilder::with_id("main-tray")
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        // 强制退出前终止所有 agent / Kill all agents before exit
+                        if let Some(state) = app.try_state::<AgentManager>() {
+                            let _ = state.kill_all();
+                        }
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // 左键点击显示窗口 / Left-click shows window
+                    if let tauri::tray::TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -214,6 +419,12 @@ pub fn run() {
             copy_file_or_dir,
             move_file_or_dir,
             open_in_explorer,
+            has_running_agents,
+            force_quit_app,
+            spawn_agent,
+            send_to_agent,
+            kill_agent,
+            check_agent_running,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

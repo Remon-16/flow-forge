@@ -26,6 +26,11 @@ const router = createRouter({
       name: 'plan-annotator',
       component: () => import('../views/PlanAnnotatorView.vue'),
     },
+    {
+      path: '/agent',
+      name: 'agent',
+      component: () => import('../views/AgentView.vue'),
+    },
   ],
 })
 

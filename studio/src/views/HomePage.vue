@@ -19,6 +19,10 @@ function goPlanAnnotator() {
   router.push('/plan-annotator')
 }
 
+function goAgent() {
+  router.push('/agent')
+}
+
 function handleLanguageChange(lang: string) {
   settings.setLanguage(lang as 'zh-CN' | 'en-US')
 }
@@ -53,6 +57,19 @@ function handleLanguageChange(lang: string) {
         </div>
         <h3>{{ t('home.annotatorTitle') }}</h3>
         <p>{{ t('home.annotatorDesc') }}</p>
+        <a-button type="primary" size="large">{{ t('home.open') }}</a-button>
+      </a-card>
+
+      <a-card hoverable class="home-card agent-card" @click="goAgent">
+        <div class="card-icon agent-icon">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l4 2" />
+            <path d="M8 14c-1-2 0-5 4-5s5 3 4 5" />
+          </svg>
+        </div>
+        <h3>{{ t('home.agentTitle') }}</h3>
+        <p>{{ t('home.agentDesc') }}</p>
         <a-button type="primary" size="large">{{ t('home.open') }}</a-button>
       </a-card>
     </div>

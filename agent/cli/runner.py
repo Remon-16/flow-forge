@@ -235,7 +235,7 @@ def main() -> int:
     """
     parser = build_parser()
     args = parser.parse_args()
-    setup_logging(args.verbose)
+    setup_logging(args.verbose, use_stderr=getattr(args, 'studio', False))
 
     settings = load_settings(args.env)
     if not settings.llm_api_key:
@@ -400,8 +400,13 @@ def main() -> int:
             "generate_plan", "human_confirm",
         }
         if next_stage in _PRE_CONFIRM_STAGES and not _auto_mode:
-            logger.info(_("resume.interactive_mode", stage=next_stage))
-            result = run_interactive(graph, initial, config, session_logger)
+            if getattr(args, 'studio', False):
+                from cli.studio_bridge import run_studio_protocol
+                logger.info(_("resume.interactive_mode", stage=next_stage))
+                result = run_studio_protocol(graph, initial, config, session_logger)
+            else:
+                logger.info(_("resume.interactive_mode", stage=next_stage))
+                result = run_interactive(graph, initial, config, session_logger)
         else:
             result = graph.invoke(initial, config)
 
@@ -509,6 +514,9 @@ def main() -> int:
 
     if auto_mode:
         result = graph.invoke(initial, config)
+    elif getattr(args, 'studio', False):
+        from cli.studio_bridge import run_studio_protocol
+        result = run_studio_protocol(graph, initial, config, session_logger)
     else:
         result = run_interactive(graph, initial, config, session_logger)
 

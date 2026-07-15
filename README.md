@@ -12,6 +12,7 @@
 - **AI 生成用例**：读需求文档（Markdown/PDF/文本）+ 接口文档（OpenAPI/Markdown），自动生成单接口和业务链路测试用例。
 - **人工审核可控**：AI 产出的测试计划先经人工确认（支持在 Studio 中可视化批注），再生成用例，抑制 AI 幻觉。
 - **可视化编辑**：Studio 桌面应用批量编辑 Excel/YAML 用例，图形化编辑 JSON 字段和断言规则。
+- **GUI 启动智能体**：Studio 桌面应用内置 Agent Runner，配置参数、实时查看日志、交互式审核测试计划，降低命令行上手难度。
 - **多线程执行**：执行器并发运行用例，自动管理登录态，支持跨接口参数传递（token 等），两级断言引擎。
 - **自包含报告**：产出内嵌样式脚本的 HTML 报告，浏览器直接打开；通过退出码集成 Jenkins。
 - **格式灵活**：YAML/Excel 双向转换，还可生成零依赖的独立 pytest 代码。
@@ -23,6 +24,7 @@ graph TD
     KB[(Grep 检索)] -.-> AGENT
     AGENT --> |plan.md| REVIEW[人工审核 / Studio 批注]
     REVIEW --> |审核确认| AGENT
+    STUDIO --> |启动 Agent| AGENT
     AGENT --> |YAML/Excel 用例| STUDIO[Studio 可视化编辑]
     STUDIO --> EXEC[测试执行器]
     AGENT --> |YAML/Excel 用例| EXEC
@@ -66,7 +68,7 @@ python main.py --yamlDir ../agent/output_<timestamp>/cases --envName local --api
 |--------|------|----------|
 | **[agent/](./agent/README.md)** | AI 用例生成智能体：需求 + 接口文档 → 测试计划（人工审核）→ YAML/Excel 用例 | [文档 →](./agent/README.md) |
 | **[python/](./python/README.md)** | 接口测试执行器 + 格式转换器：运行 YAML/Excel 用例 → HTML 报告；Excel↔YAML↔pytest 互转 | [文档 →](./python/README.md) |
-| **[studio/](./studio/README.md)** | Flow Forge Studio 桌面应用：可视化编辑用例、Markdown 计划批注 | [文档 →](./studio/README.md) |
+| **[studio/](./studio/README.md)** | Flow Forge Studio 桌面应用：可视化编辑用例、Markdown 计划批注、Agent Runner（GUI 启动智能体） | [文档 →](./studio/README.md) |
 
 三者通过 **YAML 文件**作为主要契约（Excel 仍兼容）——智能体生成什么格式，执行器就解析什么格式。用户可自由选择：AI 自动生成、手动编写、或 Studio 可视化编辑。
 
@@ -108,6 +110,7 @@ AI 难免幻觉，Flow Forge 通过多重机制控制质量：
 |------|--------|------|
 | [`python/processors/`](./python/docs/processors-and-report.md#前置处理器--后置处理器) | PreProcessor / PostProcessor | 请求前后的处理逻辑（HMAC 签名、SQL 清理、路径参数等） |
 | [`agent/plugins/`](./agent/docs/plugins-and-skills.md) | CaseAttributeGenerator | 用例生成后自动补充属性（数据填充、断言生成等） |
+| `studio/` | Agent Runner | 在 Studio 中配置并启动 AI 智能体，实时查看日志，交互式处理提问和计划审核 |
 | `studio/` | PreProcessors / PostProcessors 字段 | 在编辑器中可视化编辑、校验处理器配置 |
 
 ## 运行测试

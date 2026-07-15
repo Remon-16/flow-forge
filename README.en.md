@@ -12,6 +12,7 @@
 - **AI-generated test cases**: Reads requirement docs (Markdown/PDF/text) plus API docs (OpenAPI/Markdown) and automatically generates single-API and business-flow test cases.
 - **Controllable human review**: The AI-produced test plan is confirmed by a human first (visual annotation supported in Studio) before cases are generated, suppressing AI hallucinations.
 - **Visual editing**: The Studio desktop app batch-edits Excel/YAML cases and graphically edits JSON fields and assertion rules.
+- **GUI agent launcher**: Studio's built-in Agent Runner lets you configure parameters, view real-time logs, and interactively review test plans — lowering the barrier to entry.
 - **Multi-threaded execution**: The executor runs cases concurrently, automatically manages login/session state, supports cross-request parameter passing (tokens, etc.), and provides a two-tier assertion engine.
 - **Self-contained reports**: Produces HTML reports with inline styles and scripts that open directly in a browser; integrates with Jenkins via exit codes.
 - **Flexible formats**: Bidirectional YAML/Excel conversion, plus generation of zero-dependency standalone pytest code.
@@ -23,6 +24,7 @@ graph TD
     KB[(Grep Search)] -.-> AGENT
     AGENT --> |plan.md| REVIEW[Human Review / Studio Annotation]
     REVIEW --> |Review Confirmed| AGENT
+    STUDIO --> |Launch Agent| AGENT
     AGENT --> |YAML/Excel Cases| STUDIO[Studio Visual Editing]
     STUDIO --> EXEC[Test Executor]
     AGENT --> |YAML/Excel Cases| EXEC
@@ -66,7 +68,7 @@ See each component's README below for detailed usage.
 |--------|------|----------|
 | **[agent/](./agent/README.en.md)** | AI test-case generation agent: requirements + API docs → test plan (human review) → YAML/Excel cases | [Docs →](./agent/README.en.md) |
 | **[python/](./python/README.en.md)** | API test executor + format converter: run YAML/Excel cases → HTML report; Excel↔YAML↔pytest conversion | [Docs →](./python/README.en.md) |
-| **[studio/](./studio/README.en.md)** | Flow Forge Studio desktop app: visually edit cases, annotate Markdown plans | [Docs →](./studio/README.en.md) |
+| **[studio/](./studio/README.en.md)** | Flow Forge Studio desktop app: visually edit cases, annotate Markdown plans, Agent Runner (GUI agent launcher) | [Docs →](./studio/README.en.md) |
 
 The three communicate through **YAML files** as the primary contract (Excel remains compatible) — whatever format the agent generates, the executor parses. Users are free to choose: AI auto-generation, manual authoring, or visual editing in Studio.
 
@@ -108,6 +110,7 @@ AI hallucinations are inevitable; Flow Forge controls quality through multiple m
 |------|--------|------|
 | [`python/processors/`](./python/docs/processors-and-report.en.md#pre-processors--post-processors) | PreProcessor / PostProcessor | Processing logic before and after requests (HMAC signing, SQL cleanup, path parameters, etc.) |
 | [`agent/plugins/`](./agent/docs/plugins-and-skills.en.md) | CaseAttributeGenerator | Automatically enrich attributes after case generation (data filling, assertion generation, etc.) |
+| `studio/` | Agent Runner | Configure and launch the AI agent from Studio, view real-time logs, and interact with prompts and plan reviews |
 | `studio/` | PreProcessors / PostProcessors fields | Visually edit and validate processor configs in the editor |
 
 ## Running Tests

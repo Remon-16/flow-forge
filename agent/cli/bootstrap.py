@@ -4,6 +4,7 @@ CLI bootstrap: logging setup, session directory, output structure.
 """
 
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple
@@ -11,14 +12,22 @@ from typing import Tuple
 logger = logging.getLogger(__name__)
 
 
-def setup_logging(verbose: bool = False) -> None:
+def setup_logging(verbose: bool = False, use_stderr: bool = False) -> None:
     """Phase 1: 配置控制台日志级别和格式。
 
     Configure console logging level and format.
+
+    Args:
+        verbose:   启用 DEBUG 级别 / Enable DEBUG level.
+        use_stderr: 输出到 stderr 而非 stdout（Studio 模式下使用，
+                    stdout 专用于 JSON 协议）/ Output to stderr instead
+                    of stdout (used in Studio mode where stdout is
+                    reserved for JSON protocol).
     """
     level = logging.DEBUG if verbose else logging.INFO
     fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-    logging.basicConfig(level=level, format=fmt, datefmt="%H:%M:%S")
+    stream = sys.stderr if use_stderr else sys.stdout  # type: ignore[name-defined]  # noqa: F821
+    logging.basicConfig(level=level, format=fmt, datefmt="%H:%M:%S", stream=stream)
 
 
 def setup_file_logging(output_dir: str) -> None:

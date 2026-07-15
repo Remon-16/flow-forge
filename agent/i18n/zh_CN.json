@@ -275,5 +275,14 @@
   "translate.input_not_found": "错误: 输入目录不存在: {dir}",
   "translate.log_enabled": "  → 日志输出到 {path}",
   "translate.failed_warning": "  ⚠ 有 {count} 个用例翻译失败，已保留原始内容。请检查 LLM 配置和日志。",
-  "translate.zero_changed": "  → 所有用例已是目标语言，无需翻译。如需强制翻译请使用 --no-detection。"
+  "translate.zero_changed": "  → 所有用例已是目标语言，无需翻译。如需强制翻译请使用 --no-detection。",
+
+  "studio.mode_enabled": "Studio 子进程模式已启用，使用 JSON 协议通信",
+  "studio.command_parse_error": "无法解析 Studio 命令 JSON: {line}",
+  "studio.prompt_sent": "已发送 prompt 到 Studio: {kind} (id={prompt_id})",
+  "studio.complete": "流水线执行完毕。单接口 {single} 个, 业务链路 {biz} 个",
+  "studio.terminated_by_user": "用户终止执行",
+  "studio.unknown_command": "未知 Studio 命令: {cmd}",
+  "studio.clarification_skipped": "已跳过 API 澄清询问",
+  "studio.clarification_response": "收到澄清回复: {text}"
 }

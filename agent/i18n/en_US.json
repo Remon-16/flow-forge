@@ -275,5 +275,14 @@
   "translate.input_not_found": "Error: Input directory not found: {dir}",
   "translate.log_enabled": "  → Log output to {path}",
   "translate.failed_warning": "  ⚠ {count} cases failed to translate, original content preserved. Check LLM config and logs.",
-  "translate.zero_changed": "  → All cases already in target language, no translation needed. Use --no-detection to force translation."
+  "translate.zero_changed": "  → All cases already in target language, no translation needed. Use --no-detection to force translation.",
+
+  "studio.mode_enabled": "Studio subprocess mode enabled, using JSON protocol",
+  "studio.command_parse_error": "Failed to parse Studio command JSON: {line}",
+  "studio.prompt_sent": "Prompt sent to Studio: {kind} (id={prompt_id})",
+  "studio.complete": "Pipeline execution complete. {single} single cases, {biz} biz flows generated",
+  "studio.terminated_by_user": "Execution terminated by user",
+  "studio.unknown_command": "Unknown Studio command: {cmd}",
+  "studio.clarification_skipped": "API clarification skipped",
+  "studio.clarification_response": "Clarification response received: {text}"
 }

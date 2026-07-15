@@ -168,4 +168,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--log-to-output", action="store_true", default=None,
         help="将日志持久化到输出目录 ({output_dir}/logs/agent.log)。Persist logs to output dir.",
     )
+    p.add_argument(
+        "--studio", action="store_true",
+        help="Studio 子进程模式 (JSON 协议通信)。Studio subprocess mode (JSON protocol).",
+    )
     return p
