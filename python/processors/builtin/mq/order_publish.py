@@ -9,6 +9,9 @@ Built on Kombu multi-MQ abstraction, supports RabbitMQ, Redis, SQS, etc.
 
 Test scenario: after order creation API call, system should send order event to MQ.
 Pre-publish test message to simulate upstream event, post-consume to verify.
+
+提示 / Tip: 可通过 LoginManager.get_current_user() 获取当前 #{} 登录用户的配置。
+Use LoginManager.get_current_user() to access the currently logged-in user's config.
 """
 
 from processors.mq import BaseMQPlugin

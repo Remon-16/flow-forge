@@ -142,6 +142,7 @@ class MyPreProcessor(PreProcessor):
 - **多数据库支持**：MySQL、PostgreSQL、SQLite、Oracle、MSSQL 等，通过 `db_url` 连接字符串切换
 - **连接池管理**：SQLAlchemy 内置 `QueuePool`，线程安全、懒加载、按 `db_url` 缓存
 - **自动注册**：`__init_subclass__` 自动创建 PreProcessor / PostProcessor 包装类
+- **共享基类**：`BaseExternalPlugin`（`processors/base.py`）统一提供 `can_process()` / `before_request()` / `after_response()` 三个扩展点的默认实现，DB/Redis/MQ/Kafka/Pulsar/RocketMQ 六类资源插件均继承自此基类
 
 使用方式：
 
@@ -291,6 +292,10 @@ Apache RocketMQ 在国内是主流 MQ，因其协议特殊（Kombu 不支持）�
 - **细粒度锁**：按 `appName:userParamName` 粒度锁定，不同用户可并发登录
 - **失败黑名单**：MD5 哈希记录登录失败用户，避免重复无效请求
 - **Token 缓存**：同一用户只需登录一次，后续复用
+- **用户上下文追踪**（v2.5+）：线程局部存储记录当前解析的 `userParamName` 和 `appConfig`，提供三个工具方法供插件使用：
+  - `LoginManager.get_current_user()` — 无参，获取当前登录用户的完整配置（含 `user_id` / `role` 等冗余字段）
+  - `LoginManager.get_user(user_param_name)` — 获取当前 App 下指定用户的配置
+  - `LoginManager.get_app_user(app_name, user_param_name)` — 完整显式查找，不依赖线程上下文
 
 ---
 

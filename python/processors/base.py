@@ -229,3 +229,59 @@ class PostProcessor(ABC):
             ProcessorError: Record a post-processing error in the report.
         """
         ...
+
+
+# ---------------------------------------------------------------------------
+# 外部资源插件共享基类 / Shared base for external-resource plugins
+# ---------------------------------------------------------------------------
+
+class BaseExternalPlugin(ABC):
+    """外部资源插件共享基类（DB / Redis / MQ / Kafka / Pulsar / RocketMQ）。
+    Shared base for external-resource plugin base classes
+    (BaseDBPlugin, BaseRedisPlugin, BaseMQPlugin, BaseKafkaPlugin,
+    BasePulsarPlugin, BaseRocketMQPlugin).
+
+    定义 before_request / after_response / can_process 三个扩展点的默认实现，
+    各资源基类仅需提供资源专属的连接管理逻辑（如 _get_connection / _get_client）。
+    Defines default no-op implementations for the three extension points,
+    so resource-specific bases only need to provide connection management.
+
+    不定义 __init_subclass__ — 注册逻辑仍由各资源基类负责，
+    避免 BaseExternalPlugin 子类化时触发额外的注册行为。
+    No __init_subclass__ — registration is handled by each resource-specific
+    base class to avoid double-registration.
+    """
+
+    name: str  # 子类必须定义 / Must be defined on each concrete subclass
+
+    def can_process(self, case: Dict[str, Any]) -> bool:
+        """是否对当前用例执行处理器。默认总是执行。
+        Whether to process this case. Default: always True.
+        子类可覆写以按条件跳过。Subclasses may override for conditional skip."""
+        return True
+
+    def before_request(
+        self,
+        headers: Dict[str, Any],
+        body: Dict[str, Any],
+        case_config: Dict[str, Any],
+        global_config: Dict[str, Any],
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """请求前操作（前置处理器）。默认直接返回 headers, body 不做修改。
+        Pre-request operation (pre-processor). Default: return unchanged.
+        子类按需覆写。Subclasses override as needed."""
+        return headers, body
+
+    def after_response(
+        self,
+        request_headers: Dict[str, Any],
+        request_body: Dict[str, Any],
+        response_headers: Dict[str, Any],
+        response_body: Any,
+        case_config: Dict[str, Any],
+        global_config: Dict[str, Any],
+    ) -> None:
+        """响应后操作（后置处理器）。默认 no-op。
+        Post-response operation (post-processor). Default: no-op.
+        子类按需覆写。Subclasses override as needed."""
+        pass

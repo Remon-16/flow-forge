@@ -9,8 +9,8 @@ A Python 3-based HTTP API test automation executor: YAML/Excel-driven case manag
 - **Two case types**: single-API test cases + multi-step business-flow test cases (data such as tokens can be passed between steps via `inherit`).
 - **Multi-threaded execution**: a thread pool runs cases concurrently (controlled by `maxThread`); this is not load testing.
 - **Two-level assertions**: simple equality assertions (`assert_dict`) + advanced multi-operator assertion rules (`assert_rules`: numeric comparison, regex, list aggregation, etc.).
-- **Automatic login/session**: manages tokens per application/user, with fine-grained locks + cache + failure blacklist.
-- **Extensible processors**: pre-/post-processor extension points (HMAC signing, timestamps, path parameters, SQL cleanup, etc.).
+- **Automatic login/session**: manages tokens per application/user, with fine-grained locks + cache + failure blacklist. Provides `get_current_user()` / `get_user()` / `get_app_user()` utilities so plugins can directly access the logged-in user's configuration.
+- **Extensible processors**: pre-/post-processor extension points (HMAC signing, timestamps, path parameters, SQL cleanup, etc.). `BaseExternalPlugin` provides a shared base class for DB/Redis/MQ/Kafka/Pulsar/RocketMQ plugins.
 - **Self-contained reports**: HTML reports embed all styles and scripts, so they open directly in a browser.
 - **Format conversion**: `excel2yaml` / `yaml2excel` / `yaml2pytest` / `excel2pytest`.
 - **CI/CD friendly**: pure CLI, reports results via exit codes, and integrates directly with Jenkins.

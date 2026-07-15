@@ -40,6 +40,7 @@ from datetime import datetime
 from typing import Any, Dict, Tuple
 
 from processors.db import BaseDBPlugin, DBQueryError
+from auth.login_manager import LoginManager
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,15 @@ class ReturnOrderDBPlugin(BaseDBPlugin):
         env_cfg = proc_configs.get(self.name, {}) if isinstance(proc_configs, dict) else {}
         cfg = {**env_cfg, **case_config}
 
-        buyer_id = int(cfg.get("test_buyer_id", 1))
+        # 优先从登录用户配置获取 buyer_id（动态解析 #{} 语法时的用户信息）
+        # Prefer buyer_id from login user config (user info from #{userParamName} resolution)
+        # 若未使用 #{} 登录或无 user_id 字段，则 fallback 到 processor_configs 中的静态配置
+        # Falls back to static config in processor_configs if no #{userParamName} login
+        current_user = LoginManager.get_current_user()
+        if current_user and "user_id" in current_user:
+            buyer_id = int(current_user["user_id"])
+        else:
+            buyer_id = int(cfg.get("test_buyer_id", 1))
         store_id = int(cfg.get("test_store_id", 1))
         product_id = int(cfg.get("test_product_id", 1))
         order_status = int(cfg.get("order_status", 3))  # 3=已收货/received

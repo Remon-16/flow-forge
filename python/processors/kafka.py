@@ -14,10 +14,10 @@ Users extend ``BaseKafkaPlugin``, implement ``before_request`` / ``after_respons
 
 import logging
 import threading
-from abc import ABC
 from typing import Any, Dict, Optional, Tuple, Type
 
 from processors.base import (
+    BaseExternalPlugin,
     ProcessorError,
     _create_external_plugin_wrappers,
     _mask_password,
@@ -125,9 +125,15 @@ def _register_kafka_plugin(cls: Type["BaseKafkaPlugin"]) -> None:
 # BaseKafkaPlugin — 用户继承的基类 / Base class for user implementations
 # ============================================================================
 
-class BaseKafkaPlugin(ABC):
+class BaseKafkaPlugin(BaseExternalPlugin):
     """Kafka 操作基类 — 管理连接，暴露 before_request / after_response 扩展点。
     Kafka operation base — manages connections, exposes before/after extension points.
+
+    扩展点方法（can_process / before_request / after_response）继承自
+    BaseExternalPlugin，默认 no-op。子类按需覆写。
+    Extension point methods (can_process / before_request / after_response)
+    are inherited from BaseExternalPlugin with default no-op implementations.
+    Subclasses override as needed.
 
     用户只需定义 ``name`` 类属性，实现 ``before_request`` / ``after_response``。
     ``__init_subclass__`` 自动创建并注册 PreProcessor / PostProcessor 包装类。
@@ -258,44 +264,3 @@ class BaseKafkaPlugin(ABC):
         # 同步等待消息发送完成 / Synchronously wait for message delivery
         producer.flush()
         logger.info("Kafka message sent to topic '%s' (key=%s)", topic, key)
-
-    # ── 扩展点 / Extension points ────────────────────────────────────────
-
-    def can_process(self, case: Dict[str, Any]) -> bool:
-        """是否对当前用例执行处理器。默认总是执行。
-        Whether to process this case. Default: always True.
-        子类可覆写以按条件跳过。Subclasses may override for conditional skip."""
-        return True
-
-    def before_request(
-        self,
-        headers: Dict[str, Any],
-        body: Dict[str, Any],
-        case_config: Dict[str, Any],
-        global_config: Dict[str, Any],
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """请求前 Kafka 操作（前置处理器）。
-        Pre-request Kafka operation (pre-processor).
-
-        默认直接返回 headers, body 不做修改。子类按需覆写。
-        Default: return headers, body unchanged. Override as needed.
-        """
-        return headers, body
-
-    def after_response(
-        self,
-        request_headers: Dict[str, Any],
-        request_body: Dict[str, Any],
-        response_headers: Dict[str, Any],
-        response_body: Any,
-        case_config: Dict[str, Any],
-        global_config: Dict[str, Any],
-    ) -> None:
-        """响应后 Kafka 操作（后置处理器）。
-        Post-response Kafka operation (post-processor).
-
-        默认 no-op。Kafka 消费由独立消费者服务处理，后置通常只做日志记录。
-        Default: no-op. Kafka consumption is handled by dedicated consumer services;
-        post-processing typically only logs confirmation.
-        """
-        pass

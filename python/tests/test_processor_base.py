@@ -3,6 +3,7 @@
 import pytest
 
 from processors.base import (
+    BaseExternalPlugin,
     PreProcessor,
     PostProcessor,
     _PRE_PROCESSOR_REGISTRY,
@@ -174,3 +175,83 @@ class TestCreateExternalPluginWrappers:
         instance = pre_cls()
         assert instance.can_process({"enabled": True}) is True
         assert instance.can_process({"enabled": False}) is False
+
+
+# ============================================================================
+# TestBaseExternalPlugin — 共享基类默认行为 / Shared base class default behavior
+# ============================================================================
+
+class _MinimalPlugin(BaseExternalPlugin):
+    """最小插件实现，仅定义 name，不覆写任何方法。
+    Minimal plugin — only defines name, overrides no methods."""
+    name = "minimal-plugin"
+
+
+class _OverridePlugin(BaseExternalPlugin):
+    """覆写所有扩展点的插件。Plugin that overrides all extension points."""
+    name = "override-plugin"
+
+    def can_process(self, case):
+        return case.get("active", True)
+
+    def before_request(self, headers, body, case_config, global_config):
+        body["modified"] = True
+        return headers, body
+
+    def after_response(self, rh, rb, rsh, rsb, cc, gc):
+        pass
+
+
+class TestBaseExternalPlugin:
+    """验证 BaseExternalPlugin 默认实现与 MRO 行为。
+    Verify BaseExternalPlugin default implementations and MRO behavior."""
+
+    def test_default_can_process_returns_true(self):
+        """默认 can_process() 返回 True。Default can_process() returns True."""
+        plugin = _MinimalPlugin()
+        assert plugin.can_process({}) is True
+
+    def test_default_before_request_returns_unchanged(self):
+        """默认 before_request() 原样返回 (headers, body)。
+        Default before_request() returns (headers, body) unchanged."""
+        plugin = _MinimalPlugin()
+        h, b = plugin.before_request(
+            {"X-Test": "1"}, {"key": "val"}, {}, {"processor_configs": {}}
+        )
+        assert h == {"X-Test": "1"}
+        assert b == {"key": "val"}
+
+    def test_default_after_response_is_noop(self):
+        """默认 after_response() 是空操作，不抛异常。
+        Default after_response() is a no-op that doesn't raise."""
+        plugin = _MinimalPlugin()
+        # 不应抛异常 / Should not raise
+        plugin.after_response({}, {}, {}, {}, {}, {})
+
+    def test_can_override_can_process(self):
+        """子类可以覆写 can_process()。Subclass can override can_process()."""
+        plugin = _OverridePlugin()
+        assert plugin.can_process({"active": True}) is True
+        assert plugin.can_process({"active": False}) is False
+
+    def test_can_override_before_request(self):
+        """子类可以覆写 before_request()。Subclass can override before_request()."""
+        plugin = _OverridePlugin()
+        h, b = plugin.before_request(
+            {}, {"key": "val"}, {}, {"processor_configs": {}}
+        )
+        assert b["modified"] is True
+        assert b["key"] == "val"
+
+    def test_mro_resolves_to_subclass_first(self):
+        """MRO 优先使用子类覆写的方法。
+        MRO resolves to subclass override first."""
+        plugin = _OverridePlugin()
+        # can_process 被覆写 / can_process is overridden
+        assert plugin.can_process({}) is True  # active not in dict → defaults True
+
+    def test_name_must_be_defined(self):
+        """BaseExternalPlugin 声明了 name 但需子类赋值。
+        BaseExternalPlugin declares name but subclass must assign it."""
+        assert _MinimalPlugin.name == "minimal-plugin"
+        assert _OverridePlugin.name == "override-plugin"

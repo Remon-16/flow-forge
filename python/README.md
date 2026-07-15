@@ -9,8 +9,8 @@
 - **两类用例**：单接口用例 + 多步骤业务链路用例（步骤间可通过 `inherit` 传递 token 等数据）。
 - **多线程执行**：线程池并发执行用例（`maxThread` 控制），非压力测试。
 - **两级断言**：简单等值断言（`assert_dict`）+ 高级多运算符断言规则（`assert_rules`：数值比较、正则、列表聚合等）。
-- **自动登录态**：按应用/用户管理 Token，细粒度锁 + 缓存 + 失败黑名单。
-- **可扩展处理器**：前置/后置处理器扩展点（HMAC 签名、时间戳、路径参数、SQL 清理等）。
+- **自动登录态**：按应用/用户管理 Token，细粒度锁 + 缓存 + 失败黑名单。提供 `get_current_user()` / `get_user()` / `get_app_user()` 工具方法，插件可直接获取登录用户配置。
+- **可扩展处理器**：前置/后置处理器扩展点（HMAC 签名、时间戳、路径参数、SQL 清理等）。`BaseExternalPlugin` 为 DB/Redis/MQ/Kafka/Pulsar/RocketMQ 插件提供共享基类。
 - **自包含报告**：HTML 报告内嵌所有样式脚本，浏览器直接打开。
 - **格式转换**：`excel2yaml` / `yaml2excel` / `yaml2pytest` / `excel2pytest`。
 - **CI/CD 友好**：纯 CLI，通过退出码反馈结果，可直接集成 Jenkins。

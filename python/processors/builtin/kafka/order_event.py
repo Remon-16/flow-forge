@@ -7,6 +7,9 @@ Kafka order event processor — pre-send order event to Kafka topic.
 Test scenario: in microservice architecture, API calls notify downstream
 services via Kafka. Pre-send test message to simulate this.
 
+提示 / Tip: 可通过 LoginManager.get_current_user() 获取当前 #{} 登录用户的配置。
+Use LoginManager.get_current_user() to access the currently logged-in user's config.
+
 环境配置 / Env config (env-local.yml)::
 
     processor_configs:

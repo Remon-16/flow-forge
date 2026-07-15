@@ -6,6 +6,9 @@ Cache handler Redis processor — pre-set + post-delete cache entries.
 
 Test scenario: API reads data from Redis cache (e.g. product list, order status).
 Pre-set test cache data before request, clean up after.
+
+提示 / Tip: 可通过 LoginManager.get_current_user() 获取当前 #{} 登录用户的配置。
+Use LoginManager.get_current_user() to access the currently logged-in user's config.
 """
 
 from processors.redis import BaseRedisPlugin

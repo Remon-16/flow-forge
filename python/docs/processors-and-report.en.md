@@ -142,6 +142,7 @@ For scenarios that need database operations before/after requests (e.g., "create
 - **Multi-database support**: MySQL, PostgreSQL, SQLite, Oracle, MSSQL, etc., switched via `db_url` connection string
 - **Connection pooling**: SQLAlchemy's built-in `QueuePool` — thread-safe, lazy-loaded, cached by `db_url`
 - **Auto-registration**: `__init_subclass__` auto-creates PreProcessor / PostProcessor wrapper classes
+- **Shared base**: `BaseExternalPlugin` (`processors/base.py`) provides default implementations for the three extension points — `can_process()` / `before_request()` / `after_response()` — from which all six resource plugin categories (DB/Redis/MQ/Kafka/Pulsar/RocketMQ) inherit
 
 Usage:
 
@@ -291,6 +292,10 @@ Embedded placeholders are supported (both `"#{normalUser}"` and `"Bearer #{norma
 - **Fine-grained locks**: locking at `appName:userParamName` granularity; different users can log in concurrently
 - **Failure blacklist**: records failed-login users by MD5 hash to avoid repeated invalid requests
 - **Token cache**: each user logs in only once; subsequent calls reuse the cached token
+- **User context tracking** (v2.5+): thread-local storage records the currently resolved `userParamName` and `appConfig`, exposing three utility methods for plugins:
+  - `LoginManager.get_current_user()` — no args; returns the full config of the currently logged-in user (including extra fields like `user_id` / `role`)
+  - `LoginManager.get_user(user_param_name)` — returns the config for a named user in the current app
+  - `LoginManager.get_app_user(app_name, user_param_name)` — full explicit lookup, independent of thread context
 
 ---
 
