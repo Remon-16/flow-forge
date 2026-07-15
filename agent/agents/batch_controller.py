@@ -50,6 +50,8 @@ class BatchController:
         self._url_failure_action = get_url_failure_action(self._case_gen_validation)
         self._reference_dir = ""
         self._memory_dir = ""
+        # 阶段执行进度跟踪 / Per-phase execution progress tracking
+        self._phase_progress: Dict[str, Any] = {}
 
     # ------------------------------------------------------------------
     # 公开入口 / Public entry point
@@ -193,8 +195,11 @@ class BatchController:
             all_failures = self._handle_url_failures_discard(
                 single_failed, biz_failed, output_dir, all_failures)
 
+        # 标记骨架阶段完成 / Mark skeleton phase as completed
+        self._phase_progress[_SKELETON_PHASE] = {"status": "completed"}
         self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE, single_cases, biz_cases,
-                              all_failures, output_dir, phases=phases)
+                              all_failures, output_dir, phases=phases,
+                              phase_status="completed")
         return single_cases, biz_cases, all_failures
 
     def _run_plugin_phase(
@@ -213,6 +218,10 @@ class BatchController:
     ) -> Tuple[List[Dict], List[Dict], List[Dict]]:
         """步骤2-N：遍历插件逐个执行 / Step 2-N: Iterate plugins and execute each.
 
+        每个插件阶段内按 single → biz 顺序处理，支持子步骤级断点续跑。
+        Within each plugin phase, processes single then biz sub-steps,
+        with sub-step-level resume support.
+
         Returns (single_cases, biz_cases, all_failures).
         """
         def _idx(p: str) -> int:
@@ -223,7 +232,18 @@ class BatchController:
 
         for plugin in plugins:
             phase_name = f"plugin_{plugin.declaration.plugin_name}"
+
+            # 跳过已完成的阶段 / Skip completed phases
             if _idx(restart_phase) > _idx(phase_name):
+                logger.info(
+                    _("batch_controller.plugin_skipped",
+                      name=plugin.declaration.plugin_name, phase=phase_name),
+                )
+                continue
+
+            # 如果 phase_progress 中标记为已完成则跳过 / Skip if phase_progress says completed
+            phase_prog = self._phase_progress.get(phase_name, {})
+            if phase_prog.get("status") == "completed":
                 logger.info(
                     _("batch_controller.plugin_skipped",
                       name=plugin.declaration.plugin_name, phase=phase_name),
@@ -238,17 +258,97 @@ class BatchController:
             )
             logger.info("=" * 60)
 
-            if decl.applies_to_single and single_cases:
-                single_cases = self._apply_plugin(
-                    plugin, single_cases, interfaces, api_summary, api_doc_text
-                )
-            if decl.applies_to_biz and biz_cases:
-                biz_cases = self._apply_plugin(
-                    plugin, biz_cases, interfaces, api_summary, api_doc_text
-                )
+            # 确保 phase_progress 条目存在 / Ensure phase_progress entry exists
+            if phase_name not in self._phase_progress:
+                self._phase_progress[phase_name] = {"status": "in_progress"}
 
+            # --- 处理 single 子步骤 / Process single sub-step ---
+            if decl.applies_to_single and single_cases:
+                sub = self._phase_progress[phase_name].setdefault("single", {})
+                sub_status = sub.get("status", "pending")
+                completed = sub.get("completed_count", 0)
+                total = len(single_cases)
+
+                if sub_status != "completed":
+                    remaining = single_cases[completed:]
+                    if remaining:
+                        logger.info(
+                            _("batch_controller.resume_partial",
+                              sub_type="single", completed=completed,
+                              total=total, remaining=len(remaining)))
+                        processed = self._apply_plugin(
+                            plugin, remaining, interfaces, api_summary, api_doc_text,
+                            start_offset=completed,
+                            phase_name=phase_name,
+                            sub_type="single",
+                            total_items=total,
+                            ckpt_mgr=ckpt_mgr,
+                            all_cases=single_cases,
+                            all_biz_cases=biz_cases,
+                            all_failures=all_failures,
+                            output_dir=output_dir,
+                            phases=phases,
+                        )
+                        single_cases = single_cases[:completed] + processed
+
+                    # 标记 single 子步骤完成 / Mark single sub-step completed
+                    self._phase_progress[phase_name]["single"] = {
+                        "status": "completed",
+                        "total_items": total,
+                        "completed_count": total,
+                        "batch_size": self._batch_size,
+                    }
+                    self._save_checkpoint(ckpt_mgr, phase_name,
+                                          single_cases, biz_cases,
+                                          all_failures, output_dir, phases=phases,
+                                          phase_status="in_progress")
+
+            # --- 处理 biz 子步骤 / Process biz sub-step ---
+            if decl.applies_to_biz and biz_cases:
+                sub = self._phase_progress[phase_name].setdefault("biz", {})
+                sub_status = sub.get("status", "pending")
+                completed = sub.get("completed_count", 0)
+                total = len(biz_cases)
+
+                if sub_status != "completed":
+                    remaining = biz_cases[completed:]
+                    if remaining:
+                        logger.info(
+                            _("batch_controller.resume_partial",
+                              sub_type="biz", completed=completed,
+                              total=total, remaining=len(remaining)))
+                        processed = self._apply_plugin(
+                            plugin, remaining, interfaces, api_summary, api_doc_text,
+                            start_offset=completed,
+                            phase_name=phase_name,
+                            sub_type="biz",
+                            total_items=total,
+                            ckpt_mgr=ckpt_mgr,
+                            all_cases=biz_cases,
+                            all_biz_cases=biz_cases,
+                            all_failures=all_failures,
+                            output_dir=output_dir,
+                            phases=phases,
+                        )
+                        biz_cases = biz_cases[:completed] + processed
+
+                    # 标记 biz 子步骤完成 / Mark biz sub-step completed
+                    self._phase_progress[phase_name]["biz"] = {
+                        "status": "completed",
+                        "total_items": total,
+                        "completed_count": total,
+                        "batch_size": self._batch_size,
+                    }
+                    self._save_checkpoint(ckpt_mgr, phase_name,
+                                          single_cases, biz_cases,
+                                          all_failures, output_dir, phases=phases,
+                                          phase_status="in_progress")
+
+            # 标记整个阶段完成 / Mark entire phase as completed
+            self._phase_progress[phase_name]["status"] = "completed"
             self._save_checkpoint(ckpt_mgr, phase_name, single_cases, biz_cases,
-                                  all_failures, output_dir, phases=phases)
+                                  all_failures, output_dir, phases=phases,
+                                  phase_status="completed")
 
         return single_cases, biz_cases, all_failures
 
@@ -440,12 +540,33 @@ class BatchController:
         interfaces: List[Dict],
         api_summary: List[Dict],
         api_doc_text: str,
+        # --- checkpoint 上下文（关键字参数，默认值保证现有调用不受影响）---
+        # Checkpoint context (keyword-only, defaults ensure backward compat)
+        start_offset: int = 0,
+        phase_name: str = "",
+        sub_type: str = "",
+        total_items: int = 0,
+        ckpt_mgr: Any = None,
+        all_cases: List[Dict] = None,
+        all_biz_cases: List[Dict] = None,
+        all_failures: List[Dict] = None,
+        output_dir: str = "",
+        phases: List[str] = None,
     ) -> List[Dict]:
-        """对一批用例执行单个插件，含分批和重试 / Run a plugin across all cases with batching and retry."""
+        """对一批用例执行单个插件，含分批、重试和逐 batch 检查点。
+        Run a plugin across all cases with batching, retry, and per-batch checkpointing.
+
+        当提供 checkpoint 上下文时，每完成一个 batch 即保存进度，
+        确保中断后 resume 可从断点继续而非重新处理整个阶段。
+        When checkpoint context is provided, saves progress after each batch
+        so that resume can continue from the interruption point.
+        """
         decl = plugin.declaration
         batches = self._split_batches(cases)
         results: List[Dict] = []
         consecutive_failures = 0
+        # 累计已处理数量（含此次调用前的 start_offset）/ Cumulative completed count
+        current_completed = start_offset
 
         for i, batch in enumerate(batches):
             batch_ok = False
@@ -478,6 +599,56 @@ class BatchController:
                 if self._check_consecutive_failures(consecutive_failures, f"plugin '{decl.plugin_name}'"):
                     break
 
+            current_completed += len(batch)
+
+            # --- 逐 batch 保存检查点 / Save checkpoint after each batch ---
+            if ckpt_mgr and phase_name and sub_type:
+                # 更新阶段进度 / Update phase progress
+                prog = self._phase_progress.setdefault(phase_name, {"status": "in_progress"})
+                sub_prog = prog.setdefault(sub_type, {})
+                sub_prog.update({
+                    "status": "in_progress" if current_completed < total_items else "completed",
+                    "total_items": total_items,
+                    "completed_count": current_completed,
+                    "batch_size": self._batch_size,
+                })
+                # 构造累积状态：前缀已处理项 + 当前结果 + 后缀未处理项
+                # Build accumulated state: prefix (done) + current results + suffix (pending)
+                remaining_unprocessed = cases[len(results):]
+                if sub_type == "single":
+                    accumulated_single = (
+                        (all_cases[:start_offset] if all_cases else [])
+                        + list(results)
+                        + remaining_unprocessed
+                    )
+                    self._save_checkpoint(
+                        ckpt_mgr, phase_name,
+                        accumulated_single, all_biz_cases or [],
+                        all_failures or [], output_dir, phases=phases,
+                        phase_status="in_progress",
+                    )
+                else:  # biz
+                    accumulated_biz = (
+                        (all_cases[:start_offset] if all_cases else [])
+                        + list(results)
+                        + remaining_unprocessed
+                    )
+                    self._save_checkpoint(
+                        ckpt_mgr, phase_name,
+                        all_cases or [], accumulated_biz,
+                        all_failures or [], output_dir, phases=phases,
+                        phase_status="in_progress",
+                    )
+
+                # 日志：批次进度 / Log batch progress
+                total_batches = len(batches)
+                logger.info(
+                    _("batch_controller.batch_progress",
+                      batch=i + 1, total_batches=total_batches,
+                      sub_type=sub_type,
+                      completed=current_completed,
+                      total_items=total_items))
+
             self._maybe_wait_between_batches(i, len(batches))
 
         logger.info(_("batch_controller.plugin_result", name=decl.plugin_name, count=len(results)))
@@ -500,6 +671,9 @@ class BatchController:
 
         restart_phase = _CkptMgr.get_restart_phase(meta)
         logger.info(_("batch_controller.resume_phase", phase=restart_phase))
+
+        # 恢复阶段执行进度 / Restore per-phase execution progress
+        self._phase_progress = meta.get("phase_progress", {})
 
         ckpt_settings = meta.get("settings", {})
         if ckpt_settings:
@@ -557,8 +731,14 @@ class BatchController:
         }
 
     def _save_checkpoint(self, ckpt_mgr, phase: str, single: List, biz: List,
-                         failures: List, output_dir: str, phases: List[str] = None):
-        """保存检查点数据和元数据 / Save checkpoint data and metadata."""
+                         failures: List, output_dir: str, phases: List[str] = None,
+                         phase_progress: Dict = None,
+                         phase_status: str = "completed"):
+        """保存检查点数据和元数据 / Save checkpoint data and metadata.
+
+        phase_progress: 各阶段执行进度（默认使用 self._phase_progress）。
+        phase_status:   "completed" | "in_progress"。
+        """
         if not ckpt_mgr:
             return
         ckpt_mgr.save_data(phase, {
@@ -568,9 +748,10 @@ class BatchController:
         })
         ckpt_mgr.save_meta(
             phase, self._collect_settings(),
-            {"single_cases": len(single), "biz_cases": len(biz)},
             output_dir,
             phases=phases,
+            phase_progress=phase_progress if phase_progress is not None else self._phase_progress,
+            phase_status=phase_status,
         )
 
     def _check_consecutive_failures(self, consecutive: int, label: str) -> bool:

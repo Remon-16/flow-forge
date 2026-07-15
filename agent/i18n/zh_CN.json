@@ -224,6 +224,8 @@
   "batch_controller.url_correction_retry": "URL 纠正重试 {retry}/{max}: {count} 个 {type} 用例 URL 无效",
   "batch_controller.plugin_failed_after_retries": "插件 '{name}' 失败 {retries} 次 — 保留原始数据",
   "batch_controller.plugin_retry": "插件 '{name}' 重试 {attempt}/{max}",
+  "batch_controller.resume_partial": "恢复 {sub_type}: 已完成 {completed}/{total}，剩余 {remaining} 个用例",
+  "batch_controller.batch_progress": "批次 {batch}/{total_batches} ({sub_type}): 已处理 {completed}/{total_items}",
   "skel_gen.generating_single_batches": "正在生成 {count} 个单接口用例骨架, 分 {batches} 批 (batch_size={size})...",
   "skel_gen.generating_biz_batches": "正在生成业务链路骨架, 分 {batches} 批 (batch_size={size})...",
   "skel_gen.batch_progress": "生成 {count} 个 {label}",

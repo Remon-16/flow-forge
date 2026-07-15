@@ -52,23 +52,30 @@ class CheckpointManager:
         self,
         phase: str,
         settings: Dict[str, Any],
-        counts: Dict[str, Any],
         output_dir: str,
         phases: List[str] = None,
+        phase_progress: Dict[str, Any] = None,
+        phase_status: str = "completed",
     ) -> None:
-        """Write checkpoint.json (lightweight metadata)."""
+        """Write checkpoint.json (lightweight metadata).
+
+        写入轻量元数据文件。
+        phase_progress: 各阶段执行进度 / per-phase execution progress.
+        phase_status:   "completed" | "in_progress".
+        """
         self.meta_path.parent.mkdir(parents=True, exist_ok=True)
         payload: Dict[str, Any] = {
             "version": CURRENT_VERSION,
             "phase": phase,
-            "phase_status": "completed",
+            "phase_status": phase_status,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "settings": settings,
-            "counts": counts,
             "output_dir": output_dir,
         }
         if phases is not None:
             payload["phases"] = phases
+        if phase_progress is not None:
+            payload["phase_progress"] = phase_progress
         self.meta_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2, default=str),
             encoding="utf-8",
@@ -143,17 +150,26 @@ class CheckpointManager:
     def get_restart_phase(meta: Dict[str, Any]) -> str:
         """Return the next incomplete phase.
 
-        If meta says phase X is completed, restart_phase is the *next* phase.
+        返回下一个未完成的阶段。若当前阶段尚未完成（phase_status="in_progress"），
+        则返回当前阶段以便继续处理。用户可手动编辑 meta["phase"] 回滚到更早的阶段。
+        Returns the current phase if it's in_progress, otherwise the next phase.
         Users can hand-edit meta["phase"] to roll back to an earlier phase.
 
         Prefers *phases* list from meta (for dynamic phase names from
         BatchController). Falls back to static _PHASES for backward
         compatibility with checkpoints saved before this fix.
         """
+        phase_status = meta.get("phase_status", "completed")
         current = meta.get("phase", "")
         phases = meta.get("phases")
         if phases is None:
             phases = _PHASES
+
+        # 当前阶段未完成 → 返回当前阶段，从断点继续
+        # If current phase is in_progress, resume from it
+        if phase_status == "in_progress" and current:
+            return current
+
         try:
             idx = phases.index(current)
         except ValueError:

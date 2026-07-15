@@ -8,6 +8,7 @@ import pytest
 
 from agents.batch_controller import BatchController
 from config.settings import Settings
+from graph.checkpoint import CheckpointManager
 from plugins.base import CaseAttributeGenerator, PluginDeclaration
 
 
@@ -469,3 +470,299 @@ class TestUrlFailureAction:
         cases = [{"url": "/api/notindoc"}]
         BatchController._final_url_check(cases, "only this text")
         assert cases[0]["url"] == f"{URL_NOT_EXIST_PREFIX}/api/notindoc"
+
+
+# ---------------------------------------------------------------------------
+# BatchResumeProgress tests / 批次断点续跑测试
+# ---------------------------------------------------------------------------
+
+class TestBatchResumeProgress:
+    """验证逐 batch 保存检查点和从断点恢复 / Verify per-batch checkpointing and resume."""
+
+    def should_resume_mid_phase_from_completed_count(self):
+        """checkpoint completed_count=5 → resume 只处理 cases[5:]。
+        Resume with completed_count=5 → only processes cases[5:]."""
+        settings = _make_settings(batch_size=2)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+
+            # 构造 checkpoint：单接口已处理 5/10 / Set up checkpoint: 5/10 single done
+            phase_progress = {
+                "plugin_data_filling": {
+                    "status": "in_progress",
+                    "single": {"status": "in_progress", "total_items": 10,
+                               "completed_count": 5, "batch_size": 2},
+                },
+            }
+            ckpt_mgr.save_meta(
+                "plugin_data_filling", {"batch_size": 2}, str(tmpdir),
+                phases=["skeletons_generated", "plugin_data_filling"],
+                phase_progress=phase_progress, phase_status="in_progress",
+            )
+            # 保存部分数据：前 5 个已处理，后 5 个未处理 / Partial data: first 5 done, last 5 untouched
+            cases = (
+                [{"test_id": f"t{i}", "filled": True} for i in range(5)]
+                + [{"test_id": f"t{i}"} for i in range(5, 10)]
+            )
+            ckpt_mgr.save_data("plugin_data_filling", {
+                "single_cases": cases, "biz_cases": [], "failures": [],
+            })
+
+            # 从 checkpoint 恢复 / Restore from checkpoint
+            meta = ckpt_mgr.load_meta()
+            restart_phase, single_cases, biz_cases, _ = \
+                controller._restore_from_checkpoint(ckpt_mgr, meta)
+
+            # 验证进度被加载 / Verify progress loaded
+            assert restart_phase == "plugin_data_filling"
+            assert controller._phase_progress["plugin_data_filling"]["single"]["completed_count"] == 5
+            assert len(single_cases) == 10
+
+    def should_save_checkpoint_after_each_batch(self):
+        """10 项 batch_size=3 → _save_checkpoint 被调用 ≥3 次。
+        Process 10 items with batch_size=3 → save_checkpoint called ≥3 times."""
+        settings = _make_settings(batch_size=3)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+
+            # 初始化骨架阶段进度 / Init skeleton phase progress
+            controller._phase_progress = {"skeletons_generated": {"status": "completed"}}
+
+            plugin = _make_mock_plugin(name="data_filling", applies_biz=False)
+            cases = [{"test_id": f"t{i}"} for i in range(10)]
+            plugin.generate.side_effect = lambda batch, *args, **kw: [
+                {**c, "filled": True} for c in batch
+            ]
+
+            controller._apply_plugin(
+                plugin, cases, [], [], "",
+                start_offset=0,
+                phase_name="plugin_data_filling",
+                sub_type="single",
+                total_items=10,
+                ckpt_mgr=ckpt_mgr,
+                all_cases=list(cases),
+                all_biz_cases=[],
+                all_failures=[],
+                output_dir=str(tmpdir),
+                phases=["skeletons_generated", "plugin_data_filling"],
+            )
+
+            # 验证 checkpoint 已保存 / Verify checkpoint saved
+            assert ckpt_mgr.exists()
+            meta = ckpt_mgr.load_meta()
+            assert meta["phase_progress"]["plugin_data_filling"]["single"]["completed_count"] == 10
+            assert meta["phase_progress"]["plugin_data_filling"]["single"]["total_items"] == 10
+
+    def should_skip_completed_sub_step_on_resume(self):
+        """single 已完成、biz in_progress → resume 跳过 single 只处理 biz。
+        Single completed, biz in_progress → skip single, only process biz."""
+        settings = _make_settings(batch_size=2)
+        controller = BatchController(settings)
+
+        # 构造进度：single completed, biz 3/5 / Setup: single done, biz partially done
+        controller._phase_progress = {
+            "skeletons_generated": {"status": "completed"},
+            "plugin_data_filling": {
+                "status": "in_progress",
+                "single": {"status": "completed", "total_items": 3, "completed_count": 3, "batch_size": 2},
+                "biz": {"status": "in_progress", "total_items": 5, "completed_count": 3, "batch_size": 2},
+            },
+        }
+
+        plugin = _make_mock_plugin(name="data_filling")
+        # 模拟：返回与输入相同数量的元素 / Mock: return same number of items as input
+        plugin.generate.side_effect = lambda batch, *args, **kw: [
+            {**c, "filled": True} for c in batch
+        ]
+
+        single_cases = [{"test_id": "t1", "filled": True} for _ in range(3)]
+        biz_cases = [{"flow_name": "f1", "filled": True} for _ in range(3)] + \
+                    [{"flow_name": f"f{i}"} for i in range(4, 6)]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+
+            single_out, biz_out, _ = controller._run_plugin_phase(
+                plugins=[plugin],
+                restart_phase="plugin_data_filling",
+                single_cases=list(single_cases),
+                biz_cases=list(biz_cases),
+                all_failures=[],
+                interfaces=[],
+                api_summary=[],
+                api_doc_text="",
+                ckpt_mgr=ckpt_mgr,
+                output_dir=str(tmpdir),
+                phases=["skeletons_generated", "plugin_data_filling"],
+            )
+
+            # single 不应变 / single should be unchanged (already completed)
+            assert len(single_out) == 3
+            # biz 应被处理完 / biz should be fully processed
+            assert len(biz_out) == 5
+
+    def should_skip_completed_phase_on_resume(self):
+        """阶段 status=completed → resume 跳过该阶段。
+        Phase with status=completed → skipped on resume."""
+        settings = _make_settings(batch_size=2)
+        controller = BatchController(settings)
+
+        controller._phase_progress = {
+            "skeletons_generated": {"status": "completed"},
+            "plugin_data_filling": {"status": "completed"},
+            "plugin_assertion_gen": {"status": "pending"},
+        }
+
+        plugin_fill = _make_mock_plugin(name="data_filling")
+        plugin_fill.generate.side_effect = lambda batch, *args, **kw: [
+            {**c, "extra": True} for c in batch
+        ]
+        plugin_assert = _make_mock_plugin(name="assertion_gen", applies_biz=False)
+        plugin_assert.generate.side_effect = lambda batch, *args, **kw: [
+            {**c, "asserted": True} for c in batch
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+
+            single_out, biz_out, _ = controller._run_plugin_phase(
+                plugins=[plugin_fill, plugin_assert],
+                restart_phase="plugin_assertion_gen",
+                single_cases=[{"test_id": "t1", "filled": True}],
+                biz_cases=[],
+                all_failures=[],
+                interfaces=[],
+                api_summary=[],
+                api_doc_text="",
+                ckpt_mgr=ckpt_mgr,
+                output_dir=str(tmpdir),
+                phases=["skeletons_generated", "plugin_data_filling", "plugin_assertion_gen"],
+            )
+
+            # data_filling 应被跳过 / data_filling should be skipped
+            plugin_fill.generate.assert_not_called()
+            # assertion_gen 应被调用 / assertion_gen should be called
+            assert plugin_assert.generate.called
+
+    def should_handle_batch_size_negative_one(self):
+        """batch_size=-1 → 单 batch，一次 checkpoint 保存。
+        batch_size=-1 → one big batch, one checkpoint save."""
+        settings = _make_settings(batch_size=-1)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+            controller._phase_progress = {}
+
+            plugin = _make_mock_plugin(name="data_filling", applies_biz=False)
+            cases = [{"test_id": f"t{i}"} for i in range(5)]
+            plugin.generate.return_value = [{**c, "filled": True} for c in cases]
+
+            result = controller._apply_plugin(
+                plugin, cases, [], [], "",
+                start_offset=0,
+                phase_name="plugin_data_filling",
+                sub_type="single",
+                total_items=5,
+                ckpt_mgr=ckpt_mgr,
+                all_cases=list(cases),
+                all_biz_cases=[],
+                all_failures=[],
+                output_dir=str(tmpdir),
+                phases=["skeletons_generated", "plugin_data_filling"],
+            )
+            assert len(result) == 5
+            assert ckpt_mgr.exists()
+
+    def should_accumulate_checkpoint_data_correctly(self):
+        """验证 checkpoint data 中前缀已处理项正确保留 + 后缀未处理项不变。
+        Verify checkpoint data preserves processed items + unprocessed suffix correctly."""
+        settings = _make_settings(batch_size=2)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+            controller._phase_progress = {}
+
+            plugin = _make_mock_plugin(name="data_filling", applies_biz=False)
+            cases = [{"test_id": f"t{i}"} for i in range(6)]
+            plugin.generate.side_effect = lambda batch, *args, **kw: [
+                {**c, "filled": True} for c in batch
+            ]
+
+            controller._apply_plugin(
+                plugin, cases, [], [], "",
+                start_offset=0,
+                phase_name="plugin_data_filling",
+                sub_type="single",
+                total_items=6,
+                ckpt_mgr=ckpt_mgr,
+                all_cases=list(cases),
+                all_biz_cases=[],
+                all_failures=[],
+                output_dir=str(tmpdir),
+                phases=["skeletons_generated", "plugin_data_filling"],
+            )
+
+            data = ckpt_mgr.load_data()
+            assert data is not None
+            # 所有 6 个都应已处理 / All 6 should be processed
+            assert len(data["single_cases"]) == 6
+            for c in data["single_cases"]:
+                assert c.get("filled") is True
+
+    def should_handle_consecutive_failure_break(self):
+        """连续失败中断后，checkpoint 记录最后一个成功 batch 的进度。
+        After consecutive failure break, checkpoint records last successful batch's progress."""
+        settings = _make_settings(batch_size=2, consecutive_batch_failure_limit=2)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+            controller._phase_progress = {}
+
+            plugin = _make_mock_plugin(name="data_filling", applies_biz=False,
+                                        error_strategy="skip")
+            cases = [{"test_id": f"t{i}"} for i in range(10)]
+
+            # 第一批成功 / first batch succeeds
+            call_count = [0]
+
+            def side_effect(batch, *args, **kw):
+                call_count[0] += 1
+                if call_count[0] <= 1:
+                    return [{**c, "filled": True} for c in batch]
+                raise Exception("persistent failure")
+
+            plugin.generate.side_effect = side_effect
+
+            controller._apply_plugin(
+                plugin, cases, [], [], "",
+                start_offset=0,
+                phase_name="plugin_data_filling",
+                sub_type="single",
+                total_items=10,
+                ckpt_mgr=ckpt_mgr,
+                all_cases=list(cases),
+                all_biz_cases=[],
+                all_failures=[],
+                output_dir=str(tmpdir),
+                phases=["skeletons_generated", "plugin_data_filling"],
+            )
+
+            # checkpoint 应记录至少 2 个已完成 / checkpoint should record at least 2 completed
+            meta = ckpt_mgr.load_meta()
+            completed = meta["phase_progress"]["plugin_data_filling"]["single"]["completed_count"]
+            assert completed >= 2

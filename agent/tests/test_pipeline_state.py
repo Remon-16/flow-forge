@@ -203,7 +203,6 @@ class TestResumeAutoVersioningSkip:
             ckpt_mgr.save_meta(
                 "skeletons_generated",
                 {"batch_size": 3},
-                {"single_cases": 5, "biz_cases": 2},
                 str(cases_dir),
                 phases=["skeletons_generated", "plugin_data_filling"],
             )
@@ -227,8 +226,8 @@ class TestResumeAutoVersioningSkip:
             meta = ckpt_mgr2.load_meta()
             assert meta is not None
             assert meta["phase"] == "skeletons_generated"
-            assert meta["counts"]["single_cases"] == 5
-            assert meta["counts"]["biz_cases"] == 2
+            # counts removed — counts now derived from checkpoint_data or phase_progress
+            assert meta.get("phase_progress", {}) == {}
 
             data = ckpt_mgr2.load_data()
             assert data is not None

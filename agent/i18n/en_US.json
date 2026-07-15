@@ -224,6 +224,8 @@
   "batch_controller.url_correction_retry": "URL correction retry {retry}/{max}: {count} {type} cases with invalid URLs",
   "batch_controller.plugin_failed_after_retries": "Plugin '{name}' failed after {retries} retries — keeping original",
   "batch_controller.plugin_retry": "Plugin '{name}' retry {attempt}/{max}",
+  "batch_controller.resume_partial": "Resuming {sub_type}: {completed}/{total} already processed, {remaining} remaining",
+  "batch_controller.batch_progress": "Batch {batch}/{total_batches} ({sub_type}): {completed}/{total_items} processed",
   "skel_gen.generating_single_batches": "Generating {count} single case skeletons in {batches} batches (batch_size={size})...",
   "skel_gen.generating_biz_batches": "Generating biz flow skeletons in {batches} batches (batch_size={size})...",
   "skel_gen.batch_progress": "Generated {count} {label}",
