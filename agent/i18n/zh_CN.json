@@ -122,6 +122,7 @@
   "plan_gen.case_type_skip_biz_sections": "跳过业务链路测试生成 (case_type=single)",
 
   "plan_gen.mermaid_generated": "已生成业务流 Mermaid 图: {flow}",
+  "plan_gen.chunk_progress_saved": "Chunk 进度已保存 ({phase}): 已完成 {completed} 个片段",
 
   "review.manual_edit_hint": "提示: 如需手动编辑计划, 请编辑 {path} 后按 y 批准",
   "review.reloaded_from_disk": "已从磁盘重新加载计划 ({path}), 包含手动编辑",
@@ -226,6 +227,9 @@
   "batch_controller.plugin_retry": "插件 '{name}' 重试 {attempt}/{max}",
   "batch_controller.resume_partial": "恢复 {sub_type}: 已完成 {completed}/{total}，剩余 {remaining} 个用例",
   "batch_controller.batch_progress": "批次 {batch}/{total_batches} ({sub_type}): 已处理 {completed}/{total_items}",
+  "batch_controller.skeleton_batch_progress": "骨架批次 {batch}/{total_batches} ({sub_type}): 已生成 {completed}/{total_items}",
+  "batch_controller.skeleton_resume_single": "恢复单接口骨架生成: 已生成 {completed}/{total}",
+  "batch_controller.skeleton_resume_biz": "恢复业务链路骨架生成: 已生成 {completed}/{total}",
   "skel_gen.generating_single_batches": "正在生成 {count} 个单接口用例骨架, 分 {batches} 批 (batch_size={size})...",
   "skel_gen.generating_biz_batches": "正在生成业务链路骨架, 分 {batches} 批 (batch_size={size})...",
   "skel_gen.batch_progress": "生成 {count} 个 {label}",

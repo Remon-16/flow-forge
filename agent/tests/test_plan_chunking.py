@@ -4,6 +4,7 @@ All LLM calls are mocked — NO real API calls.
 """
 
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -264,3 +265,250 @@ class TestPlanChunking:
 
             assert "API_SECTION" in plan_md
             mock_save.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# TestPlanChunkResumeProgress — PlanGenerator 逐 chunk 保存 + resume 跳过测试
+# ---------------------------------------------------------------------------
+
+class TestPlanChunkResumeProgress:
+    """Tests for incremental plan_chunks_progress.json save and resume skip."""
+
+    def should_save_chunk_progress_after_phase_a(self, tmp_path):
+        """Phase A 后 plan_chunks_progress.json 存在且含 global_context。
+        After Phase A, plan_chunks_progress.json exists with global_context."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            outline = _sample_outline()
+            interfaces = _sample_interfaces()
+
+            agent.call_llm = MagicMock(return_value="GLOBAL_CONTEXT")
+
+            memory_dir = str(tmp_path / "memory")
+            agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=interfaces,
+                memory_dir=memory_dir,
+            )
+
+            progress_path = Path(memory_dir) / "plan_chunks_progress.json"
+            assert progress_path.exists()
+            progress = json.loads(progress_path.read_text(encoding="utf-8"))
+            assert "plan_parts" in progress
+            assert progress["plan_parts"]["global_context"] == "GLOBAL_CONTEXT"
+
+    def should_save_chunk_progress_after_each_api_group(self, tmp_path):
+        """2 个 API groups → api_sections 含 2 个 key。
+        2 API groups → api_sections has 2 keys."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [
+                    {"group_name": "Group A", "api_ids": ["api_a"], "test_focus": "Focus A"},
+                    {"group_name": "Group B", "api_ids": ["api_b"], "test_focus": "Focus B"},
+                ],
+                "biz_flows": [],
+            }
+            interfaces = [
+                {"test_id": "api_a", "api_name": "A", "method": "GET", "url": "/a",
+                 "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200,
+                 "assert_dict": {}, "remark": ""},
+                {"test_id": "api_b", "api_name": "B", "method": "POST", "url": "/b",
+                 "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200,
+                 "assert_dict": {}, "remark": ""},
+            ]
+
+            agent.call_llm = MagicMock(side_effect=["GLOBAL", "SECTION_A", "SECTION_B"])
+            memory_dir = str(tmp_path / "memory")
+
+            agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=interfaces,
+                memory_dir=memory_dir,
+            )
+
+            progress_path = Path(memory_dir) / "plan_chunks_progress.json"
+            progress = json.loads(progress_path.read_text(encoding="utf-8"))
+            api_sections = progress["plan_parts"].get("api_sections", {})
+            assert "api_Group A" in api_sections or "api_Group_A" in api_sections
+
+    def should_save_chunk_progress_after_each_biz_batch(self, tmp_path):
+        """3 scenarios plan_biz_flow_batch_size=2 → biz_sections 含 2 个 batch key。
+        3 scenarios plan_biz_flow_batch_size=2 → biz_sections with 2 batch keys."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            settings = _make_settings(plan_biz_flow_batch_size=2)
+            agent = _make_agent(settings=settings)
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [],
+                "biz_flows": [
+                    {"name": "Flow 1", "description": "d1", "involved_apis": []},
+                    {"name": "Flow 2", "description": "d2", "involved_apis": []},
+                    {"name": "Flow 3", "description": "d3", "involved_apis": []},
+                ],
+            }
+
+            # Phase A + 3 Mermaid flows + 2 biz batches = 6 calls
+            agent.call_llm = MagicMock(side_effect=[
+                "GLOBAL", "MERMAID_1", "MERMAID_2", "MERMAID_3",
+                "BIZ_BATCH_0", "BIZ_BATCH_1",
+            ])
+            memory_dir = str(tmp_path / "memory")
+
+            agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=[],
+                memory_dir=memory_dir,
+            )
+
+            progress_path = Path(memory_dir) / "plan_chunks_progress.json"
+            progress = json.loads(progress_path.read_text(encoding="utf-8"))
+            biz_sections = progress["plan_parts"].get("biz_sections", {})
+            assert len(biz_sections) >= 2
+
+    def should_skip_phase_a_when_global_context_present(self, tmp_path):
+        """预置 global_context → Phase A 不调 LLM。
+        Pre-set global_context → Phase A doesn't call LLM."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            memory_dir = str(tmp_path / "memory")
+
+            # 预置 plan_chunks_progress.json / Pre-populate
+            progress_path = Path(memory_dir)
+            progress_path.mkdir(parents=True, exist_ok=True)
+            (progress_path / "plan_chunks_progress.json").write_text(
+                json.dumps({"plan_parts": {"global_context": "PRE_EXISTING_GLOBAL"}}),
+                encoding="utf-8",
+            )
+
+            outline = _sample_outline()
+            interfaces = _sample_interfaces()
+
+            # Phase B 一次调用 / One call for Phase B
+            agent.call_llm = MagicMock(return_value="API_SECTION")
+
+            agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=interfaces,
+                chunk_progress=json.loads(
+                    (progress_path / "plan_chunks_progress.json").read_text(encoding="utf-8")
+                ),
+                memory_dir=memory_dir,
+            )
+
+            # Phase A 被跳过，只调用了 Phase B / Phase A skipped, only Phase B called
+            assert agent.call_llm.call_count == 1
+
+    def should_skip_completed_mermaid_flows_on_resume(self, tmp_path):
+        """预置 mermaid_chunks → 已完成 flow 不调 LLM。
+        Pre-set mermaid_chunks → completed flows don't call LLM."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            memory_dir = str(tmp_path / "memory")
+
+            progress_path = Path(memory_dir)
+            progress_path.mkdir(parents=True, exist_ok=True)
+            (progress_path / "plan_chunks_progress.json").write_text(
+                json.dumps({"plan_parts": {
+                    "mermaid_chunks": {"biz_flow_1": "MERMAID_DONE"},
+                }}),
+                encoding="utf-8",
+            )
+
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [],
+                "biz_flows": [
+                    {"name": "Flow 1", "description": "d1", "involved_apis": [], "chunk_id": "biz_flow_1"},
+                    {"name": "Flow 2", "description": "d2", "involved_apis": [], "chunk_id": "biz_flow_2"},
+                ],
+            }
+
+            # Phase A + Flow 2 Mermaid only (Flow 1 skipped) + 1 biz batch = 3 calls
+            agent.call_llm = MagicMock(side_effect=["GLOBAL", "MERMAID_2", "BIZ_BATCH"])
+
+            agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=[],
+                chunk_progress=json.loads(
+                    (progress_path / "plan_chunks_progress.json").read_text(encoding="utf-8")
+                ),
+                memory_dir=memory_dir,
+            )
+
+            # Flow 1 Mermaid 被跳过 / Flow 1 Mermaid skipped
+            assert agent.call_llm.call_count == 3
+
+    def should_handle_memory_dir_empty_string(self):
+        """memory_dir="" 时不写盘不崩溃 / No crash with empty memory_dir."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            agent.call_llm = MagicMock(return_value="GLOBAL")
+
+            # 不应崩溃 / Should not crash
+            plan_md = agent.generate_from_outline(
+                outline=_sample_outline(),
+                requirement_analysis={"flows": 1},
+                interfaces=_sample_interfaces(),
+                memory_dir="",
+            )
+            assert "GLOBAL" in plan_md
+
+    def should_generate_complete_plan_from_partial_resume(self, tmp_path):
+        """Phase B 部分完成 → resume → 最终 plan.md 包含所有 group。
+        Partial Phase B → resume → final plan.md has all groups."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            memory_dir = str(tmp_path / "memory")
+
+            # 预置: Phase A 完成, Phase B group A 完成 / Pre-set: Phase A done, Phase B group A done
+            progress_path = Path(memory_dir)
+            progress_path.mkdir(parents=True, exist_ok=True)
+            (progress_path / "plan_chunks_progress.json").write_text(
+                json.dumps({"plan_parts": {
+                    "global_context": "DONE_GLOBAL",
+                    "api_sections": {"api_Group A": "DONE_GROUP_A"},
+                }}),
+                encoding="utf-8",
+            )
+
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [
+                    {"group_name": "Group A", "api_ids": ["api_a"], "test_focus": "Focus A"},
+                    {"group_name": "Group B", "api_ids": ["api_b"], "test_focus": "Focus B"},
+                ],
+                "biz_flows": [],
+            }
+            interfaces = [
+                {"test_id": "api_a", "api_name": "A", "method": "GET", "url": "/a",
+                 "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200,
+                 "assert_dict": {}, "remark": ""},
+                {"test_id": "api_b", "api_name": "B", "method": "POST", "url": "/b",
+                 "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200,
+                 "assert_dict": {}, "remark": ""},
+            ]
+
+            # Phase B group B only (A skipped) = 1 call
+            agent.call_llm = MagicMock(return_value="DONE_GROUP_B")
+
+            plan_md = agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=interfaces,
+                chunk_progress=json.loads(
+                    (progress_path / "plan_chunks_progress.json").read_text(encoding="utf-8")
+                ),
+                memory_dir=memory_dir,
+            )
+
+            assert agent.call_llm.call_count == 1
+            assert "DONE_GLOBAL" in plan_md
+            assert "DONE_GROUP_A" in plan_md
+            assert "DONE_GROUP_B" in plan_md

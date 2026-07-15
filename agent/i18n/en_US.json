@@ -122,6 +122,7 @@
   "plan_gen.case_type_skip_biz_sections": "Skipping business flow test generation (case_type=single)",
 
   "plan_gen.mermaid_generated": "Mermaid diagram generated for flow: {flow}",
+  "plan_gen.chunk_progress_saved": "Chunk progress saved ({phase}): {completed} chunks so far",
 
   "review.manual_edit_hint": "Tip: to manually edit the plan, modify {path} then press y to approve",
   "review.reloaded_from_disk": "Reloaded plan from disk ({path}), including manual edits",
@@ -226,6 +227,9 @@
   "batch_controller.plugin_retry": "Plugin '{name}' retry {attempt}/{max}",
   "batch_controller.resume_partial": "Resuming {sub_type}: {completed}/{total} already processed, {remaining} remaining",
   "batch_controller.batch_progress": "Batch {batch}/{total_batches} ({sub_type}): {completed}/{total_items} processed",
+  "batch_controller.skeleton_batch_progress": "Skeleton batch {batch}/{total_batches} ({sub_type}): {completed}/{total_items} generated",
+  "batch_controller.skeleton_resume_single": "Resuming single skeleton gen: {completed}/{total} already generated",
+  "batch_controller.skeleton_resume_biz": "Resuming biz skeleton gen: {completed}/{total} already generated",
   "skel_gen.generating_single_batches": "Generating {count} single case skeletons in {batches} batches (batch_size={size})...",
   "skel_gen.generating_biz_batches": "Generating biz flow skeletons in {batches} batches (batch_size={size})...",
   "skel_gen.batch_progress": "Generated {count} {label}",

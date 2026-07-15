@@ -21,6 +21,7 @@ def _make_settings(**kwargs):
     s.max_steps_no_progress = kwargs.get("max_steps_no_progress", 10)
     s.url_doc_match_max_retries = kwargs.get("url_doc_match_max_retries", 3)
     s.consecutive_batch_failure_limit = kwargs.get("consecutive_batch_failure_limit", 3)
+    s.skeleton_batch_size = kwargs.get("skeleton_batch_size", 10)
     s.llm_rate_limit_delay = kwargs.get("llm_rate_limit_delay", 0.0)
     return s
 
@@ -38,6 +39,22 @@ def _make_mock_plugin(name="test_plugin", applies_single=True, applies_biz=True,
     )
     type(plugin).declaration = decl
     return plugin
+
+
+def _setup_mock_skel_gen(mock_gen, plan, return_skeletons, batch_size=10):
+    """为 mock 骨架生成器设置 iter_batches + generate_batch。
+    Set up mock skeleton generator with iter_batches + generate_batch.
+
+    用于适配新的逐批 checkpoint API / For adapting tests to new per-batch checkpoint API.
+    """
+    mock_gen._skeleton_batch_size = batch_size
+    if isinstance(return_skeletons, list) and return_skeletons:
+        mock_gen.iter_batches = MagicMock(return_value=iter([
+            ({}, len(return_skeletons), 1, 1),
+        ]))
+        mock_gen.generate_batch = MagicMock(return_value=return_skeletons)
+    else:
+        mock_gen.iter_batches = MagicMock(return_value=iter([]))
 
 
 def _make_mock_plan(single_count=2, biz_count=1):
@@ -74,9 +91,9 @@ class TestBatchControllerRun:
         plan.biz_flow_scenarios = []
 
         mock_single_gen = MagicMock()
-        mock_single_gen.generate.return_value = [{"test_id": "t1", "url": "/api/test"}]
+        _setup_mock_skel_gen(mock_single_gen, plan, [{"test_id": "t1", "url": "/api/test"}])
         mock_biz_gen = MagicMock()
-        mock_biz_gen.generate.return_value = []
+        _setup_mock_skel_gen(mock_biz_gen, plan, [])
 
         plugin = _make_mock_plugin(name="data_filling", applies_biz=False)
         plugin.generate.return_value = [{"test_id": "t1", "url": "/api/test", "filled": True}]
@@ -106,7 +123,7 @@ class TestBatchControllerRun:
         plan.biz_flow_scenarios = []
 
         mock_single_gen = MagicMock()
-        mock_single_gen.generate.return_value = [{"test_id": "t1", "url": "/api/test"}]
+        _setup_mock_skel_gen(mock_single_gen, plan, [{"test_id": "t1", "url": "/api/test"}])
         mock_biz_gen = MagicMock()
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -120,7 +137,7 @@ class TestBatchControllerRun:
                 api_doc_text="",
             )
 
-        mock_biz_gen.generate.assert_not_called()
+        mock_biz_gen.generate_batch.assert_not_called()
         assert len(result["biz_flows"]) == 0
 
     def should_start_from_scratch_when_no_checkpoint(self):
@@ -132,7 +149,7 @@ class TestBatchControllerRun:
         plan.biz_flow_scenarios = []
 
         mock_single_gen = MagicMock()
-        mock_single_gen.generate.return_value = [{"test_id": "t1", "url": "/api/test"}]
+        _setup_mock_skel_gen(mock_single_gen, plan, [{"test_id": "t1", "url": "/api/test"}])
         mock_biz_gen = MagicMock()
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -148,7 +165,7 @@ class TestBatchControllerRun:
                 api_doc_text="",
             )
 
-        mock_single_gen.generate.assert_called_once()
+        mock_single_gen.generate_batch.assert_called_once()
         assert len(result["single_cases"]) == 1
 
 
@@ -373,9 +390,9 @@ class TestUrlFailureAction:
         plan.biz_flow_scenarios = []
 
         mock_single_gen = MagicMock()
-        mock_single_gen.generate.return_value = [{"test_id": "t1", "url": "/not/found"}]
+        _setup_mock_skel_gen(mock_single_gen, plan, [{"test_id": "t1", "url": "/not/found"}])
         mock_biz_gen = MagicMock()
-        mock_biz_gen.generate.return_value = []
+        _setup_mock_skel_gen(mock_biz_gen, plan, [])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             result = controller.run(
@@ -405,9 +422,9 @@ class TestUrlFailureAction:
         plan.biz_flow_scenarios = []
 
         mock_single_gen = MagicMock()
-        mock_single_gen.generate.return_value = [{"test_id": "t1", "url": "/not/found"}]
+        _setup_mock_skel_gen(mock_single_gen, plan, [{"test_id": "t1", "url": "/not/found"}])
         mock_biz_gen = MagicMock()
-        mock_biz_gen.generate.return_value = []
+        _setup_mock_skel_gen(mock_biz_gen, plan, [])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             result = controller.run(
@@ -438,9 +455,9 @@ class TestUrlFailureAction:
         plan.biz_flow_scenarios = []
 
         mock_single_gen = MagicMock()
-        mock_single_gen.generate.return_value = [{"test_id": "t1", "url": "/not/found"}]
+        _setup_mock_skel_gen(mock_single_gen, plan, [{"test_id": "t1", "url": "/not/found"}])
         mock_biz_gen = MagicMock()
-        mock_biz_gen.generate.return_value = []
+        _setup_mock_skel_gen(mock_biz_gen, plan, [])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             result = controller.run(
@@ -766,3 +783,354 @@ class TestBatchResumeProgress:
             meta = ckpt_mgr.load_meta()
             completed = meta["phase_progress"]["plugin_data_filling"]["single"]["completed_count"]
             assert completed >= 2
+
+
+# ---------------------------------------------------------------------------
+# TestSkeletonPhaseResumeProgress — 骨架阶段逐批 checkpoint 测试
+# ---------------------------------------------------------------------------
+
+def _mock_single_skel_gen(batch_results=None):
+    """创建 mock 单接口骨架生成器 / Create mock single skeleton generator."""
+    gen = MagicMock()
+    gen._skeleton_batch_size = 10
+    if batch_results is None:
+        batch_results = [[{"test_id": f"sk_{i}"} for i in range(10)]]
+    # 模拟 iter_batches: yield 一个 batch
+    # Mock iter_batches: yield one batch
+    return gen
+
+
+def _mock_biz_skel_gen(batch_results=None):
+    """创建 mock 业务链路骨架生成器 / Create mock biz skeleton generator."""
+    gen = MagicMock()
+    gen._skeleton_batch_size = 10
+    return gen
+
+
+def _mock_plan_with_single_points(api_points: dict):
+    """创建带 single_test_points 的 mock plan / Mock plan with single_test_points."""
+    plan = MagicMock()
+    plan.business_summary = "Test"
+
+    class _Pt:
+        def __init__(self, tag, tid, desc, stype):
+            self.tag = tag
+            self.test_id = tid
+            self.description = desc
+            self.scenario_type = stype
+
+    sp = {}
+    for api_id, count in api_points.items():
+        sp[api_id] = [_Pt("P0", f"{api_id}_{i}", f"desc {i}", "positive") for i in range(count)]
+    plan.single_test_points = sp
+    plan.biz_flow_scenarios = []
+    return plan
+
+
+def _mock_plan_with_biz_scenarios(count: int):
+    """创建带 biz_flow_scenarios 的 mock plan / Mock plan with biz_flow_scenarios."""
+    plan = MagicMock()
+    plan.business_summary = "Test"
+    plan.single_test_points = {}
+    plan.biz_flow_scenarios = [
+        {"name": f"flow_{i}", "description": f"desc_{i}", "involved_apis": []}
+        for i in range(count)
+    ]
+    return plan
+
+
+class TestSkeletonPhaseResumeProgress:
+    """验证骨架阶段逐批保存 checkpoint 和 resume / Verify skeleton phase per-batch checkpoint & resume."""
+
+    def should_save_checkpoint_after_each_single_batch(self):
+        """25 点 batch_size=10 (3 批) → _save_checkpoint 被调用 ≥3 次。
+        25 points batch_size=10 (3 batches) → _save_checkpoint called ≥3 times."""
+        settings = _make_settings(skeleton_batch_size=10)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+
+            plan = _mock_plan_with_single_points({"api_a": 25})
+
+            # Mock 骨架生成器 / Mock skeleton generators
+            single_gen = MagicMock()
+            single_gen._skeleton_batch_size = 10
+            # iter_batches → 3 batches (10+10+5)
+            single_gen.iter_batches = MagicMock(return_value=iter([
+                ({"api_a": plan.single_test_points["api_a"][:10]}, 10, 1, 3),
+                ({"api_a": plan.single_test_points["api_a"][10:20]}, 10, 2, 3),
+                ({"api_a": plan.single_test_points["api_a"][20:]}, 5, 3, 3),
+            ]))
+            single_gen.generate_batch = MagicMock(side_effect=lambda *args, **kw: [
+                {"test_id": f"sk_{i}"} for i in range(kw.get("batch_idx", 1) * 10 if "batch_idx" not in str(args) else 10)
+            ])
+            # Fix the side_effect to match batch_expected
+            call_idx = [0]
+
+            def gen_side_effect(batch_grouped, plan, iface_dicts, api_summary,
+                                user_guidance, batch_idx, total_batches):
+                count = sum(len(pts) for pts in batch_grouped.values())
+                return [{"test_id": f"sk_{call_idx[0]}_{j}", "url": "/api/test"} for j in range(count)]
+
+            single_gen.generate_batch = MagicMock(side_effect=gen_side_effect)
+
+            biz_gen = MagicMock()
+            biz_gen._skeleton_batch_size = 10
+            biz_gen.iter_batches = MagicMock(return_value=iter([]))
+
+            # 重写 _save_checkpoint 用来计数 / Override _save_checkpoint for counting
+            original_save = controller._save_checkpoint
+            save_count = [0]
+
+            def counting_save(*args, **kwargs):
+                save_count[0] += 1
+                return original_save(*args, **kwargs)
+
+            controller._save_checkpoint = counting_save
+
+            controller._run_skeleton_phase(
+                plan, [], "", None, single_gen, biz_gen, "", "single",
+                str(tmpdir), [], ckpt_mgr, ["skeletons_generated", "plugin_x"],
+            )
+
+            # 3 批 + 完成后 2 次确认（single done + phase done）= ≥5
+            # 3 batches + 2 confirmations (single done + phase done) = ≥5
+            assert save_count[0] >= 3
+
+    def should_resume_single_from_completed_count(self):
+        """预置 checkpoint completed_count=10 → resume 跳过前 10 个。
+        Pre-set checkpoint completed_count=10 → first 10 skipped on resume."""
+        settings = _make_settings(skeleton_batch_size=10)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+
+            # 预置 checkpoint：已完成 10 个 / Pre-set checkpoint: 10 completed
+            controller._phase_progress = {
+                "skeletons_generated": {
+                    "status": "in_progress",
+                    "single": {"status": "in_progress", "total_items": 25,
+                               "completed_count": 10, "batch_size": 10},
+                },
+            }
+            ckpt_mgr.save_data("skeletons_generated", {
+                "single_cases": [{"test_id": f"existing_{i}", "url": "/api/test"} for i in range(10)],
+                "biz_cases": [],
+                "failures": [],
+            })
+            ckpt_mgr.save_meta("skeletons_generated", controller._collect_settings(),
+                               str(tmpdir), phases=["skeletons_generated", "plugin_x"],
+                               phase_progress=controller._phase_progress,
+                               phase_status="in_progress")
+
+            # Reload to ensure proper state
+            meta = ckpt_mgr.load_meta()
+            data = ckpt_mgr.load_data()
+            existing_single = data["single_cases"]
+
+            plan = _mock_plan_with_single_points({"api_a": 25})
+            single_gen = MagicMock()
+            single_gen._skeleton_batch_size = 10
+            single_gen.iter_batches = MagicMock(return_value=iter([
+                ({"api_a": plan.single_test_points["api_a"][:10]}, 10, 1, 3),
+                ({"api_a": plan.single_test_points["api_a"][10:20]}, 10, 2, 3),
+                ({"api_a": plan.single_test_points["api_a"][20:]}, 5, 3, 3),
+            ]))
+            # 批次 1 应被跳过（batch_start=0 < completed=10），只调用批次 2、3
+            # Batch 1 should be skipped; only batches 2 and 3 called
+            gen_calls = []
+
+            def gen_side_effect(batch_grouped, *args, **kwargs):
+                count = sum(len(pts) for pts in batch_grouped.values())
+                gen_calls.append(kwargs.get("batch_idx", 0))
+                return [{"test_id": f"new_{len(gen_calls)}_{j}", "url": "/api/test"} for j in range(count)]
+
+            single_gen.generate_batch = MagicMock(side_effect=gen_side_effect)
+
+            biz_gen = MagicMock()
+            biz_gen._skeleton_batch_size = 10
+            biz_gen.iter_batches = MagicMock(return_value=iter([]))
+
+            single_cases, biz_cases, failures = controller._run_skeleton_phase(
+                plan, [], "", None, single_gen, biz_gen, "", "single",
+                str(tmpdir), [], ckpt_mgr, ["skeletons_generated", "plugin_x"],
+                existing_single_cases=existing_single,
+            )
+
+            # 批次 1 被跳过，只调用了批次 2、3 / Batch 1 skipped, only 2 and 3 called
+            assert single_gen.generate_batch.call_count == 2
+            # 结果 = 已有 10 + 新生成 15 = 25 / Result = 10 existing + 15 new = 25
+            assert len(single_cases) == 25
+
+    def should_skip_completed_single_substep(self):
+        """single completed, biz pending → 跳过 single 进入 biz。
+        Single completed, biz pending → skips single, enters biz."""
+        settings = _make_settings(skeleton_batch_size=10)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+
+            controller._phase_progress = {
+                "skeletons_generated": {
+                    "status": "in_progress",
+                    "single": {"status": "completed", "total_items": 10,
+                               "completed_count": 10, "batch_size": 10},
+                },
+            }
+
+            plan = _mock_plan_with_biz_scenarios(5)
+            plan.single_test_points = {"api_a": [MagicMock() for _ in range(10)]}
+            for p in plan.single_test_points["api_a"]:
+                p.tag = "P0"
+                p.test_id = "t"
+                p.description = "d"
+                p.scenario_type = "positive"
+
+            single_gen = MagicMock()
+            single_gen._skeleton_batch_size = 10
+            single_gen.iter_batches = MagicMock(return_value=iter([]))
+            single_gen.generate_batch = MagicMock()
+
+            biz_gen = MagicMock()
+            biz_gen._skeleton_batch_size = 10
+            biz_gen.iter_batches = MagicMock(return_value=iter([
+                (plan.biz_flow_scenarios, 5, 1, 1),
+            ]))
+            biz_gen.generate_batch = MagicMock(return_value=[
+                {"name": f"flow_{i}", "steps": [{"url": "/api/test"}]} for i in range(5)
+            ])
+
+            single_cases, biz_cases, failures = controller._run_skeleton_phase(
+                plan, [], "/api/test", None, single_gen, biz_gen, "", "both",
+                str(tmpdir), [], ckpt_mgr, ["skeletons_generated", "plugin_x"],
+                existing_single_cases=[{"test_id": f"existing_{i}", "url": "/api/test"} for i in range(10)],
+            )
+
+            # single 生成器不应被调用 / Single generator should not be called
+            single_gen.generate_batch.assert_not_called()
+            # biz 生成器应被调用 / Biz generator should be called
+            assert biz_gen.generate_batch.call_count >= 1
+
+    def should_skip_full_skeleton_phase_when_phase_completed(self):
+        """phase_status=completed → 完全跳过骨架阶段。
+        Phase status=completed → skeleton phase fully skipped."""
+        settings = _make_settings(skeleton_batch_size=10)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+
+            controller._phase_progress = {
+                "skeletons_generated": {"status": "completed"},
+            }
+
+            plan = _mock_plan_with_single_points({"api_a": 5})
+            single_gen = MagicMock()
+            single_gen._skeleton_batch_size = 10
+            single_gen.iter_batches = MagicMock(return_value=iter([]))
+            single_gen.generate_batch = MagicMock()
+            biz_gen = MagicMock()
+            biz_gen._skeleton_batch_size = 10
+            biz_gen.iter_batches = MagicMock(return_value=iter([]))
+            biz_gen.generate_batch = MagicMock()
+
+            single_cases, biz_cases, failures = controller._run_skeleton_phase(
+                plan, [], "", None, single_gen, biz_gen, "", "single",
+                str(tmpdir), [], ckpt_mgr, ["skeletons_generated", "plugin_x"],
+                existing_single_cases=[{"test_id": "existing", "url": "/api/test"}],
+            )
+
+            # 生成器不应被调用 / Generators should not be called (sub-steps skipped)
+            single_gen.generate_batch.assert_not_called()
+
+    def should_handle_zero_test_points(self):
+        """无测试点时正常完成 / Handles zero test points gracefully."""
+        settings = _make_settings(skeleton_batch_size=10)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+
+            plan = MagicMock()
+            plan.business_summary = "Test"
+            plan.single_test_points = {}
+            plan.biz_flow_scenarios = []
+
+            single_gen = MagicMock()
+            single_gen._skeleton_batch_size = 10
+            single_gen.iter_batches = MagicMock(return_value=iter([]))
+            biz_gen = MagicMock()
+            biz_gen._skeleton_batch_size = 10
+            biz_gen.iter_batches = MagicMock(return_value=iter([]))
+
+            single_cases, biz_cases, failures = controller._run_skeleton_phase(
+                plan, [], "", None, single_gen, biz_gen, "", "both",
+                str(tmpdir), [], ckpt_mgr, ["skeletons_generated", "plugin_x"],
+            )
+
+            assert single_cases == []
+            assert biz_cases == []
+            # 阶段应标记为 completed / Phase should be marked completed
+            assert controller._phase_progress["skeletons_generated"]["status"] == "completed"
+
+    def should_use_checkpoint_skeleton_batch_size(self):
+        """checkpoint 中的 skeleton_batch_size 优先于 env.yaml。
+        Checkpoint skeleton_batch_size overrides env.yaml value."""
+        settings = _make_settings(skeleton_batch_size=30)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+
+            # 预置 checkpoint settings 中 skeleton_batch_size=5 / Pre-set: skeleton_batch_size=5
+            controller._phase_progress = {}
+            controller._skeleton_batch_size = 5
+            ckpt_mgr.save_meta("skeletons_generated", controller._collect_settings(),
+                               str(tmpdir), phases=["skeletons_generated", "plugin_x"],
+                               phase_progress=controller._phase_progress,
+                               phase_status="in_progress")
+
+            meta = ckpt_mgr.load_meta()
+            controller._restore_from_checkpoint(ckpt_mgr, meta)
+            # 应恢复为 5 而非 env.yaml 的 30 / Should restore to 5, not 30
+            assert controller._skeleton_batch_size == 5
+
+    def should_log_batch_progress_after_each_save(self):
+        """验证骨架批次进度日志 / Verify skeleton batch progress logging."""
+        settings = _make_settings(skeleton_batch_size=10)
+        controller = BatchController(settings)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = str(Path(tmpdir) / "memory")
+            ckpt_mgr = CheckpointManager(memory_dir)
+
+            plan = _mock_plan_with_single_points({"api_a": 5})
+            single_gen = MagicMock()
+            single_gen._skeleton_batch_size = 10
+            single_gen.iter_batches = MagicMock(return_value=iter([
+                ({"api_a": plan.single_test_points["api_a"]}, 5, 1, 1),
+            ]))
+            single_gen.generate_batch = MagicMock(return_value=[
+                {"test_id": f"sk_{i}", "url": "/api/test"} for i in range(5)
+            ])
+            biz_gen = MagicMock()
+            biz_gen._skeleton_batch_size = 10
+            biz_gen.iter_batches = MagicMock(return_value=iter([]))
+
+            with patch("agents.batch_controller.logger") as mock_logger:
+                controller._run_skeleton_phase(
+                    plan, [], "", None, single_gen, biz_gen, "", "single",
+                    str(tmpdir), [], ckpt_mgr, ["skeletons_generated", "plugin_x"],
+                )
+
+                # 验证骨架批次进度的 info 日志被调用 / Verify skeleton batch progress logged
+                assert mock_logger.info.call_count > 0

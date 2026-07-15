@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from plugins.base import CaseAttributeGenerator
 
+from agents.skeleton_generator import _normalize_interfaces
 from config.settings import Settings, get_strategy, get_url_failure_action
 from flow_forge_schemas import URL_NOT_EXIST_PREFIX
 from i18n import _
@@ -44,6 +45,7 @@ class BatchController:
         self._consecutive_failure_limit = getattr(
             settings, "consecutive_batch_failure_limit", 3
         )
+        self._skeleton_batch_size = getattr(settings, "skeleton_batch_size", 30)
         self._rate_limit_delay = getattr(settings, "llm_rate_limit_delay", 0.0)
         # 校验规则列表 / Validation rules list
         self._case_gen_validation = getattr(settings, "case_gen_validation", [])
@@ -115,7 +117,8 @@ class BatchController:
             single_cases, biz_cases, all_failures = self._run_skeleton_phase(
                 plan, interfaces, api_doc_text, api_summary,
                 single_skel_gen, biz_skel_gen, user_guidance, case_type,
-                output_dir, all_failures, ckpt_mgr, phases)
+                output_dir, all_failures, ckpt_mgr, phases,
+                existing_single_cases=single_cases, existing_biz_cases=biz_cases)
         else:
             logger.info(_("batch_controller.step_skeleton_skipped"))
 
@@ -146,38 +149,155 @@ class BatchController:
         all_failures: List[Dict],
         ckpt_mgr: Any,
         phases: List[str],
+        existing_single_cases: List[Dict] = None,
+        existing_biz_cases: List[Dict] = None,
     ) -> Tuple[List[Dict], List[Dict], List[Dict]]:
         """步骤1：骨架生成 + URL 校验 + 纠正 / Step 1: Skeleton generation + URL check + correction.
 
+        支持子步骤级逐批 checkpoint：每个 batch 完成后保存进度，
+        resume 时跳过已完成批次从断点继续。
+        Supports sub-step-level per-batch checkpointing: saves progress
+        after each batch, resumes from interruption point.
+
         Returns (single_cases, biz_cases, all_failures).
         """
-        # 1a. 单接口用例骨架 / Single case skeletons
+        # 初始化阶段进度 / Initialize phase progress
+        self._phase_progress.setdefault(_SKELETON_PHASE, {"status": "in_progress"})
+
+        # 同步 skeleton_batch_size 到生成器（resume 时 checkpoint 恢复的值优先）
+        # Sync skeleton_batch_size to generators (checkpoint-restored value takes priority)
+        single_skel_gen._skeleton_batch_size = self._skeleton_batch_size
+        biz_skel_gen._skeleton_batch_size = self._skeleton_batch_size
+
+        # 规范化接口（一次，复用）/ Normalize interfaces once, reuse
+        iface_dicts = _normalize_interfaces(interfaces)
+
+        batch_size = self._skeleton_batch_size
+
+        # ==================================================================
+        # SINGLE 子步骤 / Single sub-step
+        # ==================================================================
         if case_type in ("both", "single"):
-            logger.info(_("batch_controller.skeleton_generating_single"))
-            single_skels = single_skel_gen.generate(
-                plan, interfaces, api_summary, user_guidance
-            )
-            logger.info(_("batch_controller.skeleton_generated_single", count=len(single_skels)))
+            sub = self._phase_progress[_SKELETON_PHASE].setdefault("single", {})
+            # 计算预期总数 / Calculate expected total
+            total = 0
+            if hasattr(plan, "single_test_points") and plan.single_test_points:
+                for points in plan.single_test_points.values():
+                    total += len(points)
+            sub.setdefault("total_items", total)
+            completed = sub.get("completed_count", 0)
+
+            if sub.get("status") != "completed":
+                # 从 checkpoint 数据恢复已生成的骨架 / Restore existing skeletons from checkpoint data
+                single_skels = list(existing_single_cases) if existing_single_cases else []
+
+                for batch_data, batch_expected, batch_idx, total_batches \
+                        in single_skel_gen.iter_batches(plan):
+                    batch_start = (batch_idx - 1) * max(batch_size, 1)
+                    if batch_start < completed:
+                        continue  # 跳过已完成批次 / Skip completed batch
+
+                    skeletons = single_skel_gen.generate_batch(
+                        batch_data, plan, iface_dicts, api_summary, user_guidance,
+                        batch_idx, total_batches,
+                    )
+                    single_skels.extend(skeletons)
+                    completed += batch_expected
+
+                    # 更新进度并保存 checkpoint / Update progress and save checkpoint
+                    sub.update({
+                        "status": "in_progress" if completed < total else "completed",
+                        "completed_count": completed,
+                        "batch_size": batch_size,
+                        "total_items": total,
+                    })
+                    self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE,
+                                          single_skels, existing_biz_cases or [],
+                                          all_failures, output_dir, phases=phases,
+                                          phase_status="in_progress")
+                    logger.info(
+                        _("batch_controller.skeleton_batch_progress",
+                          batch=batch_idx, total_batches=total_batches,
+                          sub_type="single", completed=completed,
+                          total_items=total))
+
+                # 标记 single 子步骤完成 / Mark single sub-step completed
+                sub["status"] = "completed"
+                self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE,
+                                      single_skels, existing_biz_cases or [],
+                                      all_failures, output_dir, phases=phases,
+                                      phase_status="in_progress")
+            else:
+                single_skels = existing_single_cases or []
+                logger.info(_("batch_controller.skeleton_resume_single",
+                            completed=completed, total=total))
         else:
             logger.info(_("batch_controller.skeleton_skip_single_case_type", case_type=case_type))
             single_skels = []
 
-        # 1b. 业务链路骨架 / Biz flow skeletons
+        # ==================================================================
+        # BIZ 子步骤 / Biz sub-step
+        # ==================================================================
         if case_type in ("both", "biz"):
-            logger.info(_("batch_controller.skeleton_generating_biz"))
-            biz_skels = []
-            if hasattr(plan, "biz_flow_scenarios") and plan.biz_flow_scenarios:
-                biz_skels = biz_skel_gen.generate(
-                    plan, interfaces, api_summary, user_guidance
-                )
-                logger.info(_("batch_controller.skeleton_generated_biz", count=len(biz_skels)))
+            sub = self._phase_progress[_SKELETON_PHASE].setdefault("biz", {})
+            total = len(plan.biz_flow_scenarios) if (
+                hasattr(plan, "biz_flow_scenarios") and plan.biz_flow_scenarios
+            ) else 0
+            sub.setdefault("total_items", total)
+            completed = sub.get("completed_count", 0)
+
+            if sub.get("status") != "completed" and total > 0:
+                biz_skels = list(existing_biz_cases) if existing_biz_cases else []
+
+                for batch_scenarios, batch_expected, batch_idx, total_batches \
+                        in biz_skel_gen.iter_batches(plan):
+                    batch_start = (batch_idx - 1) * max(batch_size, 1)
+                    if batch_start < completed:
+                        continue
+
+                    skeletons = biz_skel_gen.generate_batch(
+                        batch_scenarios, plan, iface_dicts, api_summary, user_guidance,
+                        batch_idx, total_batches,
+                    )
+                    biz_skels.extend(skeletons)
+                    completed += batch_expected
+
+                    sub.update({
+                        "status": "in_progress" if completed < total else "completed",
+                        "completed_count": completed,
+                        "batch_size": batch_size,
+                        "total_items": total,
+                    })
+                    self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE,
+                                          single_skels, biz_skels,
+                                          all_failures, output_dir, phases=phases,
+                                          phase_status="in_progress")
+                    logger.info(
+                        _("batch_controller.skeleton_batch_progress",
+                          batch=batch_idx, total_batches=total_batches,
+                          sub_type="biz", completed=completed,
+                          total_items=total))
+
+                sub["status"] = "completed"
+                self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE,
+                                      single_skels, biz_skels,
+                                      all_failures, output_dir, phases=phases,
+                                      phase_status="in_progress")
+            elif sub.get("status") == "completed":
+                biz_skels = existing_biz_cases or []
+                logger.info(_("batch_controller.skeleton_resume_biz",
+                            completed=completed, total=total))
             else:
-                logger.info(_("batch_controller.skeleton_skip_biz"))
+                biz_skels = []
         else:
             logger.info(_("batch_controller.skeleton_skip_biz_case_type", case_type=case_type))
             biz_skels = []
 
-        # 1c. URL 校验 + 纠正 / URL check + correction
+        # ==================================================================
+        # URL 校验 + 纠正 / URL check + correction
+        # resume 时重跑无副作用（纯字符串匹配，非 LLM 调用）
+        # Re-running on resume is harmless (string matching only, no LLM call)
+        # ==================================================================
         single_cases, single_failed = self._url_check_and_correct(
             single_skels, interfaces, api_doc_text, api_summary,
             single_skel_gen, "single"
@@ -196,7 +316,7 @@ class BatchController:
                 single_failed, biz_failed, output_dir, all_failures)
 
         # 标记骨架阶段完成 / Mark skeleton phase as completed
-        self._phase_progress[_SKELETON_PHASE] = {"status": "completed"}
+        self._phase_progress[_SKELETON_PHASE]["status"] = "completed"
         self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE, single_cases, biz_cases,
                               all_failures, output_dir, phases=phases,
                               phase_status="completed")
@@ -678,6 +798,8 @@ class BatchController:
         ckpt_settings = meta.get("settings", {})
         if ckpt_settings:
             self._batch_size = ckpt_settings.get("batch_size", self._batch_size)
+            self._skeleton_batch_size = ckpt_settings.get(
+                "skeleton_batch_size", self._skeleton_batch_size)
             self._case_format_enabled = ckpt_settings.get(
                 "case_format_enabled", self._case_format_enabled)
             self._case_format_max_retries = ckpt_settings.get(
@@ -777,6 +899,7 @@ class BatchController:
     def _collect_settings(self) -> Dict[str, Any]:
         return {
             "batch_size": self._batch_size,
+            "skeleton_batch_size": self._skeleton_batch_size,
             "case_format_enabled": self._case_format_enabled,
             "case_format_max_retries": self._case_format_max_retries,
             "url_doc_match_max_retries": self._url_doc_match_max_retries,

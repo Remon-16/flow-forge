@@ -104,6 +104,93 @@ python main.py --resume --output output_20240101_120000 --auto
 
 ---
 
+## Checkpoint System & Manual Editing
+
+### Two-Layer Checkpoint Architecture
+
+Flow Forge uses a two-layer checkpoint mechanism for precise recovery after interruption:
+
+| Layer | File | Purpose |
+|-------|------|---------|
+| **Pipeline layer (Layer 1)** | `memory/pipeline_state.json` | Tracks the current LangGraph node; determines which node to resume from |
+| **Batch layer (Layer 2)** | `memory/checkpoint.json` + `memory/checkpoint_data.json` | Tracks per-batch progress inside the `batch_controller` node; resume continues from the interruption point instead of restarting |
+
+### `memory/` Files Overview
+
+All files reside in the `memory/` subdirectory under the output directory:
+
+| File | Purpose | Manually Editable |
+|------|---------|:---:|
+| `pipeline_state.json` | Pipeline node progress (`completed_stage` + `stages` list) | ✅ |
+| `checkpoint.json` | Batch metadata: `phase`, `phase_status`, `phase_progress`, `settings` | ✅ |
+| `checkpoint_data.json` | Case data (`single_cases`, `biz_cases`, `failures`) | ❌ Machine-maintained |
+| `run_config.json` | CLI args / config snapshot from first run | ✅ (affects unexecuted stages only) |
+| `plan_chunks_progress.json` | Plan generation chunk-by-chunk progress | ❌ Machine-maintained |
+| `plan_outline.json` / `plan_parsed.json` etc. | Intermediate artifacts from pipeline nodes | ❌ Machine-maintained |
+
+### Manual Editing Examples
+
+#### 1. Adjusting batch_size
+
+Edit `settings.batch_size` in `memory/checkpoint.json`:
+
+```json
+{
+  "settings": {
+    "batch_size": 5
+  }
+}
+```
+
+On resume, `_restore_from_checkpoint()` reads this value; all subsequent batches use the new size. The plugin execution batch size and skeleton generation batch size (`skeleton_batch_size`) are stored separately in `settings`.
+
+#### 2. Force re-running a phase
+
+`phase_progress` in `checkpoint.json` tracks the completion status of each phase/sub-step. For example, to re-run the single skeleton sub-step, set its status to `"in_progress"` and reset `completed_count`:
+
+```json
+{
+  "phase_progress": {
+    "skeletons_generated": {
+      "status": "in_progress",
+      "single": {"status": "in_progress", "total_items": 100, "completed_count": 0}
+    }
+  }
+}
+```
+
+You can also set `phase_status` to `"in_progress"` and set `phase` to the target phase name to resume from that phase.
+
+#### 3. Skipping a sub-step
+
+Set the sub-step `status` to `"completed"` with `completed_count = total_items`:
+
+```json
+{
+  "phase_progress": {
+    "plugin_data_filling": {
+      "status": "in_progress",
+      "single": {"status": "completed", "total_items": 100, "completed_count": 100}
+    }
+  }
+}
+```
+
+On resume, this sub-step will be skipped and execution proceeds to the next sub-step.
+
+#### 4. Force re-running a pipeline node
+
+Edit `completed_stage` in `pipeline_state.json` to the name of the previous node, or delete the artifact file for nodes you want to re-run.
+
+### ⚠️ Important Notes
+
+- **Do not** manually edit `checkpoint_data.json` — data integrity depends on internal logic; incorrect edits may corrupt data
+- Incorrect edits to `checkpoint.json` may cause resume to skip phases or restart from the beginning
+- Emergency recovery: delete `checkpoint.json` + `checkpoint_data.json` to force a clean restart of `batch_controller` (previously completed pipeline nodes are unaffected)
+- Setting `phase` to a value not in the `phases` list will cause a fallback to the first phase
+
+---
+
 ## Knowledge Base
 
 The knowledge base (`knowledge/search.py`) provides grep-based plain-text keyword search — no embedding model or external vector database required. Knowledge is stored as `.md` files under the `knowledge/` directory.

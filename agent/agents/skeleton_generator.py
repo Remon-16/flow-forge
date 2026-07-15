@@ -4,7 +4,8 @@ Skeleton generators: produce test case skeletons for single and biz flow cases.
 
 import json
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+import math
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from .base import BaseAgent
 from config.settings import Settings, get_strategy
@@ -372,58 +373,95 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
         )
 
     # ------------------------------------------------------------------
+    # 批次迭代 + 单批生成（公开方法，供 BatchController 逐批 checkpoint 使用）
+    # Batch iteration + single-batch generation (public API for per-batch checkpoint)
+    # ------------------------------------------------------------------
+
+    def iter_batches(self, plan) -> Iterator[Tuple[Dict, int, int, int]]:
+        """迭代所有骨架批次 / Iterate all skeleton batches.
+
+        Yield (batch_grouped, batch_expected, batch_idx, total_batches):
+        - batch_grouped: {api_id: [PlanStep, ...]} — 本批测试点子集 / subset of test points
+        - batch_expected: 本批预期骨架数 / expected skeleton count for this batch
+        - batch_idx: 1-based 批次索引 / 1-based batch index
+        - total_batches: 总批次数 / total number of batches
+
+        当 plan.single_test_points 为空时，不产生任何 yield。
+        skeleton_batch_size < 1 时视为一整批。
+        Yields nothing when plan.single_test_points is empty.
+        Treats skeleton_batch_size < 1 as a single batch.
+        """
+        all_points: List[Tuple[str, Any]] = []
+        if hasattr(plan, "single_test_points") and plan.single_test_points:
+            for api_id, points in plan.single_test_points.items():
+                for p in points:
+                    all_points.append((api_id, p))
+        total = len(all_points)
+        if total == 0:
+            return
+        batch_size = self._skeleton_batch_size
+        if batch_size < 1:
+            batch_size = total
+        total_batches = math.ceil(total / batch_size)
+        for i in range(0, total, batch_size):
+            batch_points = all_points[i:i + batch_size]
+            grouped: Dict[str, List] = {}
+            for api_id, p in batch_points:
+                grouped.setdefault(api_id, []).append(p)
+            yield grouped, len(batch_points), i // batch_size + 1, total_batches
+
+    def generate_batch(
+        self,
+        batch_grouped: Dict,
+        plan,
+        iface_dicts: List[Dict],
+        api_summary,
+        user_guidance: str,
+        batch_idx: int,
+        total_batches: int,
+    ) -> List[Dict]:
+        """为单批生成骨架 / Generate skeletons for a single batch.
+
+        从 _generate_multi_batch 的循环体提取，供外部逐批调用。
+        Extracted from _generate_multi_batch loop body for external per-batch use.
+        """
+        batch_plan_str = _serialize_partial_single(batch_grouped, plan)
+        batch_expected = sum(len(pts) for pts in batch_grouped.values())
+
+        batch_prompt = self._build_prompt(
+            batch_plan_str, iface_dicts, api_summary, user_guidance,
+            SINGLE_SKELETON_USER, SINGLE_SKELETON_SYSTEM,
+            batch_notice=f"[Batch {batch_idx}/{total_batches}] ",
+        )
+        return _count_validate(
+            self, batch_prompt,
+            render_prompt(SINGLE_SKELETON_SYSTEM, language=get_language_name()),
+            "single_skeletons", batch_expected,
+            f"single batch {batch_idx}/{total_batches}",
+            get_strategy(self._case_gen_validation, "skeleton_count"),
+            max_retries=self._case_format_max_retries,
+        )
+
+    # ------------------------------------------------------------------
     # 分批生成 / Multi-batch generation
     # ------------------------------------------------------------------
 
     def _generate_multi_batch(
         self, plan, iface_dicts, api_summary, user_guidance, expected_count,
     ) -> List[Dict]:
-        """分批生成骨架，每批 ≤ batch_size 个测试点 / Generate skeletons in batches."""
-        # 1. 将所有测试点 flatten 为 (api_id, point) 列表
-        #    Flatten all test points into [(api_id, point), ...]
-        all_points: List[Tuple[str, Any]] = []
-        for api_id, points in plan.single_test_points.items():
-            for p in points:
-                all_points.append((api_id, p))
-
-        # 2. 按 batch_size 切片，每片重新按 api_id 分组
-        #    Slice by batch_size, regroup each slice by api_id
-        batches: List[Dict[str, List]] = []
-        for i in range(0, len(all_points), self._skeleton_batch_size):
-            batch_points = all_points[i:i + self._skeleton_batch_size]
-            grouped: Dict[str, List] = {}
-            for api_id, p in batch_points:
-                grouped.setdefault(api_id, []).append(p)
-            batches.append(grouped)
-
-        logger.info(
-            _("skel_gen.generating_single_batches",
-              count=expected_count, batches=len(batches), size=self._skeleton_batch_size),
-        )
-
-        # 3. 逐批调用 LLM / Call LLM for each batch
+        """分批生成骨架 — 重构为调用 iter_batches() + generate_batch()。
+        Generate skeletons in batches — refactored to call iter_batches() + generate_batch().
+        """
         all_skeletons: List[Dict] = []
-        strategy = get_strategy(self._case_gen_validation, "skeleton_count")
-        for i, batch_grouped in enumerate(batches):
-            batch_expected = sum(len(pts) for pts in batch_grouped.values())
-            label = f"single batch {i+1}/{len(batches)}"
-
-            batch_plan_str = _serialize_partial_single(batch_grouped, plan)
-            batch_prompt = self._build_prompt(
-                batch_plan_str, iface_dicts, api_summary, user_guidance,
-                SINGLE_SKELETON_USER, SINGLE_SKELETON_SYSTEM,
-                batch_notice=f"[Batch {i+1}/{len(batches)}] ",
-            )
-
-            skeletons = _count_validate(
-                self, batch_prompt,
-                render_prompt(SINGLE_SKELETON_SYSTEM, language=get_language_name()),
-                "single_skeletons", batch_expected, label, strategy,
-                max_retries=self._case_format_max_retries,
+        total_batches = 0
+        for batch_grouped, batch_expected, batch_idx, total_batches in self.iter_batches(plan):
+            skeletons = self.generate_batch(
+                batch_grouped, plan, iface_dicts, api_summary, user_guidance,
+                batch_idx, total_batches,
             )
             all_skeletons.extend(skeletons)
 
-        # 4. 最终汇总校验 / Final total count check
+        # 最终汇总校验 / Final total count check
         if len(all_skeletons) != expected_count:
             logger.warning(
                 _("skel_gen.total_count_mismatch",
@@ -432,7 +470,7 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
 
         logger.info(
             _("skel_gen.single_result",
-              count=len(all_skeletons), batches=len(batches)),
+              count=len(all_skeletons), batches=total_batches),
         )
         return all_skeletons
 
@@ -644,44 +682,84 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
         )
 
     # ------------------------------------------------------------------
+    # 批次迭代 + 单批生成（公开方法，供 BatchController 逐批 checkpoint 使用）
+    # Batch iteration + single-batch generation (public API for per-batch checkpoint)
+    # ------------------------------------------------------------------
+
+    def iter_batches(self, plan) -> Iterator[Tuple[List, int, int, int]]:
+        """迭代所有业务链路骨架批次 / Iterate all biz skeleton batches.
+
+        Yield (batch_scenarios, batch_expected, batch_idx, total_batches):
+        - batch_scenarios: 本批场景列表 / list of scenarios for this batch
+        - batch_expected: 本批预期骨架数 / expected skeleton count for this batch
+        - batch_idx: 1-based 批次索引 / 1-based batch index
+        - total_batches: 总批次数 / total number of batches
+
+        当 plan.biz_flow_scenarios 为空时，不产生任何 yield。
+        skeleton_batch_size < 1 时视为一整批。
+        Yields nothing when plan.biz_flow_scenarios is empty.
+        Treats skeleton_batch_size < 1 as a single batch.
+        """
+        scenarios = plan.biz_flow_scenarios if hasattr(plan, "biz_flow_scenarios") else []
+        total = len(scenarios)
+        if total == 0:
+            return
+        batch_size = self._skeleton_batch_size
+        if batch_size < 1:
+            batch_size = total
+        total_batches = math.ceil(total / batch_size)
+        for i in range(0, total, batch_size):
+            batch_scenarios = scenarios[i:i + batch_size]
+            yield batch_scenarios, len(batch_scenarios), i // batch_size + 1, total_batches
+
+    def generate_batch(
+        self,
+        batch_scenarios: List[Dict],
+        plan,
+        iface_dicts: List[Dict],
+        api_summary,
+        user_guidance: str,
+        batch_idx: int,
+        total_batches: int,
+    ) -> List[Dict]:
+        """为单批生成业务链路骨架 / Generate biz skeletons for a single batch.
+
+        从 _generate_multi_batch 的循环体提取，供外部逐批调用。
+        Extracted from _generate_multi_batch loop body for external per-batch use.
+        """
+        batch_plan = _make_partial_biz_plan(plan, batch_scenarios)
+        batch_plan_str = _serialize_plan_biz(batch_plan)
+        batch_prompt = self._build_prompt(
+            batch_plan_str, iface_dicts, api_summary, user_guidance,
+            BIZ_SKELETON_USER, BIZ_SKELETON_SYSTEM,
+            batch_notice=f"[Batch {batch_idx}/{total_batches}] ",
+            knowledge_query="business flow test case",
+        )
+        return _count_validate(
+            self, batch_prompt,
+            render_prompt(BIZ_SKELETON_SYSTEM, language=get_language_name()),
+            "biz_skeletons", len(batch_scenarios),
+            f"biz batch {batch_idx}/{total_batches}",
+            get_strategy(self._case_gen_validation, "skeleton_count"),
+            max_retries=self._case_format_max_retries,
+        )
+
+    # ------------------------------------------------------------------
     # 分批生成 / Multi-batch generation
     # ------------------------------------------------------------------
 
     def _generate_multi_batch(
         self, plan, iface_dicts, api_summary, user_guidance, expected_count,
     ) -> List[Dict]:
-        """分批生成业务链路骨架 / Generate biz skeletons in batches."""
-        scenarios = plan.biz_flow_scenarios
-        total_batches = (len(scenarios) + self._skeleton_batch_size - 1) // self._skeleton_batch_size
-
-        logger.info(
-            _("skel_gen.generating_biz_batches",
-              count=expected_count, batches=total_batches, size=self._skeleton_batch_size),
-        )
-
+        """分批生成业务链路骨架 — 重构为调用 iter_batches() + generate_batch()。
+        Generate biz skeletons in batches — refactored to call iter_batches() + generate_batch().
+        """
         all_skeletons: List[Dict] = []
-        strategy = get_strategy(self._case_gen_validation, "skeleton_count")
-        for i in range(0, len(scenarios), self._skeleton_batch_size):
-            batch_scenarios = scenarios[i:i + self._skeleton_batch_size]
-            batch_idx = i // self._skeleton_batch_size + 1
-            batch_expected = len(batch_scenarios)
-            label = f"biz batch {batch_idx}/{total_batches}"
-
-            # 构造局部 plan / Build partial plan
-            batch_plan = _make_partial_biz_plan(plan, batch_scenarios)
-            batch_plan_str = _serialize_plan_biz(batch_plan)
-            batch_prompt = self._build_prompt(
-                batch_plan_str, iface_dicts, api_summary, user_guidance,
-                BIZ_SKELETON_USER, BIZ_SKELETON_SYSTEM,
-                batch_notice=f"[Batch {batch_idx}/{total_batches}] ",
-                knowledge_query="business flow test case",
-            )
-
-            skeletons = _count_validate(
-                self, batch_prompt,
-                render_prompt(BIZ_SKELETON_SYSTEM, language=get_language_name()),
-                "biz_skeletons", batch_expected, label, strategy,
-                max_retries=self._case_format_max_retries,
+        total_batches = 0
+        for batch_scenarios, batch_expected, batch_idx, total_batches in self.iter_batches(plan):
+            skeletons = self.generate_batch(
+                batch_scenarios, plan, iface_dicts, api_summary, user_guidance,
+                batch_idx, total_batches,
             )
             all_skeletons.extend(skeletons)
 
@@ -694,7 +772,7 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
 
         logger.info(
             _("skel_gen.batch_progress", count=len(all_skeletons),
-              label=f"biz flow skeletons"),
+              label="biz flow skeletons"),
         )
         return all_skeletons
 

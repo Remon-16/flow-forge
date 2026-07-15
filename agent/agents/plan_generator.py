@@ -257,6 +257,8 @@ class PlanGenerator(BaseAgent):
             reference_summary=reference_summary,
             plan_parts=plan_parts,
         )
+        # 保存 chunk 进度（Phase A 完成后）/ Save chunk progress after Phase A
+        self._save_chunk_progress(memory_dir, plan_parts)
 
         # 逐流生成 Mermaid 图 / Per-flow Mermaid generation
         # 仅 both / biz 模式生成 / Only generate for both or biz mode
@@ -270,6 +272,8 @@ class PlanGenerator(BaseAgent):
                     global_context=global_context,
                     plan_parts=plan_parts,
                 )
+                # 保存 chunk 进度（每个 Mermaid flow 后）/ Save after each Mermaid flow
+                self._save_chunk_progress(memory_dir, plan_parts)
             mermaid_chunks = plan_parts.get("mermaid_chunks", {})
 
         # Phase B: 按 API group 生成测试点 section
@@ -282,6 +286,7 @@ class PlanGenerator(BaseAgent):
                 global_context=global_context,
                 user_guidance=user_guidance,
                 plan_parts=plan_parts,
+                memory_dir=memory_dir,
             )
         else:
             logger.info(_("plan_gen.case_type_skip_api_sections"))
@@ -299,6 +304,7 @@ class PlanGenerator(BaseAgent):
                 global_context=global_context,
                 user_guidance=user_guidance,
                 plan_parts=plan_parts,
+                memory_dir=memory_dir,
             )
         else:
             logger.info(_("plan_gen.case_type_skip_biz_sections"))
@@ -338,6 +344,26 @@ class PlanGenerator(BaseAgent):
         )
         return plan_md
 
+
+    # -----------------------------------------------------------------------
+    # Chunk 进度持久化 / Chunk progress persistence
+    # -----------------------------------------------------------------------
+
+    def _save_chunk_progress(self, memory_dir: str, plan_parts: Dict[str, Any]) -> None:
+        """保存 chunk 进度以便 resume / Save chunk progress for resume.
+
+        每个 chunk 完成后调用，确保中断后可从断点恢复。
+        Called after each chunk completes so interrupted runs can resume.
+        """
+        if not memory_dir:
+            return
+        from pathlib import Path
+        progress_path = Path(memory_dir) / "plan_chunks_progress.json"
+        progress_path.parent.mkdir(parents=True, exist_ok=True)
+        progress_path.write_text(
+            json.dumps({"plan_parts": plan_parts}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     # -----------------------------------------------------------------------
     # Phase 私有方法 / Private phase methods
@@ -435,15 +461,19 @@ class PlanGenerator(BaseAgent):
         global_context: str,
         user_guidance: str,
         plan_parts: Dict[str, Any],
+        memory_dir: str = "",
     ) -> Dict[str, str]:
         """Phase B: 按 API group 逐个生成测试点 / Generate API test sections per group.
 
         已完成的 group (resume) 自动跳过。
+        Each completed group is saved to plan_chunks_progress.json for resume.
         """
         api_sections = plan_parts.get("api_sections", {})
         if isinstance(api_sections, str):
             api_sections = json.loads(api_sections)
-        plan_parts.setdefault("api_sections", {})
+            plan_parts["api_sections"] = api_sections
+        if "api_sections" not in plan_parts:
+            plan_parts["api_sections"] = api_sections
 
         for i, group in enumerate(api_groups):
             group_name = group.get("group_name", f"group_{i}")
@@ -481,6 +511,8 @@ class PlanGenerator(BaseAgent):
             self.reset_steps()
             section_md = self.call_llm(prompt, system_with_context)
             api_sections[section_key] = section_md
+            # 保存 chunk 进度（每个 API group 后）/ Save after each API group
+            self._save_chunk_progress(memory_dir, plan_parts)
 
         plan_parts["api_sections"] = api_sections
         return api_sections
@@ -493,15 +525,19 @@ class PlanGenerator(BaseAgent):
         global_context: str,
         user_guidance: str,
         plan_parts: Dict[str, Any],
+        memory_dir: str = "",
     ) -> Dict[str, str]:
         """Phase C: 按批次生成业务链路测试 / Generate biz flow test sections in batches.
 
         已完成的批次 (resume) 自动跳过。接口按 batch 去重收集。
+        Each completed batch is saved to plan_chunks_progress.json for resume.
         """
         biz_sections = plan_parts.get("biz_sections", {})
         if isinstance(biz_sections, str):
             biz_sections = json.loads(biz_sections)
-        plan_parts.setdefault("biz_sections", {})
+            plan_parts["biz_sections"] = biz_sections
+        if "biz_sections" not in plan_parts:
+            plan_parts["biz_sections"] = biz_sections
 
         for j, batch in enumerate(biz_batches):
             if not batch:
@@ -569,6 +605,8 @@ class PlanGenerator(BaseAgent):
             self.reset_steps()
             section_md = self.call_llm(prompt, system_with_context)
             biz_sections[section_key] = section_md
+            # 保存 chunk 进度（每个 biz batch 后）/ Save after each biz batch
+            self._save_chunk_progress(memory_dir, plan_parts)
 
         plan_parts["biz_sections"] = biz_sections
         return biz_sections

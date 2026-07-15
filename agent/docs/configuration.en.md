@@ -253,6 +253,21 @@ Example: if the plan has already been generated, adding `-p "new guidance"` duri
 
 **Saved config scope**: `case_type`, `user_guidance` (CLI `-p`), `output_format`, `plugin_batch_size`, `auto_mode`, `parse_mode`, `output_dir`, `api_path`, `requirement_paths`, `debug_snapshots`, `parser_path`, `reference_dir`.
 
+### Manual Checkpoint Editing
+
+When resuming, the system reads multiple files from the `memory/` directory to restore state. Users can directly edit certain JSON files to control resume behavior:
+
+- **`checkpoint.json`** (editable): Contains `phase` (current phase), `phase_status` (completion status), `phase_progress` (per-sub-step progress), and `settings` (runtime parameters like `batch_size`, `skeleton_batch_size`)
+- **`checkpoint_data.json`** (not editable): Contains actual case data, machine-maintained
+- **`pipeline_state.json`** (editable): Contains `completed_stage` and `stages` list
+
+**Common scenarios**:
+- Adjust `batch_size`: Edit `checkpoint.json` → `settings.batch_size` or `settings.skeleton_batch_size`
+- Force re-run a phase: Edit the `status` of the corresponding entry in `phase_progress` to `"in_progress"` and reset `completed_count`
+- Skip a sub-step: Set the sub-step `status` to `"completed"` with `completed_count = total_items`
+
+See [how-it-works.en.md § Checkpoint System & Manual Editing](./how-it-works.en.md#checkpoint-system--manual-editing) for detailed examples and notes.
+
 ---
 
 ## translate_cases.py — Case Field Translation Tool

@@ -104,6 +104,93 @@ python main.py --resume --output output_20240101_120000 --auto
 
 ---
 
+## 检查点系统与手动编辑
+
+### 两层检查点架构
+
+Flow Forge 使用两层检查点机制确保中断后可精确恢复：
+
+| 层级 | 文件 | 作用 |
+|------|------|------|
+| **流水线层（Layer 1）** | `memory/pipeline_state.json` | 记录当前 LangGraph 节点，resume 时决定从哪个节点开始执行 |
+| **批处理层（Layer 2）** | `memory/checkpoint.json` + `memory/checkpoint_data.json` | 记录 `batch_controller` 节点内部的逐批进度，resume 时从断点批次继续而非从头开始 |
+
+### `memory/` 文件一览
+
+所有文件位于输出目录的 `memory/` 子目录下：
+
+| 文件 | 用途 | 是否可手动编辑 |
+|------|------|:---:|
+| `pipeline_state.json` | 流水线节点进度（`completed_stage` + `stages` 列表）| ✅ |
+| `checkpoint.json` | 批处理元数据：`phase`、`phase_status`、`phase_progress`、`settings` | ✅ |
+| `checkpoint_data.json` | 用例数据（`single_cases`、`biz_cases`、`failures`）| ❌ 机器维护 |
+| `run_config.json` | 首次运行时的 CLI 参数 / 配置快照 | ✅（仅影响未执行阶段）|
+| `plan_chunks_progress.json` | 计划生成阶段的逐 chunk 进度 | ❌ 机器维护 |
+| `plan_outline.json` / `plan_parsed.json` 等 | 各流水线节点的中间产物 | ❌ 机器维护 |
+
+### 手动编辑示例
+
+#### 1. 调整 batch_size
+
+编辑 `memory/checkpoint.json` 中的 `settings.batch_size`：
+
+```json
+{
+  "settings": {
+    "batch_size": 5
+  }
+}
+```
+
+Resume 时，`_restore_from_checkpoint()` 读取此值，后续所有 batch 使用新大小。插件执行和骨架生成各自的 `batch_size`（`skeleton_batch_size`）分别存储在 `settings` 中。
+
+#### 2. 强制重跑某个阶段
+
+`checkpoint.json` 中的 `phase_progress` 跟踪各阶段/子步骤的完成状态。例如，将骨架生成的 single 子步骤改为 `"in_progress"` 并重置 `completed_count`：
+
+```json
+{
+  "phase_progress": {
+    "skeletons_generated": {
+      "status": "in_progress",
+      "single": {"status": "in_progress", "total_items": 100, "completed_count": 0}
+    }
+  }
+}
+```
+
+也可以将 `phase_status` 改为 `"in_progress"` 且把 `phase` 设为目标阶段名，使 resume 从该阶段重新开始。
+
+#### 3. 跳过一个子步骤
+
+将子步骤的 `status` 改为 `"completed"` 并设置 `completed_count = total_items`：
+
+```json
+{
+  "phase_progress": {
+    "plugin_data_filling": {
+      "status": "in_progress",
+      "single": {"status": "completed", "total_items": 100, "completed_count": 100}
+    }
+  }
+}
+```
+
+Resume 时该子步骤将被跳过，直接进入下一个子步骤。
+
+#### 4. 强制重跑流水线节点
+
+编辑 `pipeline_state.json` 中的 `completed_stage`，改为前一个节点的名称，或删除已完成节点的对应 artifact 文件。
+
+### ⚠️ 注意事项
+
+- **不要**手动编辑 `checkpoint_data.json`——数据一致性依赖内部逻辑，编辑错误可能导致数据损坏
+- 编辑 `checkpoint.json` 错误可能导致 resume 跳过阶段或从头开始
+- 紧急恢复：删除 `checkpoint.json` + `checkpoint_data.json` 可以强制从头执行 `batch_controller`（不影响之前已完成的流水线节点）
+- 将 `phase` 改为不在 `phases` 列表中的值会导致 fallback 到第一阶段
+
+---
+
 ## 知识库
 
 知识库（`knowledge/search.py`）提供基于 grep 的纯文本关键词搜索，无需 embedding 模型或外部向量数据库。知识以 `.md` 文件形式存放在 `knowledge/` 目录下。

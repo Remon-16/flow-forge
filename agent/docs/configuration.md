@@ -253,6 +253,21 @@ logging:
 
 **配置保存范围**：`case_type`、`user_guidance`（对应 `-p`）、`output_format`、`plugin_batch_size`、`auto_mode`、`parse_mode`、`output_dir`、`api_path`、`requirement_paths`、`debug_snapshots`、`parser_path`、`reference_dir`。
 
+### 手动编辑检查点 / Manual Checkpoint Editing
+
+Resume 时，系统从 `memory/` 目录读取多个文件恢复运行状态。用户可以直接编辑其中某些 JSON 文件来控制 resume 行为：
+
+- **`checkpoint.json`**（可编辑）：包含 `phase`（当前阶段）、`phase_status`（完成状态）、`phase_progress`（各子步骤进度）、`settings`（运行参数如 `batch_size`、`skeleton_batch_size`）
+- **`checkpoint_data.json`**（不可编辑）：包含实际用例数据，由机器维护
+- **`pipeline_state.json`**（可编辑）：包含 `completed_stage` 和 `stages` 列表
+
+**常见场景**：
+- 调整 `batch_size`：编辑 `checkpoint.json` → `settings.batch_size` 或 `settings.skeleton_batch_size`
+- 强制重跑某阶段：编辑 `phase_progress` 中对应条目的 `status` 为 `"in_progress"` 并重置 `completed_count`
+- 跳过一个子步骤：设置子步骤 `status` 为 `"completed"` 且 `completed_count = total_items`
+
+详细示例和注意事项见 [how-it-works.md § 检查点系统与手动编辑](./how-it-works.md#检查点系统与手动编辑)。
+
 ---
 
 ## translate_cases.py — 用例字段翻译工具
