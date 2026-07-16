@@ -1,10 +1,10 @@
 <script setup lang="ts">
-// EditorToolbar — 编辑器右上角工具栏，split button 运行/转换按钮。
-// Editor toolbar with split button for run and convert actions.
-import { ref, computed, h, type VNode } from 'vue'
+// EditorToolbar — 编辑器右上角工具栏，独立下拉选择 + 动作按钮 + 参数编辑。
+// Editor toolbar with independent dropdown selectors, action buttons, and param edit.
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dropdown, Menu, MenuItem, MenuDivider } from 'ant-design-vue'
-import { SettingOutlined } from '@ant-design/icons-vue'
+import { CaretRightOutlined, RetweetOutlined, MoreOutlined, SettingOutlined } from '@ant-design/icons-vue'
 
 const { t } = useI18n()
 
@@ -49,25 +49,21 @@ const defaultConvertAction = ref<ConvertAction>('all')
 const memoryKey = computed(() => `${props.editorType}:${props.filePath || ''}`)
 
 // ============================================================================
-// Menu items / 菜单项
+// Action items (without icons — icons are rendered as separate components)
 // ============================================================================
 
-const runMenuItems = computed(() => [
-  { key: 'all', label: t('editor.toolbar.runAll'), icon: '▶' },
-  { key: 'single', label: t('editor.toolbar.runSingle'), icon: '▶' },
-  { key: 'biz', label: t('editor.toolbar.runBiz'), icon: '▶' },
-  { key: 'select', label: t('editor.toolbar.runSelect'), icon: '▶' },
-  { type: 'divider' as const },
-  { key: 'editRunParams', label: t('editor.toolbar.editRunParams'), icon: 'settings' },
+const runActionItems = computed(() => [
+  { key: 'all', label: t('editor.toolbar.runAll') },
+  { key: 'single', label: t('editor.toolbar.runSingle') },
+  { key: 'biz', label: t('editor.toolbar.runBiz') },
+  { key: 'select', label: t('editor.toolbar.runSelect') },
 ])
 
-const convertMenuItems = computed(() => [
-  { key: 'all', label: t('editor.toolbar.convertAll'), icon: '⟳' },
-  { key: 'single', label: t('editor.toolbar.convertSingle'), icon: '⟳' },
-  { key: 'biz', label: t('editor.toolbar.convertBiz'), icon: '⟳' },
-  { key: 'select', label: t('editor.toolbar.convertSelect'), icon: '⟳' },
-  { type: 'divider' as const },
-  { key: 'editConvertParams', label: t('editor.toolbar.editConvertParams'), icon: 'settings' },
+const convertActionItems = computed(() => [
+  { key: 'all', label: t('editor.toolbar.convertAll') },
+  { key: 'single', label: t('editor.toolbar.convertSingle') },
+  { key: 'biz', label: t('editor.toolbar.convertBiz') },
+  { key: 'select', label: t('editor.toolbar.convertSelect') },
 ])
 
 // ============================================================================
@@ -75,12 +71,12 @@ const convertMenuItems = computed(() => [
 // ============================================================================
 
 function getRunActionLabel(action: RunAction): string {
-  const item = runMenuItems.value.find(i => i.key === action)
+  const item = runActionItems.value.find(i => i.key === action)
   return item?.label || ''
 }
 
 function getConvertActionLabel(action: ConvertAction): string {
-  const item = convertMenuItems.value.find(i => i.key === action)
+  const item = convertActionItems.value.find(i => i.key === action)
   return item?.label || ''
 }
 
@@ -135,22 +131,16 @@ function handleConvertDefault() {
 
 <template>
   <div class="editor-toolbar">
-    <!-- Run split button / 运行按钮组 -->
+    <!-- ====== 执行组 / Run Group ====== -->
     <a-dropdown :trigger="['click']">
-      <a-button-group>
-        <a-button size="small" type="text" @click="handleRunDefault" class="toolbar-btn">
-          ▶
-        </a-button>
-        <a-button size="small" type="text" class="toolbar-drop-arrow"
-          @click.stop
-        >
-          <span class="arrow">▼</span>
-        </a-button>
-      </a-button-group>
+      <a-button size="small" class="toolbar-select-btn">
+        {{ getRunActionLabel(defaultRunAction) }}
+        <span class="arrow">▼</span>
+      </a-button>
       <template #overlay>
         <a-menu @click="handleRunMenuClick">
           <a-menu-item
-            v-for="item in runMenuItems.filter(i => i.type !== 'divider' && i.key !== 'editRunParams')"
+            v-for="item in runActionItems"
             :key="item.key"
           >
             <span :class="{ 'active-action': item.key === defaultRunAction }">
@@ -165,22 +155,27 @@ function handleConvertDefault() {
       </template>
     </a-dropdown>
 
-    <!-- Convert split button / 转换按钮组 -->
-    <a-dropdown :trigger="['click']" style="margin-left: 8px">
-      <a-button-group>
-        <a-button size="small" type="text" @click="handleConvertDefault" class="toolbar-btn">
-          ⟳
-        </a-button>
-        <a-button size="small" type="text" class="toolbar-drop-arrow"
-          @click.stop
-        >
-          <span class="arrow">▼</span>
-        </a-button>
-      </a-button-group>
+    <a-button size="small" type="text" class="toolbar-icon-btn" @click="handleRunDefault" :title="t('editor.toolbar.runAll')">
+      <CaretRightOutlined />
+    </a-button>
+
+    <a-button size="small" type="text" class="toolbar-icon-btn" @click="emit('editRunParams')" :title="t('editor.toolbar.editRunParams')">
+      <MoreOutlined />
+    </a-button>
+
+    <!-- 分隔 / Separator -->
+    <div class="toolbar-separator"></div>
+
+    <!-- ====== 转换组 / Convert Group ====== -->
+    <a-dropdown :trigger="['click']">
+      <a-button size="small" class="toolbar-select-btn">
+        {{ getConvertActionLabel(defaultConvertAction) }}
+        <span class="arrow">▼</span>
+      </a-button>
       <template #overlay>
         <a-menu @click="handleConvertMenuClick">
           <a-menu-item
-            v-for="item in convertMenuItems.filter(i => i.type !== 'divider' && i.key !== 'editConvertParams')"
+            v-for="item in convertActionItems"
             :key="item.key"
           >
             <span :class="{ 'active-action': item.key === defaultConvertAction }">
@@ -194,6 +189,14 @@ function handleConvertDefault() {
         </a-menu>
       </template>
     </a-dropdown>
+
+    <a-button size="small" type="text" class="toolbar-icon-btn" @click="handleConvertDefault" :title="t('editor.toolbar.convertAll')">
+      <RetweetOutlined />
+    </a-button>
+
+    <a-button size="small" type="text" class="toolbar-icon-btn" @click="emit('editConvertParams')" :title="t('editor.toolbar.editConvertParams')">
+      <MoreOutlined />
+    </a-button>
   </div>
 </template>
 
@@ -204,25 +207,42 @@ function handleConvertDefault() {
   gap: 2px;
   padding: 2px 8px;
 }
-.toolbar-btn {
-  font-size: 16px;
-  padding: 0 8px;
+.toolbar-select-btn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
   height: 28px;
-  line-height: 1;
+  padding: 0 8px;
   color: #555;
 }
-.toolbar-btn:hover {
+.toolbar-select-btn:hover {
   color: #1890ff;
-  background: rgba(24, 144, 255, 0.06);
-}
-.toolbar-drop-arrow {
-  padding: 0 4px;
-  min-width: 20px;
-  height: 28px;
+  border-color: #1890ff;
 }
 .arrow {
   font-size: 8px;
   color: #999;
+  margin-left: 4px;
+}
+.toolbar-icon-btn {
+  font-size: 16px;
+  padding: 0 6px;
+  height: 28px;
+  line-height: 1;
+  color: #555;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.toolbar-icon-btn:hover {
+  color: #1890ff;
+  background: rgba(24, 144, 255, 0.06);
+}
+.toolbar-separator {
+  width: 1px;
+  height: 20px;
+  background: #e8e8e8;
+  margin: 0 6px;
 }
 .active-action {
   font-weight: 600;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -16,49 +16,49 @@ const emit = defineEmits<{
 const activeKeys = ref<string[]>([])
 
 // 配置节定义 / Config section definitions
-const sections: { key: string; label: string; fields: { key: string; label: string; type: string }[] }[] = [
+const sections = computed(() => [
   {
     key: 'pipeline',
-    label: 'Pipeline',
+    label: t('agent.config_pipeline'),
     fields: [
-      { key: 'max_steps', label: 'Max Steps', type: 'number' },
-      { key: 'max_retries', label: 'Max Retries', type: 'number' },
-      { key: 'skeleton_batch_size', label: 'Skeleton Batch Size', type: 'number' },
-      { key: 'plan_single_batch_size', label: 'Plan Single Batch Size', type: 'number' },
-      { key: 'plugin_batch_size', label: 'Plugin Batch Size', type: 'number' },
-      { key: 'consecutive_batch_failure_limit', label: 'Batch Failure Limit', type: 'number' },
-      { key: 'max_steps_no_progress', label: 'Max Steps No Progress', type: 'number' },
-      { key: 'case_type', label: 'Case Type', type: 'select', options: ['both', 'single', 'biz'] },
-      { key: 'auto', label: 'Auto Mode', type: 'boolean' },
+      { key: 'max_steps', label: t('agent.config_maxSteps'), type: 'number' },
+      { key: 'max_retries', label: t('agent.config_maxRetries'), type: 'number' },
+      { key: 'skeleton_batch_size', label: t('agent.config_skeletonBatchSize'), type: 'number' },
+      { key: 'plan_single_batch_size', label: t('agent.config_planSingleBatchSize'), type: 'number' },
+      { key: 'plugin_batch_size', label: t('agent.config_pluginBatchSize'), type: 'number' },
+      { key: 'consecutive_batch_failure_limit', label: t('agent.config_batchFailureLimit'), type: 'number' },
+      { key: 'max_steps_no_progress', label: t('agent.config_maxStepsNoProgress'), type: 'number' },
+      { key: 'case_type', label: t('agent.config_caseType'), type: 'select', options: ['both', 'single', 'biz'] },
+      { key: 'auto', label: t('agent.config_autoMode'), type: 'boolean' },
     ],
   },
   {
     key: 'validation',
-    label: 'Validation',
+    label: t('agent.config_validation'),
     fields: [],
   },
   {
     key: 'plugins',
-    label: 'Plugins',
+    label: t('agent.config_plugins'),
     fields: [
-      { key: 'enabled', label: 'Enabled', type: 'boolean' },
+      { key: 'enabled', label: t('agent.config_enabled'), type: 'boolean' },
     ],
   },
   {
     key: 'skills',
-    label: 'Skills',
+    label: t('agent.config_skills'),
     fields: [
-      { key: 'enabled', label: 'Enabled', type: 'boolean' },
+      { key: 'enabled', label: t('agent.config_enabled'), type: 'boolean' },
     ],
   },
   {
     key: 'logging',
-    label: 'Logging',
+    label: t('agent.config_logging'),
     fields: [
-      { key: 'log_to_output', label: 'Log to Output', type: 'boolean' },
+      { key: 'log_to_output', label: t('agent.config_logToOutput'), type: 'boolean' },
     ],
   },
-]
+] as const)
 
 function getValue(sectionKey: string, fieldKey: string): any {
   const section = props.configData?.[sectionKey]
@@ -82,7 +82,7 @@ function setValue(sectionKey: string, fieldKey: string, val: any) {
         :header="sec.label"
       >
         <div v-if="sec.fields.length === 0" style="color: #999; font-size: 12px;">
-          Configuration passed as-is from env.yaml
+          {{ t('agent.config_emptyHint') }}
         </div>
         <div v-for="f in sec.fields" :key="f.key" class="config-field">
           <label>{{ f.label }}</label>
@@ -104,7 +104,7 @@ function setValue(sectionKey: string, fieldKey: string, val: any) {
             :value="getValue(sec.key, f.key)"
             size="small"
             style="width: 100%"
-            :options="(f as any).options?.map((o: string) => ({ value: o, label: o }))"
+            :options="(f as any).options?.map((o: string) => ({ value: o, label: t('agent.config_' + o) }))"
             @change="(v: string) => setValue(sec.key, f.key, v)"
           />
         </div>

@@ -53,8 +53,8 @@ onMounted(async () => {
         @select-task="agent.selectTask"
         @delete-task="(id) => {
           Modal.confirm({
-            title: 'Delete task?',
-            content: 'This cannot be undone. Output files are not affected.',
+            title: t('agent.deleteTask'),
+            content: t('agent.deleteTaskContent'),
             okText: t('dialog.yes'),
             cancelText: t('dialog.cancel'),
             onOk: () => agent.removeTask(id),
@@ -99,7 +99,7 @@ onMounted(async () => {
             <div class="error-overlay">
               <a-alert
                 type="error"
-                :message="agent.activeTask.error || 'Unknown error'"
+                :message="agent.activeTask.error || t('agent.unknownError')"
                 show-icon
               />
               <a-button
@@ -107,7 +107,7 @@ onMounted(async () => {
                 style="margin-top: 12px;"
                 @click="agent.startResumeTask(agent.activeTask!.id, [])"
               >
-                Retry (Resume)
+                {{ t('agent.retry') }}
               </a-button>
             </div>
           </div>
@@ -147,6 +147,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #f5f5f5;
 }
 .agent-toolbar {
   display: flex;

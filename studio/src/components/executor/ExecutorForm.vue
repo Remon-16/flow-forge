@@ -206,9 +206,9 @@ async function handleSubmit() {
           <div class="param-row">
             <label>{{ t('executor.param_apiMode') }}</label>
             <a-select v-model:value="cliParams.apiMode" style="width: 120px">
-              <a-select-option value="all">all</a-select-option>
-              <a-select-option value="single">single</a-select-option>
-              <a-select-option value="biz">biz</a-select-option>
+              <a-select-option value="all">{{ t('agent.config_both') }}</a-select-option>
+              <a-select-option value="single">{{ t('agent.config_single') }}</a-select-option>
+              <a-select-option value="biz">{{ t('agent.config_biz') }}</a-select-option>
             </a-select>
           </div>
         </div>

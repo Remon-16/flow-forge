@@ -39,6 +39,9 @@ function formatDate(ts: number): string {
   <div class="sidebar">
     <div class="sidebar-header">
       <span class="sidebar-title">{{ t('executor.sidebar_title') }}</span>
+      <a-button size="small" type="dashed" @click="emit('new-session')">
+        + {{ t('executor.newSession') }}
+      </a-button>
     </div>
 
     <div class="session-list">
@@ -71,11 +74,6 @@ function formatDate(ts: number): string {
       </div>
     </div>
 
-    <div class="sidebar-footer">
-      <a-button type="dashed" block @click="emit('new-session')">
-        + {{ t('executor.newSession') }}
-      </a-button>
-    </div>
   </div>
 </template>
 
@@ -90,7 +88,10 @@ function formatDate(ts: number): string {
   flex-shrink: 0;
 }
 .sidebar-header {
-  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
   border-bottom: 1px solid #e8e8e8;
 }
 .sidebar-title {
@@ -160,9 +161,5 @@ function formatDate(ts: number): string {
   text-align: center;
   color: #bbb;
   font-size: 13px;
-}
-.sidebar-footer {
-  padding: 12px;
-  border-top: 1px solid #e8e8e8;
 }
 </style>

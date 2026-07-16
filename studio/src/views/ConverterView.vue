@@ -65,6 +65,9 @@ function formatDate(ts: number): string {
       <div class="sidebar">
         <div class="sidebar-header">
           <span class="sidebar-title">{{ t('converter.sidebar_title') }}</span>
+          <a-button size="small" type="dashed" @click="converter.selectSession(null)">
+            + {{ t('converter.newSession') }}
+          </a-button>
         </div>
         <div class="session-list">
           <div
@@ -99,11 +102,6 @@ function formatDate(ts: number): string {
           <div v-if="converter.sortedSessions.length === 0" class="empty-hint">
             {{ t('converter.noSessions') }}
           </div>
-        </div>
-        <div class="sidebar-footer">
-          <a-button type="dashed" block @click="converter.selectSession(null)">
-            + {{ t('converter.newSession') }}
-          </a-button>
         </div>
       </div>
 
@@ -227,6 +225,7 @@ function formatDate(ts: number): string {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #f5f5f5;
 }
 .toolbar {
   display: flex;
@@ -264,7 +263,10 @@ function formatDate(ts: number): string {
   flex-shrink: 0;
 }
 .sidebar-header {
-  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
   border-bottom: 1px solid #e8e8e8;
 }
 .sidebar-title {
@@ -334,10 +336,6 @@ function formatDate(ts: number): string {
   text-align: center;
   color: #bbb;
   font-size: 13px;
-}
-.sidebar-footer {
-  padding: 12px;
-  border-top: 1px solid #e8e8e8;
 }
 
 /* Content */

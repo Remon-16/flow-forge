@@ -116,7 +116,7 @@ function handleCancel() {
       <!-- 虚拟环境路径 / Virtual env path -->
       <div class="settings-field">
         <label>{{ t('agent.settings_venvPath') }}</label>
-        <a-input v-model:value="local.venvPath" placeholder=".venv" />
+        <a-input v-model:value="local.venvPath" :placeholder="t('agent.settings_venvHint')" />
       </div>
 
       <a-divider style="margin: 4px 0" />

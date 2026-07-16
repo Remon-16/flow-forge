@@ -203,6 +203,7 @@ function browsePath(path: string) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #f5f5f5;
 }
 .toolbar {
   display: flex;

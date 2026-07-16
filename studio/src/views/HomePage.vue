@@ -1,12 +1,11 @@
 <script setup lang="ts">
 // HomePage — 首页，3 列入口卡片（生成 → 编辑 → 执行），含设置/退出按钮。
 // Homepage with 3-column entry cards (Generate → Edit → Execute), plus settings/exit buttons.
-import { inject, ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { SettingOutlined, CloseOutlined } from '@ant-design/icons-vue'
+import { SettingOutlined } from '@ant-design/icons-vue'
 import { useSettingsStore } from '../stores/settings'
-import { isDesktop } from '../utils/desktop-bridge'
 import AgentSettings from '../components/agent/AgentSettings.vue'
 
 const router = useRouter()
@@ -15,8 +14,6 @@ const settings = useSettingsStore()
 
 // 设置弹窗可见性 / Settings modal visibility
 const settingsVisible = ref(false)
-// 关闭请求方法（由 App.vue provide）/ Close request method (provided by App.vue)
-const requestClose = inject<() => void>('requestClose')
 
 function goExcel() {
   router.push('/excel')
@@ -45,13 +42,6 @@ function goConverter() {
 function handleLanguageChange(lang: string) {
   settings.setLanguage(lang as 'zh-CN' | 'en-US')
 }
-
-// 处理退出按钮点击 / Handle exit button click
-function handleExit() {
-  if (requestClose) {
-    requestClose()
-  }
-}
 </script>
 
 <template>
@@ -69,10 +59,6 @@ function handleExit() {
       </a-select>
       <a-button class="action-btn" :title="t('home.settings')" @click="settingsVisible = true">
         <SettingOutlined />
-      </a-button>
-      <!-- 退出按钮仅桌面模式显示 / Exit button only visible in desktop mode -->
-      <a-button v-if="isDesktop" class="action-btn" :title="t('home.exit')" @click="handleExit">
-        <CloseOutlined />
       </a-button>
     </div>
 

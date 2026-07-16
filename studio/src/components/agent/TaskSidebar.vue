@@ -33,7 +33,7 @@ const hasNotify = (taskId: string): boolean =>
 <template>
   <div class="task-sidebar">
     <div class="sidebar-header">
-      <span class="header-title">Sessions</span>
+      <span class="header-title">{{ t('agent.sidebar_title') }}</span>
       <a-button size="small" type="dashed" @click="emit('newTask')">
         + {{ t('agent.newTask') }}
       </a-button>

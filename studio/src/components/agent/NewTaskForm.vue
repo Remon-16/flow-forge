@@ -147,7 +147,7 @@ function handleConfigChange(path: string, value: any) {
 // 提交 / Submit
 async function handleSubmit() {
   if (!outputDir.value) {
-    message.warning('Output directory is required')
+    message.warning(t('agent.form_outputRequired'))
     return
   }
 
@@ -200,12 +200,12 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
   <div class="new-task-form">
     <!-- 基础输入 / Basic inputs -->
     <div class="form-section">
-      <h4>Basic Settings</h4>
+      <h4>{{ t('agent.form_basicSettings') }}</h4>
 
       <div class="form-row">
         <label>{{ t('agent.form_outputDir') }} *</label>
         <a-input-group compact>
-          <a-input v-model:value="outputDir" style="width: calc(100% - 80px)" placeholder="./output" />
+          <a-input v-model:value="outputDir" style="width: calc(100% - 80px)" :placeholder="t('agent.form_outputDirHint')" />
           <a-button @click="browseDir('output')">{{ t('agent.settings_browse') }}</a-button>
         </a-input-group>
       </div>
@@ -213,19 +213,17 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
       <div class="form-row">
         <label>{{ t('agent.form_requirement') }}</label>
         <a-input-group compact>
-          <a-input v-model:value="requirementPaths" style="width: calc(100% - 80px)" placeholder="docs/req1.md;docs/req2.md" />
+          <a-input v-model:value="requirementPaths" style="width: calc(100% - 80px)" :placeholder="t('agent.form_requirementHint')" />
           <a-button @click="browseFile('requirement')">{{ t('agent.settings_browse') }}</a-button>
         </a-input-group>
-        <div class="form-hint">{{ t('agent.form_requirementHint') }}</div>
       </div>
 
       <div class="form-row">
         <label>{{ t('agent.form_api') }}</label>
         <a-input-group compact>
-          <a-input v-model:value="apiPaths" style="width: calc(100% - 80px)" placeholder="docs/api1.yaml;docs/api2.md" />
+          <a-input v-model:value="apiPaths" style="width: calc(100% - 80px)" :placeholder="t('agent.form_apiHint')" />
           <a-button @click="browseFile('api')">{{ t('agent.settings_browse') }}</a-button>
         </a-input-group>
-        <div class="form-hint">{{ t('agent.form_apiHint') }}</div>
       </div>
 
       <div class="form-row inline">
@@ -235,7 +233,7 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
 
       <div class="form-row">
         <label>{{ t('agent.form_userGuidance') }}</label>
-        <a-textarea v-model:value="userGuidance" :rows="3" placeholder="Optional user guidance..." />
+        <a-textarea v-model:value="userGuidance" :rows="3" :placeholder="t('agent.form_userGuidanceHint')" />
       </div>
     </div>
 
@@ -249,7 +247,7 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
         :loading="loadingConfig"
         @click="loadYamlConfig"
       >
-        Load from {{ agent.config.configFileName }}
+        {{ t('agent.form_loadConfig', { name: agent.config.configFileName }) }}
       </a-button>
 
       <a-alert v-if="configError" type="warning" :message="configError" show-icon style="margin-bottom: 8px;" />
@@ -335,6 +333,5 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
   border-top: 1px solid #f0f0f0;
   position: sticky;
   bottom: 0;
-  background: #fff;
 }
 </style>

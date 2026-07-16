@@ -631,6 +631,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  background: #f5f5f5;
 }
 
 .yaml-global-search {

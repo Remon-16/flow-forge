@@ -720,7 +720,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 </script>
 
 <template>
-  <div style="height: 100%; display: flex; flex-direction: column;">
+  <div style="height: 100%; display: flex; flex-direction: column; background: #f5f5f5;">
     <!-- Editor toolbar -->
     <div style="display: flex; justify-content: flex-end; border-bottom: 1px solid #f0f0f0">
       <EditorToolbar

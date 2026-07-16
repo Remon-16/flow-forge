@@ -9,7 +9,7 @@ import { isDesktop } from './utils/desktop-bridge'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import StatusBar from './components/layout/StatusBar.vue'
-import { watch, computed, ref, onMounted, onUnmounted, provide } from 'vue'
+import { watch, computed, ref, onMounted, onUnmounted } from 'vue'
 
 const route = useRoute()
 const { t, locale } = useI18n()
@@ -71,20 +71,6 @@ async function handleTerminateAndQuit() {
   await getCurrentWindow().destroy()
 }
 
-// 提供关闭请求方法给子组件（如 HomePage 的退出按钮）
-// Provide close request method to child components (e.g. HomePage exit button)
-async function requestClose() {
-  const runningTasks = agent.tasks.filter(
-    t => t.status === 'running' || t.status === 'question'
-  )
-  if (runningTasks.length > 0) {
-    closeDialogRunningCount.value = runningTasks.length
-    closeDialogVisible.value = true
-    return
-  }
-  await handleForceQuit()
-}
-
 // 强制退出应用 / Force quit the application
 async function handleForceQuit() {
   closeDialogVisible.value = false
@@ -96,8 +82,6 @@ async function handleForceQuit() {
   }
 }
 
-provide('requestClose', requestClose)
-
 onMounted(async () => {
   window.addEventListener('beforeunload', onBeforeUnload)
 
@@ -108,13 +92,16 @@ onMounted(async () => {
   const appWindow = getCurrentWindow()
 
   appWindow.onCloseRequested(async (event) => {
-    // 始终阻止默认关闭行为，弹出确认对话框 / Always prevent default close, show confirmation dialog
-    event.preventDefault()
+    // 有运行中任务时阻止关闭并弹框，无任务则直接关闭
+    // Prevent close only when tasks are running; close directly otherwise
     const runningTasks = agent.tasks.filter(
       t => t.status === 'running' || t.status === 'question'
     )
-    closeDialogRunningCount.value = runningTasks.length
-    closeDialogVisible.value = true
+    if (runningTasks.length > 0) {
+      event.preventDefault()
+      closeDialogRunningCount.value = runningTasks.length
+      closeDialogVisible.value = true
+    }
   })
 })
 
