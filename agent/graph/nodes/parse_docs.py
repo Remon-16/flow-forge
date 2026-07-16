@@ -180,6 +180,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
             "api_raw_texts": state.get("api_raw_texts", []),
             "interfaces": state.get("interfaces", []),
             "parse_mode": state.get("parse_mode", ""),
+            "interface_extraction_method": state.get("interface_extraction_method", ""),
         })
         save_pipeline_state(memory_dir, "parse_docs")
 

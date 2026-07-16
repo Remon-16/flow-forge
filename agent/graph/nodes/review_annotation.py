@@ -9,12 +9,14 @@
 
 import json
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 from agents.base import BaseAgent
 from agents.plan_generator import PlanGenerator, _serialize_interfaces
 from graph.state import GraphState
 from i18n import get_language_name, _
+from plugins.skill_loader import load_skill_extensions
 from prompts.plan_generation import (
     PLAN_CHUNK_API_SECTION_SYSTEM,
     PLAN_CHUNK_API_SECTION_USER,
@@ -67,6 +69,10 @@ def _annotation_chunked_revision(
     memory_dir = state.get("memory_dir", "")
     outline = state.get("plan_outline")
 
+    # 加载 skill 扩展 / Load skill extensions
+    _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
+    _exts = load_skill_extensions('plan_generator', _h._settings, _skills_dir)
+
     # 加载 chunk 注册表 / Load chunk registry
     sections = _load_or_parse_sections(memory_dir, plan_md, outline)
 
@@ -82,7 +88,8 @@ def _annotation_chunked_revision(
         return plan_md
 
     # 执行 chunk 级操作 / Execute chunk-level actions
-    _execute_chunk_actions(sections, all_actions, state, analysis, api_summary, plan_md)
+    _execute_chunk_actions(sections, all_actions, state, analysis, api_summary,
+                           skill_extensions=_exts, plan_md=plan_md)
 
     # 保存 + 拼接 / Save + assemble
     if memory_dir:
@@ -403,6 +410,7 @@ def _execute_chunk_actions(
     analysis: dict,
     api_summary: list,
     plan_md: str = "",
+    skill_extensions: List[str] | None = None,
 ):
     """执行 chunk 级操作 / Execute chunk-level actions.
 
@@ -427,7 +435,7 @@ def _execute_chunk_actions(
         return
 
     # 生成 agent / Create agent for chunk regeneration
-    agent = PlanGenerator(_h._settings, _h._knowledge)
+    agent = PlanGenerator(_h._settings, _h._knowledge, skill_extensions=skill_extensions)
     iface_dicts = _serialize_interfaces(interfaces)
     iface_by_id = {d["test_id"]: d for d in iface_dicts if d.get("test_id")}
 

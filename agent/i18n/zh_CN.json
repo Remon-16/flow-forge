@@ -148,6 +148,8 @@
   "review.revised": "\n[审核] 计划已修改，请再次审核...",
   "review.revised_new": "[新生成的测试计划]",
   "review.revised_from_feedback": "[修改后计划] 已根据您的反馈修改测试计划：\n  修改意见: {feedback}",
+  "review.feedback_archived_on_approve": "计划已批准，反馈文件已归档: {path}",
+  "review.feedback_archived_on_revise": "修订完成，反馈文件已归档: {path}",
   "review.annotations_not_found": "\n错误: 未找到批注文件: {path}\n请先在 Studio 中对测试计划添加批注。",
   "review.annotations_parse_error": "\n错误: 批注文件解析失败: {error}",
   "review.annotations_empty": "\n错误: 批注文件为空，请添加批注后重试。",

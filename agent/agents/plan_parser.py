@@ -179,6 +179,9 @@ class PlanParser(BaseAgent):
         return merged
 
     def _build_testplan(self, result: dict) -> TestPlan:
+        # 防护：若 LLM 返回裸数组，包装为 dict / Guard: wrap bare array in dict
+        if isinstance(result, list):
+            result = {"api_definitions": result, "single_test_points": {}, "biz_flow_scenarios": []}
 
         api_defs = []
         for ad in result.get("api_definitions", []):

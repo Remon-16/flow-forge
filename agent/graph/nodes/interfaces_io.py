@@ -117,6 +117,11 @@ def reload_interfaces_node(state: GraphState) -> GraphState:
     state["interfaces"] = reloaded
     logger.info(_("ifaces.reloaded", count=len(reloaded)))
 
+    # Save pipeline state for resume / 保存流水线状态供 resume 使用
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        save_pipeline_state(memory_dir, "reload_interfaces")
+
     if _sl():
         _sl().log_event("reload_interfaces", count=len(reloaded), url_issues=len(url_issues))
         _sl().log_node_end("reload_interfaces")

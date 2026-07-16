@@ -8,11 +8,13 @@
 
 import json
 import logging
+import os
 from typing import Dict, List, Optional
 
 from agents.base import BaseAgent
 from graph.state import GraphState
 from i18n import get_language_name, _
+from plugins.skill_loader import load_skill_extensions
 from prompts.plan_reviser import (
     PLAN_SECTION_IMPACT_SYSTEM,
     PLAN_SECTION_IMPACT_USER,
@@ -52,6 +54,13 @@ def _text_revision(
     memory_dir = state.get("memory_dir", "")
     outline = state.get("plan_outline")
 
+    # 加载 skill 扩展 / Load skill extensions
+    _skills_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        'skills', 'builtin',
+    )
+    _exts = load_skill_extensions('plan_generator', _h._settings, _skills_dir)
+
     # 加载 chunk 注册表 / Load chunk registry
     sections = _load_or_parse_sections(memory_dir, plan_md, outline)
 
@@ -59,7 +68,7 @@ def _text_revision(
     token_counter = TokenCounter(model=_h._settings.llm_model)
 
     # Step 1: Section 影响分析 / Section impact analysis
-    section_impact = _section_impact_analysis(feedback, case_type, token_counter)
+    section_impact = _section_impact_analysis(feedback, case_type, token_counter, skill_extensions=_exts)
     if not any(section_impact.values()):
         logger.info(_("review.no_section_affected"))
         return plan_md
@@ -75,7 +84,7 @@ def _text_revision(
     all_actions: List[dict] = []
 
     if section_impact.get("global"):
-        actions = _chunk_intent_for_global(feedback, token_counter)
+        actions = _chunk_intent_for_global(feedback, token_counter, skill_extensions=_exts)
         all_actions.extend(actions)
 
     # section 数据使用 "type" 字段，值为 "api_group" / "biz_flow"
@@ -91,7 +100,7 @@ def _text_revision(
         if not sec_chunks:
             continue
         actions = _chunk_intent_for_section(
-            sec_chunks, sec_type, feedback, token_counter
+            sec_chunks, sec_type, feedback, token_counter, skill_extensions=_exts,
         )
         all_actions.extend(actions)
 
@@ -110,7 +119,8 @@ def _text_revision(
     ))
 
     # Step 3: 执行 chunk 操作 (与 r 模式共用) / Execute (shared with r mode)
-    _execute_chunk_actions(sections, all_actions, state, analysis, api_summary, plan_md)
+    _execute_chunk_actions(sections, all_actions, state, analysis, api_summary,
+                           skill_extensions=_exts, plan_md=plan_md)
 
     # 保存 + 拼接 / Save + assemble
     if memory_dir:
@@ -125,6 +135,7 @@ def _text_revision(
 
 def _section_impact_analysis(
     feedback: str, case_type: str, token_counter,
+    skill_extensions: List[str] | None = None,
 ) -> Dict[str, bool]:
     """分析用户文本反馈涉及哪些顶层 section / Determine which sections are affected.
 
@@ -153,6 +164,7 @@ def _section_impact_analysis(
         max_concurrency=_h._settings.llm_max_concurrency,
         request_timeout=_h._settings.llm_request_timeout,
         extra_params=_h._settings.llm_extra_params,
+        skill_extensions=skill_extensions,
     )
 
     result = agent.call_llm_json(prompt, system_msg)
@@ -177,6 +189,7 @@ def _section_impact_analysis(
 
 def _chunk_intent_for_global(
     feedback: str, token_counter,
+    skill_extensions: List[str] | None = None,
 ) -> List[dict]:
     """分析 global section 是否需要修改 / Check if global section needs changes.
 
@@ -205,10 +218,19 @@ def _chunk_intent_for_global(
         max_concurrency=_h._settings.llm_max_concurrency,
         request_timeout=_h._settings.llm_request_timeout,
         extra_params=_h._settings.llm_extra_params,
+        skill_extensions=skill_extensions,
     )
 
     result = agent.call_llm_json(prompt, system_msg)
     actions = result.get("actions", [])
+    # 数量校验 / Count validation: global has exactly 1 chunk
+    if len(actions) != 1:
+        logger.warning(
+            _("review.intent_validation_retry",
+              batch=0, attempt=1,
+              errors=f"Expected 1 action for global, got {len(actions)}")
+        )
+        actions = []
     for a in actions:
         a["section_key"] = "__global__"
         a.setdefault("annotation", {"review_comment": feedback})
@@ -217,6 +239,7 @@ def _chunk_intent_for_global(
 
 def _chunk_intent_for_section(
     chunks: List[dict], section_type: str, feedback: str, token_counter,
+    skill_extensions: List[str] | None = None,
 ) -> List[dict]:
     """对某个 section 的所有 chunk 做意图分析 / Intent analysis for all chunks in a section.
 
@@ -254,10 +277,21 @@ def _chunk_intent_for_section(
         max_concurrency=_h._settings.llm_max_concurrency,
         request_timeout=_h._settings.llm_request_timeout,
         extra_params=_h._settings.llm_extra_params,
+        skill_extensions=skill_extensions,
     )
 
     result = agent.call_llm_json(prompt, system_msg)
     actions = result.get("actions", [])
+    # 数量校验 / Count validation: verify actions count matches chunk count
+    expected_count = len(chunks)
+    if len(actions) != expected_count:
+        logger.warning(
+            _("review.intent_validation_retry",
+              batch=0, attempt=1,
+              errors=f"Expected {expected_count} action(s), got {len(actions)}")
+        )
+        # fallback 为 noop / Fallback to noop for all chunks
+        actions = []
     # 回填 section_key 和 annotation / Backfill section_key and annotation
     for a in actions:
         a["section_key"] = a.get("chunk_id", a.get("section_key", ""))

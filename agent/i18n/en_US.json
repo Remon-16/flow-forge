@@ -148,6 +148,8 @@
   "review.revised": "\n[Review] Plan revised. Please review again...",
   "review.revised_new": "[New Test Plan]",
   "review.revised_from_feedback": "[Revised Plan] Plan updated based on your feedback:\n  Feedback: {feedback}",
+  "review.feedback_archived_on_approve": "Plan approved, feedback file archived: {path}",
+  "review.feedback_archived_on_revise": "Revision complete, feedback file archived: {path}",
   "review.annotations_not_found": "\nError: Annotation file not found: {path}\nPlease add annotations to the test plan in Studio first.",
   "review.annotations_parse_error": "\nError: Failed to parse annotation file: {error}",
   "review.annotations_empty": "\nError: Annotation file is empty. Add annotations and try again.",

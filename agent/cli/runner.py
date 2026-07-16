@@ -162,6 +162,7 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
             state["api_raw_texts"] = data.get("api_raw_texts", [])
             state["interfaces"] = data.get("interfaces", [])
             state["parse_mode"] = data.get("parse_mode", "raw")
+            state["interface_extraction_method"] = data.get("interface_extraction_method", "")
 
     if "analyze_api" in completed_stages:
         data = _load_json("api_summary.json")
@@ -306,6 +307,28 @@ def main() -> int:
         _debug_snapshots = _first(args.debug_snapshots, saved_config.get("debug_snapshots"), False)
         _api_paths = list(args.api) if args.api else saved_config.get("api_paths", [])
 
+        # 从已保存配置中提取校验和分批设置 / Extract validation and batching from saved config
+        _case_format_enabled = _first(
+            True if args.validation else (False if args.no_validation else None),
+            saved_config.get("case_format_enabled"),
+            settings.case_format_enabled,
+        )
+        _case_format_max_retries = _first(
+            args.case_format_max_retries,
+            saved_config.get("case_format_max_retries"),
+            settings.case_format_max_retries,
+        )
+        _skeleton_batch_size = _first(
+            args.skeleton_batch_size,
+            saved_config.get("skeleton_batch_size"),
+            settings.skeleton_batch_size,
+        )
+        _plan_single_batch_size = _first(
+            args.plan_single_batch_size,
+            saved_config.get("plan_single_batch_size"),
+            settings.plan_single_batch_size,
+        )
+
         # If no pipeline_state.json, fall back to legacy resume (batch_controller only)
         ps_path = Path(str(_memory_dir)) / "pipeline_state.json"
         if not ps_path.exists():
@@ -372,6 +395,10 @@ def main() -> int:
             "debug_snapshots": _debug_snapshots,
             "parser_path": _parser_path,
             "reference_dir": _reference_dir,
+            "case_format_enabled": _case_format_enabled,
+            "case_format_max_retries": _case_format_max_retries,
+            "skeleton_batch_size": _skeleton_batch_size,
+            "plan_single_batch_size": _plan_single_batch_size,
         }
         save_run_config(str(_memory_dir), _merged_config)
 
@@ -385,8 +412,8 @@ def main() -> int:
             "debug_snapshots": _debug_snapshots,
             "output_format": _output_format,
             "batch_size": _plugin_batch_size,
-            "case_format_enabled": settings.case_format_enabled,
-            "case_format_max_retries": settings.case_format_max_retries,
+            "case_format_enabled": _case_format_enabled,
+            "case_format_max_retries": _case_format_max_retries,
             "plan_only": False,
             "requirement_texts": loaded.get("requirement_texts", []),
             "interfaces": loaded.get("interfaces", []),
@@ -466,14 +493,6 @@ def main() -> int:
     else:
         _case_format_enabled = settings.case_format_enabled
 
-    # URL 文档匹配校验开关 / URL doc-match validation toggle
-    if args.no_url_doc_match_enabled:
-        _url_doc_match_enabled = False
-    elif args.url_doc_match_enabled:
-        _url_doc_match_enabled = True
-    else:
-        _url_doc_match_enabled = settings.url_doc_match_enabled
-
     # 语言设置 / Language setting
     if args.lang is not None:
         import os as _os
@@ -527,6 +546,10 @@ def main() -> int:
         "debug_snapshots": args.debug_snapshots,
         "parser_path": _first(args.parser_path, ""),
         "reference_dir": _first(args.reference_dir, ""),
+        "case_format_enabled": _case_format_enabled,
+        "case_format_max_retries": _first(args.case_format_max_retries, settings.case_format_max_retries),
+        "skeleton_batch_size": _first(args.skeleton_batch_size, settings.skeleton_batch_size),
+        "plan_single_batch_size": _first(args.plan_single_batch_size, settings.plan_single_batch_size),
     }
     save_run_config(str(memory_dir), _run_config)
 

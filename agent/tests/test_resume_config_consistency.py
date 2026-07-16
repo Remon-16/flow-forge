@@ -93,6 +93,10 @@ class TestRunConfigKeyConsistency:
                 "debug_snapshots": True,
                 "parser_path": "/tmp/custom.py",
                 "reference_dir": "/tmp/ref",
+                "case_format_enabled": True,
+                "case_format_max_retries": 5,
+                "skeleton_batch_size": 20,
+                "plan_single_batch_size": 6,
             }
             save_run_config(tmp, config)
             loaded = load_run_config(tmp)
@@ -108,6 +112,8 @@ class TestRunConfigKeyConsistency:
             "case_type", "user_guidance", "output_format", "plugin_batch_size",
             "auto_mode", "parse_mode", "output_dir", "api_paths",
             "debug_snapshots", "parser_path", "reference_dir",
+            "case_format_enabled", "case_format_max_retries",
+            "skeleton_batch_size", "plan_single_batch_size",
         }
         assert "resume_overwrite" not in standard_keys
 

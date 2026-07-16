@@ -169,6 +169,9 @@ class PlanGenerator(BaseAgent):
         )
         system_msg = render_prompt(PLAN_OUTLINE_SYSTEM, language=get_language_name())
         outline = self.call_llm_json(prompt, system_msg)
+        # 防护：若 LLM 返回裸数组，包装为 dict / Guard: wrap bare array in dict
+        if isinstance(outline, list):
+            outline = {"api_groups": outline, "biz_flows": [], "business_summary": ""}
         # 确保每条记录都有唯一的 chunk_id / Ensure every entry has a unique chunk_id
         outline = _normalize_chunk_ids(outline)
         logger.info(

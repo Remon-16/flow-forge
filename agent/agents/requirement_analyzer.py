@@ -132,8 +132,13 @@ class RequirementAnalyzer(BaseAgent):
         return merged
 
     @staticmethod
-    def _normalize_result(result: Dict[str, Any]) -> Dict[str, Any]:
-        """Ensure expected keys exist."""
+    def _normalize_result(result: Any) -> Dict[str, Any]:
+        """Ensure expected keys exist. Handles bare-list LLM output as fallback."""
+        # 防护：若 LLM 返回裸数组，包装为 dict / Guard: wrap bare array in dict
+        if isinstance(result, list):
+            result = {"business_flows": result}
+        if not isinstance(result, dict):
+            return {"business_flows": [], "roles": [], "constraints": [], "exceptions": []}
         for key in ("business_flows", "roles", "constraints", "exceptions"):
             if key not in result:
                 result[key] = []

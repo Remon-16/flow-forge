@@ -183,9 +183,9 @@ class TestPlanFeedbackPersistence:
             # 有未处理 feedback 时 confirmed 应为 False
             assert loaded["plan_confirmed"] is False
 
-    def should_clear_feedback_after_revision(self):
-        """修订完成后应删除 pending_feedback.json
-        pending_feedback.json should be deleted after revision completion."""
+    def should_archive_feedback_after_revision(self):
+        """修订完成后应归档 pending_feedback.json 到 history-feedback/
+        pending_feedback.json should be archived to history-feedback/ after revision."""
         with tempfile.TemporaryDirectory() as tmp:
             memory_dir = Path(tmp) / "memory"
             memory_dir.mkdir()
@@ -199,10 +199,45 @@ class TestPlanFeedbackPersistence:
             fb_path = memory_dir / "pending_feedback.json"
             assert fb_path.exists()
 
-            # 模拟 revise_plan_node 删除
-            if fb_path.exists():
-                fb_path.unlink()
+            # 模拟 revise_plan_node 归档 (archive instead of delete)
+            from datetime import datetime
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            history_dir = memory_dir / "history-feedback"
+            history_dir.mkdir(parents=True, exist_ok=True)
+            archive_name = f"pending_feedback_{ts}.json"
+            fb_path.rename(history_dir / archive_name)
             assert not fb_path.exists()
+            assert (history_dir / archive_name).exists()
+
+    def should_archive_pending_feedback_on_approve(self):
+        """批准后应归档 pending_feedback.json 到 history-feedback/
+        pending_feedback.json should be archived to history-feedback/ on approve."""
+        with tempfile.TemporaryDirectory() as tmp:
+            memory_dir = Path(tmp) / "memory"
+            memory_dir.mkdir()
+
+            # 模拟 reject 后保存的 feedback
+            save_pipeline_artifact(str(memory_dir), "pending_feedback.json", {
+                "plan_feedback": "add more tests",
+                "plan_feedback_type": "text",
+                "plan_annotations": [],
+            })
+            fb_path = memory_dir / "pending_feedback.json"
+            assert fb_path.exists()
+
+            # 模拟 human_confirm_node approve 后归档
+            from datetime import datetime
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            history_dir = memory_dir / "history-feedback"
+            history_dir.mkdir(parents=True, exist_ok=True)
+            archive_name = f"pending_feedback_{ts}.json"
+            if fb_path.exists():
+                fb_path.rename(history_dir / archive_name)
+            assert not fb_path.exists()
+            assert (history_dir / archive_name).exists()
+            # 验证归档内容正确 / Verify archived content is correct
+            archived = json.loads((history_dir / archive_name).read_text(encoding="utf-8"))
+            assert archived["plan_feedback"] == "add more tests"
 
 
 # ---------------------------------------------------------------------------
