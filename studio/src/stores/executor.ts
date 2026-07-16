@@ -7,6 +7,7 @@ import type { ExecutorSession, ExecutorSettings, ExecutorCliParams } from '../ty
 import { DEFAULT_CLI_PARAMS, DEFAULT_EXECUTOR_SETTINGS } from '../types/executor'
 import type { LogEntry } from '../types/agent'
 import { spawnExecutor, killExecutor, listenToExecutorEvents } from '../utils/executor-bridge'
+import { resolvePythonExe } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
 import { readFile, writeFile, exists } from '../utils/desktop-bridge'
 
@@ -274,7 +275,7 @@ export const useExecutorStore = defineStore('executor', () => {
       // Python 路径优先使用 agent config（共享设置）/ Use agent config python path
       const { useAgentStore } = await import('./agent')
       const agentStore = useAgentStore()
-      const pythonExe = agentStore.config.pythonExePath || 'python'
+      const pythonExe = resolvePythonExe(agentStore.config)
       await spawnExecutor(
         sessionId,
         settings.value.executorRootDir,

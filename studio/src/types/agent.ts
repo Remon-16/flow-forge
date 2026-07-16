@@ -44,10 +44,13 @@ export interface LogEntry {
 
 export interface AgentConfig {
   agentRootDir: string
-  pythonExePath: string        // optional
-  venvPath: string             // optional
+  pythonExePath: string        // optional, 手动覆盖 / manual override
+  venvPath: string             // optional, envType='venv' 时使用 / used when envType='venv'
   executorRootDir: string      // 执行器根目录 / Executor root directory
   saveToEnvFile: boolean       // 是否将 CLI 参数同步到 env 文件 / Whether to sync CLI params to env file
+  // ---- 环境类型 / Environment type ----
+  envType: 'system' | 'venv' | 'conda'   // Python 环境类型 / Python environment type
+  condaEnvName: string                    // Conda 环境名称（envType='conda' 时使用）/ Conda env name
 }
 
 // ============================================================================

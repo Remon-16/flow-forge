@@ -13,6 +13,7 @@ import type {
   CompletionSummary,
 } from '../types/agent'
 import { spawnAgent, sendToAgent, killAgent, listenToAgentEvents } from '../utils/agent-bridge'
+import { resolvePythonExe } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
 
 const CONFIG_FILE = 'agent_config.json'
@@ -28,6 +29,8 @@ const DEFAULT_CONFIG: AgentConfig = {
   venvPath: '',
   executorRootDir: '',
   saveToEnvFile: false,
+  envType: 'system',
+  condaEnvName: '',
 }
 
 // ============================================================================
@@ -176,7 +179,7 @@ export const useAgentStore = defineStore('agent', () => {
       await spawnAgent(
         taskId,
         config.value.agentRootDir,
-        config.value.pythonExePath || 'python',
+        resolvePythonExe(config.value),
         args,
       )
       appendLog(taskId, 'info', 'Agent process started')
@@ -216,7 +219,7 @@ export const useAgentStore = defineStore('agent', () => {
       await spawnAgent(
         taskId,
         config.value.agentRootDir,
-        config.value.pythonExePath || 'python',
+        resolvePythonExe(config.value),
         args,
       )
       appendLog(taskId, 'info', 'Agent process started (resume mode)')

@@ -71,8 +71,17 @@ def _args_to_overrides(args: argparse.Namespace) -> dict:
 
 def _load_config(args: argparse.Namespace) -> dict:
     """Load configuration from YAML file. Returns config dict or raises SystemExit."""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    yml_path = args.config or os.path.join(script_dir, "env.yml")
+    # 查找优先级 / Lookup priority:
+    #   1. --config 显式指定 / --config explicit path
+    #   2. CWD 下的 env.yml（Studio 通过 current_dir 设置）/ env.yml in CWD (set by Studio)
+    #   3. script_dir 下的 env.yml（命令行直接运行时）/ env.yml in script dir (direct CLI)
+    if args.config:
+        yml_path = args.config
+    else:
+        cwd_yml = os.path.join(os.getcwd(), "env.yml")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_yml = os.path.join(script_dir, "env.yml")
+        yml_path = cwd_yml if os.path.exists(cwd_yml) else script_yml
 
     try:
         initialize(yml_path, _args_to_overrides(args))

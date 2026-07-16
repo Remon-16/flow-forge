@@ -2,9 +2,10 @@
 // AgentSettings — 通用设置模态框，配置 Python/venv + Agent 根目录 + Executor 根目录。
 // General settings modal: Python/venv path, Agent root dir, Executor root dir,
 // plus env-file sync controls.
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '../../stores/agent'
+import { resolvePythonExe } from '../../utils/resolve-python'
 import { openDirectoryDialog, openFileDialog, exists } from '../../utils/desktop-bridge'
 import { message } from 'ant-design-vue'
 
@@ -20,7 +21,12 @@ const local = ref({
   agentRootDir: '',
   executorRootDir: '',
   saveToEnvFile: false,
+  envType: 'system' as 'system' | 'venv' | 'conda',
+  condaEnvName: '',
 })
+
+// 解析后的 Python 可执行文件路径预览 / Resolved Python executable path preview
+const resolvedExe = computed(() => resolvePythonExe(local.value as any))
 
 watch(() => props.visible, (v) => {
   if (v) {
@@ -76,6 +82,15 @@ async function browsePythonExe() {
   } catch { /* user cancelled */ }
 }
 
+// venv 目录浏览 / Browse venv directory
+async function browseVenvDir() {
+  try {
+    const dir = await openDirectoryDialog()
+    if (!dir) return
+    local.value.venvPath = dir
+  } catch { /* user cancelled */ }
+}
+
 // ---- 保存/读取 / Save / Load ----
 
 async function handleSave() {
@@ -100,7 +115,17 @@ function handleCancel() {
     <div class="settings-form">
       <p class="settings-desc">{{ t('agent.settingsDesc') }}</p>
 
-      <!-- Python 可执行文件（可选）/ Python executable (optional) -->
+      <!-- Python 环境类型 / Python environment type -->
+      <div class="settings-field">
+        <label>{{ t('settings.envType') }}</label>
+        <a-radio-group v-model:value="local.envType">
+          <a-radio value="system">{{ t('settings.envTypeSystem') }}</a-radio>
+          <a-radio value="venv">{{ t('settings.envTypeVenv') }}</a-radio>
+          <a-radio value="conda">{{ t('settings.envTypeConda') }}</a-radio>
+        </a-radio-group>
+      </div>
+
+      <!-- Python 可执行文件（手动覆盖所有模式）/ Python executable (manual override for all modes) -->
       <div class="settings-field">
         <label>{{ t('agent.settings_pythonExe') }}</label>
         <a-input-group compact>
@@ -113,10 +138,26 @@ function handleCancel() {
         </a-input-group>
       </div>
 
-      <!-- 虚拟环境路径 / Virtual env path -->
-      <div class="settings-field">
+      <!-- venv 路径（仅 envType=venv 时显示）/ venv path (only when venv selected) -->
+      <div v-if="local.envType === 'venv'" class="settings-field">
         <label>{{ t('agent.settings_venvPath') }}</label>
-        <a-input v-model:value="local.venvPath" :placeholder="t('agent.settings_venvHint')" />
+        <a-input-group compact>
+          <a-input v-model:value="local.venvPath" style="width: calc(100% - 80px)" :placeholder="t('agent.settings_venvHint')" />
+          <a-button @click="browseVenvDir">{{ t('agent.settings_browse') }}</a-button>
+        </a-input-group>
+      </div>
+
+      <!-- Conda 环境名（仅 envType=conda 时显示）/ Conda env name (only when conda selected) -->
+      <div v-if="local.envType === 'conda'" class="settings-field">
+        <label>{{ t('settings.condaEnvName') }}</label>
+        <a-input v-model:value="local.condaEnvName" :placeholder="t('settings.condaEnvNameHint')" />
+        <p class="sync-desc">{{ t('settings.condaAutoResolve') }}</p>
+      </div>
+
+      <!-- 解析后路径预览 / Resolved path preview -->
+      <div class="settings-field">
+        <label>{{ t('settings.resolvedExe') }}</label>
+        <a-input :value="resolvedExe" disabled style="color: #666;" />
       </div>
 
       <a-divider style="margin: 4px 0" />
