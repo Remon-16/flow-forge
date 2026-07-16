@@ -67,7 +67,7 @@ function browsePath(path: string) {
             content: t('executor.deleteSessionConfirm'),
             okText: t('dialog.yes'),
             cancelText: t('dialog.cancel'),
-            onOk: () => executor.removeSession(id),
+            onOk: () => { executor.removeSession(id).catch(() => {}) },
           })
         }"
         @new-session="executor.selectSession(null)"
@@ -185,7 +185,7 @@ function browsePath(path: string) {
           okText: t('dialog.yes'),
           cancelText: t('dialog.cancel'),
           okType: 'danger',
-          onOk: () => executor.terminateSession(executor.activeSession!.id),
+          onOk: () => { executor.terminateSession(executor.activeSession!.id).catch(() => {}) },
         })"
       >
         ⏹ {{ t('executor.terminate') }}

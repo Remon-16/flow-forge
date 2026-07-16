@@ -91,17 +91,22 @@ onMounted(async () => {
   const { getCurrentWindow } = await import('@tauri-apps/api/window')
   const appWindow = getCurrentWindow()
 
-  // 注册关闭请求处理器（同步回调，内部无异步操作）
-  // Register close request handler (sync callback, no async ops inside)
+  // 注册关闭请求处理器 / Register close request handler
+  // 始终阻止默认行为（存在托盘时默认是隐藏到托盘而非关闭）
+  // Always prevent default (tray causes default to be hide-to-tray, not close)
   await appWindow.onCloseRequested((event) => {
+    event.preventDefault()
     const tasks = agent.tasks || []
     const runningTasks = tasks.filter(
       t => t.status === 'running' || t.status === 'question'
     )
     if (runningTasks.length > 0) {
-      event.preventDefault()
+      // 有运行中任务：弹框确认 / Running tasks: show confirmation dialog
       closeDialogRunningCount.value = runningTasks.length
       closeDialogVisible.value = true
+    } else {
+      // 无运行中任务：直接关闭窗口 / No running tasks: close directly
+      appWindow.destroy()
     }
   })
 })

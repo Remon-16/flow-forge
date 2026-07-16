@@ -57,7 +57,7 @@ onMounted(async () => {
             content: t('agent.deleteTaskContent'),
             okText: t('dialog.yes'),
             cancelText: t('dialog.cancel'),
-            onOk: () => agent.removeTask(id),
+            onOk: () => { agent.removeTask(id).catch(() => {}) },
           })
         }"
         @new-task="agent.selectTask(null)"
@@ -129,7 +129,7 @@ onMounted(async () => {
           okText: t('dialog.yes'),
           cancelText: t('dialog.cancel'),
           okType: 'danger',
-          onOk: () => agent.terminateTask(agent.activeTask!.id),
+          onOk: () => { agent.terminateTask(agent.activeTask!.id).catch(() => {}) },
         })"
       >
         ⏹ {{ t('agent.terminate') }}

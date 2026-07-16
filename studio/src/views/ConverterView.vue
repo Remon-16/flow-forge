@@ -93,7 +93,7 @@ function formatDate(ts: number): string {
                 content: t('converter.deleteSessionConfirm'),
                 okText: t('dialog.yes'),
                 cancelText: t('dialog.cancel'),
-                onOk: () => converter.removeSession(s.id),
+                onOk: () => { converter.removeSession(s.id).catch(() => {}) },
               })"
             >
               ×
@@ -207,7 +207,7 @@ function formatDate(ts: number): string {
           okText: t('dialog.yes'),
           cancelText: t('dialog.cancel'),
           okType: 'danger',
-          onOk: () => converter.terminateSession(converter.activeSession!.id),
+          onOk: () => { converter.terminateSession(converter.activeSession!.id).catch(() => {}) },
         })"
       >
         ⏹ {{ t('converter.terminate') }}

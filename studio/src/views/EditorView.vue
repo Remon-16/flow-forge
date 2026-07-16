@@ -8,7 +8,8 @@ import { useConverterStore } from '../stores/converter'
 import { useAgentStore } from '../stores/agent'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
-import { writeFile, exists } from '../utils/desktop-bridge'
+import { writeFile, deleteToTrash } from '../utils/desktop-bridge'
+import { getAppDataDir } from '../utils/settings-store'
 import yaml from 'js-yaml'
 import ApiDefEditor from '../components/editor/ApiDefEditor.vue'
 import SingleCaseEditor from '../components/editor/SingleCaseEditor.vue'
@@ -115,10 +116,44 @@ async function writeTempYaml(caseFilter: 'all' | 'single' | 'biz' | string[]): P
   }
 
   const yamlContent = yaml.dump(cases, { indent: 2, lineWidth: -1 })
-  const tempDir = agent.config.executorRootDir || '.'
-  const tempPath = `${tempDir}/_studio_temp_${Date.now()}.yaml`.replace(/\\/g, '/')
+
+  // 使用 appDataDir 下的 temp/ 子目录，避免污染源码目录，MSI 安装后也可正常读写
+  // Use temp/ subdirectory under appDataDir, works in dev and after MSI install
+  const appDir = await getAppDataDir()
+  const tempDir = `${appDir}/temp`.replace(/\\/g, '/')
+  const tempPath = `${tempDir}/_studio_temp_${Date.now()}.yaml`
+
+  // 写入临时文件 / Write temp file
   await writeFile(tempPath, yamlContent)
+
+  // 清理 1 小时前的旧临时文件 / Clean up old temp files (older than 1 hour)
+  cleanupOldTempFiles(tempDir).catch(() => {})
+
   return tempPath
+}
+
+/** 清理指定目录中的旧临时文件 / Clean up old temp files in given directory */
+async function cleanupOldTempFiles(tempDir: string): Promise<void> {
+  try {
+    const { listDirectoryAll } = await import('../utils/desktop-bridge')
+    const entries = await listDirectoryAll(tempDir)
+    const now = Date.now()
+    for (const entry of entries) {
+      if (entry.name.startsWith('_studio_temp_') && !entry.isDirectory) {
+        const match = entry.name.match(/_studio_temp_(\d+)\./)
+        if (match) {
+          const ts = parseInt(match[1], 10)
+          // 删除 1 小时前的文件 / Delete files older than 1 hour
+          if (now - ts > 3_600_000) {
+            deleteToTrash(entry.path).catch(() => {})
+          }
+        } else {
+          // 无法解析时间戳，直接删除 / Can't parse timestamp, delete anyway
+          deleteToTrash(entry.path).catch(() => {})
+        }
+      }
+    }
+  } catch { /* 非桌面模式或目录不存在 / Non-desktop mode or dir doesn't exist */ }
 }
 
 function workbookRowToYaml(row: unknown, caseType: string): Record<string, unknown> {

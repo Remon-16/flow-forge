@@ -64,17 +64,22 @@ impl AgentManager {
     pub fn kill(&self, task_id: &str) -> Result<(), String> {
         let mut agents = self.agents.lock().map_err(|e| e.to_string())?;
         if let Some(mut handle) = agents.remove(task_id) {
-            // 先尝试通过 stdin 发送 terminate 命令 / Try graceful termination first
+            // 取出 handle 后立即释放 mutex 锁，避免阻塞其他操作
+            // Release mutex lock immediately after removing handle
+            drop(agents);
+
+            // 先尝试通过 stdin 发送 terminate 命令（优雅终止）
+            // Try graceful termination via stdin first
             let terminate_cmd = "{\"command\":\"terminate\",\"prompt_id\":\"\"}";
             let _ = writeln!(handle.stdin, "{}", terminate_cmd);
             let _ = handle.stdin.flush();
 
-            // 等待一小段时间 / Wait briefly
-            std::thread::sleep(std::time::Duration::from_secs(2));
-
-            // 强制终止 / Force kill
+            // 直接强制终止，不 sleep 不 wait
+            // Force kill immediately — no sleep, no blocking wait
+            // try_wait 非阻塞回收僵尸进程，OS 会最终清理
+            // try_wait reaps zombies without blocking; OS handles final cleanup
             let _ = handle.child.kill();
-            let _ = handle.child.wait();
+            let _ = handle.child.try_wait();
             Ok(())
         } else {
             Err(format!("Agent task not found: {}", task_id))

@@ -4,7 +4,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dropdown, Menu, MenuItem, MenuDivider } from 'ant-design-vue'
-import { CaretRightOutlined, RetweetOutlined, MoreOutlined } from '@ant-design/icons-vue'
+import { PlayCircleOutlined, RetweetOutlined, MoreOutlined } from '@ant-design/icons-vue'
 
 const { t } = useI18n()
 
@@ -144,7 +144,7 @@ function handleConvertDefault() {
     </a-dropdown>
 
     <a-button size="small" type="text" class="toolbar-icon-btn" @click="handleRunDefault" :title="t('editor.toolbar.runAll')">
-      <CaretRightOutlined />
+      <PlayCircleOutlined />
     </a-button>
 
     <a-button size="small" type="text" class="toolbar-icon-btn" @click="emit('editRunParams')" :title="t('editor.toolbar.editRunParams')">
