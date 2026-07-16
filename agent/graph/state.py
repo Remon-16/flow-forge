@@ -36,7 +36,8 @@ class GraphState(TypedDict, total=False):
     # === 文档解析 / Document parsing ===
     requirement_texts: List[str]
     interfaces: List[Dict[str, Any]]
-    api_raw_text: str          # Raw text of API doc (for --parse-mode raw)
+    api_raw_text: str          # Raw text of API doc (for --parse-mode raw) — 多文件拼接，供 URL 校验
+    api_raw_texts: List[Dict[str, str]]  # 逐文件原文 [{"path": "...", "text": "..."}]，供独立 LLM 分析 / Per-file raw texts for per-file LLM analysis
     parse_mode: str            # "raw" | "rule" | "llm"
     parser_path: str           # Custom parser script path
 

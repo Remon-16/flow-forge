@@ -56,13 +56,45 @@ def analyze_api_node(state: GraphState) -> GraphState:
             logger.info(_("analyze_api.parsing_raw", model=_h._settings.llm_model))
             if _sl():
                 _sl().log_node_start("analyze_api", "2/9")
-                _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
-                                model=_h._settings.llm_model, text_length=len(api_raw_text))
             if feedback:
                 summary = agent.revise([], api_summary, feedback)
             else:
-                _first_api = state.get("api_paths", [""])[0]
-                summary = agent.analyze_raw_text(api_raw_text, Path(_first_api).name)
+                # 获取逐文件原文列表 / Get per-file raw text list
+                api_raw_texts = state.get("api_raw_texts", [])
+                if not api_raw_texts:
+                    # 兼容旧格式：无逐文件信息时回退到拼接文本 / Fallback for legacy data
+                    _first_api = state.get("api_paths", [""])[0]
+                    summary = agent.analyze_raw_text(api_raw_text, Path(_first_api).name)
+                    if _sl():
+                        _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
+                                        model=_h._settings.llm_model, text_length=len(api_raw_text))
+                elif len(api_raw_texts) == 1:
+                    # 单文件：直接分析 / Single file: direct analysis
+                    _item = api_raw_texts[0]
+                    summary = agent.analyze_raw_text(_item["text"], Path(_item["path"]).name)
+                    if _sl():
+                        _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
+                                        model=_h._settings.llm_model, text_length=len(_item["text"]))
+                else:
+                    # 多文件：逐文件独立分析后合并 / Multi-file: per-file independent analysis then merge
+                    all_results = []
+                    for i, item in enumerate(api_raw_texts):
+                        if not item["text"].strip():
+                            continue
+                        logger.info(
+                            "Analyzing API doc %d/%d: %s (%d chars)",
+                            i + 1, len(api_raw_texts), item["path"], len(item["text"]),
+                        )
+                        if _sl():
+                            _sl().log_event("llm_call", agent=f"ApiAnalyzer.analyze_raw_text[{i+1}/{len(api_raw_texts)}]",
+                                            model=_h._settings.llm_model, file=item["path"], text_length=len(item["text"]))
+                        result = agent.analyze_raw_text(item["text"], Path(item["path"]).name)
+                        all_results.append(result)
+                    summary = agent._merge_raw_results(all_results, "")
+                    logger.info(
+                        "Merged API analysis from %d files: %d unique interfaces",
+                        len(api_raw_texts), len(summary),
+                    )
         else:
             logger.info(_("analyze_api.llm_calling", model=_h._settings.llm_model))
             if _sl():

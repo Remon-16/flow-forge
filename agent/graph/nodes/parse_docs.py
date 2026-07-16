@@ -73,6 +73,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
         state["interfaces"] = []
         state["interface_extraction_method"] = "none"
         state["api_raw_text"] = ""
+        state["api_raw_texts"] = []
         return state
 
     logger.info(_("parse_docs.parse_mode", mode=parse_mode))
@@ -149,11 +150,13 @@ def parse_docs_node(state: GraphState) -> GraphState:
     # 合并结果 / Merge results
     if parse_mode == "raw":
         state["api_raw_text"] = "\n\n---\n\n".join(all_raw_texts)
+        state["api_raw_texts"] = [{"path": p, "text": t} for p, t in zip(api_paths, all_raw_texts)]
         state["interfaces"] = all_interfaces  # raw 模式下留空，交给后续 analyze_api_node / empty for raw, deferred to analyze_api_node
         state["interface_extraction_method"] = "raw"
         logger.info(_("parse_docs.api_identify_next"))
     else:
         state["api_raw_text"] = "\n\n---\n\n".join(all_raw_texts) if all_raw_texts else ""
+        state["api_raw_texts"] = [{"path": p, "text": t} for p, t in zip(api_paths, all_raw_texts)] if all_raw_texts else []
         state["interfaces"] = all_interfaces
         # 至少有一个文件成功用 LLM 解析则标记为 llm / Mark as llm if at least one file used it
         state["interface_extraction_method"] = aggregated_method
@@ -163,6 +166,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
         save_snapshot(state["memory_dir"], "extracted_texts.json", {
             "requirement_texts": requirement_texts,
             "api_raw_text": state.get("api_raw_text", ""),
+            "api_raw_texts": state.get("api_raw_texts", []),
             "requirement_files": state.get("requirement_paths", []),
             "api_files": api_paths,
         })
@@ -173,6 +177,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
         save_pipeline_artifact(memory_dir, "parsed_docs.json", {
             "requirement_texts": requirement_texts,
             "api_raw_text": state.get("api_raw_text", ""),
+            "api_raw_texts": state.get("api_raw_texts", []),
             "interfaces": state.get("interfaces", []),
             "parse_mode": state.get("parse_mode", ""),
         })

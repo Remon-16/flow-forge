@@ -88,11 +88,15 @@ def batch_controller_node(state: GraphState) -> GraphState:
     api_paths = state.get("api_paths", [])
     api_doc_text = state.get("api_raw_text", "")
     if not api_doc_text and api_paths:
+        # 回退：重新提取所有 API 文档文本并合并 / Fallback: re-extract all API doc texts and merge
         from doc_parser.text_extractor import extract_text
-        try:
-            api_doc_text = extract_text(api_paths[0])
-        except Exception:
-            api_doc_text = ""
+        parts = []
+        for p in api_paths:
+            try:
+                parts.append(extract_text(p))
+            except Exception:
+                pass
+        api_doc_text = "\n\n---\n\n".join(parts)
 
     try:
         result = controller.run(

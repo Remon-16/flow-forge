@@ -159,6 +159,7 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
         if data:
             state["requirement_texts"] = data.get("requirement_texts", [])
             state["api_raw_text"] = data.get("api_raw_text", "")
+            state["api_raw_texts"] = data.get("api_raw_texts", [])
             state["interfaces"] = data.get("interfaces", [])
             state["parse_mode"] = data.get("parse_mode", "raw")
 
@@ -374,6 +375,8 @@ def main() -> int:
             "plan_only": False,
             "requirement_texts": loaded.get("requirement_texts", []),
             "interfaces": loaded.get("interfaces", []),
+            "api_raw_text": loaded.get("api_raw_text", ""),  # 恢复拼接文本供 URL 校验 / Restore merged text for URL validation
+            "api_raw_texts": loaded.get("api_raw_texts", []),  # 恢复逐文件原文 / Restore per-file raw texts
             "plan_md": loaded.get("plan_md", ""),
             "plan_confirmed": loaded.get("plan_confirmed", True),
             "api_summary_confirmed": loaded.get("api_summary_confirmed", True),
