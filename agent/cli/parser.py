@@ -20,8 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="需求文档路径 (.txt, .md, .pdf)。Requirement document path(s).",
     )
     p.add_argument(
-        "--api",
-        help="API 文档路径 (OpenAPI .yaml/.json 或 Markdown .md)。API documentation path.",
+        "--api", nargs="+",
+        help="API 文档路径（支持多个文件）(OpenAPI .yaml/.json 或 Markdown .md)。API documentation path(s).",
     )
     p.add_argument(
         "--output",
@@ -91,14 +91,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--no-url-doc-match-enabled", action="store_true", default=None,
         help="禁用 URL 文档匹配校验。Disable URL doc-match validation.",
-    )
-    p.add_argument(
-        "--knowledge", action="store_true", default=None,
-        help="启用知识库。Enable knowledge base.",
-    )
-    p.add_argument(
-        "--no-knowledge", action="store_true", default=None,
-        help="禁用知识库。Disable knowledge base.",
     )
     p.add_argument(
         "--plugins", action="store_true", default=None,

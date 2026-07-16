@@ -20,8 +20,8 @@ export interface AgentTask {
   createdAt: number          // Unix timestamp ms
   updatedAt: number
   // Form data (saved at creation time)
-  requirementPath: string
-  apiPath: string
+  requirementPaths: string
+  apiPaths: string
   autoMode: boolean
   userGuidance: string
   caseType: 'single' | 'biz' | 'both'

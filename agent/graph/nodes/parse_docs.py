@@ -30,8 +30,8 @@ def parse_docs_node(state: GraphState) -> GraphState:
 
     logger.info(_step("parse_docs", "pipeline.reading_docs"))
 
-    # --- Requirements ---
-    requirement_text_parts: List[str] = []
+    # --- Requirements（按文件独立存储 / per-file storage）---
+    requirement_texts: List[str] = []
     for path in state.get("requirement_paths", []):
         size_str = fmt_size(path)
         ext = Path(path).suffix.lower()
@@ -39,20 +39,20 @@ def parse_docs_node(state: GraphState) -> GraphState:
             if ext in (".txt", ".md"):
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    requirement_text_parts.append(content)
+                    requirement_texts.append(content)
                 logger.info(_("parse_docs.read_file", path=path, size=size_str))
                 if _sl():
                     _sl().log_file_read(path, len(content))
             elif ext == ".pdf":
                 content = PdfParser.parse(path)
-                requirement_text_parts.append(content)
+                requirement_texts.append(content)
                 logger.info(_("parse_docs.pdf_parsing", path=path, size=size_str))
                 if _sl():
                     _sl().log_file_read(path, len(content))
             else:
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    requirement_text_parts.append(content)
+                    requirement_texts.append(content)
                 logger.info(_("parse_docs.read_file", path=path, size=size_str))
                 if _sl():
                     _sl().log_file_read(path, len(content))
@@ -62,103 +62,116 @@ def parse_docs_node(state: GraphState) -> GraphState:
             state["errors"].append(msg)
             logger.info(_("batch.error", msg=msg))
 
-    state["requirement_text"] = "\n\n".join(requirement_text_parts)
+    state["requirement_texts"] = requirement_texts
 
-    # --- API ---
-    api_path = state.get("api_path", "")
+    # --- API（多文档独立解析 / multi-doc independent parsing）---
+    api_paths = state.get("api_paths", [])
     parse_mode = state.get("parse_mode", "raw")
     state["interfaces_from_llm"] = False
 
-    if not api_path:
+    if not api_paths:
         state["interfaces"] = []
         state["interface_extraction_method"] = "none"
+        state["api_raw_text"] = ""
         return state
-
-    size_str = fmt_size(api_path)
-    ext = Path(api_path).suffix.lower()
 
     logger.info(_("parse_docs.parse_mode", mode=parse_mode))
 
-    if parse_mode == "raw":
-        raw_text = extract_text(api_path)
-        if not raw_text.strip():
-            raise Exception(f"API document '{api_path}' is empty, cannot parse.")
-        if len(raw_text.strip()) < 50:
-            logger.info(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
-            logger.warning("API document '%s' contains very little text (%d chars). "
-                           "Image-based content will NOT be processed.", api_path, len(raw_text))
-        state["api_raw_text"] = raw_text
-        state["interfaces"] = []
-        state["interface_extraction_method"] = "raw"
-        logger.info(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
-        logger.info(_("parse_docs.api_identify_next"))
+    all_interfaces: List[dict] = []
+    all_raw_texts: List[str] = []
+    seen_keys: set = set()  # (api_path, method) 去重 / dedup by (url, method)
+    aggregated_method = parse_mode
 
-    elif parse_mode == "rule":
-        from .analyze_api import _dispatch_rule_parser
-        interfaces = _dispatch_rule_parser(api_path, state.get("parser_path", ""))
-        if len(interfaces) == 0:
-            raise Exception(
-                f"Rule parser extracted no interfaces from '{api_path}'.\n"
-                f"Suggestions:\n"
-                f"  1. Try --parse-mode raw (default, let LLM identify interfaces from source)\n"
-                f"  2. Try --parse-mode llm (use LLM to pre-extract structured interfaces)\n"
-                f"  3. Write a custom parser: --parser-path /path/to/parser.py"
+    for api_path in api_paths:
+        size_str = fmt_size(api_path)
+        ext = Path(api_path).suffix.lower()
+
+        if parse_mode == "raw":
+            raw_text = extract_text(api_path)
+            if not raw_text.strip():
+                logger.warning("API document '%s' is empty, skipped.", api_path)
+                continue
+            if len(raw_text.strip()) < 50:
+                logger.info(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
+                logger.warning("API document '%s' contains very little text (%d chars). "
+                               "Image-based content will NOT be processed.", api_path, len(raw_text))
+            all_raw_texts.append(raw_text)
+            logger.info(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
+
+        elif parse_mode == "rule":
+            from .analyze_api import _dispatch_rule_parser
+            interfaces = _dispatch_rule_parser(api_path, state.get("parser_path", ""))
+            for iface in interfaces:
+                d = iface_to_dict(iface)
+                key = (d.get("api_path", ""), d.get("method", ""))
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_interfaces.append(d)
+            logger.info(_("parse_docs.rule_done", count=len(interfaces)))
+
+        elif parse_mode == "llm":
+            raw_text = extract_text(api_path)
+            if not raw_text.strip():
+                logger.warning("API document '%s' is empty, skipped.", api_path)
+                continue
+            if len(raw_text.strip()) < 50:
+                logger.info(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
+                logger.warning("API document '%s' contains very little text (%d chars). "
+                               "Image-based content will NOT be processed.", api_path, len(raw_text))
+            all_raw_texts.append(raw_text)
+            logger.info(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
+            logger.info(_("parse_docs.llm_extracting", model=_h._settings.llm_model))
+            if _sl():
+                _sl().log_event("llm_call", agent="DocParserAgent", model=_h._settings.llm_model,
+                                text_length=len(raw_text))
+            parser_doc = DocParserAgent(_h._settings)
+            interfaces = parser_doc.parse(
+                raw_text=raw_text,
+                file_name=Path(api_path).name,
+                file_type_hint=ext,
             )
-        state["interfaces"] = [iface_to_dict(i) for i in interfaces]
-        state["interface_extraction_method"] = "rule"
-        logger.info(_("parse_docs.rule_done", count=len(interfaces)))
+            for iface in interfaces:
+                d = iface_to_dict(iface)
+                key = (d.get("api_path", ""), d.get("method", ""))
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_interfaces.append(d)
+            state["interfaces_from_llm"] = True
+            aggregated_method = "llm"
+            logger.info(_("parse_docs.llm_extracted", count=len(interfaces)))
 
-    elif parse_mode == "llm":
-        raw_text = extract_text(api_path)
-        if not raw_text.strip():
-            raise Exception(f"API document '{api_path}' is empty, cannot parse.")
-        if len(raw_text.strip()) < 50:
-            logger.info(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
-            logger.warning("API document '%s' contains very little text (%d chars). "
-                           "Image-based content will NOT be processed.", api_path, len(raw_text))
-        logger.info(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
-        logger.info(_("parse_docs.llm_extracting", model=_h._settings.llm_model))
+        else:
+            raise Exception(f"Unknown parse mode: {parse_mode}. Supported modes: raw (default), rule, llm")
+
         if _sl():
-            _sl().log_event("llm_call", agent="DocParserAgent", model=_h._settings.llm_model,
-                            text_length=len(raw_text))
-        parser = DocParserAgent(_h._settings)
-        interfaces = parser.parse(
-            raw_text=raw_text,
-            file_name=Path(api_path).name,
-            file_type_hint=ext,
-        )
-        if len(interfaces) == 0:
-            raise Exception(
-                f"LLM extracted no interfaces from '{api_path}'.\n"
-                f"Suggestions:\n"
-                f"  1. Try --parse-mode raw (let ApiAnalyzer analyze directly from source)\n"
-                f"  2. Check if the file content describes API interfaces"
-            )
-        state["interfaces"] = [iface_to_dict(i) for i in interfaces]
-        state["interfaces_from_llm"] = True
-        state["api_raw_text"] = raw_text
-        state["interface_extraction_method"] = "llm"
-        logger.info(_("parse_docs.llm_extracted", count=len(interfaces)))
+            _sl().log_file_read(api_path, Path(api_path).stat().st_size)
 
+    # 合并结果 / Merge results
+    if parse_mode == "raw":
+        state["api_raw_text"] = "\n\n---\n\n".join(all_raw_texts)
+        state["interfaces"] = all_interfaces  # raw 模式下留空，交给后续 analyze_api_node / empty for raw, deferred to analyze_api_node
+        state["interface_extraction_method"] = "raw"
+        logger.info(_("parse_docs.api_identify_next"))
     else:
-        raise Exception(f"Unknown parse mode: {parse_mode}. Supported modes: raw (default), rule, llm")
-
-    if _sl():
-        _sl().log_file_read(api_path, Path(api_path).stat().st_size)
+        state["api_raw_text"] = "\n\n---\n\n".join(all_raw_texts) if all_raw_texts else ""
+        state["interfaces"] = all_interfaces
+        # 至少有一个文件成功用 LLM 解析则标记为 llm / Mark as llm if at least one file used it
+        state["interface_extraction_method"] = aggregated_method
+        logger.info(_("parse_docs.llm_extracted", count=len(all_interfaces)))
 
     if state.get("debug_snapshots") and state.get("memory_dir"):
         save_snapshot(state["memory_dir"], "extracted_texts.json", {
-            "requirement_text": state.get("requirement_text", ""),
+            "requirement_texts": requirement_texts,
             "api_raw_text": state.get("api_raw_text", ""),
             "requirement_files": state.get("requirement_paths", []),
-            "api_file": state.get("api_path", ""),
+            "api_files": api_paths,
         })
 
     # Save pipeline artifact for resume
     memory_dir = state.get("memory_dir", "")
     if memory_dir:
         save_pipeline_artifact(memory_dir, "parsed_docs.json", {
-            "requirement_text": state.get("requirement_text", ""),
+            "requirement_texts": requirement_texts,
             "api_raw_text": state.get("api_raw_text", ""),
             "interfaces": state.get("interfaces", []),
             "parse_mode": state.get("parse_mode", ""),

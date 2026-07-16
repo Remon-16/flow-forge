@@ -85,18 +85,6 @@ pipeline:
 
 The skipping logic runs at the code level and does not affect outline generation — the outline still contains the complete `api_groups` and `biz_flows`. It can also be overridden with the `--case-type` CLI argument.
 
-### knowledge — Knowledge Base
-
-> The knowledge base is currently a Beta feature.
-
-```yaml
-knowledge:
-  enabled: false     # Enable the knowledge base (grep-based plain-text search)
-  dir: ./knowledge   # Knowledge base directory
-```
-
-See the [Knowledge Base section in how-it-works.md](./how-it-works.en.md#knowledge-base) for details.
-
 ### validation — Validation & Correction
 
 ```yaml
@@ -227,7 +215,6 @@ Main entry point: `python main.py`. Full argument list (matching `cli/parser.py`
 | `--case-format-max-retries N` | Overrides `validation.case_gen_validation.max_retries` (case format validation retry limit, 0 = no retries) |
 | `--validation` / `--no-validation` | Enable/disable case format validation (overrides `validation.case_gen_validation.enable`) |
 | `--url-doc-match-enabled` / `--no-url-doc-match-enabled` | Enable/disable URL doc-match validation (overrides `validation.url_doc_match_validation.enable`) |
-| `--knowledge` / `--no-knowledge` | Enable/disable knowledge base (overrides `knowledge.enabled`) |
 | `--plugins` / `--no-plugins` | Enable/disable plugins (overrides `plugins.enabled`) |
 | `--skills` / `--no-skills` | Enable/disable skills (overrides `skills.enabled`) |
 | `--lang {zh_CN,en_US}` | Overrides `agent.lang` (UI language) |

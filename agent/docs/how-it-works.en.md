@@ -2,7 +2,7 @@
 
 [← Back to agent/README](../README.en.md)
 
-This document explains the agent's internal mechanics: the pipeline architecture, human review modes (y/n/r), the knowledge base, prompt management, auto mode, directory structure, and design philosophy.
+This document explains the agent's internal mechanics: the pipeline architecture, human review modes (y/n/r), prompt management, auto mode, directory structure, and design philosophy.
 
 ---
 
@@ -191,13 +191,131 @@ Edit `completed_stage` in `pipeline_state.json` to the name of the previous node
 
 ---
 
-## Knowledge Base
+## Context Window Management & Document Chunking Strategy
 
-The knowledge base (`knowledge/search.py`) provides grep-based plain-text keyword search — no embedding model or external vector database required. Knowledge is stored as `.md` files under the `knowledge/` directory.
+Flow Forge's core strategy for handling large documents is "**user splitting first, automatic splitting as fallback**" — giving users control over document granularity, with auto-chunking only as a safety net for extremely long texts.
 
-It is controlled by the `knowledge.enabled` switch in `env.yaml`. When enabled, each agent uses grep to search the `.md` files while building its prompt, appending matching knowledge snippets to the end of the prompt to provide domain knowledge and best-practice references.
+### Phase 1: User-Controlled Splitting (Recommended)
 
-Users can extend the knowledge base by adding their own `.md` files to the `knowledge/` directory.
+Users can pass multiple files via `--requirement` and `--api`; the system makes one independent LLM call per document, then merges results.
+
+**Why split documents yourself?**
+- One document = one independent LLM call, preserving parse quality
+- Avoids context breakage from auto-splitting at arbitrary boundaries
+- Critical for weaker models: smaller per-document context → more focused model → higher quality output
+
+**Usage guidance**:
+- Recommend **14 interfaces or fewer** per submission
+- Large tasks can be split into multiple document files, or run as parallel CLI jobs
+- Use `--auto` mode for overnight batch execution to skip manual review
+
+**API document merge rules**: Interface lists from multiple API docs are deduplicated by `(api_path, method)`. `test_id` values from different LLM calls are unreliable — URL + method is the true unique identifier for an interface.
+
+**Requirement document merge rules**: Analysis results from multiple requirement docs are merged by key (`business_flows`, `roles`, `constraints`, `exceptions`), with string-level deduplication within each key.
+
+### Phase 2: Automatic Token-Aware Chunking
+
+When a single document exceeds the context window threshold, the system automatically invokes `_process_long_text()` for chunked processing.
+
+**Trigger**: `estimated_input_tokens > context_window * compression_threshold` (default `128000 * 0.9 = 115200` tokens).
+
+**Chunking algorithm** (`BaseAgent._chunk_text()`):
+1. **Level 1**: Split by `\n\n` (paragraph boundaries), accumulating paragraphs until the token budget is reached
+2. **Level 2**: If a single paragraph exceeds budget, fall back to sentence-level splitting using `(?<=[。.!！?？])\s*` (Chinese and English punctuation)
+
+**Chunk token budget**:
+```
+max_chunk = context_window - system_prompt_tokens - max(output_tokens, 4096) - 200(overlap_reserve)
+```
+Clamped to a floor of 1000 tokens when necessary.
+
+**Chunk notices**: Each chunk is prepended with a notice string (e.g. `REQ_CHUNK_NOTICE`, `RAW_API_CHUNK_NOTICE`, `DOC_CHUNK_NOTICE`) telling the LLM this is part of a larger document.
+
+### Phase 3: Context Accumulation & Compression
+
+`_process_long_text()` maintains progressive context across multiple rounds:
+
+- **Sliding window**: Only the last **3 results** (as JSON) are passed as accumulated context to the next chunk. Earlier results are preserved only indirectly via the compression summary.
+
+- **Context compression** (`_compress_conversation()`): When accumulated context approaches the window limit, an LLM call condenses historical results into a key-point summary. Compression only touches chunk processing results — it **never modifies system prompts or skill content**.
+
+- **Dual threshold**:
+  - `compression_threshold` (default `0.9`, soft threshold): logs a warning only, no blocking
+  - Hard limit (`1.0`): returns False, forcing compression before proceeding
+
+- **Overlap reserve**: 200 tokens reserved per chunk as overlap buffer. This is a budget reservation, not literal text overlap — continuity is maintained by accumulated context and the compression summary.
+
+### Chunking Strategy by Pipeline Stage
+
+Different stages use different chunking strategies tailored to their needs:
+
+| Stage | Splitting Method | Merge Strategy | Notes |
+|------|---------|---------|------|
+| **parse_docs** (document input) | User-split (one file at a time) | Dedup interfaces by `(api_path, method)` | No auto-chunking; N files = N LLM calls |
+| **analyze_requirement** (requirement analysis) | `_process_long_text()` auto-chunking | Merge by key (`business_flows`, `roles`, `constraints`, `exceptions`), string dedup | Only triggered when single doc exceeds threshold |
+| **analyze_api** (API analysis, raw mode) | `_process_long_text()` auto-chunking | Dedup interface list by `(api_path, method)` | Triggered when single doc exceeds threshold |
+| **generate_plan** (plan generation) | Four-phase logical split (Phases A/B/C/D) | Concatenate in phase order | Not token-based; splits by **API groups and biz flow batches**; each batch is an independent LLM call with global context injected |
+| **parse_plan** (plan parsing) | Adaptive heading-level split + `_process_long_text()` | Dedup by `test_id` + `url` | Uses `detect_section_level()` to auto-detect the plan's primary heading level, then delegates to `_process_long_text()` for token-aware chunked LLM parsing |
+| **batch_controller** (case generation) | `skeleton_batch_size` controls test points per batch | Concatenate case lists | Not token-based; splits by **test point count** per batch |
+| **revise_plan** (plan revision) | Adaptive heading-level section split + annotation/feedback targeted to chunks | Replace by chunk key, reassemble | See "Plan Review & Revision" below |
+
+### Four-Phase Plan Generation (Phases A/B/C/D)
+
+Plan generation does not use the generic `_process_long_text()`. Instead it splits by **logical boundaries** in four phases:
+
+- **Phase A**: Global context (single LLM call with full interface overview)
+- **Phase B**: Split by API groups. `plan_single_batch_size` (default 8) controls interfaces per batch; set to `-1` to merge all into one batch
+- **Phase C**: Split by biz flow batches. `plan_biz_flow_batch_size` (default 1) controls flows per batch. Defaults to 1 because Mermaid sequence diagrams require per-flow generation
+- **Phase D**: Assembly — concatenate Phase A/B/C outputs in order, no LLM call
+
+Each phase/batch saves progress to `plan_chunks_progress.json`, supporting resume from interruption.
+
+### Plan Review & Revision
+
+The test plan is not a one-shot generation. The system provides a `human_confirm → revise_plan` loop supporting multiple revision rounds:
+
+**Section parsing infrastructure** (shared by n-mode and r-mode):
+- `detect_section_level(plan_md)`: Adaptive heading-level detection — scans all Markdown headings, selects the shallowest level that appears ≥2 times as the primary split level
+- `classify_section(heading_text)`: Keyword-based classification into global ("Business Understanding"), API ("Single Interface Test Points"), or biz ("Business Flow Testing") categories
+- `_parse_plan_to_sections()`: Parses plan.md into `{global, sections: [{key, type, name, content}]}` structure, mapping chunks to outline entries by name
+- `_assemble_plan(sections)`: Reassembles all chunks back into complete plan.md after revision
+
+**Plan Sections structure**:
+```
+plan.md
+  │ detect_section_level() → find primary split level (e.g. ##)
+  │ _parse_plan_to_sections()
+  ▼
+{
+  global: "<Business Understanding + Mermaid diagrams>",
+  sections: [
+    { key: "api_Payment", type: "api_group", content: "### Payment\n...test points..." },
+    { key: "biz_Login",  type: "biz_flow",  content: "### Login flow\n...steps..." },
+  ]
+}
+  │ Modify sections[n].content → _assemble_plan()
+  ▼
+Revised plan.md
+```
+
+**n-mode (text feedback) — three stages**:
+1. **Section impact analysis**: Send user feedback to LLM to determine which broad categories (global/single_api/biz_flows) are affected. Returns `{global: bool, single_api: bool, biz_flows: bool}`
+2. **Chunk-level intent analysis**: For each affected category, send chunk names and descriptions to LLM (without full content) to classify each as `noop`/`fix`/`delete_chunk`/`add_chunk`
+3. **Execute chunk actions**: Shared with r-mode (below)
+
+**r-mode (annotations) — four steps**:
+1. **Load section registry**: Parse plan.md into chunk list
+2. **Map annotations to sections**: Locate target chunks via `selected_text` substring matching; fall back to line-number positioning on match failure
+3. **Intent analysis**: Batch annotations + chunk content to LLM; LLM outputs one action per annotation (`noop`/`fix`/`delete_chunk`/`add_chunk`). Output validated; defaults to `noop` on validation failure
+4. **Execute chunk actions**: Shared execution layer
+
+**Shared chunk action execution layer** (used by both modes):
+- **noop**: No modification
+- **fix**: Inject revision instructions into chunk generation prompt, have LLM regenerate content. For biz-type chunks, Mermaid diagram is regenerated first
+- **delete_chunk**: Remove from sections and outline
+- **add_chunk**: Create new outline entry, register section, generate content via LLM
+
+After revision, chunks are reassembled into complete plan.md, and the graph loops back to `human_confirm` for re-review.
 
 ---
 
@@ -251,7 +369,6 @@ agent/
 ├── graph/                       # StateGraph workflow and nodes
 │   └── nodes/                   #   Workflow nodes split by responsibility
 ├── validators/                  # Case format validation, URL existence checks
-├── knowledge/                   # grep knowledge base (.md files)
 ├── doc_parser/                  # OpenAPI / Markdown / PDF / LLM document parsing
 ├── utils/                       # Session logging, token counting
 ├── logs/                        # Runtime logs (generated at runtime)
@@ -267,10 +384,6 @@ agent/
 - **State management**: The `GraphState` TypedDict is passed automatically between nodes — no manual state object maintenance needed.
 - **Interrupts and resume**: `interrupt()` + `MemorySaver` natively support human review interrupts and resume precisely from the checkpoint.
 - **Conditional routing**: `add_conditional_edges()` makes the review branch a natural part of the graph.
-
-### Why grep Instead of Embedding Search
-
-Zero cost (no embedding API calls), zero external dependencies (standard library only), interpretable (exact matching, no semantic drift), and extensible (just create a `.md` file to add knowledge).
 
 ### Why the Pipeline Pattern
 

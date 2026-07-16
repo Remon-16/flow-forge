@@ -359,7 +359,7 @@ remark: ""
 
             # 保存必要的 pipeline artifacts / Save required pipeline artifacts
             save_pipeline_artifact(str(memory_dir), "parsed_docs.json", {
-                "requirement_text": "",
+                "requirement_texts": [],
                 "api_raw_text": "",
                 "interfaces": [{"test_id": "api_old", "method": "GET", "url": "/old"}],
                 "parse_mode": "raw",
@@ -393,7 +393,7 @@ remark: ""
             interfaces_dir.mkdir(parents=True)  # empty dir, no YAML files
 
             save_pipeline_artifact(str(memory_dir), "parsed_docs.json", {
-                "requirement_text": "",
+                "requirement_texts": [],
                 "api_raw_text": "",
                 "interfaces": [{"test_id": "api_from_parsed"}],
                 "parse_mode": "raw",

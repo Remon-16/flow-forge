@@ -21,7 +21,6 @@
 graph TD
     REQ[Requirements Doc] --> AGENT[AI Test Case Generation Agent]
     API[API Documentation] --> AGENT
-    KB[(Grep Search)] -.-> AGENT
     AGENT --> |plan.md| REVIEW[Human Review / Studio Annotation]
     REVIEW --> |Review Confirmed| AGENT
     STUDIO --> |Launch Agent| AGENT

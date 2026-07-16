@@ -6,7 +6,7 @@ A multi-agent system built on a LangGraph pipeline. It reads **requirement docum
 
 ## What It Does
 
-- **Multi-format input**: Requirement documents support Markdown / PDF / plain text; API documentation supports OpenAPI 3.0 (JSON/YAML) / Markdown tables.
+- **Multi-format input**: Requirement documents support Markdown / PDF / plain text; API documentation supports OpenAPI 3.0 (JSON/YAML) / Markdown tables. Supports multi-file input with per-file independent parsing for quality assurance.
 - **Two case types**: Generates single-API test cases and multi-step business-flow test cases, supporting simple equality assertions (`assert_dict`) and advanced multi-operator assertion rules (`assert_rules`).
 - **Controllable human review**: After the AI generates the test plan, a human confirms it (via `y` / `n` / `r`), ensuring quality before cases are generated.
 - **Anti-hallucination**: URL correction, output-count validation, and batched generation catch unreliable output at the generation stage.
@@ -73,6 +73,6 @@ Tests incur no LLM API costs (all LLM calls are mocked).
 | Document | Contents |
 |------|------|
 | [Configuration & CLI Reference](./docs/configuration.en.md) | All `env.yaml` fields, `translate_env.yaml`, all CLI parameters, the translation tool |
-| [How It Works](./docs/how-it-works.en.md) | The 11-step pipeline architecture, review modes y/n/r, auto mode, knowledge base, directory structure, design philosophy |
+| [How It Works](./docs/how-it-works.en.md) | The 11-step pipeline architecture, review modes y/n/r, auto mode, context window management & document chunking strategy, directory structure, design philosophy |
 | [Plugin & Skill System](./docs/plugins-and-skills.en.md) | Plugin development and configuration, skill injection, official plugins and built-in skills |
 | [Anti-Hallucination & Error Handling](./docs/anti-hallucination.en.md) | URL correction, count validation, retry strategies (warn/retry/keep) |

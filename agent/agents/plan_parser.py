@@ -76,17 +76,21 @@ class PlanParser(BaseAgent):
     def _llm_parse(self, plan_md: str) -> TestPlan:
         """Use LLM to extract structured test points from the plan.
 
-        For large plans, splits by ``##`` section headers and processes
-        each section independently, then merges results.
+        对超大计划使用自适应标题层级切分 + _process_long_text() 进行 token
+        感知的逐 chunk 解析，享受滑动窗口上下文传递和上下文压缩。
+
+        For large plans, splits by adaptively-detected heading level and uses
+        _process_long_text() for token-aware chunked parsing, with sliding-window
+        context and compression.
         """
         from prompts.plan_parser import (
             PLAN_PARSER_SYSTEM as system_msg,
             PLAN_PARSER_USER,
-            PLAN_CHUNK_NOTICE,
         )
         from prompts.render import render_prompt
+        from utils.plan_sections import detect_section_level
 
-        # Check if plan fits in a single call
+        # 单次调用能否塞下 / Does it fit in a single call?
         test_prompt = render_prompt(PLAN_PARSER_USER, plan_md=plan_md)
         input_tokens = self._estimate_input_tokens(system_msg, test_prompt)
 
@@ -99,40 +103,55 @@ class PlanParser(BaseAgent):
                 result = self._regex_parse(plan_md)
                 return self._build_testplan(result)
 
-        # Large plan — split by sections
-        logger.info("Plan too large (%d tokens), splitting by sections", input_tokens)
-        sections = re.split(r"\n(?=##\s)", plan_md)
+        # 大计划 — 自适应标题层级切分 / Large plan — adaptive heading-level split
+        logger.info("Plan too large (%d tokens), splitting by adaptive heading level", input_tokens)
+        section_level = detect_section_level(plan_md)
+        logger.info("Detected section level: H%d", section_level)
+        sections = re.split(rf"\n(?=#{{{section_level}}}\s)", plan_md)
+
         if len(sections) <= 1:
-            # Can't split further — truncate and try
-            truncated = plan_md[:int(self._context_window * 0.7 * 4)]
-            try:
-                result = self.call_llm_json(
-                    render_prompt(PLAN_PARSER_USER, plan_md=truncated),
-                    system_msg,
-                )
-                return self._build_testplan(result)
-            except Exception as e:
-                logger.warning("LLM plan parsing failed: %s", e)
-                result = self._regex_parse(plan_md)
-                return self._build_testplan(result)
-
-        # Process sections in chunks
-        all_results = []
-        for i in range(0, len(sections), 3):
-            chunk = "\n".join(sections[i:i + 3])
-            chunk_prompt = (
-                f"{PLAN_CHUNK_NOTICE.format(part=i // 3 + 1)}\n\n"
-                f"{render_prompt(PLAN_PARSER_USER, plan_md=chunk)}"
+            # 无法按标题拆分 → 回退到纯文本 token 切分
+            # Can't split by heading → fallback to plain-text token chunking
+            logger.info("Single section, using _process_long_text for token-aware chunking")
+            merged = self._process_long_text(
+                text=plan_md,
+                system_msg=system_msg,
+                chunk_processor=self._parse_chunk_processor(system_msg, PLAN_PARSER_USER),
+                result_merger=lambda results, _sm: self._merge_plan_results(results),
             )
-            try:
-                result = self.call_llm_json(chunk_prompt, system_msg)
-                all_results.append(result)
-            except Exception as e:
-                logger.warning("Chunk %d parsing failed: %s", i // 3 + 1, e)
-                all_results.append(self._regex_parse(chunk))
+            return self._build_testplan(merged)
 
-        merged = self._merge_plan_results(all_results)
+        # 多 section → 以 \n\n 拼接，让 _chunk_text 以 section 为边界切分
+        # Multi-section → join with \n\n so _chunk_text respects section boundaries
+        sectioned_text = "\n\n".join(sections)
+        logger.info("Split into %d sections, processing via _process_long_text", len(sections))
+
+        merged = self._process_long_text(
+            text=sectioned_text,
+            system_msg=system_msg,
+            chunk_processor=self._parse_chunk_processor(system_msg, PLAN_PARSER_USER),
+            result_merger=lambda results, _sm: self._merge_plan_results(results),
+        )
         return self._build_testplan(merged)
+
+    def _parse_chunk_processor(self, system_msg: str, user_template: str):
+        """创建 chunk 处理器闭包 / Create chunk processor closure.
+
+        返回一个签名为 (chunk_text, accumulated) -> dict 的函数，供
+        _process_long_text() 逐 chunk 调用。
+        Returns a callable with signature (chunk_text, accumulated) -> dict
+        for _process_long_text() to invoke per chunk.
+        """
+        from prompts.render import render_prompt
+
+        def _proc(chunk_with_notice: str, _accumulated: str) -> dict:
+            prompt = render_prompt(user_template, plan_md=chunk_with_notice)
+            try:
+                return self.call_llm_json(prompt, system_msg)
+            except Exception:
+                return self._regex_parse(chunk_with_notice)
+
+        return _proc
 
     def _merge_plan_results(self, results: list) -> dict:
         """Merge parsed plan results from multiple chunks."""

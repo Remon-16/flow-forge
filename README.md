@@ -21,7 +21,6 @@
 graph TD
     REQ[需求文档] --> AGENT[AI 用例生成智能体]
     API[接口文档] --> AGENT
-    KB[(Grep 检索)] -.-> AGENT
     AGENT --> |plan.md| REVIEW[人工审核 / Studio 批注]
     REVIEW --> |审核确认| AGENT
     STUDIO --> |启动 Agent| AGENT

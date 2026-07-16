@@ -85,18 +85,6 @@ pipeline:
 
 跳过逻辑在代码级别执行，不影响轮廓生成——轮廓仍包含完整的 `api_groups` 和 `biz_flows`。也可用 `--case-type` CLI 参数覆盖。
 
-### knowledge — 知识库
-
-> 目前知识库属于Beta内容
-
-```yaml
-knowledge:
-  enabled: false     # 启用知识库（基于 grep 的纯文本检索）
-  dir: ./knowledge   # 知识库目录
-```
-
-详见 [how-it-works.md 的知识库章节](./how-it-works.md#知识库)。
-
 ### validation — 校验与纠错
 
 ```yaml
@@ -227,7 +215,6 @@ logging:
 | `--case-format-max-retries N` | 覆盖 `validation.case_gen_validation.max_retries`（用例格式校验重试次数，0 = 不重试） |
 | `--validation` / `--no-validation` | 启用/禁用用例格式校验（覆盖 `validation.case_gen_validation.enable`） |
 | `--url-doc-match-enabled` / `--no-url-doc-match-enabled` | 启用/禁用 URL 文档匹配校验（覆盖 `validation.url_doc_match_validation.enable`） |
-| `--knowledge` / `--no-knowledge` | 启用/禁用知识库（覆盖 `knowledge.enabled`） |
 | `--plugins` / `--no-plugins` | 启用/禁用插件（覆盖 `plugins.enabled`） |
 | `--skills` / `--no-skills` | 启用/禁用技能（覆盖 `skills.enabled`） |
 | `--lang {zh_CN,en_US}` | 覆盖 `agent.lang`（界面语言） |

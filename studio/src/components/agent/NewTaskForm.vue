@@ -15,8 +15,8 @@ const emit = defineEmits<{
 
 // 基础输入 / Basic inputs
 const outputDir = ref('')
-const requirementPath = ref('')
-const apiPath = ref('')
+const requirementPaths = ref('')
+const apiPaths = ref('')
 const autoMode = ref(false)
 const userGuidance = ref('')
 const caseType = ref<'single' | 'biz' | 'both'>('both')
@@ -38,15 +38,22 @@ async function browseDir(target: 'output') {
   } catch { /* cancelled */ }
 }
 
-// 浏览文件 / Browse file
+// 浏览文件（支持多选）/ Browse file (multi-select)
 async function browseFile(target: 'requirement' | 'api') {
   try {
-    const file = await openFileDialog()
-    if (file) {
-      if (target === 'requirement') requirementPath.value = file
-      else apiPath.value = file
+    const files = await openFileDialog(true)
+    if (files) {
+      const paths = Array.isArray(files) ? files.join(';') : files
+      if (target === 'requirement') requirementPaths.value = paths
+      else apiPaths.value = paths
     }
   } catch { /* cancelled */ }
+}
+
+// 解析路径字符串为数组 / Parse path string to array
+function splitPaths(input: string): string[] {
+  if (!input.trim()) return []
+  return input.split(/[;\n]+/).map(s => s.trim()).filter(Boolean)
 }
 
 // 加载配置文件 / Load config file
@@ -146,8 +153,8 @@ async function handleSubmit() {
 
   const taskId = await agent.createTask({
     outputDir: outputDir.value,
-    requirementPath: requirementPath.value,
-    apiPath: apiPath.value,
+    requirementPaths: requirementPaths.value,
+    apiPaths: apiPaths.value,
     autoMode: autoMode.value,
     userGuidance: userGuidance.value,
     caseType: caseType.value,
@@ -168,8 +175,6 @@ async function handleSubmit() {
       cliArgs.push(`--${key.replace(/_/g, '-')}`, String(val))
     } else if (section === 'validation' && key === 'enabled') {
       cliArgs.push(val ? '--validation' : '--no-validation')
-    } else if (section === 'knowledge') {
-      cliArgs.push(val ? '--knowledge' : '--no-knowledge')
     } else if (section === 'plugins') {
       cliArgs.push(val ? '--plugins' : '--no-plugins')
     } else if (section === 'skills') {
@@ -208,17 +213,19 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
       <div class="form-row">
         <label>{{ t('agent.form_requirement') }}</label>
         <a-input-group compact>
-          <a-input v-model:value="requirementPath" style="width: calc(100% - 80px)" placeholder="docs/req.md" />
+          <a-input v-model:value="requirementPaths" style="width: calc(100% - 80px)" placeholder="docs/req1.md;docs/req2.md" />
           <a-button @click="browseFile('requirement')">{{ t('agent.settings_browse') }}</a-button>
         </a-input-group>
+        <div class="form-hint">{{ t('agent.form_requirementHint') }}</div>
       </div>
 
       <div class="form-row">
         <label>{{ t('agent.form_api') }}</label>
         <a-input-group compact>
-          <a-input v-model:value="apiPath" style="width: calc(100% - 80px)" placeholder="docs/api.yaml" />
+          <a-input v-model:value="apiPaths" style="width: calc(100% - 80px)" placeholder="docs/api1.yaml;docs/api2.md" />
           <a-button @click="browseFile('api')">{{ t('agent.settings_browse') }}</a-button>
         </a-input-group>
+        <div class="form-hint">{{ t('agent.form_apiHint') }}</div>
       </div>
 
       <div class="form-row inline">

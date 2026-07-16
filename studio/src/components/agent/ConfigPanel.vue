@@ -38,13 +38,6 @@ const sections: { key: string; label: string; fields: { key: string; label: stri
     fields: [],
   },
   {
-    key: 'knowledge',
-    label: 'Knowledge Base',
-    fields: [
-      { key: 'enabled', label: 'Enabled', type: 'boolean' },
-    ],
-  },
-  {
     key: 'plugins',
     label: 'Plugins',
     fields: [

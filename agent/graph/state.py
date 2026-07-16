@@ -18,7 +18,7 @@ class GraphState(TypedDict, total=False):
 
     # === 输入 / Input ===
     requirement_paths: List[str]
-    api_path: str
+    api_paths: List[str]
     output_path: str
     plan_only: bool
 
@@ -34,7 +34,7 @@ class GraphState(TypedDict, total=False):
     case_type: str              # "both" | "single" | "biz"
 
     # === 文档解析 / Document parsing ===
-    requirement_text: str
+    requirement_texts: List[str]
     interfaces: List[Dict[str, Any]]
     api_raw_text: str          # Raw text of API doc (for --parse-mode raw)
     parse_mode: str            # "raw" | "rule" | "llm"

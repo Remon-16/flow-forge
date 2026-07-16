@@ -84,8 +84,8 @@ export const useAgentStore = defineStore('agent', () => {
 
   async function createTask(params: {
     outputDir: string
-    requirementPath: string
-    apiPath: string
+    requirementPaths: string
+    apiPaths: string
     autoMode: boolean
     userGuidance: string
     caseType: 'single' | 'biz' | 'both'
@@ -100,8 +100,8 @@ export const useAgentStore = defineStore('agent', () => {
       status: 'pending',
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      requirementPath: params.requirementPath,
-      apiPath: params.apiPath,
+      requirementPaths: params.requirementPaths,
+      apiPaths: params.apiPaths,
       autoMode: params.autoMode,
       userGuidance: params.userGuidance,
       caseType: params.caseType,
@@ -150,10 +150,14 @@ export const useAgentStore = defineStore('agent', () => {
     task.updatedAt = Date.now()
 
     // 构建额外 CLI 参数 / Build additional CLI args
+    // 多路径以 ; 或空格分隔 / Multi-path separated by ; or space
+    const reqPaths = task.requirementPaths ? task.requirementPaths.split(/[;\n]+/).map(s => s.trim()).filter(Boolean) : []
+    const apiPathList = task.apiPaths ? task.apiPaths.split(/[;\n]+/).map(s => s.trim()).filter(Boolean) : []
+
     const args: string[] = [
       '--output', task.outputDir,
-      ...(task.requirementPath ? ['--requirement', task.requirementPath] : []),
-      ...(task.apiPath ? ['--api', task.apiPath] : []),
+      ...(reqPaths.length ? ['--requirement', ...reqPaths] : []),
+      ...(apiPathList.length ? ['--api', ...apiPathList] : []),
       ...(task.autoMode ? ['--auto'] : []),
       ...(task.userGuidance ? ['--prompt', task.userGuidance] : []),
       '--case-type', task.caseType,

@@ -85,12 +85,12 @@ def batch_controller_node(state: GraphState) -> GraphState:
     controller = BatchController(_h._settings)
     controller._batch_size = batch_size
 
-    api_path = state.get("api_path", "")
+    api_paths = state.get("api_paths", [])
     api_doc_text = state.get("api_raw_text", "")
-    if not api_doc_text and api_path:
+    if not api_doc_text and api_paths:
         from doc_parser.text_extractor import extract_text
         try:
-            api_doc_text = extract_text(api_path)
+            api_doc_text = extract_text(api_paths[0])
         except Exception:
             api_doc_text = ""
 

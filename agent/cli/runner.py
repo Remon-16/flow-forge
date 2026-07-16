@@ -157,7 +157,7 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
     if "parse_docs" in completed_stages:
         data = _load_json("parsed_docs.json")
         if data:
-            state["requirement_text"] = data.get("requirement_text", "")
+            state["requirement_texts"] = data.get("requirement_texts", [])
             state["api_raw_text"] = data.get("api_raw_text", "")
             state["interfaces"] = data.get("interfaces", [])
             state["parse_mode"] = data.get("parse_mode", "raw")
@@ -287,7 +287,7 @@ def main() -> int:
         _parser_path = _first(args.parser_path, saved_config.get("parser_path"), "")
         _reference_dir = _first(args.reference_dir, saved_config.get("reference_dir"), "")
         _debug_snapshots = _first(args.debug_snapshots, saved_config.get("debug_snapshots"), False)
-        _api_path = _first(args.api, saved_config.get("api_path"), "")
+        _api_paths = list(args.api) if args.api else saved_config.get("api_paths", [])
 
         # If no pipeline_state.json, fall back to legacy resume (batch_controller only)
         ps_path = Path(str(_memory_dir)) / "pipeline_state.json"
@@ -351,7 +351,7 @@ def main() -> int:
             "auto_mode": _auto_mode,
             "parse_mode": _parse_mode,
             "output_dir": output_dir,
-            "api_path": _api_path,
+            "api_paths": _api_paths,
             "debug_snapshots": _debug_snapshots,
             "parser_path": _parser_path,
             "reference_dir": _reference_dir,
@@ -361,7 +361,7 @@ def main() -> int:
 
         initial: GraphState = {
             "requirement_paths": [],
-            "api_path": _api_path,
+            "api_paths": _api_paths,
             "output_path": str(_cases_dir / "test_cases.xlsx"),
             "output_dir": output_dir,
             "cases_dir": str(_cases_dir),
@@ -372,7 +372,7 @@ def main() -> int:
             "case_format_enabled": settings.case_format_enabled,
             "case_format_max_retries": settings.case_format_max_retries,
             "plan_only": False,
-            "requirement_text": loaded.get("requirement_text", ""),
+            "requirement_texts": loaded.get("requirement_texts", []),
             "interfaces": loaded.get("interfaces", []),
             "plan_md": loaded.get("plan_md", ""),
             "plan_confirmed": loaded.get("plan_confirmed", True),
@@ -474,7 +474,7 @@ def main() -> int:
 
     initial: GraphState = {
         "requirement_paths": list(args.requirement),
-        "api_path": args.api,
+        "api_paths": list(args.api) if args.api else [],
         "output_path": str(cases_dir / "test_cases.xlsx"),
         "output_dir": output_dir,
         "cases_dir": str(cases_dir),
@@ -504,7 +504,7 @@ def main() -> int:
         "auto_mode": auto_mode,
         "parse_mode": args.parse_mode,
         "output_dir": output_dir,
-        "api_path": args.api,
+        "api_paths": list(args.api) if args.api else [],
         "requirement_paths": list(args.requirement),
         "debug_snapshots": args.debug_snapshots,
         "parser_path": _first(args.parser_path, ""),

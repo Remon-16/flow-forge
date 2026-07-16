@@ -61,7 +61,8 @@ def analyze_api_node(state: GraphState) -> GraphState:
             if feedback:
                 summary = agent.revise([], api_summary, feedback)
             else:
-                summary = agent.analyze_raw_text(api_raw_text, Path(state.get("api_path", "")).name)
+                _first_api = state.get("api_paths", [""])[0]
+                summary = agent.analyze_raw_text(api_raw_text, Path(_first_api).name)
         else:
             logger.info(_("analyze_api.llm_calling", model=_h._settings.llm_model))
             if _sl():

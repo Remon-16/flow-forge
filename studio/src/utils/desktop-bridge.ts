@@ -12,10 +12,16 @@ export interface FileEntry {
 const isDesktop = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
 
 export async function openFileDialog(
-  filters?: { name: string; extensions: string[] }[],
-): Promise<string | null> {
+  filtersOrMultiple?: { name: string; extensions: string[] }[] | boolean,
+): Promise<string | string[] | null> {
+  const multiple = typeof filtersOrMultiple === 'boolean' ? filtersOrMultiple : false
+  const filters = typeof filtersOrMultiple === 'boolean' ? undefined : filtersOrMultiple
+
   if (isDesktop) {
-    const selected = await open({ filters })
+    const selected = await open({ filters, multiple })
+    if (multiple && Array.isArray(selected)) {
+      return selected
+    }
     return selected ?? null
   }
 
@@ -23,11 +29,18 @@ export async function openFileDialog(
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
+    input.multiple = multiple
     if (filters) {
       const extList = filters.flatMap((f) => f.extensions.map((e) => `.${e}`))
       input.accept = extList.join(',')
     }
     input.onchange = () => {
+      if (multiple) {
+        const names = Array.from(input.files || []).map(f => (f as any).path || f.name)
+        if (names.length === 0) { resolve(null); return }
+        resolve(names.join(';'))
+        return
+      }
       const file = input.files?.[0]
       if (!file) { resolve(null); return }
       const reader = new FileReader()

@@ -81,6 +81,8 @@ class Settings:
     llm_context_window: int = 128000
     llm_context_compression_threshold: float = 0.9
     llm_max_output_tokens: int = 4096
+    # 知识库功能已下线，代码保留以备将来恢复。默认 False 确保不启用。
+    # Knowledge base feature is disabled. Code preserved for future restoration. Default False.
     enable_knowledge: bool = False
     knowledge_dir: str = "./knowledge"
     max_steps: int = 10

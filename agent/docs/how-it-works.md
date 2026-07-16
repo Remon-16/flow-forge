@@ -2,7 +2,7 @@
 
 [← 返回 agent/README](../README.md)
 
-本文档讲解智能体的内部机制：流水线架构、人工审核模式（y/n/r）、知识库、提示词管理、自动模式、目录结构与设计理念。
+本文档讲解智能体的内部机制：流水线架构、人工审核模式（y/n/r）、提示词管理、自动模式、目录结构与设计理念。
 
 ---
 
@@ -191,13 +191,131 @@ Resume 时该子步骤将被跳过，直接进入下一个子步骤。
 
 ---
 
-## 知识库
+## 上下文窗口管理与文档切分策略
 
-知识库（`knowledge/search.py`）提供基于 grep 的纯文本关键词搜索，无需 embedding 模型或外部向量数据库。知识以 `.md` 文件形式存放在 `knowledge/` 目录下。
+Flow Forge 处理大文档的核心策略是"**用户主动切分优先，自动切分兜底**"——将文档粒度控制权交给用户，自动切分仅作为超长文本的保底机制。
 
-通过 `env.yaml` 中的 `knowledge.enabled` 开关控制。启用后，各智能体在生成 prompt 时通过 grep 搜索 `.md` 文件，将匹配的知识片段追加到 prompt 末尾，提供领域知识和最佳实践参考。
+### 第一阶段：用户主动切分（推荐）
 
-用户可自行在 `knowledge/` 目录添加 `.md` 文件扩展知识库。
+用户可通过 `--requirement` 和 `--api` 传入多个文件，系统对每个文档独立调用一次 LLM 进行解析，然后合并结果。
+
+**为什么推荐用户自行切分？**
+- 一份文档 = 一次独立的 LLM 调用，解析质量有保证
+- 避免自动切分在语义边界处截断导致的上下文断裂
+- 对弱模型尤其关键：单文档上下文小 → 模型更专注 → 产出质量更高
+
+**使用建议**：
+- 每次提交建议控制在 **14 个接口以下**
+- 大任务可拆分为多个文档文件，或通过 CLI 并行提交多个任务
+- 夜间批量执行时可配合 `--auto` 模式跳过人工审核
+
+**API 文档合并规则**：多个 API 文档解析后的接口列表按 `(api_path, method)` 去重。不同 LLM 调用产出的 `test_id` 相互不可靠，URL + 方法才是接口的唯一标识。
+
+**需求文档合并规则**：多个需求文档分别分析后，按 key（`business_flows`、`roles`、`constraints`、`exceptions`）合并，每个 key 内部按字符串值去重。
+
+### 第二阶段：自动 Token 感知切分
+
+当单文档超过上下文窗口阈值时，系统自动触发 `_process_long_text()` 进行逐 chunk 处理。
+
+**触发条件**：`estimated_input_tokens > context_window * compression_threshold`（默认 `128000 * 0.9 = 115200` tokens）。
+
+**切分算法**（`BaseAgent._chunk_text()`）：
+1. **第一级**：按 `\n\n`（段落边界）切分，逐段累积直到达到 token 预算上限
+2. **第二级**：若单个段落超预算，降级到句子级切分，使用正则 `(?<=[。.!！?？])\s*` 在中英文标点处分割
+
+**Chunk Token 预算**：
+```
+max_chunk = context_window - system_prompt_tokens - max(output_tokens, 4096) - 200(overlap_reserve)
+```
+`max_chunk` 低于 1000 时 clamp 到 1000，保证即使极限场景也能处理。
+
+**Chunk 通知**：每个 chunk 前注入通知字符串（如 `REQ_CHUNK_NOTICE`、`RAW_API_CHUNK_NOTICE`、`DOC_CHUNK_NOTICE`），告知 LLM 当前文档是部分内容，需继续处理。
+
+### 第三阶段：上下文累积与压缩
+
+`_process_long_text()` 在多轮处理中维护渐进上下文：
+
+- **滑动窗口**：chunk 间仅保留最近 **3 个结果的 JSON** 作为累积上下文传递给下一个 chunk。超过 3 个时，更早的结果仅通过下文介绍的压缩摘要间接保留。
+
+- **上下文压缩**（`_compress_conversation()`）：当累积上下文接近窗口上限时，调用 LLM 将历史结果压缩为一段关键点摘要，释放 token 空间。压缩仅作用于 chunk 处理结果，**不触碰 system prompt 和 skill 内容**。
+
+- **双重阈值**：
+  - `compression_threshold`（默认 `0.9`，软阈值）：仅记录警告，不阻断
+  - 硬限制（`1.0`）：返回 False，触发强制压缩后才能继续
+
+- **Overlap Reserve**：每个 chunk 的预算预留 200 tokens 作为重叠缓冲区。这不是字面上的文本重叠——连续性由累积上下文和压缩摘要共同维护。
+
+### 各流水线阶段的切分策略差异
+
+不同阶段根据自身需求采用不同的切分方式：
+
+| 阶段 | 切分方式 | 合并策略 | 说明 |
+|------|---------|---------|------|
+| **parse_docs**（文档输入） | 用户切分（每文件独立） | 接口按 `(api_path, method)` 去重 | 不做自动切分；文档数 = LLM 调用数 |
+| **analyze_requirement**（需求分析） | `_process_long_text()` 自动切分 | 按 key（`business_flows`, `roles`, `constraints`, `exceptions`）合并去重 | 仅当单文档超阈值时触发 |
+| **analyze_api**（API 分析 raw 模式） | `_process_long_text()` 自动切分 | 接口列表按 `(api_path, method)` 去重 | 单文档超阈值时触发 |
+| **generate_plan**（测试计划生成） | 四阶段逻辑切分（Phase A/B/C/D） | 按阶段顺序拼接 | 不基于 token，基于**接口分组和业务流批次**拆分；每批独立 LLM 调用 + 全局上下文注入 |
+| **parse_plan**（计划解析） | 自适应标题层级切分 + `_process_long_text()` | 按 `test_id` + `url` 去重 | 通过 `detect_section_level()` 自动识别 plan.md 的主分割标题层级，再交由 `_process_long_text()` 进行 token 感知的逐 chunk LLM 解析 |
+| **batch_controller**（用例生成） | `skeleton_batch_size` 控制每批测试点数 | 用例列表拼接 | 不基于 token，基于**测试点数量**分批次 |
+| **revise_plan**（计划修订） | 标题层级自适应章节切分 + 注释/反馈精确定位到区块 | 按区块 key 替换后重新拼接 | 详见下文"计划审核与修订" |
+
+### 测试计划四阶段切分（Phase A/B/C/D）
+
+测试计划生成不使用通用的 `_process_long_text()`，而是按**逻辑边界**进行四阶段拆分：
+
+- **Phase A**：全局上下文（一次 LLM 调用，包含全部接口概要）
+- **Phase B**：按 API 组拆分。`plan_single_batch_size`（默认 8）控制每批接口数；设为 `-1` 则所有接口合并为一批
+- **Phase C**：按业务流批次拆分。`plan_biz_flow_batch_size`（默认 1）控制每批流数。因为 Mermaid 时序图需要逐流生成，此值默认为 1
+- **Phase D**：组装——将 Phase A/B/C 的产出按顺序拼接，无 LLM 调用
+
+每个 Phase/Batch 完成后写入 `plan_chunks_progress.json`，支持中断后从断点恢复。
+
+### 计划审核与修订
+
+测试计划并非一次性生成即通过。系统提供 `human_confirm → revise_plan` 循环，支持多轮修订：
+
+**章节解析基础设施**（n 模式和 r 模式共用）：
+- `detect_section_level(plan_md)`：自适应标题层级检测——扫描所有 Markdown 标题，选择出现次数 ≥2 的最浅层级作为主分割级别。若 plan.md 用 `###` 做主标题则自动适配 `###`，不硬编码 `##`
+- `classify_section(heading_text)`：基于中英文关键词分类——全局（"商业理解"/"Business Understanding"）、API（"单接口测试点"/"Single Interface"）、业务流（"商业流程测试"/"Business Flow"）
+- `_parse_plan_to_sections()`：将 plan.md 拆分为 `{global, sections: [{key, type, name, content}]}` 结构，通过名称匹配与 outline 关联
+- `_assemble_plan(sections)`：修订后按原顺序拼接回完整 plan.md
+
+**Plan Sections 结构**：
+```
+plan.md
+  │ detect_section_level() → 找到主分割级别（如 ##）
+  │ _parse_plan_to_sections()
+  ▼
+{
+  global: "<商业理解 + Mermaid 图文本>",
+  sections: [
+    { key: "api_Payment", type: "api_group", content: "### Payment\n...测试点..." },
+    { key: "biz_Login",  type: "biz_flow",  content: "### Login流程\n...步骤..." },
+  ]
+}
+  │ 修改 sections[n].content → _assemble_plan()
+  ▼
+修订后 plan.md
+```
+
+**n 模式（文本反馈）——三阶段**：
+1. **章节影响分析**：将用户反馈发给 LLM，判断影响了哪些大类（全局/单接口/业务流）。返回 `{global: bool, single_api: bool, biz_flows: bool}`
+2. **区块级意图分析**：对每个受影响的大类，将区块名称和描述列表发给 LLM（不发送完整内容），LLM 判断每个区块是否需要 `fix`/`delete_chunk`/`add_chunk`
+3. **执行区块操作**：与 r 模式共享（见下文）
+
+**r 模式（批注）——四步骤**：
+1. **加载章节注册表**：用 `_parse_plan_to_sections()` 获取区块列表
+2. **注释定位**：通过 `selected_text` 子串匹配定位目标区块；匹配失败时回退到行号定位
+3. **意图分析**：将注释 + 所在区块内容分批发给 LLM，LLM 对每个注释输出操作（`noop`/`fix`/`delete_chunk`/`add_chunk`），输出经格式校验，超限后默认 `noop`
+4. **执行区块操作**：共享执行层
+
+**共享的区块操作执行层**：
+- **noop**：不做任何修改
+- **fix**：将修订指令注入到区块生成提示词，LLM 重新生成该区块内容。biz 类型的区块优先重生成 Mermaid 图
+- **delete_chunk**：从 sections 移除，同时从 outline 移除
+- **add_chunk**：在 outline 创建新条目，调用 LLM 生成内容
+
+修订完成后拼接回完整 plan.md，循环回到 `human_confirm` 供用户再次审核。
 
 ---
 
@@ -251,7 +369,6 @@ agent/
 ├── graph/                       # StateGraph 工作流与节点
 │   └── nodes/                   #   按职责拆分的工作流节点
 ├── validators/                  # 用例格式校验、URL 存在性检查
-├── knowledge/                   # grep 知识库（.md 文件）
 ├── doc_parser/                  # OpenAPI / Markdown / PDF / LLM 文档解析
 ├── utils/                       # 会话日志、Token 计数
 ├── logs/                        # 运行日志（运行时生成）
@@ -267,10 +384,6 @@ agent/
 - **状态管理**：`GraphState` TypedDict 在节点间自动传递，无需手动维护状态对象。
 - **中断与恢复**：`interrupt()` + `MemorySaver` 原生支持人工审核中断，可从断点精确恢复。
 - **条件路由**：`add_conditional_edges()` 让审核分支成为图的自然组成部分。
-
-### 为什么用 grep 替代 embedding 检索
-
-零成本（无 embedding API 调用）、零外部依赖（仅标准库）、可解释（精确匹配、不语义漂移）、可扩展（创建 `.md` 即可添加知识）。
 
 ### 为什么用流水线模式
 
