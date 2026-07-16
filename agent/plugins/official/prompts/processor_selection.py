@@ -89,7 +89,14 @@ Return the business flows with processor assignments in the following JSON forma
   ]
 }}"""
 
-BIZ_PROCESSOR_USER = """Please assign pre/post-processors for the following business flow test cases:
+BIZ_PROCESSOR_USER = """\
+⚠️ CRITICAL OUTPUT FORMAT — READ THIS FIRST:
+- Return ONLY a raw JSON object. Do NOT wrap it in ```json fences.
+- Do NOT add any explanatory text, markdown, or code blocks.
+- The ENTIRE response must be parseable by json.loads().
+- Start your response with {{ and end with }}.
+
+Please assign pre/post-processors for the following business flow test cases:
 
 ## Business Flow Cases (already filled with request data)
 ```json

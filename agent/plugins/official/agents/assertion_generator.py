@@ -7,7 +7,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from agents.base import BaseAgent
-from agents.skeleton_generator import _count_validate
+from utils.count_validate import count_validate as _count_validate
 from config.settings import Settings, get_strategy
 from knowledge.search import KnowledgeSearch
 from prompts import KNOWLEDGE_SECTION_HEADER

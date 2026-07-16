@@ -9,7 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agents.base import BaseAgent
-from agents.skeleton_generator import SingleSkeletonGenerator, _count_validate
+from agents.skeleton_generator import SingleSkeletonGenerator
+from utils.count_validate import count_validate as _count_validate
 from config.settings import Settings, get_strategy, get_url_failure_action, _parse_validation_rules
 
 

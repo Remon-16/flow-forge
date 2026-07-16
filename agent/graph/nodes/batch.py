@@ -54,6 +54,10 @@ def batch_controller_node(state: GraphState) -> GraphState:
         msg = _("batch.plan_missing")
         logger.error(msg)
         state["errors"].append(msg)
+        # 清空用例列表与异常路径保持一致 / Clear case lists to match exception path
+        state["single_cases"] = []
+        state["biz_flows"] = []
+        state["validation_failures"] = []
         state["_batch_failed"] = True
         return state
 

@@ -121,7 +121,8 @@ def analyze_api_node(state: GraphState) -> GraphState:
         save_snapshot(memory_dir, "api_summary.json", summary)
         save_pipeline_artifact(memory_dir, "api_summary.json", summary)
 
-    if api_raw_text and not interfaces:
+    # 首次运行（无 interfaces）或反馈循环后均需重建接口 / Rebuild on first run or after feedback loop
+    if api_raw_text and (not interfaces or feedback):
         state["interfaces"] = summary_to_interfaces(summary)
         logger.info(_("analyze_api.rebuilt_interfaces", count=len(state["interfaces"])))
 

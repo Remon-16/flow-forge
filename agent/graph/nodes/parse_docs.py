@@ -78,7 +78,8 @@ def parse_docs_node(state: GraphState) -> GraphState:
     logger.info(_("parse_docs.parse_mode", mode=parse_mode))
 
     all_interfaces: List[dict] = []
-    all_raw_texts: List[str] = []
+    # 直接存储 path/text 字典，避免 zip 对齐错误 / Store path/text dicts to avoid zip misalignment
+    all_raw_texts: List[dict] = []
     seen_keys: set = set()  # (api_path, method) 去重 / dedup by (url, method)
     aggregated_method = parse_mode
 
@@ -95,7 +96,8 @@ def parse_docs_node(state: GraphState) -> GraphState:
                 logger.info(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
                 logger.warning("API document '%s' contains very little text (%d chars). "
                                "Image-based content will NOT be processed.", api_path, len(raw_text))
-            all_raw_texts.append(raw_text)
+            # 存储 path/text 对，跳过空文件时不追加，天然对齐 / Store path/text pair, skip empty files naturally
+            all_raw_texts.append({"path": api_path, "text": raw_text})
             logger.info(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
 
         elif parse_mode == "rule":
@@ -107,6 +109,10 @@ def parse_docs_node(state: GraphState) -> GraphState:
                 if key not in seen_keys:
                     seen_keys.add(key)
                     all_interfaces.append(d)
+            # rule 模式下也采集原始文本，确保 URL 校验可以运行 / Also collect raw text for URL validation
+            raw_text = extract_text(api_path)
+            if raw_text.strip():
+                all_raw_texts.append({"path": api_path, "text": raw_text})
             logger.info(_("parse_docs.rule_done", count=len(interfaces)))
 
         elif parse_mode == "llm":
@@ -118,7 +124,8 @@ def parse_docs_node(state: GraphState) -> GraphState:
                 logger.info(_("parse_docs.short_text_warning", chars=len(raw_text.strip())))
                 logger.warning("API document '%s' contains very little text (%d chars). "
                                "Image-based content will NOT be processed.", api_path, len(raw_text))
-            all_raw_texts.append(raw_text)
+            # 存储 path/text 对，跳过空文件时不追加，天然对齐 / Store path/text pair, skip empty files naturally
+            all_raw_texts.append({"path": api_path, "text": raw_text})
             logger.info(_("parse_docs.read_api_doc", size=size_str, chars=len(raw_text)))
             logger.info(_("parse_docs.llm_extracting", model=_h._settings.llm_model))
             if _sl():
@@ -147,14 +154,15 @@ def parse_docs_node(state: GraphState) -> GraphState:
 
     # 合并结果 / Merge results
     if parse_mode == "raw":
-        state["api_raw_text"] = "\n\n---\n\n".join(all_raw_texts)
-        state["api_raw_texts"] = [{"path": p, "text": t} for p, t in zip(api_paths, all_raw_texts)]
+        # all_raw_texts 已是 [{"path": p, "text": t}, ...] 格式，无需 zip / already in correct format
+        state["api_raw_text"] = "\n\n---\n\n".join(item["text"] for item in all_raw_texts)
+        state["api_raw_texts"] = all_raw_texts
         state["interfaces"] = all_interfaces  # raw 模式下留空，交给后续 analyze_api_node / empty for raw, deferred to analyze_api_node
         state["interface_extraction_method"] = "raw"
         logger.info(_("parse_docs.api_identify_next"))
     else:
-        state["api_raw_text"] = "\n\n---\n\n".join(all_raw_texts) if all_raw_texts else ""
-        state["api_raw_texts"] = [{"path": p, "text": t} for p, t in zip(api_paths, all_raw_texts)] if all_raw_texts else []
+        state["api_raw_text"] = "\n\n---\n\n".join(item["text"] for item in all_raw_texts) if all_raw_texts else ""
+        state["api_raw_texts"] = all_raw_texts if all_raw_texts else []
         state["interfaces"] = all_interfaces
         # 至少有一个文件成功用 LLM 解析则标记为 llm / Mark as llm if at least one file used it
         state["interface_extraction_method"] = aggregated_method

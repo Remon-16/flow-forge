@@ -221,15 +221,17 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
     if "parse_plan" in completed_stages:
         data = _load_json("plan_parsed.json")
         if data:
-            from models.schema import PlanStep, TestPlan
+            from models.schema import InterfaceDef as _InterfaceDef, PlanStep, TestPlan
             # 重建 single_test_points 中的 PlanStep 对象，因为下游通过属性访问
             # Reconstruct PlanStep objects — downstream accesses them via attributes
             single_tps: dict = {}
             for tid, steps in data.get("single_test_points", {}).items():
                 single_tps[tid] = [PlanStep(**s) for s in steps]
+            # 重建 api_definitions 中的 InterfaceDef 对象 / Reconstruct InterfaceDef objects
+            api_defs = [_InterfaceDef(**ad) for ad in data.get("api_definitions", [])]
             state["plan_parsed"] = TestPlan(
                 business_summary=data.get("business_summary", ""),
-                api_definitions=data.get("api_definitions", []),
+                api_definitions=api_defs,
                 single_test_points=single_tps,
                 mermaid_flows=data.get("mermaid_flows", {}),
                 biz_flow_scenarios=data.get("biz_flow_scenarios", []),

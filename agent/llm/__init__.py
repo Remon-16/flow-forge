@@ -1,3 +1,1 @@
-from .factory import create_chat_model
-
-__all__ = ["create_chat_model"]
+# LLM module — 预留给 LangChain 集成 / Reserved for LangChain integration

@@ -73,7 +73,6 @@ def _parse_validation_rules(rules_raw) -> List[Dict[str, str]]:
 
 @dataclass
 class Settings:
-    llm_provider: str = "openai"
     llm_api_key: str = ""
     llm_base_url: str = ""
     llm_model: str = "gpt-4o"
@@ -139,7 +138,6 @@ class Settings:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "llm_provider": self.llm_provider,
             "llm_api_key": "***",
             "llm_base_url": self.llm_base_url,
             "llm_model": self.llm_model,
@@ -256,27 +254,9 @@ def _read_url_doc_match_strategy(validation: Dict) -> str:
     return "warn"
 
 
-def _read_case_gen_enabled(validation: Dict) -> bool:
-    """读取用例格式校验开关 / Read case format validation enable flag.
-
-    优先级 / Priority:
-      1. case_gen_validation.enable（新路径 / new path）
-      2. case_gen_rules.enable（旧 block 路径 / old block path）
-      3. 默认 True / Default True
-    """
-    # 新路径 / New path
-    block = validation.get("case_gen_validation", {})
-    if isinstance(block, dict):
-        enable = block.get("enable")
-        if enable is not None:
-            return bool(enable)
-    # 旧 block 路径 / Old block path
-    old_block = validation.get("case_gen_rules", {})
-    if isinstance(old_block, dict):
-        enable = old_block.get("enable")
-        if enable is not None:
-            return bool(enable)
-    return True
+# _read_case_gen_enabled() — 预留给将来实现 / Reserved for future implementation
+# 当前代码路径不需要此函数，因为所有校验均设为 skip 策略
+# Currently unused because all validation rules are set to "skip"
 
 
 def _read_case_gen_max_retries(validation: Dict) -> int:
@@ -350,7 +330,6 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
     logging_cfg = config.get("logging", {})
 
     settings = Settings(
-        llm_provider=llm.get("provider", "openai"),
         llm_api_key=llm.get("api_key", ""),
         llm_base_url=llm.get("base_url", ""),
         llm_model=llm.get("model", "gpt-4o"),
