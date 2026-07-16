@@ -110,6 +110,11 @@ def analyze_api_node(state: GraphState) -> GraphState:
 
         state["api_summary"] = summary
         state["api_summary_feedback"] = ""
+        # 删除已处理的 feedback 文件 / Remove consumed feedback artifact
+        if state.get("memory_dir"):
+            fb_path = Path(state["memory_dir"]) / "api_analysis_feedback.json"
+            if fb_path.exists():
+                fb_path.unlink()
 
     memory_dir = state.get("memory_dir", "")
     if memory_dir:
@@ -152,6 +157,12 @@ def analyze_api_node(state: GraphState) -> GraphState:
         state["api_summary_confirmed"] = True
     else:
         state["api_summary_feedback"] = choice
+        # 持久化 feedback 供 resume 恢复 / Persist feedback for resume recovery
+        if memory_dir:
+            save_pipeline_artifact(memory_dir, "api_analysis_feedback.json", {
+                "feedback": choice,
+                "api_summary": api_summary,
+            })
 
     if state["api_summary_confirmed"] and memory_dir:
         save_pipeline_state(memory_dir, "analyze_api")

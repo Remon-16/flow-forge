@@ -241,26 +241,31 @@ class TestDefaultValidationRules:
     """Tests for default case_gen_validation in Settings."""
 
     def should_have_default_rules(self):
-        """Settings 创建后应有默认 4 条规则 / Default Settings has 4 rules."""
+        """Settings 创建后应有默认 5 条规则 / Default Settings has 5 rules."""
         s = Settings()
-        assert len(s.case_gen_validation) == 4
+        assert len(s.case_gen_validation) == 5
 
-    def should_default_skeleton_count_to_fail(self):
-        """骨架数量校验默认 fail / Skeleton count defaults to fail."""
+    def should_default_skeleton_count_to_warn(self):
+        """骨架数量校验默认 warn / Skeleton count defaults to warn."""
         s = Settings()
-        assert get_strategy(s.case_gen_validation, "skeleton_count") == "fail"
+        assert get_strategy(s.case_gen_validation, "skeleton_count") == "warn"
 
     def should_default_url_check_to_warn(self):
         """URL 校验默认 warn / URL check defaults to warn."""
         s = Settings()
         assert get_strategy(s.case_gen_validation, "url_check") == "warn"
 
-    def should_default_data_fill_count_to_fail(self):
-        """数据填充数量校验默认 fail / Data fill count defaults to fail."""
+    def should_default_data_fill_count_to_warn(self):
+        """数据填充数量校验默认 warn / Data fill count defaults to warn."""
         s = Settings()
-        assert get_strategy(s.case_gen_validation, "data_fill_count") == "fail"
+        assert get_strategy(s.case_gen_validation, "data_fill_count") == "warn"
 
-    def should_default_assertion_count_to_fail(self):
-        """断言数量校验默认 fail / Assertion count defaults to fail."""
+    def should_default_assertion_count_to_warn(self):
+        """断言数量校验默认 warn / Assertion count defaults to warn."""
         s = Settings()
-        assert get_strategy(s.case_gen_validation, "assertion_count") == "fail"
+        assert get_strategy(s.case_gen_validation, "assertion_count") == "warn"
+
+    def should_default_processor_count_to_warn(self):
+        """处理器数量校验默认 warn / Processor count defaults to warn."""
+        s = Settings()
+        assert get_strategy(s.case_gen_validation, "processor_count") == "warn"

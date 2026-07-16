@@ -78,12 +78,15 @@ def _text_revision(
         actions = _chunk_intent_for_global(feedback, token_counter)
         all_actions.extend(actions)
 
+    # section 数据使用 "type" 字段，值为 "api_group" / "biz_flow"
+    # section dicts use "type" field with values "api_group" / "biz_flow"
+    _TYPE_MAP = {"single_api": "api_group", "biz_flows": "biz_flow"}
     for sec_type in ("single_api", "biz_flows"):
         if not section_impact.get(sec_type):
             continue
         sec_chunks = [
             s for s in sections.get("sections", [])
-            if s.get("section") == sec_type
+            if s.get("type") == _TYPE_MAP.get(sec_type)
         ]
         if not sec_chunks:
             continue
@@ -139,10 +142,17 @@ def _section_impact_analysis(
         api_key=_h._settings.llm_api_key,
         model=_h._settings.llm_model,
         temperature=0.1,
-        max_tokens=_h._settings.llm_max_output_tokens,
-        base_url=_h._settings.llm_base_url,
+        max_retries=_h._settings.max_retries,
         max_steps=_h._settings.max_steps,
+        base_url=_h._settings.llm_base_url,
         context_window=_h._settings.llm_context_window,
+        max_output_tokens=_h._settings.llm_max_output_tokens,
+        compression_threshold=_h._settings.llm_context_compression_threshold,
+        rate_limit_delay=_h._settings.llm_rate_limit_delay,
+        retry_base_delay=_h._settings.llm_retry_base_delay,
+        max_concurrency=_h._settings.llm_max_concurrency,
+        request_timeout=_h._settings.llm_request_timeout,
+        extra_params=_h._settings.llm_extra_params,
     )
 
     result = agent.call_llm_json(prompt, system_msg)
@@ -184,10 +194,17 @@ def _chunk_intent_for_global(
         api_key=_h._settings.llm_api_key,
         model=_h._settings.llm_model,
         temperature=0.1,
-        max_tokens=_h._settings.llm_max_output_tokens,
-        base_url=_h._settings.llm_base_url,
+        max_retries=_h._settings.max_retries,
         max_steps=_h._settings.max_steps,
+        base_url=_h._settings.llm_base_url,
         context_window=_h._settings.llm_context_window,
+        max_output_tokens=_h._settings.llm_max_output_tokens,
+        compression_threshold=_h._settings.llm_context_compression_threshold,
+        rate_limit_delay=_h._settings.llm_rate_limit_delay,
+        retry_base_delay=_h._settings.llm_retry_base_delay,
+        max_concurrency=_h._settings.llm_max_concurrency,
+        request_timeout=_h._settings.llm_request_timeout,
+        extra_params=_h._settings.llm_extra_params,
     )
 
     result = agent.call_llm_json(prompt, system_msg)
@@ -226,10 +243,17 @@ def _chunk_intent_for_section(
         api_key=_h._settings.llm_api_key,
         model=_h._settings.llm_model,
         temperature=0.1,
-        max_tokens=_h._settings.llm_max_output_tokens,
-        base_url=_h._settings.llm_base_url,
+        max_retries=_h._settings.max_retries,
         max_steps=_h._settings.max_steps,
+        base_url=_h._settings.llm_base_url,
         context_window=_h._settings.llm_context_window,
+        max_output_tokens=_h._settings.llm_max_output_tokens,
+        compression_threshold=_h._settings.llm_context_compression_threshold,
+        rate_limit_delay=_h._settings.llm_rate_limit_delay,
+        retry_base_delay=_h._settings.llm_retry_base_delay,
+        max_concurrency=_h._settings.llm_max_concurrency,
+        request_timeout=_h._settings.llm_request_timeout,
+        extra_params=_h._settings.llm_extra_params,
     )
 
     result = agent.call_llm_json(prompt, system_msg)

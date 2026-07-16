@@ -16,7 +16,6 @@ from graph.nodes import (
     batch_controller_node,
     check_confirmed,
     configure,
-    generate_cases_node,
     generate_outline_node,
     generate_plan_node,
     human_confirm_node,
@@ -27,7 +26,6 @@ from graph.nodes import (
     route_after_api_confirm,
     save_interfaces_node,
     validate_interface_urls_node,
-    write_excel_node,
     write_output_node,
 )
 from graph.state import GraphState
@@ -58,10 +56,24 @@ def _route_resume(state: GraphState) -> str:
 
     Reads the pipeline progress marker to determine the next node.
     Falls back to batch_controller (legacy resume) if no marker found.
+
+    优先检查未处理的反馈文件 / Checks for pending feedback files first:
+    - pending_feedback.json → "human_confirm"（计划审核反馈待处理 / plan feedback pending）
+    - api_analysis_feedback.json → "analyze_api"（API 分析反馈待处理 / API feedback pending）
     """
     memory_dir = state.get("memory_dir", "")
     if not memory_dir:
         return "batch_controller"
+
+    # 检查未处理的计划审核反馈 / Check for pending plan review feedback
+    if (Path(memory_dir) / "pending_feedback.json").exists():
+        logger.info("Resume: pending_feedback.json found → routing to human_confirm")
+        return "human_confirm"
+
+    # 检查未处理的 API 分析反馈 / Check for pending API analysis feedback
+    if (Path(memory_dir) / "api_analysis_feedback.json").exists():
+        logger.info("Resume: api_analysis_feedback.json found → routing to analyze_api")
+        return "analyze_api"
 
     state_path = Path(memory_dir) / "pipeline_state.json"
     if not state_path.exists():
@@ -118,9 +130,6 @@ def build_workflow(
     graph.add_node("parse_plan", parse_plan_node)
     graph.add_node("batch_controller", batch_controller_node)
     graph.add_node("write_output", write_output_node)
-    # Legacy nodes (non-batch mode)
-    graph.add_node("generate_cases", generate_cases_node)
-    graph.add_node("write_excel", write_excel_node)
 
     # --- Entry routing (supports full-pipeline resume mode) ---
     graph.add_node("entry", lambda s: s)

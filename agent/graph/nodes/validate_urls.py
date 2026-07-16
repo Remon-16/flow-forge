@@ -99,10 +99,10 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
                 if new_url and new_url in api_raw_text:
                     if isinstance(iface, dict):
                         iface["url"] = new_url
-                        iface["remark"] = (iface.get("remark") or "") + " [URL corrected by LLM]"
+                        iface["remark"] = (iface.get("remark") or "") + f" [URL corrected by LLM: {bad_url} → {new_url}]"
                     else:
                         iface.url = new_url
-                        iface.remark = (getattr(iface, "remark", "") or "") + " [URL corrected by LLM]"
+                        iface.remark = (getattr(iface, "remark", "") or "") + f" [URL corrected by LLM: {bad_url} → {new_url}]"
                     corrected_count += 1
                     corrected = True
                     logger.info("Corrected URL for %s: %s → %s", interface_id, bad_url, new_url)

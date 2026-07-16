@@ -40,6 +40,7 @@ class GraphState(TypedDict, total=False):
     api_raw_texts: List[Dict[str, str]]  # 逐文件原文 [{"path": "...", "text": "..."}]，供独立 LLM 分析 / Per-file raw texts for per-file LLM analysis
     parse_mode: str            # "raw" | "rule" | "llm"
     parser_path: str           # Custom parser script path
+    interface_extraction_method: str  # "none" | "raw" | "rule" | "llm"
 
     # === 需求分析 / Requirement analysis ===
     requirement_analysis: Dict[str, Any]

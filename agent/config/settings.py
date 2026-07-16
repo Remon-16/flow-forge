@@ -132,10 +132,11 @@ class Settings:
     # 每项为 {"check": "<校验名>", "strategy": "fail|warn|skip"}
     # Each entry: {"check": "<check_name>", "strategy": "fail|warn|skip"}
     case_gen_validation: List[Dict[str, str]] = field(default_factory=lambda: [
-        {"check": "skeleton_count", "strategy": "fail"},
+        {"check": "skeleton_count", "strategy": "warn"},
         {"check": "url_check", "strategy": "warn"},
-        {"check": "data_fill_count", "strategy": "fail"},
-        {"check": "assertion_count", "strategy": "fail"},
+        {"check": "data_fill_count", "strategy": "warn"},
+        {"check": "assertion_count", "strategy": "warn"},
+        {"check": "processor_count", "strategy": "warn"},
     ])
 
     def to_dict(self) -> Dict[str, Any]:

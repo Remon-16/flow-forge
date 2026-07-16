@@ -90,6 +90,13 @@ def human_confirm_node(state: GraphState) -> GraphState:
     else:
         state["plan_confirmed"] = False
         state["plan_feedback"] = decision
+        # 持久化 reject 反馈供 resume 恢复 / Persist rejection feedback for resume recovery
+        if memory_dir:
+            save_pipeline_artifact(memory_dir, "pending_feedback.json", {
+                "plan_feedback": decision,
+                "plan_feedback_type": state.get("plan_feedback_type", "text"),
+                "plan_annotations": state.get("plan_annotations", []),
+            })
 
     # Save review state for resume
     memory_dir = state.get("memory_dir", "")
@@ -152,10 +159,16 @@ def revise_plan_node(state: GraphState) -> GraphState:
     state["plan_feedback_type"] = "text"
     state["plan_annotations"] = []
 
+    # 删除已处理的 pending_feedback / Remove consumed pending feedback
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        fb_path = Path(memory_dir) / "pending_feedback.json"
+        if fb_path.exists():
+            fb_path.unlink()
+
     if _sl():
         _sl().save_plan(revised)
 
-    memory_dir = state.get("memory_dir", "")
     if memory_dir:
         try:
             plan_path = Path(memory_dir) / "plan.md"

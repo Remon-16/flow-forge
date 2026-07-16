@@ -166,8 +166,15 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
     if "analyze_api" in completed_stages:
         data = _load_json("api_summary.json")
         if data:
-            state["api_summary"] = data
-            state["api_summary_confirmed"] = True
+            # 检查是否有未处理的 API 分析反馈 / Check for pending API analysis feedback
+            fb_data = _load_json("api_analysis_feedback.json")
+            if fb_data:
+                state["api_summary"] = fb_data.get("api_summary", data)
+                state["api_summary_feedback"] = fb_data.get("feedback", "")
+                state["api_summary_confirmed"] = False
+            else:
+                state["api_summary"] = data
+                state["api_summary_confirmed"] = True
 
     if "validate_urls" in completed_stages:
         _load_json("url_validation.json")  # Just validate existence; errors stored in state
@@ -194,6 +201,15 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
         data = _load_json("review_state.json")
         if data:
             state["plan_confirmed"] = data.get("plan_confirmed", True)
+
+    # 加载未处理的计划审核反馈（无论 human_confirm 是否完成都检查）
+    # Load pending plan review feedback regardless of human_confirm completion status
+    pending_fb = _load_json("pending_feedback.json")
+    if pending_fb:
+        state["plan_feedback"] = pending_fb.get("plan_feedback", "")
+        state["plan_feedback_type"] = pending_fb.get("plan_feedback_type", "text")
+        state["plan_annotations"] = pending_fb.get("plan_annotations", [])
+        state["plan_confirmed"] = False
 
     if "parse_plan" in completed_stages:
         data = _load_json("plan_parsed.json")
@@ -503,7 +519,7 @@ def main() -> int:
         "case_type": _first(args.case_type, settings.case_type),
         "user_guidance": _first(args.prompt, ""),
         "output_format": _first(args.output_format, settings.output_format),
-        "batch_size": _first(args.plugin_batch_size, settings.plugin_batch_size),
+        "plugin_batch_size": _first(args.plugin_batch_size, settings.plugin_batch_size),
         "auto_mode": auto_mode,
         "parse_mode": args.parse_mode,
         "output_dir": output_dir,
