@@ -29,6 +29,9 @@ const isYamlMode = computed(() => route.name === 'yaml-editor')
 const closeDialogVisible = ref(false)
 const closeDialogRunningCount = ref(0)
 
+// 窗口关闭事件监听器清理函数 / Window close event listener cleanup
+let _closeUnlisten: (() => void) | undefined
+
 watch(
   () => settings.language,
   (lang) => {
@@ -67,8 +70,13 @@ async function handleTerminateAndQuit() {
   for (const task of runningTasks) {
     await agent.terminateTask(task.id)
   }
-  const { getCurrentWindow } = await import('@tauri-apps/api/window')
-  await getCurrentWindow().destroy()
+  // 终止所有子进程后退出应用 / Kill all subprocesses then exit the app
+  if (isDesktop) {
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('force_quit_app')
+  } else {
+    window.close()
+  }
 }
 
 // 强制退出应用 / Force quit the application
@@ -88,30 +96,50 @@ onMounted(async () => {
   // 仅在桌面模式下拦截窗口关闭 / Only intercept in desktop mode
   if (!isDesktop) return
 
-  const { getCurrentWindow } = await import('@tauri-apps/api/window')
-  const appWindow = getCurrentWindow()
-
-  // 注册关闭请求处理器 / Register close request handler
-  // 始终阻止默认行为（存在托盘时默认是隐藏到托盘而非关闭）
-  // Always prevent default (tray causes default to be hide-to-tray, not close)
-  await appWindow.onCloseRequested((event) => {
-    event.preventDefault()
-    const tasks = agent.tasks || []
-    const runningTasks = tasks.filter(
-      t => t.status === 'running' || t.status === 'question'
-    )
-    if (runningTasks.length > 0) {
-      // 有运行中任务：弹框确认 / Running tasks: show confirmation dialog
-      closeDialogRunningCount.value = runningTasks.length
-      closeDialogVisible.value = true
-    } else {
-      // 无运行中任务：直接关闭窗口 / No running tasks: close directly
-      appWindow.destroy()
-    }
-  })
+  // 监听来自 Rust 层的窗口关闭请求（绕过托盘图标对 CloseRequested 的拦截）
+  // Listen for close request from Rust layer (bypasses tray interception of CloseRequested)
+  try {
+    const { listen } = await import('@tauri-apps/api/event')
+    _closeUnlisten = await listen('window-close-requested', () => {
+      const tasks = agent.tasks || []
+      const runningTasks = tasks.filter(
+        t => t.status === 'running' || t.status === 'question'
+      )
+      if (runningTasks.length > 0) {
+        // 有运行中任务：弹框确认 / Running tasks: show confirmation dialog
+        closeDialogRunningCount.value = runningTasks.length
+        closeDialogVisible.value = true
+      } else {
+        // 无运行中任务：直接退出应用 / No running tasks: quit directly
+        handleForceQuit()
+      }
+    })
+  } catch (e) {
+    console.warn('Failed to register close listener via Rust event, falling back to onCloseRequested', e)
+    // 回退方案：如果 Rust 事件监听失败，尝试直接注册 onCloseRequested
+    // Fallback: try direct onCloseRequested if Rust event listener fails
+    const { getCurrentWindow } = await import('@tauri-apps/api/window')
+    const appWindow = getCurrentWindow()
+    _closeUnlisten = await appWindow.onCloseRequested((event) => {
+      event.preventDefault()
+      const tasks = agent.tasks || []
+      const runningTasks = tasks.filter(
+        t => t.status === 'running' || t.status === 'question'
+      )
+      if (runningTasks.length > 0) {
+        closeDialogRunningCount.value = runningTasks.length
+        closeDialogVisible.value = true
+      } else {
+        handleForceQuit()
+      }
+    })
+  }
 })
 
-onUnmounted(() => window.removeEventListener('beforeunload', onBeforeUnload))
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload)
+  if (_closeUnlisten) _closeUnlisten()
+})
 </script>
 
 <template>

@@ -7,7 +7,7 @@ use std::thread;
 use tauri::{
     menu::{MenuBuilder, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager, State,
+    AppHandle, Emitter, Manager, State, WindowEvent,
 };
 
 mod agent_manager;
@@ -506,6 +506,20 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // 拦截窗口关闭事件，防止被托盘图标默认行为吞掉
+            // Intercept window close event to prevent it from being swallowed by tray default behavior
+            if let Some(window) = app.get_webview_window("main") {
+                let app_handle = app.handle().clone();
+                window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        // 阻止默认关闭/隐藏行为 / Prevent default close/hide behavior
+                        api.prevent_close();
+                        // 通知 JS 层弹出确认弹框 / Notify JS layer to show confirmation dialog
+                        let _ = app_handle.emit("window-close-requested", ());
+                    }
+                });
+            }
 
             Ok(())
         })
