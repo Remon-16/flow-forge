@@ -15,15 +15,15 @@ graph TD
     CLI[CLI Entry] --> GRAPH[LangGraph StateGraph]
     GRAPH --> PARSE[parse_docs Document Parsing]
     PARSE --> ANALYZE_API[analyze_api API Analysis + Self-Eval]
-    ANALYZE_API -->|Self-eval passed / user skipped| VALIDATE_URLS[validate_interface_urls Interface URL Validation]
-    ANALYZE_API -.->|Critical uncertainties| API_ASK{Optional Query}
-    API_ASK -.->|User provides feedback| ANALYZE_API
+    ANALYZE_API -->|Passed / Skipped| VALIDATE_URLS[validate_interface_urls<br/>URL Validation]
+    ANALYZE_API -.->|Uncertainties| API_ASK{Optional Query}
+    API_ASK -.->|Feedback| ANALYZE_API
     VALIDATE_URLS --> SAVE_IFACES[save_interfaces Save Interface YAMLs]
     SAVE_IFACES --> ANALYZE_REQ[analyze_requirement Requirements Analysis]
-    ANALYZE_REQ --> GEN_OUTLINE[generate_outline Outline Generation] --> GEN_PLAN[generate_plan Test Plan Generation]
-    GEN_PLAN --> CONFIRM{human_confirm Human Review Interrupt}
-    CONFIRM -->|Approved| RELOAD_IFACES[reload_interfaces Reload Interface YAMLs]
-    CONFIRM -->|Rejected| REVISE[revise_plan Revise from Feedback]
+    ANALYZE_REQ --> GEN_OUTLINE[generate_outline Outline] --> GEN_PLAN[generate_plan Test Plan Generation]
+    GEN_PLAN --> CONFIRM{Human Review Interrupt<br/>human_confirm}
+    CONFIRM -->|y Approve| RELOAD_IFACES[reload_interfaces Reload Interface YAMLs]
+    CONFIRM -->|n/r Revise| REVISE[revise_plan Revise from Feedback]
     REVISE --> CONFIRM
     RELOAD_IFACES --> PARSE_PLAN[parse_plan Plan Parsing]
     PARSE_PLAN --> BATCH[batch_controller Skeleton + Plugin Pipeline]

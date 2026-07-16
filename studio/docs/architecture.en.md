@@ -10,16 +10,36 @@ Flow Forge Studio's component architecture, data flow, project structure, develo
 
 ```mermaid
 graph TD
-    App[App.vue] --> Home[HomePage - Editor Selection]
-    App --> Layout[Editor Layout - Header + Sidebar + Content + StatusBar]
+    App[App.vue] --> Home[HomePage - Six Feature Entries]
+    App --> AgentLayout[Agent Layout - Borderless]
+    App --> ExecutorLayout[Executor Layout - Borderless]
+    App --> ConverterLayout[Converter Layout - Borderless]
+    App --> AnnotatorLayout[Annotator Layout - Borderless]
+    App --> EditorLayout[Editor Layout - Header + Sidebar + Content + StatusBar]
 
-    Layout --> Excel[Excel Editor /excel]
-    Layout --> YAML[YAML Editor /yaml]
+    AgentLayout --> Agent[AgentView AI Case Generator /agent]
+    ExecutorLayout --> Executor[ExecutorView Case Executor /executor]
+    ConverterLayout --> Converter[ConverterView Case Converter /converter]
+    AnnotatorLayout --> Annotator[PlanAnnotatorView Plan Annotator /plan-annotator]
+
+    EditorLayout --> Excel[Excel Editor /excel]
+    EditorLayout --> YAML[YAML Editor /yaml]
+
+    Agent --> TaskSidebar[TaskSidebar - Task Sidebar]
+    Agent --> AgentSettings[AgentSettings - Settings Panel]
+    Agent --> RunningView[RunningView - Run Logs]
+    Agent --> PlanReviewDrawer[PlanReviewDrawer - Plan Review Drawer]
+
+    Executor --> ExecutorForm[ExecutorForm - Run Config]
+    Executor --> ExecutorSidebar[ExecutorSidebar - Session Sidebar]
+
+    Converter --> ConverterForm[ConverterForm - Convert Config]
 
     Excel --> ApiDefEditor[ApiDefEditor - API Definition Editor]
     Excel --> SingleCaseEditor[SingleCaseEditor - Single-API Case Editor]
     Excel --> BizFlowEditor[BizFlowEditor - Business Flow Editor]
     Excel --> AssertRulesEditor[AssertRulesEditor - Advanced Assertion Editor]
+    Excel --> EditorToolbar[EditorToolbar - Run/Convert Quick Buttons]
 
     YAML --> FileTree[YamlFileTree - File Tree Sidebar]
     YAML --> TabBar[YamlTabBar - File Tab Bar]
@@ -28,8 +48,7 @@ graph TD
     YAML --> BizForm[BizFlowForm - Business Flow Form]
     YAML --> RawView[YamlRawView - Raw YAML View]
     YAML --> StepEditor[StepEditor - Step Sub-form]
-
-    Layout --> Annotator[Plan Annotator /plan-annotator]
+    YAML --> EditorToolbar
 
     Annotator --> AnnotatorViewer[MarkdownPreview - Markdown Preview]
     Annotator --> CommentList[AnnotationSidebar - Annotation Sidebar]
@@ -59,6 +78,15 @@ graph TD
         STORE_Y --> STRINGIFY[js-yaml Serialize]
         STRINGIFY --> WRITE_Y[Tauri API Write to Original Path]
     end
+
+    subgraph Agent / Executor / Converter Subprocess
+        GUI[Studio GUI] --> JSON[JSON Protocol]
+        JSON --> BRIDGE[bridge.ts Subprocess Manager]
+        BRIDGE --> PROC[Python Subprocess]
+        PROC --> BRIDGE
+        BRIDGE --> JSON
+        JSON --> GUI
+    end
 ```
 
 ---
@@ -79,14 +107,17 @@ studio/
 └── src/
     ├── main.ts                 # Renderer process entry
     ├── App.vue                 # Root component, conditional layout
-    ├── router/index.ts         # Four routes: /, /excel, /yaml, /plan-annotator
+    ├── router/index.ts         # Seven routes: /, /excel, /yaml, /plan-annotator, /agent, /executor, /converter
     ├── stores/
     │   ├── workbook.ts         # Excel workbook data (core store)
     │   ├── yaml-store.ts       # YAML editor data store
     │   ├── editor.ts           # Editor UI state
-    │   └── settings.ts         # Settings (language)
+    │   ├── settings.ts         # Settings (language)
+    │   ├── agent.ts            # Agent task state
+    │   ├── executor.ts         # Executor session state
+    │   └── converter.ts        # Converter session state
     ├── i18n/                   # vue-i18n (zh-CN / en-US)
-    ├── types/                  # TS type definitions (excel / yaml / editor)
+    ├── types/                  # TS type definitions (excel / yaml / editor / agent / executor / converter)
     ├── utils/
     │   ├── excel-reader.ts     # Excel read + parse (SheetJS)
     │   ├── excel-writer.ts     # Excel write (ExcelJS)
@@ -94,19 +125,28 @@ studio/
     │   ├── assert-rules-validator.ts # AssertRules format validation
     │   ├── validators.ts       # General validation utilities
     │   ├── desktop-bridge.ts   # Tauri API bridge + browser fallback
-    │   └── json-helper.ts      # JSON parse/serialize helpers
+    │   ├── json-helper.ts      # JSON parse/serialize helpers
+    │   ├── agent-bridge.ts     # Agent subprocess JSON protocol communication
+    │   ├── executor-bridge.ts  # Executor subprocess communication
+    │   └── converter-bridge.ts # Converter subprocess communication
     ├── components/
     │   ├── layout/             # AppHeader / AppSidebar / StatusBar
-    │   ├── editor/             # Editors for the three sheets + AssertRules editor
+    │   ├── editor/             # Editors for the three sheets + AssertRules editor + toolbar
     │   ├── yaml-editor/        # YAML file tree / tab bar / forms / raw view
     │   ├── json-editor/        # JSON tree editor components
     │   ├── search/             # Find bar + search results panel
-    │   └── annotator/          # Markdown preview / annotation panel / dialog / history viewer
+    │   ├── annotator/          # Markdown preview / annotation panel / dialog / history viewer
+    │   ├── agent/              # AgentSettings / TaskSidebar / RunningView / PlanReviewDrawer etc.
+    │   ├── executor/           # ExecutorForm / ExecutorSidebar
+    │   └── converter/          # ConverterForm
     ├── views/
-    │   ├── HomePage.vue        # Home page
+    │   ├── HomePage.vue        # Home page (six feature entries)
     │   ├── EditorView.vue      # Excel editor view
     │   ├── YamlEditorView.vue  # YAML editor view
-    │   └── PlanAnnotatorView.vue # Plan annotator view
+    │   ├── PlanAnnotatorView.vue # Plan annotator view
+    │   ├── AgentView.vue       # AI case generator view
+    │   ├── ExecutorView.vue    # Case executor view
+    │   └── ConverterView.vue   # Case converter view
     └── assets/styles/global.css
 ```
 

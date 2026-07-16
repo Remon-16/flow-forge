@@ -100,4 +100,11 @@ output_dir/
 
 ## 推荐工作流
 
-先用 AI 智能体生成 Excel 用例（`--output-format excel`），在 [Flow Forge Studio](../../studio/README.md) 中批量编辑（调整 Tag、补全参数、修改断言），再用 `excel2yaml` 转为 YAML 纳入 Git 版本控制——YAML 每个用例一个文件，git diff 可清晰展示每次变更，方便代码评审。需要分享或集成 CI/CD 时，用 `yaml2pytest` / `excel2pytest` 生成独立 pytest 文件。
+最推荐的工作方式：**AI 生成 Excel → Studio 批量编辑 → 转 YAML 做 git diff → 执行器运行**。
+
+1. 在 [Flow Forge Studio](../../studio/README.md) 的「AI 用例生成」中配置文档并启动智能体，生成 Excel 用例。
+2. 在 Studio 的 Excel 编辑器中批量调整 Tag、补全参数、修改断言。
+3. 用 `excel2yaml`（CLI 或 Studio 的「用例转换器」）转为 YAML 纳入 Git 版本控制——YAML 每个用例一个文件，git diff 可清晰展示每次变更。
+4. 需要分享或集成 CI/CD 时，用 `yaml2pytest` / `excel2pytest` 生成独立 pytest 文件。
+
+调试好 Skill 和插件后，可在 CLI 下用 `--auto` 模式跳过人工审核，适合夜间批量生成。

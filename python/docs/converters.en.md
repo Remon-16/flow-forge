@@ -100,4 +100,11 @@ output_dir/
 
 ## Recommended Workflow
 
-First generate Excel cases with the AI agent (`--output-format excel`), batch-edit them in [Flow Forge Studio](../../studio/README.en.md) (adjust tags, fill in parameters, modify assertions), then convert them to YAML with `excel2yaml` for Git version control — with one YAML file per case, git diff clearly shows every change, making code review straightforward. When you need to share cases or integrate into CI/CD, use `yaml2pytest` / `excel2pytest` to generate standalone pytest files.
+The most recommended approach: **AI generate Excel → Studio batch edit → convert to YAML for git diff → executor run**.
+
+1. Configure docs and launch the agent in [Flow Forge Studio](../../studio/README.en.md)'s "AI Case Generator" to produce Excel cases.
+2. Batch-edit in Studio's Excel Editor — adjust tags, fill in parameters, modify assertions.
+3. Convert to YAML with `excel2yaml` (CLI or Studio's "Case Converter") for Git version control — with one YAML file per case, git diff clearly shows every change.
+4. When you need standalone tests for sharing or CI/CD, use `yaml2pytest` / `excel2pytest`.
+
+After debugging Skills and plugins, use `--auto` mode in CLI to skip human review — ideal for overnight batch generation.

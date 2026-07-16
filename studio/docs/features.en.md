@@ -2,13 +2,13 @@
 
 [← Back to studio/README](../README.en.md)
 
-Flow Forge Studio offers three workspaces: the Excel editor, the YAML editor, and the Markdown plan annotator. This document details the features of each workspace, along with find and replace and keyboard shortcuts.
+Flow Forge Studio offers six feature entries grouped into three workflow stages (Generate → Edit → Execute & Convert): AI Case Generator, Plan Annotator, Excel Editor, YAML Editor, Case Executor, and Case Converter. This document details the features of each workspace, along with find and replace and keyboard shortcuts.
 
 ---
 
 ## General Features
 
-- Home-page editor selection (Excel / YAML / Markdown plan annotator)
+- Home page with six feature entries grouped by workflow stage: Generate (AI Case Generator / Plan Annotator), Edit (Excel / YAML Editor), Execute & Convert (Case Executor / Case Converter)
 - Tauri desktop app that saves local files back to their original path
 - Bilingual Chinese/English interface, switchable at any time
 - Save (Ctrl+S) and Save As (Ctrl+Alt+S)
@@ -16,6 +16,98 @@ Flow Forge Studio offers three workspaces: the Excel editor, the YAML editor, an
 - **"Edit" menu**: the toolbar's "Edit" dropdown provides "Find", "Replace", "Find in Files", and "Replace in Files", along with "Zoom In", "Zoom Out", and "Reset Zoom"
 - **Font zoom**: Ctrl+= to zoom in / Ctrl+- to zoom out / Ctrl+0 to reset / Ctrl+MouseWheel to zoom, with the zoom level persisted
 - **Global search**: "Find in Files" searches across all sheets (Excel) or all YAML files in the project directory, with results grouped by source; "Replace in Files" supports both one-by-one review replacement and replace all
+
+---
+
+## AI Case Generator
+
+Configure and launch the AI agent directly in Studio — no CLI flags to memorize.
+
+### New Task
+
+Click the "AI Case Generator" card on the home page, then fill in the task configuration:
+- Requirement doc paths (supports multiple files)
+- API doc paths (supports multiple files)
+- Output directory
+- Parse mode (raw / rule / llm)
+- Case type (single / biz / both)
+- Output format (YAML / Excel / both)
+- Optional: enable auto mode to skip human review
+
+### Running & Logs
+
+- After clicking "Launch", the Agent runs as a subprocess, outputting logs to the right-side log panel in real time
+- Logs are color-coded by stage (document parsing, API analysis, plan generation, etc.)
+- Support pause, resume, and terminate
+- Configurations are saved automatically after completion for easy reuse
+
+### Interactive Prompts & Plan Review
+
+- When the Agent encounters critical uncertainties (e.g., unknown auth type), a prompt pops up in Studio
+- After the test plan is generated, a plan review drawer opens automatically, allowing you to approve the plan or provide text feedback directly on the rendered plan
+- All interaction uses a JSON protocol over the Agent subprocess
+
+### Settings Panel
+
+- Configure LLM (API Key, Model, Base URL)
+- Adjust batch sizes and retry limits for each stage
+- Toggle plugins and Skills
+
+---
+
+## Case Executor
+
+Run test cases and view HTML reports in Studio.
+
+### Session Management
+
+- Use the top dropdown to select an existing execution session or create a new one
+- Each session independently saves its configuration (environment, input path, thread count, etc.)
+
+### Run Configuration
+
+- **Input type**: YAML directory / Excel file
+- **Environment**: select from the `env-{name}.yml` list
+- **Case mode**: single-API / business-flow / all
+- **Thread count**: control concurrent execution
+
+### Execution & Report
+
+- Click "Run" to launch the executor subprocess with real-time execution logs
+- After completion, an HTML report is auto-generated and can be opened in the browser
+- Reports embed styles and scripts inline — no web server required
+
+---
+
+## Case Converter
+
+Convert between case formats in Studio, with batch support.
+
+### Session Management
+
+- Use the top dropdown to select an existing conversion session or create a new one
+- Each session independently saves its configuration
+
+### Conversion Directions
+
+- **Excel → YAML**: read .xlsx, output YAML files by sheet type
+- **YAML → Excel**: read YAML directories, merge into .xlsx
+- **YAML → pytest**: generate standalone pytest test code (zero dependencies)
+- **Excel → pytest**: generate pytest code directly from Excel
+
+### Batch Conversion
+
+- Select multiple input directories/files for batch processing
+- Real-time progress shown in the execution log
+
+---
+
+## Quick Editor Toolbar Actions
+
+In the Excel / YAML Editor, the top-right toolbar provides quick-action buttons:
+
+- **▶ Run**: execute the current file directly without switching to the Executor view — ideal for single-file debugging
+- **⟳ Convert**: convert the current file (Excel ↔ YAML) directly without switching to the Converter view
 
 ---
 

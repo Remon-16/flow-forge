@@ -15,15 +15,15 @@ graph TD
     CLI[CLI 入口] --> GRAPH[LangGraph StateGraph]
     GRAPH --> PARSE[parse_docs 文档解析]
     PARSE --> ANALYZE_API[analyze_api 接口分析 + 自评]
-    ANALYZE_API -->|自评通过/用户跳过| VALIDATE_URLS[validate_interface_urls 接口 URL 校验]
-    ANALYZE_API -.->|关键不确定性| API_ASK{可选询问}
-    API_ASK -.->|用户提供反馈| ANALYZE_API
+    ANALYZE_API -->|通过/跳过| VALIDATE_URLS[validate_interface_urls<br/>URL 校验]
+    ANALYZE_API -.->|不确定时| API_ASK{可选询问}
+    API_ASK -.->|反馈| ANALYZE_API
     VALIDATE_URLS --> SAVE_IFACES[save_interfaces 保存接口 YAML]
     SAVE_IFACES --> ANALYZE_REQ[analyze_requirement 需求分析]
     ANALYZE_REQ --> GEN_OUTLINE[generate_outline 轮廓生成] --> GEN_PLAN[generate_plan 测试计划生成]
-    GEN_PLAN --> CONFIRM{human_confirm 人工审核中断点}
-    CONFIRM -->|批准| RELOAD_IFACES[reload_interfaces 重载接口 YAML]
-    CONFIRM -->|拒绝| REVISE[revise_plan 根据反馈修改]
+    GEN_PLAN --> CONFIRM{人工审核中断点<br/>human_confirm}
+    CONFIRM -->|y 批准| RELOAD_IFACES[reload_interfaces 重载接口 YAML]
+    CONFIRM -->|n/r 修改| REVISE[revise_plan 根据反馈修改]
     REVISE --> CONFIRM
     RELOAD_IFACES --> PARSE_PLAN[parse_plan 计划解析]
     PARSE_PLAN --> BATCH[batch_controller 骨架 + 插件流水线]

@@ -47,9 +47,36 @@ graph TD
 └──────────────┘      └──────────────┘      └──────────────┘
 ```
 
-1. **Generate first**: Launch the AI Agent in Studio, provide requirement docs and API docs, and it auto-generates test cases. Review and annotate the test plan before case generation.
-2. **Edit next**: Batch-edit with the Excel Editor, or fine-tune files individually with the YAML Editor. Supports visual JSON editing, assertion rules, and processor configuration.
-3. **Execute or convert last**: Run cases and generate HTML reports with the Executor; convert between Excel ↔ YAML with the Converter.
+### 🏆 The Most Recommended Approach
+
+**Edit in Excel, then convert to YAML for version control.** This is the best practice balancing efficiency and traceability:
+
+1. **AI generates Excel**: Configure requirement docs and API docs in Studio's "AI Case Generator", launch the agent to auto-generate test cases. Review and annotate the test plan before generating.
+2. **Batch-edit in Excel**: Use the Excel Editor to quickly browse, sort, and batch-modify tags, parameters, and assertions. The spreadsheet UI is ideal for mass editing.
+3. **Convert to YAML for git diff**: Use the Converter to transform Excel into YAML (one file per case), commit file-by-file to Git. Code review diffs are crystal clear, making every change traceable.
+4. **Run with Executor**: Execute YAML (or Excel directly) in the Case Executor to generate HTML reports.
+
+> **💡 Why Excel → YAML?** Excel excels at batch editing, YAML excels at diffing. Use each where it shines: Excel for editing, YAML for commits. When you need standalone tests, use `yaml2pytest` / `excel2pytest` to produce zero-dependency pytest code.
+
+### 🤖 Auto Mode After Debugging
+
+Once your Skills (business rules) and plugins are debugged, use `--auto` to skip human review — ideal for overnight batch generation or CI/CD:
+
+```bash
+cd agent
+python main.py --requirement docs/req.md --api docs/api.yaml --auto
+```
+
+### 💻 Pure CLI (SSH / CI/CD)
+
+If you prefer the command line or operate over SSH on a server, full CLI workflow is also supported:
+
+```bash
+cd agent
+python main.py --requirement docs/req.md --api docs/api.yaml  # AI generation + human review
+cd ../python
+python main.py --yamlDir ../agent/output --envName local       # Executor run
+```
 
 > **Quick editor actions**: In the Excel / YAML Editor, use the `▶ Run` and `⟳ Convert` split buttons in the top-right toolbar to execute or convert the current file directly — no need to switch views, ideal for single-file debugging.
 
@@ -78,29 +105,7 @@ npm run build        # production → src-tauri/target/release/
 | **Excel Editor** | Batch-edit .xlsx case files in a spreadsheet UI, covering API definitions, single-API cases, and business-flow cases |
 | **YAML Editor** | Form-based structured editing with a tree-directory browser — one case per file, ideal for git diff |
 | **Case Executor** | Run test cases and generate HTML reports, with multi-environment switching and multi-threaded execution |
-| **Case Converter** | Convert between Excel ↔ YAML ↔ pytest formats, with batch conversion support |
-
-## Command-Line Mode (SSH / CI/CD)
-
-If you prefer the CLI or operate over SSH on a server, each component can also be used independently:
-
-```bash
-# ── 1. AI generates cases (agent/) ────────────────────────────
-cd agent
-pip install -r requirements.txt
-cp env.example.yaml env.yaml          # Fill in the LLM api_key / model / base_url
-python main.py --requirement docs/req.md --api docs/api.yaml
-# Review the test plan: enter y to approve / n for text feedback / r to revise from the annotation file
-# Generated cases are written to agent/output_<timestamp>/
-
-# ── 2. Executor runs cases and produces a report (python/) ────────────────
-cd ../python
-pip install -r requirements.txt       # Edit env-local.yml with the target app and login info
-python main.py --yamlDir ../agent/output_<timestamp>/cases --envName local --apiMode all
-# The report is generated at python/report/{filename}_{timestamp}.html
-```
-
-See each component's README below for detailed usage.
+| **Case Converter** | Convert Excel ↔ YAML bidirectionally + export to pytest, with batch conversion support |
 
 ## The Three Sub-projects
 
@@ -108,21 +113,11 @@ See each component's README below for detailed usage.
 | -------- | ------ | ---------- |
 | **[studio/](./studio/README.en.md)** | Flow Forge Studio desktop app: visual case editing, plan annotation, GUI agent/executor/converter launcher | [Docs →](./studio/README.en.md) |
 | **[agent/](./agent/README.en.md)** | AI test-case generation agent: requirements + API docs → test plan (human review) → YAML/Excel cases | [Docs →](./agent/README.en.md) |
-| **[python/](./python/README.en.md)** | API test executor + format converter: run YAML/Excel cases → HTML report; Excel↔YAML↔pytest conversion | [Docs →](./python/README.en.md) |
+| **[python/](./python/README.en.md)** | API test executor + format converter: run YAML/Excel cases → HTML report; Excel↔YAML bidirectional, export to pytest | [Docs →](./python/README.en.md) |
 
 The three communicate through **YAML files** as the primary contract (Excel remains compatible) — whatever format the agent generates, the executor parses. Users are free to choose: AI auto-generation, manual authoring, or visual editing in Studio.
 
 The `shared/` directory holds cross-language shared schemas (column definitions, field mappings, operators, etc.), keeping field definitions consistent across the agent, python, and studio ends.
-
-## Workflow
-
-Flow Forge supports three workflows; choose as needed:
-
-- **Option 1: Full GUI (recommended)** — Launch Agent in Studio to generate cases → adjust in Excel/YAML Editor → run with Executor. No CLI needed.
-- **Option 2: Full CLI** — AI agent generates cases → human review → executor runs them. Best for quick iteration or CI/CD.
-- **Option 3: Initial Excel generation + YAML version control** — AI generates Excel (`--output-format excel`) → batch-edit in Studio → convert to YAML with the `converter` → review file-by-file with git diff → run with the executor.
-
-> **Why is Option 3 recommended?** Excel is ideal for batch editing (quick browsing, sorting, bulk changes), while YAML is ideal for diffing (one file per case, so git diff shows changes clearly). Edit in Excel first, then convert to YAML for commit — balancing efficiency and traceability. When you need standalone tests, use `yaml2pytest` / `excel2pytest` to generate zero-dependency pytest code.
 
 ## CI/CD Integration (Jenkins)
 

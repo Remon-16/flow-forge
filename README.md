@@ -47,9 +47,36 @@ graph TD
 └──────────────┘      └──────────────┘      └──────────────┘
 ```
 
-1. **先生成**：在 Studio 中启动 AI Agent，输入需求文档和接口文档，自动生成测试用例。生成前可审核测试计划、添加批注。
-2. **再编辑**：用 Excel 编辑器批量编辑，或用 YAML 编辑器逐文件精细调整。支持 JSON 字段编辑、断言规则配置、处理器可视化编辑。
-3. **最后执行或转换**：在用例执行器中运行用例、生成 HTML 测试报告；或用转换器在 Excel ↔ YAML 之间互转。
+### 🏆 最推荐的工作方式
+
+**先用 Excel 批量编辑，再转 YAML 做版本控制。** 这是兼顾效率与可追溯性的最佳实践：
+
+1. **AI 生成 Excel**：在 Studio 的「AI 用例生成」中配置需求文档和接口文档，启动智能体生成测试用例。生成前可在计划批注器中审核测试计划、添加批注。
+2. **Excel 批量编辑**：用 Excel 编辑器快速浏览、排序、批量修改 Tag/参数/断言。Excel 的表格化界面最适合大批量编辑。
+3. **转 YAML 做 git diff**：用转换器将 Excel 转为 YAML（每个用例一个文件），逐文件提交 Git。代码评审时变更一目了然，轻松追溯每次修改。
+4. **执行器运行**：在用例执行器中运行 YAML（或直接运行 Excel），生成 HTML 测试报告。
+
+> **💡 为什么推荐 Excel → YAML？** Excel 适合批量编辑，YAML 适合做 diff。两者各取所长：编辑时用 Excel，提交时用 YAML。需要独立测试时用 `yaml2pytest` / `excel2pytest` 生成零依赖 pytest 代码。
+
+### 🤖 调试完毕后的自动模式
+
+当 Skill（业务规则）、插件配置调试完毕后，可在 CLI 下使用 `--auto` 跳过人工审核，适合夜间批量生成或 CI/CD 集成：
+
+```bash
+cd agent
+python main.py --requirement docs/req.md --api docs/api.yaml --auto
+```
+
+### 💻 纯命令行方式（SSH / CI/CD）
+
+如果偏好命令行或在服务器上操作，也支持全流程 CLI：
+
+```bash
+cd agent
+python main.py --requirement docs/req.md --api docs/api.yaml  # AI 生成 + 人工审核
+cd ../python
+python main.py --yamlDir ../agent/output --envName local       # 执行器运行
+```
 
 > **编辑器内快捷执行**：在 Excel / YAML 编辑器中，右上角工具栏提供 `▶ 运行` 和 `⟳ 转换` 按钮，可直接对当前文件执行或转换，无需跳转到执行器/转换器视图，方便单文件调试。
 
@@ -78,29 +105,7 @@ npm run build        # 生产构建 → src-tauri/target/release/
 | **Excel 编辑器** | 表格化批量编辑 .xlsx 用例文件，支持接口定义、单接口用例、业务链路三个 Sheet |
 | **YAML 编辑器** | 基于表单的结构化编辑，树形目录浏览，每用例一个文件，便于 git diff |
 | **用例执行器** | 运行测试用例，生成 HTML 报告，支持多环境切换和多线程执行 |
-| **用例转换器** | Excel ↔ YAML ↔ pytest 互转，支持批量转换 |
-
-## 命令行方式（SSH / CI/CD）
-
-如果你偏好命令行，或在服务器上通过 SSH 操作，各组件也可独立使用：
-
-```bash
-# ── 1. AI 生成用例（agent/）────────────────────────────
-cd agent
-pip install -r requirements.txt
-cp env.example.yaml env.yaml          # 填入 LLM 的 api_key / model / base_url
-python main.py --requirement docs/req.md --api docs/api.yaml
-# 审核测试计划：输入 y 批准 / n 文字反馈 / r 按批注文件修改
-# 生成的用例输出到 agent/output_<timestamp>/
-
-# ── 2. 执行器运行用例并出报告（python/）────────────────
-cd ../python
-pip install -r requirements.txt       # 编辑 env-local.yml 填入被测应用与登录信息
-python main.py --yamlDir ../agent/output_<timestamp>/cases --envName local --apiMode all
-# 报告生成在 python/report/{文件名}_{时间戳}.html
-```
-
-各组件详细用法见下方对应 README。
+| **用例转换器** | Excel ↔ YAML 互转 + 导出 pytest，支持批量转换 |
 
 ## 三大子项目
 
@@ -108,21 +113,11 @@ python main.py --yamlDir ../agent/output_<timestamp>/cases --envName local --api
 | -------- | ------ | ---------- |
 | **[studio/](./studio/README.md)** | Flow Forge Studio 桌面应用：可视化编辑用例、计划批注、GUI 启动智能体/执行器/转换器 | [文档 →](./studio/README.md) |
 | **[agent/](./agent/README.md)** | AI 用例生成智能体：需求 + 接口文档 → 测试计划（人工审核）→ YAML/Excel 用例 | [文档 →](./agent/README.md) |
-| **[python/](./python/README.md)** | 接口测试执行器 + 格式转换器：运行 YAML/Excel 用例 → HTML 报告；Excel↔YAML↔pytest 互转 | [文档 →](./python/README.md) |
+| **[python/](./python/README.md)** | 接口测试执行器 + 格式转换器：运行 YAML/Excel 用例 → HTML 报告；Excel↔YAML 互转、导出 pytest | [文档 →](./python/README.md) |
 
 三者通过 **YAML 文件**作为主要契约（Excel 仍兼容）——智能体生成什么格式，执行器就解析什么格式。用户可自由选择：AI 自动生成、手动编写、或 Studio 可视化编辑。
 
 `shared/` 目录存放跨语言共享的 schema（列定义、字段映射、运算符等），保证 agent / python / studio 三端的字段定义一致。
-
-## 工作流程
-
-Flow Forge 支持三种工作流，按需选择：
-
-- **方式一：全流程 GUI（推荐）** — Studio 中启动 Agent 生成用例 → Excel/YAML 编辑器调整 → 执行器运行。无需接触命令行。
-- **方式二：全流程 CLI** — AI 智能体生成用例 → 人工审核 → 执行器运行。适合从零快速产出，或 CI/CD 集成。
-- **方式三：初始生成 Excel + YAML 版本控制** — AI 生成 Excel（`--output-format excel`）→ Studio 批量编辑 → `converter` 转 YAML → Git 逐文件 diff 审查 → 执行器运行。
-
-> **为什么推荐方式三？** Excel 适合批量编辑（快速浏览、排序、批量改），YAML 适合做 diff（每个用例一个文件，git diff 清晰展示变更）。先用 Excel 编辑，再转 YAML 提交，兼顾效率与可追溯性。需要独立测试时用 `yaml2pytest` / `excel2pytest` 生成零依赖 pytest 代码。
 
 ## CI/CD 集成（Jenkins）
 
