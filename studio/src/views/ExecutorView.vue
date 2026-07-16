@@ -8,6 +8,7 @@ import { Modal } from 'ant-design-vue'
 import { useExecutorStore } from '../stores/executor'
 import { useAgentStore } from '../stores/agent'
 import { isDesktop, openInExplorer } from '../utils/desktop-bridge'
+import { SettingOutlined } from '@ant-design/icons-vue'
 import AgentSettings from '../components/agent/AgentSettings.vue'
 import ExecutorSidebar from '../components/executor/ExecutorSidebar.vue'
 import ExecutorForm from '../components/executor/ExecutorForm.vue'
@@ -46,8 +47,8 @@ function browsePath(path: string) {
         ← {{ t('executor.backHome') }}
       </a-button>
       <span class="toolbar-title">{{ t('executor.title') }}</span>
-      <a-button size="small" @click="settingsVisible = true" title="Settings">
-        ⚙
+      <a-button size="small" @click="settingsVisible = true" :title="t('agent.settings')">
+        <SettingOutlined />
       </a-button>
     </div>
 

@@ -124,6 +124,9 @@
     "zhCN": "中文",
     "enUS": "English",
     "executorRootDir": "Executor Root Directory",
+    "pythonExeHint": "Select or enter Python executable path",
+    "agentRootDirHint": "Select or enter agent root directory path",
+    "executorRootDirHint": "Select or enter executor root directory path",
     "validationMissingMainPy": "main.py not found. Please verify the directory is correct.",
     "validationMissingEnvYml": "env.yml not found. Please verify the directory is correct.",
     "saveToEnv": "Sync CLI parameters to env file",
@@ -162,7 +165,11 @@
     "sectionGenerate": "① Generate",
     "sectionEdit": "② Edit",
     "sectionExecute": "③ Execute & Convert",
-    "open": "Open Editor"
+    "open": "Open Editor",
+    "settings": "Settings",
+    "exit": "Exit",
+    "exitConfirmTitle": "Confirm Exit",
+    "exitConfirmContent": "Are you sure you want to exit Flow Forge Studio?"
   },
   "yaml": {
     "comingSoon": "YAML Editor coming soon...",

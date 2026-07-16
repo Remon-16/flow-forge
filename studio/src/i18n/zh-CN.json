@@ -124,6 +124,9 @@
     "zhCN": "中文",
     "enUS": "English",
     "executorRootDir": "执行器根目录",
+    "pythonExeHint": "选择或输入 Python 可执行文件路径",
+    "agentRootDirHint": "选择或输入智能体根目录路径",
+    "executorRootDirHint": "选择或输入执行器根目录路径",
     "validationMissingMainPy": "未检测到 main.py，请确认目录是否正确",
     "validationMissingEnvYml": "未检测到 env.yml，请确认目录是否正确",
     "saveToEnv": "将 CLI 参数同步到 env 文件",
@@ -162,7 +165,11 @@
     "sectionGenerate": "① 用例生成",
     "sectionEdit": "② 用例编辑",
     "sectionExecute": "③ 执行与转换",
-    "open": "打开编辑器"
+    "open": "打开编辑器",
+    "settings": "设置",
+    "exit": "退出",
+    "exitConfirmTitle": "确认退出",
+    "exitConfirmContent": "确定要退出 Flow Forge Studio 吗？"
   },
   "yaml": {
     "comingSoon": "YAML 编辑器即将上线...",

@@ -4,6 +4,7 @@
 import { ref, computed, h, type VNode } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dropdown, Menu, MenuItem, MenuDivider } from 'ant-design-vue'
+import { SettingOutlined } from '@ant-design/icons-vue'
 
 const { t } = useI18n()
 
@@ -57,7 +58,7 @@ const runMenuItems = computed(() => [
   { key: 'biz', label: t('editor.toolbar.runBiz'), icon: '▶' },
   { key: 'select', label: t('editor.toolbar.runSelect'), icon: '▶' },
   { type: 'divider' as const },
-  { key: 'editRunParams', label: t('editor.toolbar.editRunParams'), icon: '⚙' },
+  { key: 'editRunParams', label: t('editor.toolbar.editRunParams'), icon: 'settings' },
 ])
 
 const convertMenuItems = computed(() => [
@@ -66,7 +67,7 @@ const convertMenuItems = computed(() => [
   { key: 'biz', label: t('editor.toolbar.convertBiz'), icon: '⟳' },
   { key: 'select', label: t('editor.toolbar.convertSelect'), icon: '⟳' },
   { type: 'divider' as const },
-  { key: 'editConvertParams', label: t('editor.toolbar.editConvertParams'), icon: '⚙' },
+  { key: 'editConvertParams', label: t('editor.toolbar.editConvertParams'), icon: 'settings' },
 ])
 
 // ============================================================================
@@ -158,7 +159,7 @@ function handleConvertDefault() {
           </a-menu-item>
           <a-menu-divider />
           <a-menu-item key="editRunParams">
-            ⚙ {{ t('editor.toolbar.editRunParams') }}
+            <SettingOutlined /> {{ t('editor.toolbar.editRunParams') }}
           </a-menu-item>
         </a-menu>
       </template>
@@ -188,7 +189,7 @@ function handleConvertDefault() {
           </a-menu-item>
           <a-menu-divider />
           <a-menu-item key="editConvertParams">
-            ⚙ {{ t('editor.toolbar.editConvertParams') }}
+            <SettingOutlined /> {{ t('editor.toolbar.editConvertParams') }}
           </a-menu-item>
         </a-menu>
       </template>

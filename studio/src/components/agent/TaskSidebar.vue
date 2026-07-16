@@ -33,7 +33,10 @@ const hasNotify = (taskId: string): boolean =>
 <template>
   <div class="task-sidebar">
     <div class="sidebar-header">
-      <span style="font-weight: 600; font-size: 13px;">Sessions</span>
+      <span class="header-title">Sessions</span>
+      <a-button size="small" type="dashed" @click="emit('newTask')">
+        + {{ t('agent.newTask') }}
+      </a-button>
     </div>
 
     <div class="task-list">
@@ -65,11 +68,6 @@ const hasNotify = (taskId: string): boolean =>
       </div>
     </div>
 
-    <div class="sidebar-footer">
-      <a-button block type="dashed" @click="emit('newTask')">
-        + {{ t('agent.newTask') }}
-      </a-button>
-    </div>
   </div>
 </template>
 
@@ -84,8 +82,15 @@ const hasNotify = (taskId: string): boolean =>
   border-right: 1px solid #e8e8e8;
 }
 .sidebar-header {
-  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
   border-bottom: 1px solid #eee;
+}
+.header-title {
+  font-weight: 600;
+  font-size: 13px;
 }
 .task-list {
   flex: 1;
@@ -140,9 +145,5 @@ const hasNotify = (taskId: string): boolean =>
   text-align: center;
   color: #999;
   font-size: 13px;
-}
-.sidebar-footer {
-  padding: 8px;
-  border-top: 1px solid #eee;
 }
 </style>

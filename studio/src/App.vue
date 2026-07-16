@@ -9,7 +9,7 @@ import { isDesktop } from './utils/desktop-bridge'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import StatusBar from './components/layout/StatusBar.vue'
-import { watch, computed, ref, onMounted, onUnmounted } from 'vue'
+import { watch, computed, ref, onMounted, onUnmounted, provide } from 'vue'
 
 const route = useRoute()
 const { t, locale } = useI18n()
@@ -71,6 +71,33 @@ async function handleTerminateAndQuit() {
   await getCurrentWindow().destroy()
 }
 
+// 提供关闭请求方法给子组件（如 HomePage 的退出按钮）
+// Provide close request method to child components (e.g. HomePage exit button)
+async function requestClose() {
+  const runningTasks = agent.tasks.filter(
+    t => t.status === 'running' || t.status === 'question'
+  )
+  if (runningTasks.length > 0) {
+    closeDialogRunningCount.value = runningTasks.length
+    closeDialogVisible.value = true
+    return
+  }
+  await handleForceQuit()
+}
+
+// 强制退出应用 / Force quit the application
+async function handleForceQuit() {
+  closeDialogVisible.value = false
+  if (isDesktop) {
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('force_quit_app')
+  } else {
+    window.close()
+  }
+}
+
+provide('requestClose', requestClose)
+
 onMounted(async () => {
   window.addEventListener('beforeunload', onBeforeUnload)
 
@@ -81,17 +108,11 @@ onMounted(async () => {
   const appWindow = getCurrentWindow()
 
   appWindow.onCloseRequested(async (event) => {
+    // 始终阻止默认关闭行为，弹出确认对话框 / Always prevent default close, show confirmation dialog
+    event.preventDefault()
     const runningTasks = agent.tasks.filter(
       t => t.status === 'running' || t.status === 'question'
     )
-
-    if (runningTasks.length === 0) {
-      // 无运行中任务，允许正常关闭 / No running tasks, allow close
-      return
-    }
-
-    // 阻止关闭，弹出确认对话框 / Prevent close, show dialog
-    event.preventDefault()
     closeDialogRunningCount.value = runningTasks.length
     closeDialogVisible.value = true
   })
@@ -144,21 +165,37 @@ onUnmounted(() => window.removeEventListener('beforeunload', onBeforeUnload))
   <!-- 关闭确认弹窗 / Close confirmation dialog -->
   <a-modal
     v-model:open="closeDialogVisible"
-    :title="t('tray.closeTitle')"
+    :title="closeDialogRunningCount > 0 ? t('tray.closeTitle') : t('home.exitConfirmTitle')"
     :footer="null"
     width="440px"
   >
-    <p style="margin-bottom: 16px;">{{ t('tray.closeContent', { count: closeDialogRunningCount }) }}</p>
-    <div style="display: flex; gap: 8px; justify-content: flex-end;">
-      <a-button @click="closeDialogVisible = false">
-        {{ t('dialog.cancel') }}
-      </a-button>
-      <a-button danger @click="handleTerminateAndQuit">
-        {{ t('tray.terminateAndQuit') }}
-      </a-button>
-      <a-button type="primary" @click="handleMinimizeToTray">
-        {{ t('tray.minimizeToTray') }}
-      </a-button>
-    </div>
+    <!-- 有运行中任务 / Running tasks exist -->
+    <template v-if="closeDialogRunningCount > 0">
+      <p style="margin-bottom: 16px;">{{ t('tray.closeContent', { count: closeDialogRunningCount }) }}</p>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <a-button @click="closeDialogVisible = false">
+          {{ t('dialog.cancel') }}
+        </a-button>
+        <a-button danger @click="handleTerminateAndQuit">
+          {{ t('tray.terminateAndQuit') }}
+        </a-button>
+        <a-button type="primary" @click="handleMinimizeToTray">
+          {{ t('tray.minimizeToTray') }}
+        </a-button>
+      </div>
+    </template>
+
+    <!-- 无运行中任务：简单退出确认 / No running tasks: simple exit confirmation -->
+    <template v-else>
+      <p style="margin-bottom: 16px;">{{ t('home.exitConfirmContent') }}</p>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <a-button @click="closeDialogVisible = false">
+          {{ t('dialog.cancel') }}
+        </a-button>
+        <a-button type="primary" danger @click="handleForceQuit">
+          {{ t('home.exit') }}
+        </a-button>
+      </div>
+    </template>
   </a-modal>
 </template>

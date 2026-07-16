@@ -1,0 +1,19 @@
+# 此目录存放主流水线 Agent 的 Skill YAML 文件。
+# Skill YAML files for main pipeline agents.
+#
+# Skill 文件会自动加载到对应的 Agent 的 system prompt 中。
+# Skill files are automatically loaded into the corresponding agent's system prompt.
+#
+# 使用方法 / Usage:
+#   1. 在此目录创建 .yaml 文件 / Create a .yaml file in this directory
+#   2. 在 env.yaml 中配置 skill_agents 映射 / Configure skill_agents mapping in env.yaml
+#   3. Skill 的 prompt_extension 将注入到对应 Agent / The skill's prompt_extension will be injected
+#
+# 示例 env.yaml 配置 / Example env.yaml config:
+#   skills:
+#     enabled: true
+#     agents:
+#       plan_generator:
+#         - my_custom_skill
+#       api_analyzer:
+#         - my_api_skill

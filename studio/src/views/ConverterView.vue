@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { Modal } from 'ant-design-vue'
 import { useConverterStore } from '../stores/converter'
 import { isDesktop, openInExplorer } from '../utils/desktop-bridge'
+import { SettingOutlined } from '@ant-design/icons-vue'
 import AgentSettings from '../components/agent/AgentSettings.vue'
 import ConverterForm from '../components/converter/ConverterForm.vue'
 import type { ConverterStatus } from '../types/converter'
@@ -48,8 +49,8 @@ function formatDate(ts: number): string {
         ← {{ t('converter.backHome') }}
       </a-button>
       <span class="toolbar-title">{{ t('converter.title') }}</span>
-      <a-button size="small" @click="settingsVisible = true" title="Settings">
-        ⚙
+      <a-button size="small" @click="settingsVisible = true" :title="t('agent.settings')">
+        <SettingOutlined />
       </a-button>
     </div>
 

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { Modal, message } from 'ant-design-vue'
 import { useAgentStore } from '../stores/agent'
 import { isDesktop } from '../utils/desktop-bridge'
+import { SettingOutlined } from '@ant-design/icons-vue'
 import AgentSettings from '../components/agent/AgentSettings.vue'
 import TaskSidebar from '../components/agent/TaskSidebar.vue'
 import NewTaskForm from '../components/agent/NewTaskForm.vue'
@@ -32,8 +33,8 @@ onMounted(async () => {
         ← {{ t('agent.backHome') }}
       </a-button>
       <span class="toolbar-title">{{ t('agent.title') }}</span>
-      <a-button size="small" @click="settingsVisible = true" title="Settings">
-        ⚙
+      <a-button size="small" @click="settingsVisible = true" :title="t('agent.settings')">
+        <SettingOutlined />
       </a-button>
     </div>
 

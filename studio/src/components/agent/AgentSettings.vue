@@ -5,7 +5,7 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '../../stores/agent'
-import { openDirectoryDialog, exists } from '../../utils/desktop-bridge'
+import { openDirectoryDialog, openFileDialog, exists } from '../../utils/desktop-bridge'
 import { message } from 'ant-design-vue'
 
 const { t } = useI18n()
@@ -66,6 +66,16 @@ async function browseExecutorDir() {
   } catch { /* user cancelled */ }
 }
 
+// Python 可执行文件选择 / Python executable file selection
+async function browsePythonExe() {
+  try {
+    const file = await openFileDialog()
+    if (!file) return
+    // openFileDialog 返回单个路径字符串 / returns single path string
+    local.value.pythonExePath = typeof file === 'string' ? file : file[0] || ''
+  } catch { /* user cancelled */ }
+}
+
 // ---- 保存/读取 / Save / Load ----
 
 async function handleSave() {
@@ -90,10 +100,17 @@ function handleCancel() {
     <div class="settings-form">
       <p class="settings-desc">{{ t('agent.settingsDesc') }}</p>
 
-      <!-- Python 可执行文件 / Python executable -->
+      <!-- Python 可执行文件（可选）/ Python executable (optional) -->
       <div class="settings-field">
         <label>{{ t('agent.settings_pythonExe') }}</label>
-        <a-input v-model:value="local.pythonExePath" placeholder="python" />
+        <a-input-group compact>
+          <a-input
+            v-model:value="local.pythonExePath"
+            style="width: calc(100% - 80px)"
+            :placeholder="t('settings.pythonExeHint')"
+          />
+          <a-button @click="browsePythonExe">{{ t('agent.settings_browse') }}</a-button>
+        </a-input-group>
       </div>
 
       <!-- 虚拟环境路径 / Virtual env path -->
@@ -111,7 +128,7 @@ function handleCancel() {
           <a-input
             v-model:value="local.agentRootDir"
             style="width: calc(100% - 80px)"
-            placeholder="D:\cc_proj\flow-forge\agent"
+            :placeholder="t('settings.agentRootDirHint')"
           />
           <a-button @click="browseAgentDir">{{ t('agent.settings_browse') }}</a-button>
         </a-input-group>
@@ -124,7 +141,7 @@ function handleCancel() {
           <a-input
             v-model:value="local.executorRootDir"
             style="width: calc(100% - 80px)"
-            placeholder="D:\cc_proj\flow-forge\python"
+            :placeholder="t('settings.executorRootDirHint')"
           />
           <a-button @click="browseExecutorDir">{{ t('agent.settings_browse') }}</a-button>
         </a-input-group>

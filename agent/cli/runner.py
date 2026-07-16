@@ -393,6 +393,8 @@ def main() -> int:
         settings.url_doc_match_max_retries = _first(args.url_doc_match_max_retries, saved_config.get("url_doc_match_max_retries"), settings.url_doc_match_max_retries)
         settings.url_doc_match_strategy = _first(args.url_doc_match_strategy, saved_config.get("url_doc_match_strategy"), settings.url_doc_match_strategy)
         settings.consecutive_batch_failure_limit = _first(args.consecutive_batch_failure_limit, saved_config.get("consecutive_batch_failure_limit"), settings.consecutive_batch_failure_limit)
+        # plan_biz_flow_batch_size 无 CLI 参数，仅从 saved_config 恢复 / No CLI arg, restore from saved config only
+        settings.plan_biz_flow_batch_size = saved_config.get("plan_biz_flow_batch_size", settings.plan_biz_flow_batch_size)
 
         if args.no_url_doc_match_enabled:
             settings.url_doc_match_enabled = False
@@ -432,6 +434,12 @@ def main() -> int:
             "reference_dir": _reference_dir,
             "skeleton_batch_size": _skeleton_batch_size,
             "plan_single_batch_size": _plan_single_batch_size,
+            "plan_biz_flow_batch_size": settings.plan_biz_flow_batch_size,
+            "max_steps": settings.max_steps,
+            "max_retries": settings.max_retries,
+            "url_doc_match_max_retries": settings.url_doc_match_max_retries,
+            "url_doc_match_strategy": settings.url_doc_match_strategy,
+            "consecutive_batch_failure_limit": settings.consecutive_batch_failure_limit,
         }
         save_run_config(str(_memory_dir), _merged_config)
 
@@ -591,6 +599,12 @@ def main() -> int:
         "reference_dir": _first(args.reference_dir, ""),
         "skeleton_batch_size": _first(args.skeleton_batch_size, settings.skeleton_batch_size),
         "plan_single_batch_size": _first(args.plan_single_batch_size, settings.plan_single_batch_size),
+        "plan_biz_flow_batch_size": settings.plan_biz_flow_batch_size,
+        "max_steps": _first(args.max_steps, settings.max_steps),
+        "max_retries": _first(args.max_retries, settings.max_retries),
+        "url_doc_match_max_retries": _first(args.url_doc_match_max_retries, settings.url_doc_match_max_retries),
+        "url_doc_match_strategy": _first(args.url_doc_match_strategy, settings.url_doc_match_strategy),
+        "consecutive_batch_failure_limit": _first(args.consecutive_batch_failure_limit, settings.consecutive_batch_failure_limit),
     }
     save_run_config(str(memory_dir), _run_config)
 
