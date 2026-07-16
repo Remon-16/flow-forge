@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { message } from 'ant-design-vue'
 import { useYamlStore } from '../stores/yaml-store'
 import { useEditorStore } from '../stores/editor'
+import { useExecutorStore } from '../stores/executor'
+import { useConverterStore } from '../stores/converter'
+import { useAgentStore } from '../stores/agent'
 import YamlFileTree from '../components/yaml-editor/YamlFileTree.vue'
 import YamlTabBar from '../components/yaml-editor/YamlTabBar.vue'
 import SingleCaseForm from '../components/yaml-editor/SingleCaseForm.vue'
@@ -11,6 +15,9 @@ import InterfaceForm from '../components/yaml-editor/InterfaceForm.vue'
 import YamlRawView from '../components/yaml-editor/YamlRawView.vue'
 import SearchBar from '../components/search/SearchBar.vue'
 import SearchResultsPanel from '../components/search/SearchResultsPanel.vue'
+import EditorToolbar from '../components/editor/EditorToolbar.vue'
+import LogPanel from '../components/editor/LogPanel.vue'
+import ParamEditModal from '../components/editor/ParamEditModal.vue'
 import type { SearchResultItem } from '../components/search/SearchResultsPanel.vue'
 import type { SearchOptions } from '../components/search/SearchBar.vue'
 import { stringifyYaml, parseYaml } from '../utils/yaml-parser'
@@ -20,6 +27,125 @@ import type { FileEntry } from '../utils/desktop-bridge'
 const { t } = useI18n()
 const yamlStore = useYamlStore()
 const editorStore = useEditorStore()
+const executor = useExecutorStore()
+const converter = useConverterStore()
+const agent = useAgentStore()
+
+// ============================================================================
+// Editor toolbar state / 编辑器工具栏状态
+// ============================================================================
+
+const paramEditVisible = ref(false)
+const paramEditMode = ref<'executor' | 'converter'>('executor')
+
+// 当前激活文件的路径 / Current active file path
+const currentFilePath = computed(() => {
+  const tab = yamlStore.openTabs[yamlStore.activeTabIndex]
+  return tab?.filePath || ''
+})
+
+// 当前激活文件的目录 / Current active file directory
+const currentDir = computed(() => {
+  const tab = yamlStore.openTabs[yamlStore.activeTabIndex]
+  return tab?.filePath ? tab.filePath.replace(/[/\\][^/\\]+$/, '') : ''
+})
+
+// ============================================================================
+// Toolbar handlers for YAML editor
+// ============================================================================
+
+async function handleRunAll() {
+  try {
+    const fp = currentFilePath.value
+    if (!fp) { message.warning(t('yaml.noFileSelected')); return }
+    const sessionId = executor.createSession({
+      envSuffix: '',
+      caseFilePath: '',
+      yamlDir: '',
+      yamlFiles: fp,
+      envOnlyParams: {},
+      cliParams: executor.getEditorCliParams(fp),
+    })
+    await executor.startSession(sessionId)
+  } catch (e: unknown) { message.error(String(e)) }
+}
+
+async function handleRunSingle() {
+  try {
+    const fp = currentFilePath.value
+    if (!fp) { message.warning(t('yaml.noFileSelected')); return }
+    const sessionId = executor.createSession({
+      envSuffix: '',
+      caseFilePath: '',
+      yamlDir: '',
+      yamlFiles: fp,
+      envOnlyParams: {},
+      cliParams: { ...executor.getEditorCliParams(fp), apiMode: 'single' },
+    })
+    await executor.startSession(sessionId)
+  } catch (e: unknown) { message.error(String(e)) }
+}
+
+async function handleRunBiz() {
+  try {
+    const fp = currentFilePath.value
+    if (!fp) { message.warning(t('yaml.noFileSelected')); return }
+    const sessionId = executor.createSession({
+      envSuffix: '',
+      caseFilePath: '',
+      yamlDir: '',
+      yamlFiles: fp,
+      envOnlyParams: {},
+      cliParams: { ...executor.getEditorCliParams(fp), apiMode: 'biz' },
+    })
+    await executor.startSession(sessionId)
+  } catch (e: unknown) { message.error(String(e)) }
+}
+
+async function handleRunSelect() {
+  // YAML: use current directory for selection
+  await handleRunAll()
+}
+
+async function handleConvertAll() {
+  try {
+    const dir = currentDir.value
+    if (!dir) { message.warning(t('yaml.noFileSelected')); return }
+    const sessionId = converter.createSession({
+      direction: 'yaml2excel',
+      inputPath: '',
+      outputPath: dir + '/_converted.xlsx',
+      interfacesDir: dir,
+      singleCasesDir: dir,
+      bizFlowsDir: dir,
+      configDir: '',
+      processorsDir: '',
+    })
+    await converter.startSession(sessionId)
+  } catch (e: unknown) { message.error(String(e)) }
+}
+
+async function handleConvertSingle() {
+  await handleConvertAll()
+}
+
+async function handleConvertBiz() {
+  await handleConvertAll()
+}
+
+async function handleConvertSelect() {
+  await handleConvertAll()
+}
+
+function handleEditRunParams() {
+  paramEditMode.value = 'executor'
+  paramEditVisible.value = true
+}
+
+function handleEditConvertParams() {
+  paramEditMode.value = 'converter'
+  paramEditVisible.value = true
+}
 const rawViewRef = ref<InstanceType<typeof YamlRawView> | null>(null)
 
 function onSelectFile(filePath: string) {
@@ -377,6 +503,24 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 <template>
   <div class="yaml-editor-view">
+    <!-- Editor toolbar -->
+    <div style="display: flex; justify-content: flex-end; border-bottom: 1px solid #f0f0f0; background: #fff;">
+      <EditorToolbar
+        editor-type="yaml"
+        :file-path="currentFilePath"
+        @run-all="handleRunAll"
+        @run-single="handleRunSingle"
+        @run-biz="handleRunBiz"
+        @run-select="handleRunSelect"
+        @convert-all="handleConvertAll"
+        @convert-single="handleConvertSingle"
+        @convert-biz="handleConvertBiz"
+        @convert-select="handleConvertSelect"
+        @edit-run-params="handleEditRunParams"
+        @edit-convert-params="handleEditConvertParams"
+      />
+    </div>
+
     <!-- Global search -->
     <div v-if="globalSearchVisible" class="yaml-global-search">
       <SearchBar
@@ -468,6 +612,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         <a-button type="primary" @click="handleSaveAndClose">{{ t('yaml.saveAndClose') }}</a-button>
       </template>
     </a-modal>
+
+    <!-- Log panel -->
+    <LogPanel />
+
+    <!-- Param edit modal -->
+    <ParamEditModal
+      v-model:visible="paramEditVisible"
+      :mode="paramEditMode"
+      :file-path="currentFilePath"
+    />
   </div>
 </template>
 

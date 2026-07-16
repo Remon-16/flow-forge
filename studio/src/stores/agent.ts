@@ -24,9 +24,10 @@ const REGISTRY_FILE = 'agent_tasks.json'
 
 const DEFAULT_CONFIG: AgentConfig = {
   agentRootDir: '',
-  configFileName: 'env.yaml',
   pythonExePath: '',
   venvPath: '',
+  executorRootDir: '',
+  saveToEnvFile: false,
 }
 
 // ============================================================================

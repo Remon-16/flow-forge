@@ -208,6 +208,75 @@ struct AgentLinePayload {
     line: String,
 }
 
+/// 通用 Python 子进程启动函数 — 被 spawn_agent / spawn_executor / spawn_converter 复用。
+/// Generic Python process spawner — shared by agent, executor, and converter commands.
+fn _spawn_python_process(
+    app: &AppHandle,
+    state: &AgentManager,
+    task_id: &str,
+    working_dir: &str,
+    python_exe: &str,
+    args: &[String],
+    stdout_event: &str,
+    stderr_event: &str,
+) -> Result<(), String> {
+    // 启动子进程 / Spawn the subprocess
+    let mut child = Command::new(python_exe)
+        .args(args)
+        .current_dir(working_dir)
+        .stdout(Stdio::piped())
+        .stdin(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn process: {}", e))?;
+
+    let stdin = child.stdin.take()
+        .ok_or_else(|| "Failed to open stdin".to_string())?;
+
+    // stdout 后台读取线程 / stdout background reader thread
+    let stdout = child.stdout.take()
+        .ok_or_else(|| "Failed to open stdout".to_string())?;
+    let app_stdout = app.clone();
+    let tid_stdout = task_id.to_string();
+    let evt_stdout = stdout_event.to_string();
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            match line {
+                Ok(l) => {
+                    let _ = app_stdout.emit(&evt_stdout,
+                        AgentLinePayload { task_id: tid_stdout.clone(), line: l });
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    // stderr 后台读取线程 / stderr background reader thread
+    let stderr = child.stderr.take()
+        .ok_or_else(|| "Failed to open stderr".to_string())?;
+    let app_stderr = app.clone();
+    let tid_stderr = task_id.to_string();
+    let evt_stderr = stderr_event.to_string();
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            match line {
+                Ok(l) => {
+                    let _ = app_stderr.emit(&evt_stderr,
+                        AgentLinePayload { task_id: tid_stderr.clone(), line: l });
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    // 存储进程句柄 / Store process handle
+    state.insert(task_id.to_string(), AgentHandle { child, stdin })?;
+
+    Ok(())
+}
+
 /// 检查是否有 agent 子进程在运行。
 /// Check whether any agent subprocess is running.
 #[tauri::command]
@@ -248,65 +317,54 @@ fn spawn_agent(
     ];
     full_args.extend(args);
 
-    // 启动子进程 / Spawn the subprocess
-    let mut child = Command::new(&python_exe)
-        .args(&full_args)
-        .current_dir(&working_dir)
-        .stdout(Stdio::piped())
-        .stdin(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn agent process: {}", e))?;
+    _spawn_python_process(
+        &app, &state, &task_id, &working_dir, &python_exe,
+        &full_args, "agent-stdout", "agent-stderr",
+    )
+}
 
-    let stdin = child.stdin.take()
-        .ok_or_else(|| "Failed to open stdin for agent process".to_string())?;
+// ============================================================================
+// Executor subprocess commands / 执行器子进程命令
+// ============================================================================
 
-    // stdout 后台读取线程 / stdout background reader thread
-    let stdout = child.stdout.take()
-        .ok_or_else(|| "Failed to open stdout for agent process".to_string())?;
-    let app_stdout = app.clone();
-    let tid_stdout = task_id.clone();
-    thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            match line {
-                Ok(l) => {
-                    let _ = app_stdout.emit("agent-stdout",
-                        AgentLinePayload { task_id: tid_stdout.clone(), line: l });
-                }
-                Err(_) => break,
-            }
-        }
-    });
+#[tauri::command]
+fn spawn_executor(
+    app: AppHandle,
+    state: State<'_, AgentManager>,
+    task_id: String,
+    working_dir: String,
+    python_exe: String,
+    args: Vec<String>,
+) -> Result<(), String> {
+    // 执行器直接使用传入的 args，前端负责构建完整的 CLI 参数
+    // Executor uses args as-is; the frontend constructs the full CLI
+    // argv: [python_exe, main.py, --config, ..., --yamlFiles, ...]
+    _spawn_python_process(
+        &app, &state, &task_id, &working_dir, &python_exe,
+        &args, "executor-stdout", "executor-stderr",
+    )
+}
 
-    // stderr 后台读取线程 / stderr background reader thread
-    let stderr = child.stderr.take()
-        .ok_or_else(|| "Failed to open stderr for agent process".to_string())?;
-    let app_stderr = app.clone();
-    let tid_stderr = task_id.clone();
-    thread::spawn(move || {
-        let reader = BufReader::new(stderr);
-        for line in reader.lines() {
-            match line {
-                Ok(l) => {
-                    let _ = app_stderr.emit("agent-stderr",
-                        AgentLinePayload { task_id: tid_stderr.clone(), line: l });
-                }
-                Err(_) => break,
-            }
-        }
-    });
+// ============================================================================
+// Converter subprocess commands / 转换器子进程命令
+// ============================================================================
 
-    // 存储进程句柄 / Store process handle
-    state.insert(task_id.clone(), AgentHandle { child, stdin })?;
-
-    // 进程退出监听（不能用 state 因为 'static 要求）
-    // Process exit watcher (can't use state in thread due to 'static requirement)
-    // 改用 Arc 包装 state / Use Arc to share state across threads
-    // 注意: Tauri State 已经按引用管理，退出检测通过前端轮询 check_agent_running 来实现
-    // Note: Exit detection is done by frontend polling check_agent_running
-
-    Ok(())
+#[tauri::command]
+fn spawn_converter(
+    app: AppHandle,
+    state: State<'_, AgentManager>,
+    task_id: String,
+    working_dir: String,
+    python_exe: String,
+    args: Vec<String>,
+) -> Result<(), String> {
+    // 转换器直接使用传入的 args，前端负责构建完整的 CLI 参数
+    // Converter uses args as-is; the frontend constructs the full CLI
+    // argv: [python_exe, converter_main.py, excel2yaml, --input, ..., --output, ...]
+    _spawn_python_process(
+        &app, &state, &task_id, &working_dir, &python_exe,
+        &args, "converter-stdout", "converter-stderr",
+    )
 }
 
 #[tauri::command]
@@ -337,6 +395,50 @@ fn check_agent_running(
         Some(c) if c < 0 => Ok(false),  // 未找到 / Not found
         Some(_) => Ok(false),            // 已退出 / Exited
         None => Ok(true),                // 仍运行 / Still running
+    }
+}
+
+// ---- 执行器/转换器的 kill/check 复用 AgentManager，仅注册新命令名 / Executor/converter kill/check reuse AgentManager ----
+
+#[tauri::command]
+fn kill_executor(
+    state: State<'_, AgentManager>,
+    task_id: String,
+) -> Result<(), String> {
+    state.kill(&task_id)
+}
+
+#[tauri::command]
+fn kill_converter(
+    state: State<'_, AgentManager>,
+    task_id: String,
+) -> Result<(), String> {
+    state.kill(&task_id)
+}
+
+#[tauri::command]
+fn check_executor_running(
+    state: State<'_, AgentManager>,
+    task_id: String,
+) -> Result<bool, String> {
+    let code = state.cleanup(&task_id)?;
+    match code {
+        Some(c) if c < 0 => Ok(false),
+        Some(_) => Ok(false),
+        None => Ok(true),
+    }
+}
+
+#[tauri::command]
+fn check_converter_running(
+    state: State<'_, AgentManager>,
+    task_id: String,
+) -> Result<bool, String> {
+    let code = state.cleanup(&task_id)?;
+    match code {
+        Some(c) if c < 0 => Ok(false),
+        Some(_) => Ok(false),
+        None => Ok(true),
     }
 }
 
@@ -425,6 +527,12 @@ pub fn run() {
             send_to_agent,
             kill_agent,
             check_agent_running,
+            spawn_executor,
+            kill_executor,
+            check_executor_running,
+            spawn_converter,
+            kill_converter,
+            check_converter_running,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

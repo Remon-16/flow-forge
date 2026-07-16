@@ -12,7 +12,6 @@
 - **AI-generated test cases**: Reads requirement docs (Markdown/PDF/text) plus API docs (OpenAPI/Markdown) and automatically generates single-API and business-flow test cases.
 - **Controllable human review**: The AI-produced test plan is confirmed by a human first (visual annotation supported in Studio) before cases are generated, suppressing AI hallucinations.
 - **Visual editing**: The Studio desktop app batch-edits Excel/YAML cases and graphically edits JSON fields and assertion rules.
-- **GUI agent launcher**: Studio's built-in Agent Runner lets you configure parameters, view real-time logs, and interactively review test plans — lowering the barrier to entry.
 - **Multi-threaded execution**: The executor runs cases concurrently, automatically manages login/session state, supports cross-request parameter passing (tokens, etc.), and provides a two-tier assertion engine.
 - **Self-contained reports**: Produces HTML reports with inline styles and scripts that open directly in a browser; integrates with Jenkins via exit codes.
 - **Flexible formats**: Bidirectional YAML/Excel conversion, plus generation of zero-dependency standalone pytest code.
@@ -34,9 +33,56 @@ graph TD
     EXEC --> |Exit Code| JENKINS
 ```
 
-## Quick Start (Shortest End-to-End Path)
+## Recommended: Flow Forge Studio (GUI)
 
-The three components are independent and can be used separately; below is the full chain from requirements to report:
+**The Studio desktop app covers all 6 features in one place — complete the entire workflow without memorizing CLI commands.**
+
+### Workflow: Generate → Edit → Execute & Convert
+
+```text
+① Generate                ② Edit                    ③ Execute & Convert
+┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+│  AI Agent     │ ───▶ │  Excel Editor │ ───▶ │  Executor     │
+│  Annotator    │      │  YAML Editor  │      │  Converter    │
+└──────────────┘      └──────────────┘      └──────────────┘
+```
+
+1. **Generate first**: Launch the AI Agent in Studio, provide requirement docs and API docs, and it auto-generates test cases. Review and annotate the test plan before case generation.
+2. **Edit next**: Batch-edit with the Excel Editor, or fine-tune files individually with the YAML Editor. Supports visual JSON editing, assertion rules, and processor configuration.
+3. **Execute or convert last**: Run cases and generate HTML reports with the Executor; convert between Excel ↔ YAML with the Converter.
+
+> **Quick editor actions**: In the Excel / YAML Editor, use the `▶ Run` and `⟳ Convert` split buttons in the top-right toolbar to execute or convert the current file directly — no need to switch views, ideal for single-file debugging.
+
+### Studio Installation
+
+<!-- RELEASE_MSI -->
+> 🚧 **MSI installer coming soon**: The installer will be published as a [GitHub Release](https://github.com/your-org/flow-forge/releases) asset. Stay tuned.
+<!-- /RELEASE_MSI -->
+
+To build from source:
+
+```bash
+cd studio
+npm install
+npm run dev          # development mode
+# or
+npm run build        # production → src-tauri/target/release/
+```
+
+### Six Feature Entries
+
+| Entry | Description |
+| ------ | ------ |
+| **AI Case Generator** | Configure and run the AI agent to generate test cases from requirement and API docs, with real-time logs and plan review |
+| **Plan Annotator** | Add annotations directly on the rendered test plan; annotations can be used by the AI for plan revision |
+| **Excel Editor** | Batch-edit .xlsx case files in a spreadsheet UI, covering API definitions, single-API cases, and business-flow cases |
+| **YAML Editor** | Form-based structured editing with a tree-directory browser — one case per file, ideal for git diff |
+| **Case Executor** | Run test cases and generate HTML reports, with multi-environment switching and multi-threaded execution |
+| **Case Converter** | Convert between Excel ↔ YAML ↔ pytest formats, with batch conversion support |
+
+## Command-Line Mode (SSH / CI/CD)
+
+If you prefer the CLI or operate over SSH on a server, each component can also be used independently:
 
 ```bash
 # ── 1. AI generates cases (agent/) ────────────────────────────
@@ -47,14 +93,9 @@ python main.py --requirement docs/req.md --api docs/api.yaml
 # Review the test plan: enter y to approve / n for text feedback / r to revise from the annotation file
 # Generated cases are written to agent/output_<timestamp>/
 
-# ── 2. (Optional) Visually edit cases in Studio (studio/) ──────────
-cd ../studio
-npm install
-npm run dev                            # Open the Excel/YAML editor for batch adjustments
-
-# ── 3. Executor runs cases and produces a report (python/) ────────────────
+# ── 2. Executor runs cases and produces a report (python/) ────────────────
 cd ../python
-pip install -r requirements.txt        # Edit env-local.yml with the target app and login info
+pip install -r requirements.txt       # Edit env-local.yml with the target app and login info
 python main.py --yamlDir ../agent/output_<timestamp>/cases --envName local --apiMode all
 # The report is generated at python/report/{filename}_{timestamp}.html
 ```
@@ -64,10 +105,10 @@ See each component's README below for detailed usage.
 ## The Three Sub-projects
 
 | Sub-project | Purpose | Quick Access |
-|--------|------|----------|
+| -------- | ------ | ---------- |
+| **[studio/](./studio/README.en.md)** | Flow Forge Studio desktop app: visual case editing, plan annotation, GUI agent/executor/converter launcher | [Docs →](./studio/README.en.md) |
 | **[agent/](./agent/README.en.md)** | AI test-case generation agent: requirements + API docs → test plan (human review) → YAML/Excel cases | [Docs →](./agent/README.en.md) |
 | **[python/](./python/README.en.md)** | API test executor + format converter: run YAML/Excel cases → HTML report; Excel↔YAML↔pytest conversion | [Docs →](./python/README.en.md) |
-| **[studio/](./studio/README.en.md)** | Flow Forge Studio desktop app: visually edit cases, annotate Markdown plans, Agent Runner (GUI agent launcher) | [Docs →](./studio/README.en.md) |
 
 The three communicate through **YAML files** as the primary contract (Excel remains compatible) — whatever format the agent generates, the executor parses. Users are free to choose: AI auto-generation, manual authoring, or visual editing in Studio.
 
@@ -77,9 +118,9 @@ The `shared/` directory holds cross-language shared schemas (column definitions,
 
 Flow Forge supports three workflows; choose as needed:
 
-- **Option 1: Fully automated end-to-end** — the AI agent generates cases → human review → executor runs them. Best for producing cases quickly from scratch.
-- **Option 2: Hand-written cases** — manually author YAML/Excel cases → run them with the executor (`--yamlDir` or `--caseFilePath`). Best when you already have cases.
-- **Option 3: Initial Excel generation + YAML version control (recommended)** — AI generates Excel (`--output-format excel`) → batch-edit in Studio → convert to YAML with the `converter` → review file-by-file with git diff → run with the executor.
+- **Option 1: Full GUI (recommended)** — Launch Agent in Studio to generate cases → adjust in Excel/YAML Editor → run with Executor. No CLI needed.
+- **Option 2: Full CLI** — AI agent generates cases → human review → executor runs them. Best for quick iteration or CI/CD.
+- **Option 3: Initial Excel generation + YAML version control** — AI generates Excel (`--output-format excel`) → batch-edit in Studio → convert to YAML with the `converter` → review file-by-file with git diff → run with the executor.
 
 > **Why is Option 3 recommended?** Excel is ideal for batch editing (quick browsing, sorting, bulk changes), while YAML is ideal for diffing (one file per case, so git diff shows changes clearly). Edit in Excel first, then convert to YAML for commit — balancing efficiency and traceability. When you need standalone tests, use `yaml2pytest` / `excel2pytest` to generate zero-dependency pytest code.
 
@@ -99,17 +140,18 @@ AI hallucinations are inevitable; Flow Forge controls quality through multiple m
 
 - **YAML/Excel as contract**: the agent and executor are decoupled, and users freely choose how to generate cases.
 - **Human review**: cases are only generated after the AI plan is confirmed by a human, keeping quality controllable.
-- **CLI-driven**: the executor is pure CLI with no GUI dependencies, fitting CI/CD.
+- **CLI & GUI dual mode**: Studio desktop app provides visual operations; CLI is preserved for CI/CD.
 - **Self-contained reports**: HTML reports embed styles and scripts inline, requiring no web server.
 - **Extensible processors/plugins**: users can customize case generation. When executing cases, they can apply custom signatures, insert timestamps, and more.
 
 ## Plugin & Extension Mechanism
 
 | Module | Extension Point | Description |
-|------|--------|------|
+| ------ | -------- | ------ |
 | [`python/processors/`](./python/docs/processors-and-report.en.md#pre-processors--post-processors) | PreProcessor / PostProcessor | Processing logic before and after requests (HMAC signing, SQL cleanup, path parameters, etc.) |
 | [`agent/plugins/`](./agent/docs/plugins-and-skills.en.md) | CaseAttributeGenerator | Automatically enrich attributes after case generation (data filling, assertion generation, etc.) |
 | `studio/` | Agent Runner | Configure and launch the AI agent from Studio, view real-time logs, and interact with prompts and plan reviews |
+| `studio/` | Editor Toolbar | Execute or convert cases directly from the editor, ideal for single-file debugging |
 | `studio/` | PreProcessors / PostProcessors fields | Visually edit and validate processor configs in the editor |
 
 ## Running Tests
@@ -125,10 +167,10 @@ cd python && python -m pytest tests/ -v
 ## Technology Stack
 
 | Component | Technology |
-|------|------|
+| ------ | ------ |
+| Studio Desktop App | Vue 3, Ant Design Vue, Vite, Tauri 2, TypeScript |
 | Test Case Generation Agent | Python 3.12, LangGraph, OpenAI-compatible API, prance (OpenAPI), pymupdf (PDF), context compression |
 | Test Executor and Converter | Python 3.12, requests, openpyxl, pyyaml |
-| Studio Desktop App | Vue 3, Ant Design Vue, Vite, Tauri 2, TypeScript |
 | Configuration Management | YAML multi-environment config files |
 | Report Output | Self-contained HTML (no external CSS/JS) |
 | CI/CD | Jenkins Pipeline, CLI exit codes |

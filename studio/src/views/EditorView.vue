@@ -3,18 +3,298 @@ import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { toRaw } from 'vue'
 import { useEditorStore } from '../stores/editor'
 import { useWorkbookStore } from '../stores/workbook'
+import { useExecutorStore } from '../stores/executor'
+import { useConverterStore } from '../stores/converter'
+import { useAgentStore } from '../stores/agent'
 import { useI18n } from 'vue-i18n'
+import { message } from 'ant-design-vue'
+import { writeFile, exists } from '../utils/desktop-bridge'
+import yaml from 'js-yaml'
 import ApiDefEditor from '../components/editor/ApiDefEditor.vue'
 import SingleCaseEditor from '../components/editor/SingleCaseEditor.vue'
 import BizFlowEditor from '../components/editor/BizFlowEditor.vue'
 import SearchBar from '../components/search/SearchBar.vue'
 import SearchResultsPanel from '../components/search/SearchResultsPanel.vue'
+import EditorToolbar from '../components/editor/EditorToolbar.vue'
+import LogPanel from '../components/editor/LogPanel.vue'
+import CaseSelectModal from '../components/editor/CaseSelectModal.vue'
+import ParamEditModal from '../components/editor/ParamEditModal.vue'
 import type { SearchResultItem } from '../components/search/SearchResultsPanel.vue'
 import type { SearchOptions } from '../components/search/SearchBar.vue'
 
 const { t } = useI18n()
 const editor = useEditorStore()
 const workbook = useWorkbookStore()
+const executor = useExecutorStore()
+const converter = useConverterStore()
+const agent = useAgentStore()
+
+// ============================================================================
+// Editor toolbar state / 编辑器工具栏状态
+// ============================================================================
+
+const workbookPath = ref('')
+const caseSelectVisible = ref(false)
+const caseSelectCases = ref<{ id: string; name: string; type: 'single' | 'biz'; sheetName?: string }[]>([])
+const paramEditVisible = ref(false)
+const paramEditMode = ref<'executor' | 'converter'>('executor')
+
+// Watch for workbook path changes
+watch(() => (workbook as any)._filePath, (fp) => {
+  workbookPath.value = fp || ''
+}, { immediate: true })
+
+// ============================================================================
+// Build case list for CaseSelectModal / 构建用例选择列表
+// ============================================================================
+
+function buildCaseList() {
+  const cases: { id: string; name: string; type: 'single' | 'biz'; sheetName?: string }[] = []
+
+  // Single cases
+  for (const c of workbook.singleCases) {
+    const name = (c as any).TestID || (c as any).APIName || `Case ${cases.length}`
+    cases.push({ id: (c as any)._uid || name, name, type: 'single', sheetName: 'SingleCases' })
+  }
+
+  // Biz flows
+  for (const flow of workbook.bizFlows) {
+    const sheetName = flow.sheetName || 'BizFlow'
+    for (const step of flow.steps) {
+      const name = (step as any).StepID || (step as any).APIName || `Step ${cases.length}`
+      cases.push({ id: (step as any)._uid || name, name, type: 'biz', sheetName })
+    }
+  }
+
+  return cases
+}
+
+// ============================================================================
+// Temp YAML generation for executor / 生成临时 YAML 文件供执行器使用
+// ============================================================================
+
+async function writeTempYaml(caseFilter: 'all' | 'single' | 'biz' | string[]): Promise<string> {
+  const cases: Record<string, unknown>[] = []
+
+  if (caseFilter === 'all' || caseFilter === 'single') {
+    for (const c of workbook.singleCases) {
+      cases.push(workbookRowToYaml(c, 'single'))
+    }
+  }
+
+  if (caseFilter === 'all' || caseFilter === 'biz') {
+    for (const flow of workbook.bizFlows) {
+      const steps = flow.steps.map(s => workbookRowToYaml(s, 'single'))
+      cases.push({
+        case_type: 'biz',
+        sheet_name: flow.sheetName || 'BizFlow',
+        steps,
+      })
+    }
+  }
+
+  if (Array.isArray(caseFilter)) {
+    // Filter by selected IDs
+    const selectedIds = new Set(caseFilter)
+    for (const c of workbook.singleCases) {
+      const id = (c as any)._uid || ''
+      if (selectedIds.has(id)) {
+        cases.push(workbookRowToYaml(c, 'single'))
+      }
+    }
+    for (const flow of workbook.bizFlows) {
+      const selectedSteps = flow.steps.filter(s => selectedIds.has((s as any)._uid || ''))
+      if (selectedSteps.length > 0) {
+        cases.push({
+          case_type: 'biz',
+          sheet_name: flow.sheetName || 'BizFlow',
+          steps: selectedSteps.map(s => workbookRowToYaml(s, 'single')),
+        })
+      }
+    }
+  }
+
+  const yamlContent = yaml.dump(cases, { indent: 2, lineWidth: -1 })
+  const tempDir = agent.config.executorRootDir || '.'
+  const tempPath = `${tempDir}/_studio_temp_${Date.now()}.yaml`.replace(/\\/g, '/')
+  await writeFile(tempPath, yamlContent)
+  return tempPath
+}
+
+function workbookRowToYaml(row: unknown, caseType: string): Record<string, unknown> {
+  const r = row as Record<string, unknown>
+  return {
+    case_type: caseType,
+    test_id: r['TestID'] || '',
+    api_name: r['APIName'] || '',
+    app_name: r['AppName'] || '',
+    method: r['Method'] || 'GET',
+    url: r['URL'] || '',
+    request_head: safeJsonParse(r['RequestHead']),
+    request_body: safeJsonParse(r['RequestBody']),
+    status_code: r['StatusCode'] || 200,
+    assert_dict: safeJsonParse(r['AssertDict']),
+    assert_rules: safeJsonParse(r['AssertRules']),
+    preprocessors: safeJsonParse(r['PreProcessors']),
+    postprocessors: safeJsonParse(r['PostProcessors']),
+    remark: r['Remark'] || '',
+  }
+}
+
+function safeJsonParse(val: unknown): unknown {
+  if (!val || typeof val !== 'string') return val ?? null
+  try { return JSON.parse(val) } catch { return val }
+}
+
+// ============================================================================
+// Toolbar handlers / 工具栏事件处理
+// ============================================================================
+
+async function handleRunAll() {
+  try {
+    const tempPath = await writeTempYaml('all')
+    const sessionId = executor.createSession({
+      envSuffix: '',
+      caseFilePath: '',
+      yamlDir: '',
+      yamlFiles: tempPath,
+      envOnlyParams: {},
+      cliParams: executor.getEditorCliParams(workbookPath.value),
+    })
+    await executor.startSession(sessionId)
+  } catch (e: unknown) {
+    message.error(String(e))
+  }
+}
+
+async function handleRunSingle() {
+  try {
+    const tempPath = await writeTempYaml('single')
+    const sessionId = executor.createSession({
+      envSuffix: '',
+      caseFilePath: '',
+      yamlDir: '',
+      yamlFiles: tempPath,
+      envOnlyParams: {},
+      cliParams: executor.getEditorCliParams(workbookPath.value),
+    })
+    await executor.startSession(sessionId)
+  } catch (e: unknown) {
+    message.error(String(e))
+  }
+}
+
+async function handleRunBiz() {
+  try {
+    const tempPath = await writeTempYaml('biz')
+    const sessionId = executor.createSession({
+      envSuffix: '',
+      caseFilePath: '',
+      yamlDir: '',
+      yamlFiles: tempPath,
+      envOnlyParams: {},
+      cliParams: executor.getEditorCliParams(workbookPath.value),
+    })
+    await executor.startSession(sessionId)
+  } catch (e: unknown) {
+    message.error(String(e))
+  }
+}
+
+function handleRunSelect() {
+  caseSelectCases.value = buildCaseList()
+  paramEditMode.value = 'executor'
+  caseSelectVisible.value = true
+}
+
+async function handleCaseSelectConfirm(selectedIds: string[]) {
+  if (selectedIds.length === 0) return
+  try {
+    const tempPath = await writeTempYaml(selectedIds)
+    const sessionId = executor.createSession({
+      envSuffix: '',
+      caseFilePath: '',
+      yamlDir: '',
+      yamlFiles: tempPath,
+      envOnlyParams: {},
+      cliParams: executor.getEditorCliParams(workbookPath.value),
+    })
+    await executor.startSession(sessionId)
+  } catch (e: unknown) {
+    message.error(String(e))
+  }
+}
+
+// Converter handlers — 使用当前 Excel 文件路径 / Use current Excel file path
+async function handleConvert(direction: 'excel2yaml' | 'yaml2excel' | 'excel2pytest') {
+  if (!workbookPath.value) {
+    message.warning(t('editor.toolbar.noFile'))
+    return
+  }
+  const outputPath = workbookPath.value.replace(/\.xlsx$/i, '_converted')
+  const sessionId = converter.createSession({
+    direction,
+    inputPath: workbookPath.value,
+    outputPath: direction === 'yaml2excel' ? workbookPath.value.replace(/\.xlsx$/i, '_from_yaml.xlsx') : outputPath,
+    interfacesDir: '',
+    singleCasesDir: '',
+    bizFlowsDir: '',
+    configDir: '',
+    processorsDir: '',
+  })
+  await converter.startSession(sessionId)
+}
+
+function handleConvertAll() {
+  handleConvert('excel2yaml')
+}
+
+function handleConvertSingle() {
+  // For Excel, single cases conversion means writing temp Excel and converting
+  handleConvert('excel2yaml')
+}
+
+function handleConvertBiz() {
+  handleConvert('excel2yaml')
+}
+
+function handleConvertSelect() {
+  caseSelectCases.value = buildCaseList()
+  paramEditMode.value = 'converter'
+  caseSelectVisible.value = true
+}
+
+async function handleConvertCaseSelectConfirm(selectedIds: string[]) {
+  if (selectedIds.length === 0) return
+  try {
+    const tempPath = await writeTempYaml(selectedIds)
+    const outputPath = tempPath.replace(/\.yaml$/i, '_converted')
+    const sessionId = converter.createSession({
+      direction: 'yaml2excel',
+      inputPath: '',
+      outputPath,
+      interfacesDir: '',
+      singleCasesDir: '',
+      bizFlowsDir: '',
+      configDir: '',
+      processorsDir: '',
+    })
+    // Write temp YAML first, then pass to yaml2excel
+    await converter.startSession(sessionId)
+  } catch (e: unknown) {
+    message.error(String(e))
+  }
+}
+
+function handleEditRunParams() {
+  paramEditMode.value = 'executor'
+  paramEditVisible.value = true
+}
+
+function handleEditConvertParams() {
+  paramEditMode.value = 'converter'
+  paramEditVisible.value = true
+}
 
 // --- Search state ---
 const searchVisible = ref(false)
@@ -441,6 +721,24 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 <template>
   <div style="height: 100%; display: flex; flex-direction: column;">
+    <!-- Editor toolbar -->
+    <div style="display: flex; justify-content: flex-end; border-bottom: 1px solid #f0f0f0">
+      <EditorToolbar
+        editor-type="excel"
+        :file-path="workbookPath"
+        @run-all="handleRunAll"
+        @run-single="handleRunSingle"
+        @run-biz="handleRunBiz"
+        @run-select="handleRunSelect"
+        @convert-all="handleConvertAll"
+        @convert-single="handleConvertSingle"
+        @convert-biz="handleConvertBiz"
+        @convert-select="handleConvertSelect"
+        @edit-run-params="handleEditRunParams"
+        @edit-convert-params="handleEditConvertParams"
+      />
+    </div>
+
     <!-- Local search bar -->
     <SearchBar
       :visible="searchVisible && !globalSearchVisible"
@@ -503,5 +801,22 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         {{ t('table.noData') }}
       </div>
     </div>
+
+    <!-- Log panel -->
+    <LogPanel />
+
+    <!-- Case select modal -->
+    <CaseSelectModal
+      v-model:visible="caseSelectVisible"
+      :cases="caseSelectCases"
+      @confirm="paramEditMode === 'converter' ? handleConvertCaseSelectConfirm($event) : handleCaseSelectConfirm($event)"
+    />
+
+    <!-- Param edit modal -->
+    <ParamEditModal
+      v-model:visible="paramEditVisible"
+      :mode="paramEditMode"
+      :file-path="workbookPath"
+    />
   </div>
 </template>

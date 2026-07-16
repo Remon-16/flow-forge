@@ -54,6 +54,9 @@ def _cmd_excel2yaml(args: argparse.Namespace) -> int:
              single=counts['single_cases'],
              biz=counts['biz_flows'],
              output=args.output))
+    # JSON 完成行供 Studio 解析 / JSON completion line for Studio parsing
+    import json as _json
+    print(_json.dumps({"output": str(args.output), "command": "excel2yaml"}, ensure_ascii=False))
     return 0
 
 
@@ -65,6 +68,8 @@ def _cmd_yaml2excel(args: argparse.Namespace) -> int:
         biz_flows_dir=args.biz_flows,
     )
     print(_("cli.excel_written", path=out))
+    import json as _json
+    print(_json.dumps({"output": str(out), "command": "yaml2excel"}, ensure_ascii=False))
     return 0
 
 
@@ -83,6 +88,8 @@ def _cmd_yaml2pytest(args: argparse.Namespace) -> int:
            biz=counts['biz_flows'],
            custom=counts['bundled_processors'],
            output=args.output))
+    import json as _json
+    print(_json.dumps({"output": str(args.output), "command": "yaml2pytest"}, ensure_ascii=False))
     return 0
 
 
@@ -99,6 +106,8 @@ def _cmd_excel2pytest(args: argparse.Namespace) -> int:
            biz=counts['biz_flows'],
            custom=counts['bundled_processors'],
            output=args.output))
+    import json as _json
+    print(_json.dumps({"output": str(args.output), "command": "excel2pytest"}, ensure_ascii=False))
     return 0
 
 

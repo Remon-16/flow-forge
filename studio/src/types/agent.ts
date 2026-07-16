@@ -44,9 +44,10 @@ export interface LogEntry {
 
 export interface AgentConfig {
   agentRootDir: string
-  configFileName: string       // default: env.yaml
   pythonExePath: string        // optional
   venvPath: string             // optional
+  executorRootDir: string      // 执行器根目录 / Executor root directory
+  saveToEnvFile: boolean       // 是否将 CLI 参数同步到 env 文件 / Whether to sync CLI params to env file
 }
 
 // ============================================================================

@@ -31,6 +31,16 @@ const router = createRouter({
       name: 'agent',
       component: () => import('../views/AgentView.vue'),
     },
+    {
+      path: '/executor',
+      name: 'executor',
+      component: () => import('../views/ExecutorView.vue'),
+    },
+    {
+      path: '/converter',
+      name: 'converter',
+      component: () => import('../views/ConverterView.vue'),
+    },
   ],
 })
 

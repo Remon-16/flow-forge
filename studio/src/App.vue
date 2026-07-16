@@ -21,6 +21,8 @@ const agent = useAgentStore()
 const isHome = computed(() => route.name === 'home')
 const isAnnotator = computed(() => route.name === 'plan-annotator')
 const isAgent = computed(() => route.name === 'agent')
+const isExecutor = computed(() => route.name === 'executor')
+const isConverter = computed(() => route.name === 'converter')
 const isYamlMode = computed(() => route.name === 'yaml-editor')
 
 // 关闭确认弹窗状态 / Close confirmation dialog state
@@ -111,6 +113,16 @@ onUnmounted(() => window.removeEventListener('beforeunload', onBeforeUnload))
 
   <!-- Agent runner page: no chrome, standalone -->
   <div v-else-if="isAgent" class="app-layout agent-layout">
+    <router-view />
+  </div>
+
+  <!-- Executor page: no chrome, standalone -->
+  <div v-else-if="isExecutor" class="app-layout executor-layout">
+    <router-view />
+  </div>
+
+  <!-- Converter page: no chrome, standalone -->
+  <div v-else-if="isConverter" class="app-layout converter-layout">
     <router-view />
   </div>
 

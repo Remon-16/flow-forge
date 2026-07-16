@@ -186,6 +186,18 @@ def main(argv: list[str] | None = None) -> int:
 
     logger.info("Report: %s", report_path)
 
+    # 输出 JSON 完成行供 Studio 解析 / Output JSON completion line for Studio parsing
+    import json as _json
+    _result = {
+        "output": str(report_path),
+        "single_cases": len(single_results),
+        "biz_flows": len(biz_results),
+        "single_passed": sum(1 for r in single_results if r.get("passed")),
+        "biz_passed": sum(1 for r in biz_results if r.get("passed")),
+        "all_passed": all_passed,
+    }
+    print(_json.dumps(_result, ensure_ascii=False))
+
     return 0 if all_passed else 1
 
 

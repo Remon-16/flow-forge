@@ -12,7 +12,6 @@
 - **AI 生成用例**：读需求文档（Markdown/PDF/文本）+ 接口文档（OpenAPI/Markdown），自动生成单接口和业务链路测试用例。
 - **人工审核可控**：AI 产出的测试计划先经人工确认（支持在 Studio 中可视化批注），再生成用例，抑制 AI 幻觉。
 - **可视化编辑**：Studio 桌面应用批量编辑 Excel/YAML 用例，图形化编辑 JSON 字段和断言规则。
-- **GUI 启动智能体**：Studio 桌面应用内置 Agent Runner，配置参数、实时查看日志、交互式审核测试计划，降低命令行上手难度。
 - **多线程执行**：执行器并发运行用例，自动管理登录态，支持跨接口参数传递（token 等），两级断言引擎。
 - **自包含报告**：产出内嵌样式脚本的 HTML 报告，浏览器直接打开；通过退出码集成 Jenkins。
 - **格式灵活**：YAML/Excel 双向转换，还可生成零依赖的独立 pytest 代码。
@@ -34,9 +33,56 @@ graph TD
     EXEC --> |退出码| JENKINS
 ```
 
-## 快速开始（端到端最短路径）
+## 推荐使用方式：Flow Forge Studio（GUI）
 
-三个组件各自独立，可单独使用；下面是从需求到报告的完整链路：
+**Studio 桌面应用覆盖全部 6 大功能，一站式完成所有操作，无需记忆 CLI 参数。**
+
+### 工作流：生成 → 编辑 → 执行与转换
+
+```text
+① 用例生成                ② 用例编辑                ③ 执行与转换
+┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+│  AI 用例生成  │ ───▶ │  Excel 编辑器 │ ───▶ │  用例执行器   │
+│  计划批注     │      │  YAML 编辑器  │      │  用例转换器   │
+└──────────────┘      └──────────────┘      └──────────────┘
+```
+
+1. **先生成**：在 Studio 中启动 AI Agent，输入需求文档和接口文档，自动生成测试用例。生成前可审核测试计划、添加批注。
+2. **再编辑**：用 Excel 编辑器批量编辑，或用 YAML 编辑器逐文件精细调整。支持 JSON 字段编辑、断言规则配置、处理器可视化编辑。
+3. **最后执行或转换**：在用例执行器中运行用例、生成 HTML 测试报告；或用转换器在 Excel ↔ YAML 之间互转。
+
+> **编辑器内快捷执行**：在 Excel / YAML 编辑器中，右上角工具栏提供 `▶ 运行` 和 `⟳ 转换` 按钮，可直接对当前文件执行或转换，无需跳转到执行器/转换器视图，方便单文件调试。
+
+### Studio 安装
+
+<!-- RELEASE_MSI -->
+> 🚧 **MSI 安装包即将推出**：安装包将在 [GitHub Releases](https://github.com/your-org/flow-forge/releases) 发布，敬请关注。
+<!-- /RELEASE_MSI -->
+
+当前可通过源码构建：
+
+```bash
+cd studio
+npm install
+npm run dev          # 开发模式
+# 或
+npm run build        # 生产构建 → src-tauri/target/release/
+```
+
+### Studio 六大功能入口
+
+| 入口 | 说明 |
+| ------ | ------ |
+| **AI 用例生成** | 配置并运行 AI 智能体，从需求文档和接口文档自动生成测试用例，支持实时日志和计划审核 |
+| **计划批注器** | 在渲染后的测试计划上直接添加批注，批注可被 AI 识别用于计划修改 |
+| **Excel 编辑器** | 表格化批量编辑 .xlsx 用例文件，支持接口定义、单接口用例、业务链路三个 Sheet |
+| **YAML 编辑器** | 基于表单的结构化编辑，树形目录浏览，每用例一个文件，便于 git diff |
+| **用例执行器** | 运行测试用例，生成 HTML 报告，支持多环境切换和多线程执行 |
+| **用例转换器** | Excel ↔ YAML ↔ pytest 互转，支持批量转换 |
+
+## 命令行方式（SSH / CI/CD）
+
+如果你偏好命令行，或在服务器上通过 SSH 操作，各组件也可独立使用：
 
 ```bash
 # ── 1. AI 生成用例（agent/）────────────────────────────
@@ -47,14 +93,9 @@ python main.py --requirement docs/req.md --api docs/api.yaml
 # 审核测试计划：输入 y 批准 / n 文字反馈 / r 按批注文件修改
 # 生成的用例输出到 agent/output_<timestamp>/
 
-# ── 2.（可选）Studio 可视化编辑用例（studio/）──────────
-cd ../studio
-npm install
-npm run dev                            # 打开 Excel/YAML 编辑器批量调整
-
-# ── 3. 执行器运行用例并出报告（python/）────────────────
+# ── 2. 执行器运行用例并出报告（python/）────────────────
 cd ../python
-pip install -r requirements.txt        # 编辑 env-local.yml 填入被测应用与登录信息
+pip install -r requirements.txt       # 编辑 env-local.yml 填入被测应用与登录信息
 python main.py --yamlDir ../agent/output_<timestamp>/cases --envName local --apiMode all
 # 报告生成在 python/report/{文件名}_{时间戳}.html
 ```
@@ -64,10 +105,10 @@ python main.py --yamlDir ../agent/output_<timestamp>/cases --envName local --api
 ## 三大子项目
 
 | 子项目 | 作用 | 快速进入 |
-|--------|------|----------|
+| -------- | ------ | ---------- |
+| **[studio/](./studio/README.md)** | Flow Forge Studio 桌面应用：可视化编辑用例、计划批注、GUI 启动智能体/执行器/转换器 | [文档 →](./studio/README.md) |
 | **[agent/](./agent/README.md)** | AI 用例生成智能体：需求 + 接口文档 → 测试计划（人工审核）→ YAML/Excel 用例 | [文档 →](./agent/README.md) |
 | **[python/](./python/README.md)** | 接口测试执行器 + 格式转换器：运行 YAML/Excel 用例 → HTML 报告；Excel↔YAML↔pytest 互转 | [文档 →](./python/README.md) |
-| **[studio/](./studio/README.md)** | Flow Forge Studio 桌面应用：可视化编辑用例、Markdown 计划批注、Agent Runner（GUI 启动智能体） | [文档 →](./studio/README.md) |
 
 三者通过 **YAML 文件**作为主要契约（Excel 仍兼容）——智能体生成什么格式，执行器就解析什么格式。用户可自由选择：AI 自动生成、手动编写、或 Studio 可视化编辑。
 
@@ -77,9 +118,9 @@ python main.py --yamlDir ../agent/output_<timestamp>/cases --envName local --api
 
 Flow Forge 支持三种工作流，按需选择：
 
-- **方式一：全流程自动** — AI 智能体生成用例 → 人工审核 → 执行器运行。适合从零快速产出。
-- **方式二：手写用例** — 手动编写 YAML/Excel 用例 → 执行器运行（`--yamlDir` 或 `--caseFilePath`）。适合已有用例。
-- **方式三：初始生成 Excel + YAML 版本控制（推荐）** — AI 生成 Excel（`--output-format excel`）→ Studio 批量编辑 → `converter` 转 YAML → Git 逐文件 diff 审查 → 执行器运行。
+- **方式一：全流程 GUI（推荐）** — Studio 中启动 Agent 生成用例 → Excel/YAML 编辑器调整 → 执行器运行。无需接触命令行。
+- **方式二：全流程 CLI** — AI 智能体生成用例 → 人工审核 → 执行器运行。适合从零快速产出，或 CI/CD 集成。
+- **方式三：初始生成 Excel + YAML 版本控制** — AI 生成 Excel（`--output-format excel`）→ Studio 批量编辑 → `converter` 转 YAML → Git 逐文件 diff 审查 → 执行器运行。
 
 > **为什么推荐方式三？** Excel 适合批量编辑（快速浏览、排序、批量改），YAML 适合做 diff（每个用例一个文件，git diff 清晰展示变更）。先用 Excel 编辑，再转 YAML 提交，兼顾效率与可追溯性。需要独立测试时用 `yaml2pytest` / `excel2pytest` 生成零依赖 pytest 代码。
 
@@ -99,17 +140,18 @@ AI 难免幻觉，Flow Forge 通过多重机制控制质量：
 
 - **YAML/Excel 即契约**：智能体与执行器解耦，用户自由选择生成方式。
 - **人工审核**：AI 计划经人工确认后才生成用例，质量可控。
-- **命令行驱动**：执行器纯 CLI，无 GUI 依赖，适配 CI/CD。
+- **CLI 与 GUI 双模式**：Studio 桌面应用提供可视化操作，命令行保留用于 CI/CD。
 - **自包含报告**：HTML 报告内嵌样式脚本，无需 Web 服务器。
 - **可扩展处理器/插件**：用户可以自定义用例生成。执行用例可以应用自定义签名和插入时间戳等。
 
 ## 插件与扩展机制
 
 | 模块 | 扩展点 | 说明 |
-|------|--------|------|
+| ------ | -------- | ------ |
 | [`python/processors/`](./python/docs/processors-and-report.md#前置处理器--后置处理器) | PreProcessor / PostProcessor | 请求前后的处理逻辑（HMAC 签名、SQL 清理、路径参数等） |
 | [`agent/plugins/`](./agent/docs/plugins-and-skills.md) | CaseAttributeGenerator | 用例生成后自动补充属性（数据填充、断言生成等） |
 | `studio/` | Agent Runner | 在 Studio 中配置并启动 AI 智能体，实时查看日志，交互式处理提问和计划审核 |
+| `studio/` | Editor Toolbar | 在编辑器中直接执行或转换用例，方便单文件调试 |
 | `studio/` | PreProcessors / PostProcessors 字段 | 在编辑器中可视化编辑、校验处理器配置 |
 
 ## 运行测试
@@ -125,10 +167,10 @@ cd python && python -m pytest tests/ -v
 ## 技术栈
 
 | 组件 | 技术 |
-|------|------|
+| ------ | ------ |
+| Studio 桌面应用 | Vue 3, Ant Design Vue, Vite, Tauri 2, TypeScript |
 | 用例生成智能体 | Python 3.12, LangGraph, OpenAI 兼容 API, prance (OpenAPI), pymupdf (PDF), 上下文压缩 |
 | 用例执行器以及转换器 | Python 3.12, requests, openpyxl, pyyaml |
-| Studio 桌面应用 | Vue 3, Ant Design Vue, Vite, Tauri 2, TypeScript |
 | 配置管理 | YAML 多环境配置文件 |
 | 报告输出 | 自包含 HTML（无需外部 CSS/JS） |
 | CI/CD | Jenkins Pipeline, 命令行退出码 |
