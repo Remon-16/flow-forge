@@ -147,7 +147,7 @@ def run_interactive(
 
         elif pending == "human_confirm":
             # 提示 plan.md 路径, 用户可手动编辑 / Show plan.md path for manual editing
-            memory_dir = state.values.get("memory_dir", "")
+            memory_dir = snapshot.values.get("memory_dir", "")
             if memory_dir:
                 plan_path = Path(memory_dir) / "plan.md"
                 if plan_path.exists():

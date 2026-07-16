@@ -92,7 +92,7 @@ class RequirementAnalyzer(BaseAgent):
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}{knowledge_context}"
 
         logger.info("Analyzing requirement document (%d chars)...", len(requirement_text))
-        result = self.call_llm_json(prompt, REQUIREMENT_ANALYSIS_SYSTEM)
+        result = self.call_llm_json_object(prompt, REQUIREMENT_ANALYSIS_SYSTEM, "business_flows")
         return self._normalize_result(result)
 
     def _analyze_chunk(self, chunk: str, _accumulated: str) -> Dict[str, Any]:
@@ -102,7 +102,7 @@ class RequirementAnalyzer(BaseAgent):
             requirement_text=chunk,
             language=get_language_name(),
         )
-        return self.call_llm_json(prompt, REQUIREMENT_ANALYSIS_SYSTEM)
+        return self.call_llm_json_object(prompt, REQUIREMENT_ANALYSIS_SYSTEM, "business_flows")
 
     @staticmethod
     def _merge_analyses(results: list, _system_msg: str) -> Dict[str, Any]:

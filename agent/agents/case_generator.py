@@ -120,11 +120,7 @@ class CaseGenerator(BaseAgent):
 
         logger.info("Generating test cases from plan (~%d tokens)...", input_tokens)
         system_msg = render_prompt(CASE_GENERATION_SYSTEM, language=get_language_name())
-        result = self.call_llm_json(prompt, system_msg)
-
-        # 防护：若 LLM 返回裸数组，包装为 dict / Guard: wrap bare array in dict
-        if isinstance(result, list):
-            result = {"single_cases": result, "biz_flows": []}
+        result = self.call_llm_json_object(prompt, system_msg, "single_cases")
 
         single_cases = self._parse_single_cases(result.get("single_cases", []))
         biz_flows = self._parse_biz_flows(result.get("biz_flows", []))
@@ -237,10 +233,7 @@ class CaseGenerator(BaseAgent):
                 f"Please generate single API test cases for the above interfaces. Output only one JSON object containing the single_cases field."
             )
 
-            result = self.call_llm_json(prompt, system)
-            # 防护：若 LLM 返回裸数组 / Guard: wrap bare array in dict
-            if isinstance(result, list):
-                result = {"single_cases": result}
+            result = self.call_llm_json_object(prompt, system, "single_cases")
             single_cases = self._parse_single_cases(result.get("single_cases", []))
             return {"single_cases": single_cases}
         else:
@@ -261,10 +254,7 @@ class CaseGenerator(BaseAgent):
                 f"Output only one JSON object containing the biz_flows field."
             )
 
-            result = self.call_llm_json(prompt, system)
-            # 防护：若 LLM 返回裸数组 / Guard: wrap bare array in dict
-            if isinstance(result, list):
-                result = {"biz_flows": result}
+            result = self.call_llm_json_object(prompt, system, "biz_flows")
             biz_flows = self._parse_biz_flows(result.get("biz_flows", []))
             return {"biz_flows": biz_flows}
 

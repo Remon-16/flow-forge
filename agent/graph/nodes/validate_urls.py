@@ -91,10 +91,10 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
                     http_method=http_method,
                     snippets=snippets,
                 )
-                result = api_analyzer.call_llm_json(
-                    correction_prompt, IFACE_URL_CORRECTION_SYSTEM
+                result = api_analyzer.call_llm_json_object(
+                    correction_prompt, IFACE_URL_CORRECTION_SYSTEM, "corrected_url"
                 )
-                new_url = result.get("corrected_url", "").strip() if isinstance(result, dict) else ""
+                new_url = result.get("corrected_url", "").strip()
                 if new_url and new_url in api_raw_text:
                     if isinstance(iface, dict):
                         iface["url"] = new_url

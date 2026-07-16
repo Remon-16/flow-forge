@@ -70,7 +70,6 @@ def _make_args(**overrides):
         "plan_single_batch_size": None,
         "url_doc_match_max_retries": None,
         "consecutive_batch_failure_limit": None,
-        "max_steps_no_progress": None,
         # 字符串型覆盖参数 / String override params (None = use env.yaml)
         "url_doc_match_strategy": None,
         "case_type": None,
@@ -160,11 +159,6 @@ class TestNoneSentinel:
         args = _make_args(consecutive_batch_failure_limit=None)
         settings = _mini_settings(consecutive_batch_failure_limit=3)
         assert _first(args.consecutive_batch_failure_limit, settings.consecutive_batch_failure_limit) == 3
-
-    def should_fallback_max_steps_no_progress(self):
-        args = _make_args(max_steps_no_progress=None)
-        settings = _mini_settings(max_steps_no_progress=5)
-        assert _first(args.max_steps_no_progress, settings.max_steps_no_progress) == 5
 
     # --- 字符串参数 / String params ---
 
@@ -278,11 +272,6 @@ class TestCliOverridesEnv:
         settings = _mini_settings(consecutive_batch_failure_limit=3)
         assert _first(args.consecutive_batch_failure_limit, settings.consecutive_batch_failure_limit) == 5
 
-    def should_override_max_steps_no_progress(self):
-        args = _make_args(max_steps_no_progress=10)
-        settings = _mini_settings(max_steps_no_progress=5)
-        assert _first(args.max_steps_no_progress, settings.max_steps_no_progress) == 10
-
     # --- 字符串参数 / String params ---
 
     def should_override_output_format(self):
@@ -371,7 +360,7 @@ class TestParserCompleteness:
             "max_steps", "max_retries", "skeleton_batch_size",
             "plan_single_batch_size",
             "url_doc_match_max_retries", "url_doc_match_strategy",
-            "consecutive_batch_failure_limit", "max_steps_no_progress",
+            "consecutive_batch_failure_limit",
             "url_doc_match_enabled", "no_url_doc_match_enabled",
             "plugins", "no_plugins",
             "skills", "no_skills",
@@ -399,7 +388,7 @@ class TestParserCompleteness:
             "plugin_batch_size", "max_steps", "max_retries",
             "skeleton_batch_size", "plan_single_batch_size",
             "url_doc_match_max_retries",
-            "consecutive_batch_failure_limit", "max_steps_no_progress",
+            "consecutive_batch_failure_limit",
             "output_format", "url_doc_match_strategy", "case_type", "lang",
             "prompt", "parser_path", "reference_dir",
             "url_doc_match_enabled", "no_url_doc_match_enabled",

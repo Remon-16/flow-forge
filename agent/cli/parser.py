@@ -69,10 +69,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="连续批次失败上限 (默认取自 env.yaml)。Consecutive batch failure limit.",
     )
     p.add_argument(
-        "--max-steps-no-progress", type=int, default=None,
-        help="进度无变化最大步数 (默认取自 env.yaml)。Max steps with no progress.",
-    )
-    p.add_argument(
         "--url-doc-match-enabled", action="store_true", default=None,
         help="启用 URL 文档匹配校验。Enable URL doc-match validation.",
     )

@@ -31,7 +31,6 @@ class BatchController:
     def __init__(self, settings: Settings):
         self._batch_size = settings.plugin_batch_size
         self._case_format_max_retries = settings.case_format_max_retries
-        self._max_steps_no_progress = settings.max_steps_no_progress
         self._url_doc_match_max_retries = getattr(
             settings, "url_doc_match_max_retries", 3
         )
@@ -901,5 +900,6 @@ class BatchController:
             "url_doc_match_max_retries": self._url_doc_match_max_retries,
             "url_doc_match_strategy": self._url_doc_match_strategy,
             "url_doc_match_enabled": self._url_doc_match_enabled,
+            "consecutive_batch_failure_limit": self._consecutive_failure_limit,
             "case_gen_validation": self._case_gen_validation,
         }

@@ -64,7 +64,6 @@ _CLI_ARG_TO_CONFIG_KEY: dict = {
     "url_doc_match_max_retries": "url_doc_match_max_retries",
     "url_doc_match_strategy": "url_doc_match_strategy",
     "consecutive_batch_failure_limit": "consecutive_batch_failure_limit",
-    "max_steps_no_progress": "max_steps_no_progress",
     "url_doc_match_enabled": "url_doc_match_enabled",
     "lang": "lang",
 }
@@ -175,6 +174,14 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
             else:
                 state["api_summary"] = data
                 state["api_summary_confirmed"] = True
+
+            # 原始模式：从 api_summary 重建接口 / Raw mode: rebuild interfaces from api_summary
+            parse_mode = state.get("parse_mode", "")
+            if parse_mode == "raw" and not state.get("interfaces"):
+                from graph.nodes.helpers import summary_to_interfaces
+                rebuilt = summary_to_interfaces(data)
+                if rebuilt:
+                    state["interfaces"] = rebuilt
 
     if "validate_urls" in completed_stages:
         _load_json("url_validation.json")  # Just validate existence; errors stored in state
@@ -376,6 +383,34 @@ def main() -> int:
         # 检查 CLI 参数覆盖是否影响已完成的阶段 / Warn if overrides affect completed stages
         _check_config_overrides(args, saved_config, ps_path)
 
+        # === CLI 参数覆盖 Settings / Override settings with CLI args ===
+        settings.max_steps = _first(args.max_steps, saved_config.get("max_steps"), settings.max_steps)
+        settings.max_retries = _first(args.max_retries, saved_config.get("max_retries"), settings.max_retries)
+        settings.skeleton_batch_size = _first(args.skeleton_batch_size, saved_config.get("skeleton_batch_size"), settings.skeleton_batch_size)
+        settings.plan_single_batch_size = _first(args.plan_single_batch_size, saved_config.get("plan_single_batch_size"), settings.plan_single_batch_size)
+        settings.url_doc_match_max_retries = _first(args.url_doc_match_max_retries, saved_config.get("url_doc_match_max_retries"), settings.url_doc_match_max_retries)
+        settings.url_doc_match_strategy = _first(args.url_doc_match_strategy, saved_config.get("url_doc_match_strategy"), settings.url_doc_match_strategy)
+        settings.consecutive_batch_failure_limit = _first(args.consecutive_batch_failure_limit, saved_config.get("consecutive_batch_failure_limit"), settings.consecutive_batch_failure_limit)
+
+        if args.no_url_doc_match_enabled:
+            settings.url_doc_match_enabled = False
+        elif args.url_doc_match_enabled is not None:
+            settings.url_doc_match_enabled = True
+
+        if args.no_plugins:
+            settings.enable_plugins = False
+        elif args.plugins:
+            settings.enable_plugins = True
+
+        if args.no_skills:
+            settings.enable_skills = False
+        elif args.skills:
+            settings.enable_skills = True
+
+        if args.lang is not None:
+            settings.agent_lang = args.lang
+            os.environ["AGENT_LANG"] = args.lang
+
         graph = build_workflow(settings, session_logger=session_logger)
         config = {"configurable": {"thread_id": f"resume_{datetime.now().strftime('%Y%m%d%H%M%S')}"}}
 
@@ -471,16 +506,41 @@ def main() -> int:
     if auto_mode:
         logger.info(_("auto.pipeline_start"))
 
+    # === CLI 参数覆盖 Settings / Override settings with CLI args ===
+    settings.max_steps = _first(args.max_steps, settings.max_steps)
+    settings.max_retries = _first(args.max_retries, settings.max_retries)
+    settings.skeleton_batch_size = _first(args.skeleton_batch_size, settings.skeleton_batch_size)
+    settings.plan_single_batch_size = _first(args.plan_single_batch_size, settings.plan_single_batch_size)
+    settings.url_doc_match_max_retries = _first(args.url_doc_match_max_retries, settings.url_doc_match_max_retries)
+    settings.url_doc_match_strategy = _first(args.url_doc_match_strategy, settings.url_doc_match_strategy)
+    settings.consecutive_batch_failure_limit = _first(args.consecutive_batch_failure_limit, settings.consecutive_batch_failure_limit)
+
+    # 布尔标志解析（--no-* 优先于 --*）/ Boolean flag resolution (--no-* wins over --*)
+    if args.no_url_doc_match_enabled:
+        settings.url_doc_match_enabled = False
+    elif args.url_doc_match_enabled is not None:
+        settings.url_doc_match_enabled = True
+
+    if args.no_plugins:
+        settings.enable_plugins = False
+    elif args.plugins:
+        settings.enable_plugins = True
+
+    if args.no_skills:
+        settings.enable_skills = False
+    elif args.skills:
+        settings.enable_skills = True
+
+    # 语言 / Language
+    if args.lang is not None:
+        settings.agent_lang = args.lang
+        os.environ["AGENT_LANG"] = args.lang
+
     graph = build_workflow(settings, session_logger=session_logger)
     thread_id = f"flow_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
     if args.prompt:
         logger.info(_("cli.user_guidance", guidance=args.prompt))
-
-    # 语言设置 / Language setting
-    if args.lang is not None:
-        import os as _os
-        _os.environ["AGENT_LANG"] = args.lang
 
     output_dir = args.output or settings.output_dir
     cases_dir, memory_dir = ensure_output_structure(Path(output_dir))

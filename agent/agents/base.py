@@ -663,6 +663,32 @@ class BaseAgent:
             )
             return self._extract_json(retry_text)
 
+    def call_llm_json_object(
+        self,
+        prompt: str,
+        system_msg: str = "You are a helpful assistant.",
+        json_key: str = "result",
+    ) -> dict:
+        """调用 LLM 并解析 JSON 响应，确保返回 dict。
+        Call LLM and parse JSON response, ensuring the result is a dict.
+
+        非 OpenAI 兼容 API 可能返回裸数组，此方法自动包装为 {json_key: array}。
+        Non-OpenAI APIs may return bare arrays; wraps them as {json_key: array}.
+
+        Args:
+            prompt: 用户提示词 / User prompt.
+            system_msg: 系统消息 / System message.
+            json_key: 包装裸数组时使用的 key / Key used when wrapping bare arrays.
+
+        Returns:
+            dict: 解析后的 JSON 对象 / Parsed JSON object.
+        """
+        result = self.call_llm_json(prompt, system_msg)
+        # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
+        if isinstance(result, list):
+            result = {json_key: result}
+        return result
+
     @staticmethod
     def _extract_json_by_brace_count(text: str) -> str | None:
         """Extract the outermost JSON object/array using brace counting.

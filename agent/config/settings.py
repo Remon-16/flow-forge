@@ -93,7 +93,6 @@ class Settings:
     plugin_batch_size: int = 10
     case_format_max_retries: int = 3
     output_format: str = "both"
-    max_steps_no_progress: int = 5
     url_doc_match_max_retries: int = 3
     url_doc_match_strategy: str = "warn"
     enable_plugins: bool = False
@@ -158,7 +157,6 @@ class Settings:
             "plugin_batch_size": self.plugin_batch_size,
             "case_format_max_retries": self.case_format_max_retries,
             "output_format": self.output_format,
-            "max_steps_no_progress": self.max_steps_no_progress,
             "url_doc_match_max_retries": self.url_doc_match_max_retries,
             "url_doc_match_strategy": self.url_doc_match_strategy,
             "enable_plugins": self.enable_plugins,
@@ -369,7 +367,6 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         knowledge_dir=knowledge.get("dir", "./knowledge"),
         max_steps=int(pipeline.get("max_steps", 10)),
         max_retries=int(pipeline.get("max_retries", 3)),
-        max_steps_no_progress=int(pipeline.get("max_steps_no_progress", 5)),
         consecutive_batch_failure_limit=int(pipeline.get("consecutive_batch_failure_limit", 3)),
         skeleton_batch_size=int(pipeline.get("skeleton_batch_size", 30)),
         plan_single_batch_size=int(pipeline.get("plan_single_batch_size", 8)),

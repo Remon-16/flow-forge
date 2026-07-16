@@ -146,7 +146,9 @@ def revise_plan_node(state: GraphState) -> GraphState:
     if feedback_type == "annotations":
         annotations = state.get("plan_annotations", [])
         if not annotations:
-            logger.warning("revise_plan called with annotations type but no annotations data")
+            logger.warning(_("review.annotations_empty"))
+            state["plan_feedback"] = ""
+            state["plan_annotations"] = []
             return state
         feedback = json.dumps(annotations, ensure_ascii=False, indent=2)
         logger.info(
@@ -171,20 +173,10 @@ def revise_plan_node(state: GraphState) -> GraphState:
     state["plan_feedback_type"] = "text"
     state["plan_annotations"] = []
 
-    # 先更新 pipeline 状态，再归档反馈文件 / Update pipeline state before archiving feedback
+    # 先更新 pipeline 状态 / Update pipeline state
     memory_dir = state.get("memory_dir", "")
     if memory_dir:
         save_pipeline_state(memory_dir, "human_confirm")
-        # 归档已处理的 pending_feedback 供回溯 / Archive consumed pending feedback for traceability
-        fb_path = Path(memory_dir) / "pending_feedback.json"
-        if fb_path.exists():
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            history_dir = Path(memory_dir) / "history-feedback"
-            history_dir.mkdir(parents=True, exist_ok=True)
-            archive_name = f"pending_feedback_{ts}.json"
-            fb_path.rename(history_dir / archive_name)
-            logger.info(_("review.feedback_archived_on_revise",
-                          path=str(history_dir / archive_name)))
 
     if _sl():
         _sl().save_plan(revised)

@@ -147,7 +147,7 @@ class PlanParser(BaseAgent):
         def _proc(chunk_with_notice: str, _accumulated: str) -> dict:
             prompt = render_prompt(user_template, plan_md=chunk_with_notice)
             try:
-                return self.call_llm_json(prompt, system_msg)
+                return self.call_llm_json_object(prompt, system_msg, "api_definitions")
             except Exception:
                 return self._regex_parse(chunk_with_notice)
 
@@ -179,10 +179,7 @@ class PlanParser(BaseAgent):
         return merged
 
     def _build_testplan(self, result: dict) -> TestPlan:
-        # 防护：若 LLM 返回裸数组，包装为 dict / Guard: wrap bare array in dict
-        if isinstance(result, list):
-            result = {"api_definitions": result, "single_test_points": {}, "biz_flow_scenarios": []}
-
+        # call_llm_json_object 已确保 result 为 dict / call_llm_json_object ensures result is a dict
         api_defs = []
         for ad in result.get("api_definitions", []):
             api_defs.append(InterfaceDef(

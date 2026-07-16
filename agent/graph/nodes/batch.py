@@ -54,6 +54,7 @@ def batch_controller_node(state: GraphState) -> GraphState:
         msg = _("batch.plan_missing")
         logger.error(msg)
         state["errors"].append(msg)
+        state["_batch_failed"] = True
         return state
 
     logger.info(_step("case_generation", "pipeline.case_generation"))

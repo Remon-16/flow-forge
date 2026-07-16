@@ -224,12 +224,8 @@ def _chunk_intent_for_global(
         skill_extensions=skill_extensions,
     )
 
-    result = agent.call_llm_json(prompt, system_msg)
-    # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
-    if isinstance(result, list):
-        result = {"actions": result}
+    result = agent.call_llm_json_object(prompt, system_msg, "actions")
     actions = result.get("actions", [])
-    # 数量校验 / Count validation: global has exactly 1 chunk
     if len(actions) != 1:
         logger.warning(
             _("review.intent_validation_retry",
@@ -286,10 +282,7 @@ def _chunk_intent_for_section(
         skill_extensions=skill_extensions,
     )
 
-    result = agent.call_llm_json(prompt, system_msg)
-    # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
-    if isinstance(result, list):
-        result = {"actions": result}
+    result = agent.call_llm_json_object(prompt, system_msg, "actions")
     actions = result.get("actions", [])
     # 数量校验 / Count validation: verify actions count matches chunk count
     expected_count = len(chunks)

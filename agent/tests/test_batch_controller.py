@@ -17,7 +17,6 @@ def _make_settings(**kwargs):
     s.llm_api_key = "test"
     s.plugin_batch_size = kwargs.get("batch_size", 2)
     s.case_format_max_retries = kwargs.get("case_format_max_retries", 1)
-    s.max_steps_no_progress = kwargs.get("max_steps_no_progress", 10)
     s.url_doc_match_max_retries = kwargs.get("url_doc_match_max_retries", 3)
     s.consecutive_batch_failure_limit = kwargs.get("consecutive_batch_failure_limit", 3)
     s.skeleton_batch_size = kwargs.get("skeleton_batch_size", 10)

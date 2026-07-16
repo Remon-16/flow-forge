@@ -281,10 +281,7 @@ def _run_intent_analysis(
         while attempts <= max_retries:
             agent.reset_steps()
             try:
-                result = agent.call_llm_json(prompt, system_rendered)
-                # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
-                if isinstance(result, list):
-                    result = {"actions": result}
+                result = agent.call_llm_json_object(prompt, system_rendered, "actions")
                 actions = result.get("actions", [])
             except Exception as e:
                 attempts += 1

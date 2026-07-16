@@ -53,7 +53,6 @@ def _make_mock_settings():
         skeleton_batch_size=10,
         plan_single_batch_size=10,
         consecutive_batch_failure_limit=3,
-        max_steps_no_progress=10,
         llm_rate_limit_delay=0.0,
         llm_max_concurrency=1,
         llm_retry_base_delay=2.0,

@@ -68,8 +68,8 @@ class GraphState(TypedDict, total=False):
     biz_flows: List[Dict[str, Any]]
 
     # === 批次追踪 / Batch tracking ===
-    batch_state: Dict[str, Any]          # 批次生成进度 / Batch generation progress
     validation_failures: List[Dict]      # 校验失败的用例 / Cases that failed validation
+    _batch_failed: bool                  # 批次控制器异常标志 / Batch controller failure flag
 
     # === 断点续写 & 增量 / Resume & incremental ===
     resume: bool                         # 从已有 output_dir 跳到批次生成

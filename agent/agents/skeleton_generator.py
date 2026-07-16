@@ -173,19 +173,13 @@ def _count_validate(
 
     # 跳过校验：调用一次直接返回，不重试 / Skip validation: one call, no retries
     if strategy == "skip":
-        result = agent.call_llm_json(prompt, system_msg)
-        # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
-        if isinstance(result, list):
-            result = {json_key: result}
+        result = agent.call_llm_json_object(prompt, system_msg, json_key)
         items = result.get(json_key, [])
         logger.info(_("skel_gen.count_check_skipped", label=label, count=len(items)))
         return items
 
     for attempt in range(max_retries + 1):
-        result = agent.call_llm_json(prompt, system_msg)
-        # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
-        if isinstance(result, list):
-            result = {json_key: result}
+        result = agent.call_llm_json_object(prompt, system_msg, json_key)
         items = result.get(json_key, [])
         if len(items) == expected_count:
             logger.info(_("skel_gen.batch_progress", count=len(items), label=label))
