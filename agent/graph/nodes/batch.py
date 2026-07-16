@@ -10,7 +10,6 @@ from pathlib import Path
 from agents.batch_controller import BatchController
 from agents.skeleton_generator import SingleSkeletonGenerator, BizSkeletonGenerator
 from graph.state import GraphState
-from models.schema import PlanStep, TestPlan
 from plugins.loader import load_all_plugins
 from plugins.skill_loader import load_skill_extensions
 from writers.yaml_writer import YamlWriter
@@ -39,30 +38,23 @@ def batch_controller_node(state: GraphState) -> GraphState:
     api_summary = state.get("api_summary", [])
     case_type = state.get("case_type", "both")
 
-    # Resume mode: build minimal TestPlan from existing YAMLs
-    if state.get("resume") and (plan is None or not interfaces_raw):
+    # Resume mode: restore interfaces from YAML if missing
+    # resume 模式：如果接口缺失，从 YAML 恢复
+    if state.get("resume") and not interfaces_raw:
         if Path(cases_dir + "/interfaces").is_dir():
-            existing_ifaces = YamlWriter.read_interfaces(cases_dir)
+            interfaces_raw = YamlWriter.read_interfaces(cases_dir)
         else:
-            existing_ifaces = YamlWriter.read_interfaces(output_dir)
-        if not interfaces_raw:
-            interfaces_raw = existing_ifaces
-        if plan is None:
-            single_tps = {}
-            for iface in existing_ifaces:
-                tid = iface.get("test_id", "")
-                if tid:
-                    single_tps[tid] = [
-                        PlanStep(test_id=f"{tid}_positive", description="Positive scenario", tag="P0", scenario_type="positive"),
-                        PlanStep(test_id=f"{tid}_negative", description="Negative scenario", tag="P1", scenario_type="negative"),
-                        PlanStep(test_id=f"{tid}_boundary", description="Boundary scenario", tag="P2", scenario_type="boundary"),
-                    ]
-            plan = TestPlan(
-                business_summary="Resume mode — minimal plan from existing interfaces",
-                single_test_points=single_tps,
-            )
-        state["plan_parsed"] = plan
+            interfaces_raw = YamlWriter.read_interfaces(output_dir)
         state["interfaces"] = interfaces_raw
+        plan = state.get("plan_parsed")
+
+    # plan_parsed 必须存在，否则无法生成用例
+    # plan_parsed is required for case generation
+    if plan is None:
+        msg = _("batch.plan_missing")
+        logger.error(msg)
+        state["errors"].append(msg)
+        return state
 
     logger.info(_step("case_generation", "pipeline.case_generation"))
     logger.info(_("batch.batch_size", size=batch_size))

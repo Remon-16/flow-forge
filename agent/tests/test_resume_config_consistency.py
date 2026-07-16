@@ -93,9 +93,39 @@ class TestRunConfigKeyConsistency:
                 "debug_snapshots": True,
                 "parser_path": "/tmp/custom.py",
                 "reference_dir": "/tmp/ref",
-                "resume_overwrite": True,
             }
             save_run_config(tmp, config)
             loaded = load_run_config(tmp)
             for key, value in config.items():
                 assert loaded.get(key) == value, f"Key '{key}' mismatch: {loaded.get(key)} != {value}"
+
+    def should_not_include_resume_overwrite_in_standard_keys(self):
+        """resume_overwrite 不应出现在标准配置键中（一次指令，不跨 resume 保留）
+        resume_overwrite is a one-shot flag and should NOT persist across resumes."""
+        # 验证标准配置键列表中不包含 resume_overwrite
+        # Verify resume_overwrite is not among standard config keys
+        standard_keys = {
+            "case_type", "user_guidance", "output_format", "plugin_batch_size",
+            "auto_mode", "parse_mode", "output_dir", "api_paths",
+            "debug_snapshots", "parser_path", "reference_dir",
+        }
+        assert "resume_overwrite" not in standard_keys
+
+        # run_config 保存/加载不会过滤键, 但 runner 不会将 resume_overwrite 放入配置
+        # Helpers save/load faithfully, but runner.py no longer includes it in _merged_config
+        with tempfile.TemporaryDirectory() as tmp:
+            config = {
+                "case_type": "single",
+                "plugin_batch_size": 10,
+                "auto_mode": False,
+                "parse_mode": "raw",
+                "output_dir": "/tmp/output",
+                "api_paths": [],
+                "debug_snapshots": False,
+                "parser_path": "",
+                "reference_dir": "",
+            }
+            save_run_config(tmp, config)
+            loaded = load_run_config(tmp)
+            # resume_overwrite 不应出现在加载的配置中 / should not appear in loaded config
+            assert "resume_overwrite" not in loaded

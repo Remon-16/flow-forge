@@ -188,6 +188,7 @@
   "batch.error": "  ✗ {msg}",
   "batch.result": "  → 生成 {single} 条单接口用例, {biz} 条业务链路",
   "batch.failures_note": "  → {count} 个用例生成失败 (详见 {dir}/failures.yaml)",
+  "batch.plan_missing": "无法继续：测试计划（plan_parsed）不存在。请确保已通过计划审核阶段。如果是从断点恢复，请检查 plan_parsed.json 是否存在。",
 
   "output.writing": "写入输出...",
   "output.excel_written": "  → Excel 已写入 {path}",

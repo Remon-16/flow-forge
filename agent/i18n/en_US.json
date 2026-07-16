@@ -188,6 +188,7 @@
   "batch.error": "  ✗ {msg}",
   "batch.result": "  → Generated {single} single cases, {biz} biz flows",
   "batch.failures_note": "  → {count} cases failed (see {dir}/failures.yaml)",
+  "batch.plan_missing": "Cannot continue: test plan (plan_parsed) is missing. Ensure the plan review stage has been completed. If resuming from a checkpoint, check if plan_parsed.json exists.",
 
   "output.writing": "Writing output...",
   "output.excel_written": "  → Excel written to {path}",

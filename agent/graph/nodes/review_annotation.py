@@ -251,10 +251,17 @@ def _run_intent_analysis(
         api_key=_h._settings.llm_api_key,
         model=_h._settings.llm_model,
         temperature=0.1,
-        max_tokens=_h._settings.llm_max_output_tokens,
-        base_url=_h._settings.llm_base_url,
+        max_retries=_h._settings.max_retries,
         max_steps=_h._settings.max_steps,
+        base_url=_h._settings.llm_base_url,
         context_window=_h._settings.llm_context_window,
+        max_output_tokens=_h._settings.llm_max_output_tokens,
+        compression_threshold=_h._settings.llm_context_compression_threshold,
+        rate_limit_delay=_h._settings.llm_rate_limit_delay,
+        retry_base_delay=_h._settings.llm_retry_base_delay,
+        max_concurrency=_h._settings.llm_max_concurrency,
+        request_timeout=_h._settings.llm_request_timeout,
+        extra_params=_h._settings.llm_extra_params,
     )
 
     for batch_idx, batch in enumerate(batches):

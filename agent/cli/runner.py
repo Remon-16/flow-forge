@@ -372,7 +372,6 @@ def main() -> int:
             "debug_snapshots": _debug_snapshots,
             "parser_path": _parser_path,
             "reference_dir": _reference_dir,
-            "resume_overwrite": resume_overwrite,
         }
         save_run_config(str(_memory_dir), _merged_config)
 
