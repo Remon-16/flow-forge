@@ -91,10 +91,11 @@ onMounted(async () => {
   const { getCurrentWindow } = await import('@tauri-apps/api/window')
   const appWindow = getCurrentWindow()
 
-  appWindow.onCloseRequested(async (event) => {
-    // 有运行中任务时阻止关闭并弹框，无任务则直接关闭
-    // Prevent close only when tasks are running; close directly otherwise
-    const runningTasks = agent.tasks.filter(
+  // 注册关闭请求处理器（同步回调，内部无异步操作）
+  // Register close request handler (sync callback, no async ops inside)
+  await appWindow.onCloseRequested((event) => {
+    const tasks = agent.tasks || []
+    const runningTasks = tasks.filter(
       t => t.status === 'running' || t.status === 'question'
     )
     if (runningTasks.length > 0) {

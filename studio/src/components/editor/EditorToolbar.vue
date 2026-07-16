@@ -4,7 +4,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dropdown, Menu, MenuItem, MenuDivider } from 'ant-design-vue'
-import { CaretRightOutlined, RetweetOutlined, MoreOutlined, SettingOutlined } from '@ant-design/icons-vue'
+import { CaretRightOutlined, RetweetOutlined, MoreOutlined } from '@ant-design/icons-vue'
 
 const { t } = useI18n()
 
@@ -82,10 +82,6 @@ function getConvertActionLabel(action: ConvertAction): string {
 
 function handleRunMenuClick(info: { key: string }) {
   const key = info.key
-  if (key === 'editRunParams') {
-    emit('editRunParams')
-    return
-  }
   defaultRunAction.value = key as RunAction
   switch (key) {
     case 'all': emit('runAll'); break
@@ -97,10 +93,6 @@ function handleRunMenuClick(info: { key: string }) {
 
 function handleConvertMenuClick(info: { key: string }) {
   const key = info.key
-  if (key === 'editConvertParams') {
-    emit('editConvertParams')
-    return
-  }
   defaultConvertAction.value = key as ConvertAction
   switch (key) {
     case 'all': emit('convertAll'); break
@@ -147,10 +139,6 @@ function handleConvertDefault() {
               {{ item.label }}
             </span>
           </a-menu-item>
-          <a-menu-divider />
-          <a-menu-item key="editRunParams">
-            <SettingOutlined /> {{ t('editor.toolbar.editRunParams') }}
-          </a-menu-item>
         </a-menu>
       </template>
     </a-dropdown>
@@ -181,10 +169,6 @@ function handleConvertDefault() {
             <span :class="{ 'active-action': item.key === defaultConvertAction }">
               {{ item.label }}
             </span>
-          </a-menu-item>
-          <a-menu-divider />
-          <a-menu-item key="editConvertParams">
-            <SettingOutlined /> {{ t('editor.toolbar.editConvertParams') }}
           </a-menu-item>
         </a-menu>
       </template>
