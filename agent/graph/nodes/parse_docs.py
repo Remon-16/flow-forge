@@ -67,7 +67,6 @@ def parse_docs_node(state: GraphState) -> GraphState:
     # --- API（多文档独立解析 / multi-doc independent parsing）---
     api_paths = state.get("api_paths", [])
     parse_mode = state.get("parse_mode", "raw")
-    state["interfaces_from_llm"] = False
 
     if not api_paths:
         state["interfaces"] = []
@@ -137,7 +136,6 @@ def parse_docs_node(state: GraphState) -> GraphState:
                 if key not in seen_keys:
                     seen_keys.add(key)
                     all_interfaces.append(d)
-            state["interfaces_from_llm"] = True
             aggregated_method = "llm"
             logger.info(_("parse_docs.llm_extracted", count=len(interfaces)))
 

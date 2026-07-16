@@ -20,7 +20,6 @@ class GraphState(TypedDict, total=False):
     requirement_paths: List[str]
     api_paths: List[str]
     output_path: str
-    plan_only: bool
 
     # === 输出配置 / Output config ===
     output_dir: str             # Output root directory
@@ -29,8 +28,6 @@ class GraphState(TypedDict, total=False):
     debug_snapshots: bool       # Save optional debug snapshots
     output_format: str          # "yaml" | "excel" | "both"
     batch_size: int             # Max cases per batch
-    case_format_enabled: bool     # Whether to run case validation
-    case_format_max_retries: int # Max case format validation retries
     case_type: str              # "both" | "single" | "biz"
 
     # === 文档解析 / Document parsing ===
@@ -48,7 +45,6 @@ class GraphState(TypedDict, total=False):
     # === 计划生成 / Plan generation ===
     plan_outline: Dict[str, Any]   # 测试计划轮廓 JSON / Test plan outline JSON
     plan_md: str
-    plan_md_path: str
     plan_parsed: Any  # 从 plan.md 解析的结构化计划 / Structured TestPlan
     user_guidance: str  # 用户通过 --prompt 传入的指导 / User guidance from --prompt
 

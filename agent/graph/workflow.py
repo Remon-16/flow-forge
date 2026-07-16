@@ -77,14 +77,19 @@ def _route_resume(state: GraphState) -> str:
 
     state_path = Path(memory_dir) / "pipeline_state.json"
     if not state_path.exists():
-        return "batch_controller"
+        raise RuntimeError(
+            f"Resume mode: pipeline_state.json not found at {memory_dir}. "
+            "Use --resume-overwrite to start a fresh pipeline."
+        )
 
     try:
         with open(state_path, "r", encoding="utf-8") as f:
             ps = json.load(f)
-    except Exception:
-        logger.warning("Failed to read pipeline_state.json, falling back to batch_controller")
-        return "batch_controller"
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"Resume mode: pipeline_state.json is corrupted ({e}). "
+            "Use --resume-overwrite to start a fresh pipeline."
+        ) from e
 
     stage = ps.get("completed_stage", "")
     next_node = STAGE_TO_NEXT_NODE.get(stage, "parse_docs")
@@ -171,7 +176,11 @@ def build_workflow(
     graph.add_edge("revise_plan", "human_confirm")  # Feedback loop
     graph.add_edge("reload_interfaces", "parse_plan")
     graph.add_edge("parse_plan", "batch_controller")
-    graph.add_edge("batch_controller", "write_output")
+    graph.add_conditional_edges(
+        "batch_controller",
+        lambda s: "end" if s.get("_batch_failed") else "write_output",
+        {"end": END, "write_output": "write_output"},
+    )
     graph.add_edge("write_output", END)
 
     return graph.compile(checkpointer=MemorySaver())

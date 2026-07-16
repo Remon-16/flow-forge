@@ -193,16 +193,16 @@ def _dispatch_rule_parser(api_path: str, parser_path: str = "") -> List[Interfac
         interfaces = OpenApiParser.parse(api_path)
         if interfaces:
             return interfaces
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(_("analyze_api.parser_error", parser="OpenApiParser", error=str(e)))
 
     try:
         logger.info(_("analyze_api.trying_markdown"))
         interfaces = MarkdownParser.parse(api_path)
         if interfaces:
             return interfaces
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(_("analyze_api.parser_error", parser="MarkdownParser", error=str(e)))
 
     return []
 

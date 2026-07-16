@@ -36,18 +36,6 @@ def _first(*values):
     return None
 
 
-def _resolve_validation_flags(args, settings):
-    """模拟 runner.py 中的 --validation / --no-validation 解析逻辑。
-    Simulate the validation flag resolution logic in runner.py.
-    """
-    if args.no_validation:
-        return False
-    elif args.validation:
-        return True
-    else:
-        return settings.case_format_enabled
-
-
 def _resolve_url_doc_match_flags(args, settings):
     """模拟 runner.py 中的 --url-doc-match-enabled / --no-url-doc-match-enabled 解析逻辑。
     Simulate the url-doc-match flag resolution logic in runner.py.
@@ -81,7 +69,6 @@ def _make_args(**overrides):
         "skeleton_batch_size": None,
         "plan_single_batch_size": None,
         "url_doc_match_max_retries": None,
-        "case_format_max_retries": None,
         "consecutive_batch_failure_limit": None,
         "max_steps_no_progress": None,
         # 字符串型覆盖参数 / String override params (None = use env.yaml)
@@ -169,11 +156,6 @@ class TestNoneSentinel:
         settings = _mini_settings(url_doc_match_max_retries=3)
         assert _first(args.url_doc_match_max_retries, settings.url_doc_match_max_retries) == 3
 
-    def should_fallback_case_format_max_retries(self):
-        args = _make_args(case_format_max_retries=None)
-        settings = _mini_settings(case_format_max_retries=3)
-        assert _first(args.case_format_max_retries, settings.case_format_max_retries) == 3
-
     def should_fallback_consecutive_batch_failure_limit(self):
         args = _make_args(consecutive_batch_failure_limit=None)
         settings = _mini_settings(consecutive_batch_failure_limit=3)
@@ -231,13 +213,6 @@ class TestZeroAsValidValue:
         args = _make_args(url_doc_match_max_retries=0)
         settings = _mini_settings(url_doc_match_max_retries=3)
         result = _first(args.url_doc_match_max_retries, settings.url_doc_match_max_retries)
-        assert result == 0
-
-    def should_allow_zero_case_format_max_retries(self):
-        """--case-format-max-retries 0 → 0（不重试格式校验）。"""
-        args = _make_args(case_format_max_retries=0)
-        settings = _mini_settings(case_format_max_retries=3)
-        result = _first(args.case_format_max_retries, settings.case_format_max_retries)
         assert result == 0
 
     def should_allow_zero_consecutive_batch_failure_limit(self):
@@ -298,11 +273,6 @@ class TestCliOverridesEnv:
         settings = _mini_settings(url_doc_match_max_retries=3)
         assert _first(args.url_doc_match_max_retries, settings.url_doc_match_max_retries) == 5
 
-    def should_override_case_format_max_retries(self):
-        args = _make_args(case_format_max_retries=5)
-        settings = _mini_settings(case_format_max_retries=3)
-        assert _first(args.case_format_max_retries, settings.case_format_max_retries) == 5
-
     def should_override_consecutive_batch_failure_limit(self):
         args = _make_args(consecutive_batch_failure_limit=5)
         settings = _mini_settings(consecutive_batch_failure_limit=3)
@@ -341,38 +311,11 @@ class TestCliOverridesEnv:
 # ============================================================================
 
 
-class TestValidationFlags:
-    """验证 --validation / --no-validation / --url-doc-match-enabled / --no-url-doc-match-enabled 的解析逻辑。
+class TestUrlDocMatchFlags:
+    """验证 --url-doc-match-enabled / --no-url-doc-match-enabled 的解析逻辑。
 
-    Verify the resolution logic for validation and url-doc-match boolean flags.
+    Verify the resolution logic for url-doc-match boolean flags.
     """
-
-    def should_enable_when_validation_flag_set(self):
-        """--validation → case_format_enabled = True，即使 env 为 False。"""
-        args = _make_args(validation=True)
-        settings = _mini_settings(case_format_enabled=False)
-        assert _resolve_validation_flags(args, settings) is True
-
-    def should_disable_when_no_validation_flag_set(self):
-        """--no-validation → case_format_enabled = False，即使 env 为 True。"""
-        args = _make_args(no_validation=True)
-        settings = _mini_settings(case_format_enabled=True)
-        assert _resolve_validation_flags(args, settings) is False
-
-    def should_use_env_when_neither_flag_set(self):
-        """两个 flag 都未设置 → 使用 env 默认值。"""
-        args = _make_args()
-        settings = _mini_settings(case_format_enabled=True)
-        assert _resolve_validation_flags(args, settings) is True
-        settings2 = _mini_settings(case_format_enabled=False)
-        assert _resolve_validation_flags(args, settings2) is False
-
-    def should_no_validation_win_over_validation(self):
-        """--no-validation 优先于 --validation（同时设置时）。"""
-        args = _make_args(validation=True, no_validation=True)
-        settings = _mini_settings(case_format_enabled=True)
-        # no_validation 先检查，应胜出
-        assert _resolve_validation_flags(args, settings) is False
 
     def should_enable_url_doc_match_when_flag_set(self):
         """--url-doc-match-enabled → url_doc_match_enabled = True。"""
@@ -428,9 +371,7 @@ class TestParserCompleteness:
             "max_steps", "max_retries", "skeleton_batch_size",
             "plan_single_batch_size",
             "url_doc_match_max_retries", "url_doc_match_strategy",
-            "case_format_max_retries",
             "consecutive_batch_failure_limit", "max_steps_no_progress",
-            "validation", "no_validation",
             "url_doc_match_enabled", "no_url_doc_match_enabled",
             "plugins", "no_plugins",
             "skills", "no_skills",
@@ -457,11 +398,10 @@ class TestParserCompleteness:
         none_default_params = {
             "plugin_batch_size", "max_steps", "max_retries",
             "skeleton_batch_size", "plan_single_batch_size",
-            "url_doc_match_max_retries", "case_format_max_retries",
+            "url_doc_match_max_retries",
             "consecutive_batch_failure_limit", "max_steps_no_progress",
             "output_format", "url_doc_match_strategy", "case_type", "lang",
             "prompt", "parser_path", "reference_dir",
-            "validation", "no_validation",
             "url_doc_match_enabled", "no_url_doc_match_enabled",
             "plugins", "no_plugins",
             "skills", "no_skills",
@@ -490,7 +430,6 @@ class TestSettingsFields:
         from config.settings import Settings
         s = Settings()
         # 新字段名应存在 / New field names should exist
-        assert hasattr(s, "case_format_enabled")
         assert hasattr(s, "case_format_max_retries")
         assert hasattr(s, "url_doc_match_max_retries")
         assert hasattr(s, "url_doc_match_strategy")

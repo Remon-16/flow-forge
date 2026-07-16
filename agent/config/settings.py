@@ -91,7 +91,6 @@ class Settings:
     llm_retry_base_delay: float = 2.0
     output_dir: str = "./output"
     plugin_batch_size: int = 10
-    case_format_enabled: bool = True
     case_format_max_retries: int = 3
     output_format: str = "both"
     max_steps_no_progress: int = 5
@@ -157,7 +156,6 @@ class Settings:
             "llm_retry_base_delay": self.llm_retry_base_delay,
             "output_dir": self.output_dir,
             "plugin_batch_size": self.plugin_batch_size,
-            "case_format_enabled": self.case_format_enabled,
             "case_format_max_retries": self.case_format_max_retries,
             "output_format": self.output_format,
             "max_steps_no_progress": self.max_steps_no_progress,
@@ -266,8 +264,7 @@ def _read_case_gen_enabled(validation: Dict) -> bool:
     优先级 / Priority:
       1. case_gen_validation.enable（新路径 / new path）
       2. case_gen_rules.enable（旧 block 路径 / old block path）
-      3. case_format_enabled（旧平铺 key / old flat key）
-      4. 默认 True / Default True
+      3. 默认 True / Default True
     """
     # 新路径 / New path
     block = validation.get("case_gen_validation", {})
@@ -281,8 +278,7 @@ def _read_case_gen_enabled(validation: Dict) -> bool:
         enable = old_block.get("enable")
         if enable is not None:
             return bool(enable)
-    # 旧平铺 key / Old flat key
-    return bool(validation.get("case_format_enabled", True))
+    return True
 
 
 def _read_case_gen_max_retries(validation: Dict) -> int:
@@ -380,7 +376,6 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         # 校验规则（新路径 case_gen_validation.rules，回退旧路径）
         # Validation rules (new path case_gen_validation.rules, fallback old paths)
         case_gen_validation=_parse_validation_rules(_extract_case_gen_rules_raw(validation)),
-        case_format_enabled=_read_case_gen_enabled(validation),
         case_format_max_retries=_read_case_gen_max_retries(validation),
         # URL 文档匹配（新路径 url_doc_match_validation，回退旧路径 url_doc_match_rules）
         # URL doc-match (new path url_doc_match_validation, fallback old path url_doc_match_rules)

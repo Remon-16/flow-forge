@@ -83,7 +83,7 @@ def _annotation_chunked_revision(
         return plan_md
 
     # 意图分析 / Intent analysis (LLM)
-    all_actions = _run_intent_analysis(sections, section_annotations, state)
+    all_actions = _run_intent_analysis(sections, section_annotations, state, skill_extensions=_exts)
     if not all_actions:
         return plan_md
 
@@ -184,6 +184,7 @@ def _run_intent_analysis(
     sections: dict,
     section_annotations: Dict[str, List[dict]],
     state: GraphState,
+    skill_extensions: List[str] = None,
 ) -> List[dict]:
     """LLM 意图分析: 每条批注 → {section_key, action, reasoning} / Classify each annotation.
 
@@ -269,6 +270,7 @@ def _run_intent_analysis(
         max_concurrency=_h._settings.llm_max_concurrency,
         request_timeout=_h._settings.llm_request_timeout,
         extra_params=_h._settings.llm_extra_params,
+        skill_extensions=skill_extensions,
     )
 
     for batch_idx, batch in enumerate(batches):
@@ -280,6 +282,9 @@ def _run_intent_analysis(
             agent.reset_steps()
             try:
                 result = agent.call_llm_json(prompt, system_rendered)
+                # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
+                if isinstance(result, list):
+                    result = {"actions": result}
                 actions = result.get("actions", [])
             except Exception as e:
                 attempts += 1
@@ -492,6 +497,9 @@ def _execute_chunk_actions(
                     _fix_biz_chunk(chunk, flow, fix_text, outline, analysis,
                                    api_summary, iface_by_id, agent, user_guidance)
                     logger.info(_("review.fixed_chunk", key=chunk_id))
+
+    # 回写 state 确保 resume 后状态一致 / Write back to state for consistent resume
+    state["plan_outline"] = outline
 
     # 保存更新后的 outline / Save updated outline
     memory_dir = state.get("memory_dir", "")

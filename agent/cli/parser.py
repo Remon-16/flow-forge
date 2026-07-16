@@ -61,10 +61,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="URL 文档匹配纠错重试次数 (默认取自 env.yaml)。URL doc-match correction retries.",
     )
     p.add_argument(
-        "--case-format-max-retries", type=int, default=None,
-        help="用例格式校验重试次数 (默认取自 env.yaml)。Case format validation retries.",
-    )
-    p.add_argument(
         "--url-doc-match-strategy", choices=["fail", "warn", "skip"], default=None,
         help="URL 文档匹配纠错策略 (默认取自 env.yaml): fail | warn | skip。URL doc-match correction strategy.",
     )
@@ -75,14 +71,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--max-steps-no-progress", type=int, default=None,
         help="进度无变化最大步数 (默认取自 env.yaml)。Max steps with no progress.",
-    )
-    p.add_argument(
-        "--validation", action="store_true", default=None,
-        help="启用用例格式校验。Enable case validation.",
-    )
-    p.add_argument(
-        "--no-validation", action="store_true", default=None,
-        help="禁用用例格式校验。Disable case validation.",
     )
     p.add_argument(
         "--url-doc-match-enabled", action="store_true", default=None,

@@ -39,8 +39,6 @@ def _make_state(**overrides):
         "errors": [],
         "debug_snapshots": False,
         "output_format": "yaml",
-        "case_format_enabled": False,
-        "case_format_max_retries": 3,
         "resume_overwrite": False,
         "auto_mode": True,
         "plan_confirmed": True,

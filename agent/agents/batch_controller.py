@@ -30,7 +30,6 @@ class BatchController:
 
     def __init__(self, settings: Settings):
         self._batch_size = settings.plugin_batch_size
-        self._case_format_enabled = settings.case_format_enabled
         self._case_format_max_retries = settings.case_format_max_retries
         self._max_steps_no_progress = settings.max_steps_no_progress
         self._url_doc_match_max_retries = getattr(
@@ -800,8 +799,6 @@ class BatchController:
             self._batch_size = ckpt_settings.get("batch_size", self._batch_size)
             self._skeleton_batch_size = ckpt_settings.get(
                 "skeleton_batch_size", self._skeleton_batch_size)
-            self._case_format_enabled = ckpt_settings.get(
-                "case_format_enabled", self._case_format_enabled)
             self._case_format_max_retries = ckpt_settings.get(
                 "case_format_max_retries", self._case_format_max_retries)
             self._url_doc_match_max_retries = ckpt_settings.get(
@@ -900,7 +897,6 @@ class BatchController:
         return {
             "batch_size": self._batch_size,
             "skeleton_batch_size": self._skeleton_batch_size,
-            "case_format_enabled": self._case_format_enabled,
             "case_format_max_retries": self._case_format_max_retries,
             "url_doc_match_max_retries": self._url_doc_match_max_retries,
             "url_doc_match_strategy": self._url_doc_match_strategy,

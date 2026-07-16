@@ -61,7 +61,6 @@ _CLI_ARG_TO_CONFIG_KEY: dict = {
     "max_retries": "max_retries",
     "skeleton_batch_size": "skeleton_batch_size",
     "plan_single_batch_size": "plan_single_batch_size",
-    "case_format_max_retries": "case_format_max_retries",
     "url_doc_match_max_retries": "url_doc_match_max_retries",
     "url_doc_match_strategy": "url_doc_match_strategy",
     "consecutive_batch_failure_limit": "consecutive_batch_failure_limit",
@@ -243,6 +242,15 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
             except Exception:
                 pass
 
+    # 检测 plan_parsed 与 plan.md 是否不同步 / Check plan_parsed vs plan.md consistency
+    if state.get("plan_parsed") and state.get("plan_md"):
+        parsed_apis = len(state["plan_parsed"].api_definitions)
+        plan_api_count = state["plan_md"].count("| api_") + state["plan_md"].count("| `api_")
+        # 若 plan.md 中手动新增/删除了 API 但 plan_parsed 未更新，发出警告
+        # If plan.md was manually edited, plan_parsed may be out of sync
+        if parsed_apis > 0 and plan_api_count > 0 and abs(parsed_apis - plan_api_count) > 0:
+            logger.warning(_("resume.plan_mismatch", parsed=parsed_apis))
+
     return state
 
 
@@ -307,17 +315,7 @@ def main() -> int:
         _debug_snapshots = _first(args.debug_snapshots, saved_config.get("debug_snapshots"), False)
         _api_paths = list(args.api) if args.api else saved_config.get("api_paths", [])
 
-        # 从已保存配置中提取校验和分批设置 / Extract validation and batching from saved config
-        _case_format_enabled = _first(
-            True if args.validation else (False if args.no_validation else None),
-            saved_config.get("case_format_enabled"),
-            settings.case_format_enabled,
-        )
-        _case_format_max_retries = _first(
-            args.case_format_max_retries,
-            saved_config.get("case_format_max_retries"),
-            settings.case_format_max_retries,
-        )
+        # 从已保存配置中提取分批设置 / Extract batching settings from saved config
         _skeleton_batch_size = _first(
             args.skeleton_batch_size,
             saved_config.get("skeleton_batch_size"),
@@ -395,8 +393,6 @@ def main() -> int:
             "debug_snapshots": _debug_snapshots,
             "parser_path": _parser_path,
             "reference_dir": _reference_dir,
-            "case_format_enabled": _case_format_enabled,
-            "case_format_max_retries": _case_format_max_retries,
             "skeleton_batch_size": _skeleton_batch_size,
             "plan_single_batch_size": _plan_single_batch_size,
         }
@@ -412,9 +408,6 @@ def main() -> int:
             "debug_snapshots": _debug_snapshots,
             "output_format": _output_format,
             "batch_size": _plugin_batch_size,
-            "case_format_enabled": _case_format_enabled,
-            "case_format_max_retries": _case_format_max_retries,
-            "plan_only": False,
             "requirement_texts": loaded.get("requirement_texts", []),
             "interfaces": loaded.get("interfaces", []),
             "api_raw_text": loaded.get("api_raw_text", ""),  # 恢复拼接文本供 URL 校验 / Restore merged text for URL validation
@@ -484,15 +477,6 @@ def main() -> int:
     if args.prompt:
         logger.info(_("cli.user_guidance", guidance=args.prompt))
 
-    # --- 解析 CLI 对校验和语言等配置的覆盖 / Resolve CLI overrides ---
-    # 用例格式校验开关 / Case format validation toggle
-    if args.no_validation:
-        _case_format_enabled = False
-    elif args.validation:
-        _case_format_enabled = True
-    else:
-        _case_format_enabled = settings.case_format_enabled
-
     # 语言设置 / Language setting
     if args.lang is not None:
         import os as _os
@@ -519,9 +503,6 @@ def main() -> int:
         "debug_snapshots": args.debug_snapshots,
         "output_format": _first(args.output_format, settings.output_format),
         "batch_size": _first(args.plugin_batch_size, settings.plugin_batch_size),
-        "case_format_enabled": _case_format_enabled,
-        "case_format_max_retries": _first(args.case_format_max_retries, settings.case_format_max_retries),
-        "plan_only": False,
         "user_guidance": _first(args.prompt, ""),
         "reference_dir": _first(args.reference_dir, ""),
         "parse_mode": args.parse_mode,
@@ -546,8 +527,6 @@ def main() -> int:
         "debug_snapshots": args.debug_snapshots,
         "parser_path": _first(args.parser_path, ""),
         "reference_dir": _first(args.reference_dir, ""),
-        "case_format_enabled": _case_format_enabled,
-        "case_format_max_retries": _first(args.case_format_max_retries, settings.case_format_max_retries),
         "skeleton_batch_size": _first(args.skeleton_batch_size, settings.skeleton_batch_size),
         "plan_single_batch_size": _first(args.plan_single_batch_size, settings.plan_single_batch_size),
     }

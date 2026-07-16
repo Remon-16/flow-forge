@@ -168,6 +168,9 @@ def _section_impact_analysis(
     )
 
     result = agent.call_llm_json(prompt, system_msg)
+    # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
+    if isinstance(result, list):
+        result = {}
     # 规范化输出 / Normalize output
     impact = {
         "global": bool(result.get("global", False)),
@@ -222,6 +225,9 @@ def _chunk_intent_for_global(
     )
 
     result = agent.call_llm_json(prompt, system_msg)
+    # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
+    if isinstance(result, list):
+        result = {"actions": result}
     actions = result.get("actions", [])
     # 数量校验 / Count validation: global has exactly 1 chunk
     if len(actions) != 1:
@@ -281,6 +287,9 @@ def _chunk_intent_for_section(
     )
 
     result = agent.call_llm_json(prompt, system_msg)
+    # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
+    if isinstance(result, list):
+        result = {"actions": result}
     actions = result.get("actions", [])
     # 数量校验 / Count validation: verify actions count matches chunk count
     expected_count = len(chunks)

@@ -20,6 +20,9 @@ A multi-agent system built on a LangGraph pipeline. It reads **requirement docum
 cd agent
 pip install -r requirements.txt
 
+# 0) Install shared data model (required for first-time setup)
+pip install -e ../shared/py
+
 # 1) Configure the LLM: copy the template and fill in api_key / model / base_url
 cp env.example.yaml env.yaml
 

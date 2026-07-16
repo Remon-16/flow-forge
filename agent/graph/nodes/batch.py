@@ -62,10 +62,9 @@ def batch_controller_node(state: GraphState) -> GraphState:
         _sl().log_node_start("batch_controller", "8/10")
 
     _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
-    _single_exts = load_skill_extensions('skeleton_generator', _h._settings, _skills_dir)
-    _biz_exts = load_skill_extensions('skeleton_generator', _h._settings, _skills_dir)
-    single_skel_gen = SingleSkeletonGenerator(_h._settings, _h._knowledge, skill_extensions=_single_exts)
-    biz_skel_gen = BizSkeletonGenerator(_h._settings, _h._knowledge, skill_extensions=_biz_exts)
+    _exts = load_skill_extensions('skeleton_generator', _h._settings, _skills_dir)
+    single_skel_gen = SingleSkeletonGenerator(_h._settings, _h._knowledge, skill_extensions=_exts)
+    biz_skel_gen = BizSkeletonGenerator(_h._settings, _h._knowledge, skill_extensions=_exts)
 
     user_module_paths = [
         p.strip() for p in _h._settings.plugin_modules if p.strip()
@@ -111,10 +110,11 @@ def batch_controller_node(state: GraphState) -> GraphState:
         msg = f"BatchController failed: {e}"
         logger.exception(msg)
         state["errors"].append(msg)
-        logger.info(_("batch.error", msg=msg))
+        logger.info(_("batch.aborted", msg=msg))
         state["single_cases"] = []
         state["biz_flows"] = []
         state["validation_failures"] = []
+        state["_batch_failed"] = True
         return state
 
     single_cases = result.get("single_cases", [])

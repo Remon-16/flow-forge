@@ -174,12 +174,18 @@ def _count_validate(
     # 跳过校验：调用一次直接返回，不重试 / Skip validation: one call, no retries
     if strategy == "skip":
         result = agent.call_llm_json(prompt, system_msg)
+        # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
+        if isinstance(result, list):
+            result = {json_key: result}
         items = result.get(json_key, [])
         logger.info(_("skel_gen.count_check_skipped", label=label, count=len(items)))
         return items
 
     for attempt in range(max_retries + 1):
         result = agent.call_llm_json(prompt, system_msg)
+        # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
+        if isinstance(result, list):
+            result = {json_key: result}
         items = result.get(json_key, [])
         if len(items) == expected_count:
             logger.info(_("skel_gen.batch_progress", count=len(items), label=label))
@@ -556,10 +562,11 @@ class SingleSkeletonGenerator(_BaseSkeletonGenerator):
 
         for attempt in range(self._case_format_max_retries + 1):
             result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)
-            corrected = result.get("cases") or result.get("single_skeletons") or []
-            if not corrected:
-                if isinstance(result, list):
-                    corrected = result
+            # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
+            if isinstance(result, list):
+                corrected = result
+            else:
+                corrected = result.get("cases") or result.get("single_skeletons") or []
             if not corrected:
                 logger.warning(
                     _("skel_gen.url_correction_empty",
@@ -852,15 +859,16 @@ class BizSkeletonGenerator(_BaseSkeletonGenerator):
 
         for attempt in range(self._case_format_max_retries + 1):
             result = self.call_llm_json(prompt, URL_CORRECTION_SYSTEM)
-            corrected = (
-                result.get("cases")
-                or result.get("biz_skeletons")
-                or result.get("biz_flows")
-                or []
-            )
-            if not corrected:
-                if isinstance(result, list):
-                    corrected = result
+            # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
+            if isinstance(result, list):
+                corrected = result
+            else:
+                corrected = (
+                    result.get("cases")
+                    or result.get("biz_skeletons")
+                    or result.get("biz_flows")
+                    or []
+                )
             if not corrected:
                 logger.warning(
                     _("skel_gen.url_correction_empty",

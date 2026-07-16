@@ -88,16 +88,6 @@ def human_confirm_node(state: GraphState) -> GraphState:
                         logger.info(_("review.reloaded_from_disk", path=str(plan_path.resolve())))
                 except Exception as e:
                     logger.warning(_("review.reload_error", error=str(e)))
-            # 归档已处理的反馈文件供回溯 / Archive consumed feedback for traceability
-            fb_path = Path(memory_dir) / "pending_feedback.json"
-            if fb_path.exists():
-                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                history_dir = Path(memory_dir) / "history-feedback"
-                history_dir.mkdir(parents=True, exist_ok=True)
-                archive_name = f"pending_feedback_{ts}.json"
-                fb_path.rename(history_dir / archive_name)
-                logger.info(_("review.feedback_archived_on_approve",
-                              path=str(history_dir / archive_name)))
     else:
         state["plan_confirmed"] = False
         state["plan_feedback"] = decision
@@ -109,11 +99,22 @@ def human_confirm_node(state: GraphState) -> GraphState:
                 "plan_annotations": state.get("plan_annotations", []),
             })
 
-    # Save review state for resume
+    # Save review state for resume — must happen BEFORE archiving feedback
+    # 先更新 pipeline 状态，再归档反馈文件（确保崩溃恢复时状态一致）
     memory_dir = state.get("memory_dir", "")
     if memory_dir and state["plan_confirmed"]:
         save_pipeline_artifact(memory_dir, "review_state.json", {"plan_confirmed": True, "plan_feedback": ""})
         save_pipeline_state(memory_dir, "human_confirm")
+        # 归档已处理的反馈文件供回溯 / Archive consumed feedback for traceability
+        fb_path = Path(memory_dir) / "pending_feedback.json"
+        if fb_path.exists():
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            history_dir = Path(memory_dir) / "history-feedback"
+            history_dir.mkdir(parents=True, exist_ok=True)
+            archive_name = f"pending_feedback_{ts}.json"
+            fb_path.rename(history_dir / archive_name)
+            logger.info(_("review.feedback_archived_on_approve",
+                          path=str(history_dir / archive_name)))
 
     if _sl():
         _sl().log_node_end("human_confirm")
@@ -170,9 +171,11 @@ def revise_plan_node(state: GraphState) -> GraphState:
     state["plan_feedback_type"] = "text"
     state["plan_annotations"] = []
 
-    # 归档已处理的 pending_feedback 供回溯 / Archive consumed pending feedback for traceability
+    # 先更新 pipeline 状态，再归档反馈文件 / Update pipeline state before archiving feedback
     memory_dir = state.get("memory_dir", "")
     if memory_dir:
+        save_pipeline_state(memory_dir, "human_confirm")
+        # 归档已处理的 pending_feedback 供回溯 / Archive consumed pending feedback for traceability
         fb_path = Path(memory_dir) / "pending_feedback.json"
         if fb_path.exists():
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -28,7 +28,6 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
 
     interfaces = state.get("interfaces", [])
     api_raw_text = state.get("api_raw_text", "")
-    parse_mode = state.get("parse_mode", "raw")
 
     if not interfaces or not api_raw_text:
         logger.info("Skipping URL validation: no interfaces or api_raw_text")

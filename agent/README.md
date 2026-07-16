@@ -20,6 +20,9 @@
 cd agent
 pip install -r requirements.txt
 
+# 0) 安装共享数据模型（首次使用必须执行 / Required for first-time setup）
+pip install -e ../shared/py
+
 # 1) 配置 LLM：复制模板并填入 api_key / model / base_url
 cp env.example.yaml env.yaml
 
