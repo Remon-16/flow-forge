@@ -178,18 +178,26 @@ export const useExecutorStore = defineStore('executor', () => {
    * for compatibility with ExecutorForm's loadEnvData().
    */
   async function readEnvFile(envSuffix: string): Promise<Record<string, unknown>> {
+    const rootDir = await getExecutorRootDir()
+    if (!rootDir) return {}
+    const envPath = envSuffix
+      ? `${rootDir}/env-${envSuffix}.yml`.replace(/\\/g, '/')
+      : `${rootDir}/env.yml`.replace(/\\/g, '/')
     try {
-      const rootDir = await getExecutorRootDir()
-      if (!rootDir) return {}
-      const envPath = envSuffix
-        ? `${rootDir}/env-${envSuffix}.yml`.replace(/\\/g, '/')
-        : `${rootDir}/env.yml`.replace(/\\/g, '/')
       const content = await readFile(envPath)
       const parsed = yaml.load(content)
       return flattenEnvConfig(parsed)
-    } catch (e) {
+    } catch (e: unknown) {
+      const err = e as Error
+      const msg = err?.message || String(e)
+      // 文件不存在为预期情况（未创建 env 文件），静默返回空 / File not found is expected (no env file yet); silent
+      if (msg.includes('os error 2') || msg.includes('No such file') || msg.includes('not found') || msg.includes('NotFound')) {
+        console.info('[executor] env file not found (ok):', envPath)
+        return {}
+      }
+      // 其他错误（权限、YAML 格式错误等）抛出给调用方处理 / Other errors (perms, bad YAML) throw to caller
       console.error('[executor] readEnvFile failed:', e)
-      return {}
+      throw e
     }
   }
 

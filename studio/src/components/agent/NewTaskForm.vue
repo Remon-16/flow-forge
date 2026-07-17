@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { useAgentStore } from '../../stores/agent'
 import { openDirectoryDialog, openFileDialog, readFile, isDesktop } from '../../utils/desktop-bridge'
+import yaml from 'js-yaml'
 import ConfigPanel from './ConfigPanel.vue'
 
 const { t } = useI18n()
@@ -23,6 +24,8 @@ const caseType = ref<'single' | 'biz' | 'both'>('both')
 
 // LLM 配置（从 YAML 读取）/ LLM config (read from YAML)
 const llmConfig = ref<Record<string, any>>({})
+// 完整配置（pipeline/validation/plugins/skills/logging）供 ConfigPanel 使用 / Full config for ConfigPanel
+const fullConfig = ref<Record<string, any>>({})
 const configLoaded = ref(false)
 const configError = ref('')
 const loadingConfig = ref(false)
@@ -58,8 +61,13 @@ function splitPaths(input: string): string[] {
 
 // 加载配置文件 / Load config file
 async function loadYamlConfig() {
+  // 检查配置文件名是否已设置 / Check if config file name is set
+  if (!agent.config.configFileName) {
+    configError.value = t('agent.form_configNotSet')
+    return
+  }
   if (!agent.config.agentRootDir) {
-    configError.value = 'Agent root directory not configured'
+    configError.value = t('agent.form_agentRootNotSet')
     return
   }
   loadingConfig.value = true
@@ -67,37 +75,43 @@ async function loadYamlConfig() {
   try {
     const configPath = `${agent.config.agentRootDir}/${agent.config.configFileName}`
     const content = await readFile(configPath)
-    // 简单 YAML 解析（仅读取 llm 节）/ Simple YAML parse (read llm section only)
-    // 对简单嵌套结构的 YAML 进行正则解析 / Regex-based parsing for simple YAML
-    const llm: Record<string, any> = {}
-    let inLlm = false
-    for (const line of content.split('\n')) {
-      if (/^llm\s*:/.test(line.trim())) {
-        inLlm = true
-        continue
-      }
-      if (inLlm && /^\w/.test(line.trim()) && !line.trim().startsWith('#')) {
-        break // 回到顶层 / Back to top level
-      }
-      if (inLlm) {
-        const m = line.match(/^\s+(\w[\w_]*)\s*:\s*(.+)\s*$/)
-        if (m) {
-          const key = m[1]
-          let val = m[2].trim()
-          // 移除引号 / Remove quotes
-          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-            val = val.slice(1, -1)
-          }
-          // 尝试解析为数字 / Try parse as number
-          const num = Number(val)
-          llm[key] = isNaN(num) ? val : num
+    const parsed = yaml.load(content) as Record<string, any> | null
+
+    if (!parsed || typeof parsed !== 'object') {
+      configError.value = t('agent.form_configInvalid')
+      return
+    }
+
+    // 提取各节 / Extract sections
+    // LLM 配置 / LLM config
+    if (parsed.llm && typeof parsed.llm === 'object') {
+      const llm: Record<string, any> = {}
+      for (const [k, v] of Object.entries(parsed.llm as Record<string, unknown>)) {
+        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+          llm[k] = v
         }
       }
+      llmConfig.value = llm
     }
-    llmConfig.value = llm
+
+    // 完整配置数据给 ConfigPanel / Full config for ConfigPanel
+    fullConfig.value = {
+      pipeline: (parsed.pipeline && typeof parsed.pipeline === 'object') ? parsed.pipeline : {},
+      validation: (parsed.validation && typeof parsed.validation === 'object') ? parsed.validation : {},
+      plugins: (parsed.plugins && typeof parsed.plugins === 'object') ? parsed.plugins : {},
+      skills: (parsed.skills && typeof parsed.skills === 'object') ? parsed.skills : {},
+      logging: (parsed.logging && typeof parsed.logging === 'object') ? parsed.logging : {},
+    }
+
     configLoaded.value = true
   } catch (e: any) {
-    configError.value = e?.message || String(e)
+    const msg = e?.message || String(e)
+    // 文件不存在 → 友好提示 / File not found → friendly message
+    if (msg.includes('os error 2') || msg.includes('No such file') || msg.includes('not found')) {
+      configError.value = t('agent.form_configNotFound', { path: agent.config.configFileName })
+    } else {
+      configError.value = msg
+    }
   } finally {
     loadingConfig.value = false
   }
@@ -274,7 +288,7 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
     <!-- 其他配置 / Other config -->
     <div class="form-section">
       <h4>{{ t('agent.form_otherConfig') }}</h4>
-      <ConfigPanel :config-data="{}" @change="handleConfigChange" />
+      <ConfigPanel :config-data="fullConfig" @change="handleConfigChange" />
     </div>
 
     <!-- 提交 / Submit -->

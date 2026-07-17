@@ -139,7 +139,9 @@
     "condaEnvName": "Conda 环境名称",
     "condaEnvNameHint": "例如：myenv",
     "condaAutoResolve": "自动解析为: conda run -n <env> python（或在上方手动指定路径）",
-    "resolvedExe": "将使用的 Python"
+    "resolvedExe": "将使用的 Python",
+    "configFileName": "Agent 配置文件名",
+    "configFileNameHint": "例如：env.yaml（Agent 根目录下的 YAML 配置文件）"
   },
   "status": {
     "ready": "就绪",
@@ -328,6 +330,10 @@
     "form_resume": "恢复执行",
     "form_configLoadError": "配置文件加载失败",
     "form_configNotFound": "配置文件未找到: {path}",
+    "form_configNotSet": "配置文件名为空，请在智能体设置中配置",
+    "form_agentRootNotSet": "智能体根目录未配置",
+    "form_configInvalid": "配置文件格式无效，无法解析",
+    "form_loadConfig": "加载配置文件 ({name})",
     "prompt_skip": "跳过",
     "prompt_inputHint": "输入相关信息：",
     "prompt_confirm": "确认",
@@ -413,6 +419,7 @@
     "param_yamlFiles": "YAML 文件列表",
     "envSaved": "环境配置已保存",
     "envSaveFailed": "保存环境配置失败：{reason}",
+    "envLoadFailed": "加载环境配置失败：{reason}",
     "noExecutorRoot": "请先在设置中配置执行器根目录",
     "running": "执行中...",
     "completed": "执行完成",

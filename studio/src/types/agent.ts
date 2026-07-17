@@ -47,6 +47,7 @@ export interface AgentConfig {
   pythonExePath: string        // optional, 手动覆盖 / manual override
   venvPath: string             // optional, envType='venv' 时使用 / used when envType='venv'
   executorRootDir: string      // 执行器根目录 / Executor root directory
+  configFileName: string       // Agent 根目录下的 YAML 配置文件名 / YAML config filename in Agent root dir
   saveToEnvFile: boolean       // 是否将 CLI 参数同步到 env 文件 / Whether to sync CLI params to env file
   // ---- 环境类型 / Environment type ----
   envType: 'system' | 'venv' | 'conda'   // Python 环境类型 / Python environment type

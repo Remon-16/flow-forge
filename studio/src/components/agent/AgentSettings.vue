@@ -20,6 +20,7 @@ const local = ref({
   venvPath: '',
   agentRootDir: '',
   executorRootDir: '',
+  configFileName: '',
   saveToEnvFile: false,
   envType: 'system' as 'system' | 'venv' | 'conda',
   condaEnvName: '',
@@ -199,6 +200,15 @@ function handleCancel() {
         </a-input-group>
       </div>
 
+      <!-- 配置文件名（Agent 根目录下的 YAML 配置文件）/ Config file name (YAML config in Agent root dir) -->
+      <div class="settings-field">
+        <label>{{ t('settings.configFileName') }}</label>
+        <a-input
+          v-model:value="local.configFileName"
+          :placeholder="t('settings.configFileNameHint')"
+        />
+      </div>
+
       <a-divider style="margin: 4px 0" />
 
       <!-- env 文件同步控制 / Env file sync controls -->
@@ -280,10 +290,16 @@ function handleCancel() {
 /* Radio 按钮组样式 / Radio button group styling */
 .settings-field :deep(.ant-radio-group) {
   display: inline-flex;
-  gap: 4px;
+  gap: 8px;
 }
 .settings-field :deep(.ant-radio-button-wrapper) {
   border-radius: 4px;
+  padding: 0 12px;
   transition: all 0.2s;
+}
+/* 隐藏 Ant Design 默认的 ::before 分隔线（与 gap 冲突导致孤立竖线）。
+   Hide Ant Design default ::before divider (conflicts with gap, causing orphan line). */
+.settings-field :deep(.ant-radio-button-wrapper::before) {
+  display: none;
 }
 </style>

@@ -139,7 +139,9 @@
     "condaEnvName": "Conda Environment Name",
     "condaEnvNameHint": "e.g.: myenv",
     "condaAutoResolve": "Auto-resolve: conda run -n <env> python (or set manual path above)",
-    "resolvedExe": "Active Python"
+    "resolvedExe": "Active Python",
+    "configFileName": "Agent Config File Name",
+    "configFileNameHint": "e.g. env.yaml (YAML config in Agent root directory)"
   },
   "status": {
     "ready": "Ready",
@@ -328,6 +330,10 @@
     "form_resume": "Resume",
     "form_configLoadError": "Failed to load config file",
     "form_configNotFound": "Config file not found: {path}",
+    "form_configNotSet": "Config file name is empty. Please configure in Agent Settings.",
+    "form_agentRootNotSet": "Agent root directory not configured",
+    "form_configInvalid": "Invalid config file format, unable to parse",
+    "form_loadConfig": "Load Config ({name})",
     "prompt_skip": "Skip",
     "prompt_inputHint": "Enter relevant info:",
     "prompt_confirm": "Confirm",
@@ -413,6 +419,7 @@
     "param_yamlFiles": "YAML File List",
     "envSaved": "Environment config saved",
     "envSaveFailed": "Failed to save environment config: {reason}",
+    "envLoadFailed": "Failed to load environment config: {reason}",
     "noExecutorRoot": "Please configure the executor root directory in Settings first",
     "running": "Running...",
     "completed": "Execution Complete",

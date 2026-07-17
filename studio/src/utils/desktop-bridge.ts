@@ -1,5 +1,5 @@
 import { open, save } from '@tauri-apps/plugin-dialog'
-import { exists as tauriExists, mkdir as tauriMkdir } from '@tauri-apps/plugin-fs'
+import { exists as tauriExists } from '@tauri-apps/plugin-fs'
 import { invoke } from '@tauri-apps/api/core'
 
 export interface FileEntry {
@@ -127,7 +127,9 @@ export async function fileExists(filePath: string): Promise<boolean> {
 
 export async function mkdir(dirPath: string): Promise<void> {
   if (isDesktop) {
-    await tauriMkdir(dirPath, { recursive: true })
+    // 使用自定义 create_dir 命令（std::fs::create_dir_all），不受 plugin-fs scope 限制。
+    // Use custom create_dir command (std::fs::create_dir_all), no plugin-fs scope restrictions.
+    await invoke<void>('create_dir', { path: dirPath })
   }
 }
 

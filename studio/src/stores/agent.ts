@@ -28,6 +28,7 @@ const DEFAULT_CONFIG: AgentConfig = {
   pythonExePath: '',
   venvPath: '',
   executorRootDir: '',
+  configFileName: 'env.yaml',
   saveToEnvFile: false,
   envType: 'system',
   condaEnvName: '',

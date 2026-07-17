@@ -49,7 +49,18 @@ watch(() => props.visible, async (v) => {
     const suffixes = await executor.readEnvSuffixes()
     selectedSuffix.value = suffixes[0] || ''
     if (selectedSuffix.value) {
-      envOnlyParams.value = await executor.readEnvFile(selectedSuffix.value)
+      const raw = await executor.readEnvFile(selectedSuffix.value)
+      // 过滤 CLI 键，仅保留 env-only 参数 / Filter CLI keys, keep only env-only params
+      const cliKeys = ['scriptType', 'envName', 'maxThread', 'reportName', 'apiMode', 'caseFilePath']
+      const filtered: Record<string, unknown> = {}
+      for (const [key, val] of Object.entries(raw)) {
+        if (key.startsWith('_app_')) {
+          filtered[key] = val
+        } else if (!cliKeys.includes(key) && key !== 'lang' && key !== 'excel_font') {
+          filtered[key] = val
+        }
+      }
+      envOnlyParams.value = filtered
     }
   }
 
@@ -106,6 +117,11 @@ function handleCancel() {
 const title = computed(() =>
   isExecutor.value ? t('editor.toolbar.editRunParams') : t('editor.toolbar.editConvertParams'),
 )
+
+// 用于去除 _app_ 前缀的显示标签 / Display label with _app_ prefix stripped
+function displayLabel(key: string): string {
+  return key.startsWith('_app_') ? key.slice(5) : key
+}
 </script>
 
 <template>
@@ -147,22 +163,47 @@ const title = computed(() =>
             </div>
           </div>
 
-          <!-- Env-only params (read-only view) -->
+          <!-- Env-only params / 仅 env 参数 -->
           <div class="param-section env-section">
             <span class="section-title">{{ t('executor.form_block1Title') }}</span>
             <p class="hint">{{ t('executor.form_block1Desc') }}</p>
-            <div class="param-row" v-for="(val, key) in envOnlyParams" :key="String(key)">
-              <label>{{ key }}</label>
-              <a-input
-                v-if="typeof val === 'string' || typeof val === 'number'"
-                :value="String(val)"
-                size="small"
-                @change="e => {
-                  const target = e.target as HTMLInputElement
-                  envOnlyParams[key] = target.value
-                }"
-              />
-            </div>
+            <template v-for="(val, key) in envOnlyParams" :key="String(key)">
+              <!-- 标量/字符串值：可编辑输入框 / Scalar/string: editable input -->
+              <div v-if="typeof val === 'string' || typeof val === 'number'" class="param-row">
+                <label>{{ displayLabel(key) }}</label>
+                <a-input
+                  :value="String(val)"
+                  size="small"
+                  @change="e => {
+                    const target = e.target as HTMLInputElement
+                    envOnlyParams[key] = target.value
+                  }"
+                />
+              </div>
+              <!-- 嵌套对象：展开子属性 / Nested object: expand sub-properties -->
+              <div v-else-if="typeof val === 'object' && val !== null && !Array.isArray(val)" class="param-group">
+                <span class="group-label">{{ displayLabel(key) }}</span>
+                <div v-for="(subVal, subKey) in val as Record<string, unknown>" :key="subKey" class="param-row indent-row">
+                  <label>{{ subKey }}</label>
+                  <a-input
+                    v-if="typeof subVal === 'string' || typeof subVal === 'number'"
+                    :value="String(subVal)"
+                    size="small"
+                    @change="e => {
+                      const target = e.target as HTMLInputElement
+                      const obj = envOnlyParams[key] as Record<string, unknown>
+                      obj[subKey] = target.value
+                    }"
+                  />
+                  <span v-else class="param-value-readonly">{{ String(subVal) }}</span>
+                </div>
+              </div>
+              <!-- 数组/布尔/其他：只读文本 / Array/boolean/other: readonly text -->
+              <div v-else class="param-row">
+                <label>{{ displayLabel(key) }}</label>
+                <span class="param-value-readonly">{{ Array.isArray(val) ? JSON.stringify(val) : String(val) }}</span>
+              </div>
+            </template>
           </div>
         </template>
 
@@ -206,7 +247,34 @@ const title = computed(() =>
   color: #666;
 }
 .env-section {
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
+}
+/* 嵌套对象组 / Nested object group */
+.param-group {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  background: #fafafa;
+}
+.group-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  display: block;
+  margin-bottom: 4px;
+}
+.indent-row {
+  margin-left: 12px;
+}
+/* 只读参数值 / Readonly param value */
+.param-value-readonly {
+  font-size: 12px;
+  color: #999;
+  padding: 4px 8px;
+  background: #f5f5f5;
+  border-radius: 3px;
+  word-break: break-all;
 }
 </style>

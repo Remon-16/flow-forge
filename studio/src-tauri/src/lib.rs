@@ -42,6 +42,13 @@ fn write_file_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, &data).map_err(|e| e.to_string())
 }
 
+/// 创建目录（递归），替代受 scope 限制的 plugin-fs mkdir。
+/// Create directory recursively, replacing scope-restricted plugin-fs mkdir.
+#[tauri::command]
+fn create_dir(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn read_dir_recursive(dir_path: String) -> Result<Vec<FileEntry>, String> {
     fn walk(dir: &Path) -> Result<Vec<FileEntry>, String> {
@@ -528,6 +535,7 @@ pub fn run() {
             write_file_text,
             read_file_bytes,
             write_file_bytes,
+            create_dir,
             read_dir_recursive,
             list_dir_all,
             rename_file,
