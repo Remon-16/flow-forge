@@ -10,6 +10,8 @@ const { t } = useI18n()
 
 const props = defineProps<{
   configData: Record<string, any>
+  /** 使用内联编辑（非 JsonEditor）的 section key 列表 / Section keys using inline editing (no JsonEditor) */
+  inlineArraySections?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -69,6 +71,59 @@ function isNumeric(v: unknown): v is number {
 function formatReadonly(v: unknown): string {
   if (Array.isArray(v)) return JSON.stringify(v)
   return String(v)
+}
+
+/** 判断某个 section 是否使用内联数组编辑 / Check if section uses inline array editing */
+function isInlineSection(sectionKey: string): boolean {
+  return props.inlineArraySections?.includes(sectionKey) ?? false
+}
+
+/** 通过路径从 configData 获取值 / Get value from configData by dot-separated path */
+function getValueAtPath(path: string): unknown {
+  const parts = path.split('.')
+  let current: any = props.configData
+  for (const part of parts) {
+    if (current && typeof current === 'object') current = current[part]
+    else return undefined
+  }
+  return current
+}
+
+/** 更新数组中的某一项 / Update an item in an array */
+function updateArrayItem(sectionKey: string, fieldPath: string, index: number, newValue: unknown) {
+  const arr = getValueAtPath(`${sectionKey}.${fieldPath}`)
+  if (!Array.isArray(arr)) return
+  const newArr = [...arr]
+  newArr[index] = newValue
+  emitChange(sectionKey, fieldPath, newArr)
+}
+
+/** 更新对象数组中某项的某个字段 / Update a field in an object array item */
+function updateArrayItemField(sectionKey: string, fieldPath: string, index: number, fieldKey: string, value: unknown) {
+  const arr = getValueAtPath(`${sectionKey}.${fieldPath}`)
+  if (!Array.isArray(arr)) return
+  const newArr = [...arr]
+  const item = { ...(newArr[index] as Record<string, unknown>) }
+  item[fieldKey] = value
+  newArr[index] = item
+  emitChange(sectionKey, fieldPath, newArr)
+}
+
+/** 删除数组中的某一项 / Delete an item from an array */
+function deleteArrayItem(sectionKey: string, fieldPath: string, index: number) {
+  const arr = getValueAtPath(`${sectionKey}.${fieldPath}`)
+  if (!Array.isArray(arr)) return
+  const newArr = [...arr]
+  newArr.splice(index, 1)
+  emitChange(sectionKey, fieldPath, newArr)
+}
+
+/** 向数组末尾添加一项 / Add an item to the end of an array */
+function addArrayItem(sectionKey: string, fieldPath: string, defaultItem: unknown) {
+  const arr = getValueAtPath(`${sectionKey}.${fieldPath}`)
+  const base = Array.isArray(arr) ? [...arr] : []
+  base.push(defaultItem)
+  emitChange(sectionKey, fieldPath, base)
 }
 
 /**
@@ -200,6 +255,30 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                     size="small"
                     @change="(v: boolean) => emitChange(sec.key, key + '.' + subKey + '.' + subSubKey, v)"
                   />
+                  <!-- 内联 section 二级嵌套对象展开 / Inline section depth-2 nested object expand -->
+                  <div v-else-if="isInlineSection(sec.key) && isNestedObject(subSubVal)" class="config-group" style="margin-left: 6px;">
+                    <span class="config-group-label">{{ subSubKey }}</span>
+                    <div v-for="(deepVal, deepKey) in subSubVal" :key="String(deepKey)" class="config-field indent-field-2">
+                      <label>{{ deepKey }}</label>
+                      <a-input
+                        v-if="typeof deepVal === 'string' || typeof deepVal === 'number'"
+                        :value="String(deepVal)"
+                        size="small"
+                        @change="e => {
+                          const target = e.target as HTMLInputElement
+                          emitChange(sec.key, key + '.' + subKey + '.' + subSubKey + '.' + deepKey, target.value)
+                        }"
+                      />
+                      <a-switch
+                        v-else-if="typeof deepVal === 'boolean'"
+                        :checked="deepVal"
+                        size="small"
+                        @change="(v: boolean) => emitChange(sec.key, key + '.' + subKey + '.' + subSubKey + '.' + deepKey, v)"
+                      />
+                      <span v-else class="config-readonly">{{ formatReadonly(deepVal) }}</span>
+                    </div>
+                  </div>
+                  <!-- 非内联 section：只读 + JsonEditor / Non-inline: readonly + JsonEditor -->
                   <div v-else style="display: flex; align-items: center; gap: 4px;">
                     <span class="config-readonly" style="flex: 1;">{{ formatReadonly(subSubVal) }}</span>
                     <a-button size="small" type="link" @click="openFieldJsonEditor(sec.key, String(key) + '.' + String(subKey), subSubVal)">
@@ -216,15 +295,104 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                   @change="(v: boolean) => emitChange(sec.key, key + '.' + subKey, v)"
                 />
               </div>
-              <!-- 数组/其他：只读文本 / Array/other: readonly text -->
+              <!-- 内联 section 字符串数组 / Inline section string array -->
+              <div v-else-if="isInlineSection(sec.key) && Array.isArray(subVal) && (subVal.length === 0 || typeof subVal[0] === 'string' || typeof subVal[0] === 'number')" class="config-array indent-field">
+                <label>{{ subKey }}</label>
+                <div v-for="(item, idx) in subVal" :key="idx" class="array-item-row">
+                  <a-input :value="String(item)" size="small" style="flex: 1"
+                    @change="e => updateArrayItem(sec.key, String(key) + '.' + String(subKey), idx, (e.target as HTMLInputElement).value)" />
+                  <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key) + '.' + String(subKey), idx)">✕</a-button>
+                </div>
+                <a-button size="small" type="dashed" @click="addArrayItem(sec.key, String(key) + '.' + String(subKey), '')">
+                  + {{ t('jsonEditor.addItem') }}
+                </a-button>
+              </div>
+              <!-- 内联 section 对象数组 / Inline section object array -->
+              <div v-else-if="isInlineSection(sec.key) && Array.isArray(subVal)" class="config-array indent-field">
+                <label>{{ subKey }}</label>
+                <div v-for="(item, idx) in subVal" :key="idx" class="array-item-card">
+                  <div class="array-item-card-header">
+                    <span>#{{ idx + 1 }}</span>
+                    <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key) + '.' + String(subKey), idx)">✕</a-button>
+                  </div>
+                  <template v-for="(fieldVal, fieldKey) in item" :key="String(fieldKey)">
+                    <div v-if="typeof fieldVal === 'string' || typeof fieldVal === 'number'" class="config-field" style="margin-left: 8px;">
+                      <label>{{ fieldKey }}</label>
+                      <a-input-number
+                        v-if="typeof fieldVal === 'number'"
+                        :value="fieldVal" size="small" style="width: 100%"
+                        @change="(v: any) => updateArrayItemField(sec.key, String(key) + '.' + String(subKey), idx, String(fieldKey), v)" />
+                      <a-input
+                        v-else :value="fieldVal" size="small"
+                        @change="e => updateArrayItemField(sec.key, String(key) + '.' + String(subKey), idx, String(fieldKey), (e.target as HTMLInputElement).value)" />
+                    </div>
+                    <div v-else-if="typeof fieldVal === 'boolean'" class="config-field" style="margin-left: 8px;">
+                      <label>{{ fieldKey }}</label>
+                      <a-switch :checked="fieldVal" size="small"
+                        @change="(v: boolean) => updateArrayItemField(sec.key, String(key) + '.' + String(subKey), idx, String(fieldKey), v)" />
+                    </div>
+                  </template>
+                </div>
+                <a-button size="small" type="dashed" @click="addArrayItem(sec.key, String(key) + '.' + String(subKey), {})">
+                  + {{ t('jsonEditor.addItem') }}
+                </a-button>
+              </div>
+              <!-- 非内联 section：只读文本 + 编辑 / Non-inline: readonly text + edit -->
               <div v-else class="config-field indent-field">
                 <label>{{ subKey }}</label>
-                <span class="config-readonly">{{ formatReadonly(subVal) }}</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="config-readonly" style="flex: 1;">{{ formatReadonly(subVal) }}</span>
+                  <a-button size="small" type="link" @click="openFieldJsonEditor(sec.key, String(key) + '.' + String(subKey), subVal)">
+                    {{ t('jsonEditor.editDetails') }}
+                  </a-button>
+                </div>
               </div>
             </template>
           </div>
 
-          <!-- 数组/其他：只读文本 + 编辑按钮 / Array/other: readonly text + edit button -->
+          <!-- 内联 section 的字符串数组编辑 / Inline section string array editing -->
+          <div v-else-if="isInlineSection(sec.key) && Array.isArray(val) && (val.length === 0 || typeof val[0] === 'string' || typeof val[0] === 'number')" class="config-array">
+            <label>{{ key }}</label>
+            <div v-for="(item, idx) in val" :key="idx" class="array-item-row">
+              <a-input :value="String(item)" size="small" style="flex: 1"
+                @change="e => updateArrayItem(sec.key, String(key), idx, (e.target as HTMLInputElement).value)" />
+              <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key), idx)">✕</a-button>
+            </div>
+            <a-button size="small" type="dashed" @click="addArrayItem(sec.key, String(key), '')">
+              + {{ t('jsonEditor.addItem') }}
+            </a-button>
+          </div>
+          <!-- 内联 section 的对象数组编辑 / Inline section object array editing -->
+          <div v-else-if="isInlineSection(sec.key) && Array.isArray(val)" class="config-array">
+            <label>{{ key }}</label>
+            <div v-for="(item, idx) in val" :key="idx" class="array-item-card">
+              <div class="array-item-card-header">
+                <span>#{{ idx + 1 }}</span>
+                <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key), idx)">✕</a-button>
+              </div>
+              <template v-for="(fieldVal, fieldKey) in item" :key="String(fieldKey)">
+                <div v-if="typeof fieldVal === 'string' || typeof fieldVal === 'number'" class="config-field" style="margin-left: 8px;">
+                  <label>{{ fieldKey }}</label>
+                  <a-input-number
+                    v-if="typeof fieldVal === 'number'"
+                    :value="fieldVal" size="small" style="width: 100%"
+                    @change="(v: any) => updateArrayItemField(sec.key, String(key), idx, String(fieldKey), v)" />
+                  <a-input
+                    v-else :value="fieldVal" size="small"
+                    @change="e => updateArrayItemField(sec.key, String(key), idx, String(fieldKey), (e.target as HTMLInputElement).value)" />
+                </div>
+                <div v-else-if="typeof fieldVal === 'boolean'" class="config-field" style="margin-left: 8px;">
+                  <label>{{ fieldKey }}</label>
+                  <a-switch :checked="fieldVal" size="small"
+                    @change="(v: boolean) => updateArrayItemField(sec.key, String(key), idx, String(fieldKey), v)" />
+                </div>
+              </template>
+            </div>
+            <a-button size="small" type="dashed" @click="addArrayItem(sec.key, String(key), {})">
+              + {{ t('jsonEditor.addItem') }}
+            </a-button>
+          </div>
+          <!-- 非内联 section：只读 + JsonEditor / Non-inline: readonly + JsonEditor -->
           <div v-else class="config-field">
             <label>{{ key }}</label>
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -297,5 +465,31 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
   border-radius: 3px;
   word-break: break-all;
   display: inline-block;
+}
+/* 数组内联编辑 / Inline array editing */
+.config-array {
+  margin-bottom: 10px;
+}
+.array-item-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  margin-left: 12px;
+}
+.array-item-card {
+  margin: 6px 0 6px 12px;
+  padding: 8px;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  background: #fff;
+}
+.array-item-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: #999;
 }
 </style>

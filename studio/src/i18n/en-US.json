@@ -81,6 +81,7 @@
     },
     "details": "Details",
     "editDetails": "Edit Details",
+    "save": "Save",
     "noData": "No data",
     "emptyHint": "No fields yet. Click \"+ Add Field\" below to start, or paste a JSON string above and click \"Parse\".",
     "parseError": "JSON parse failed. Check the format."
@@ -321,7 +322,7 @@
     "form_llmConfig": "LLM Configuration",
     "form_llmSave": "Save to Config File",
     "form_llmSaved": "LLM config saved",
-    "form_extraParamsHint": "JSON format, passed directly to LLM API",
+    "form_extraParamsHint": "YAML format, passed directly to LLM API",
     "form_otherConfig": "Other Configuration",
     "form_submit": "Submit Task",
     "form_save": "Save",

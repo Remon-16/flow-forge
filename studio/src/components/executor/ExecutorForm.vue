@@ -1,25 +1,20 @@
 <script setup lang="ts">
 // ExecutorForm — 执行前配置表单。
 // Pre-execution config form: env suffix selection, Block1 (env-only) + Block2 (CLI params).
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useExecutorStore } from '../../stores/executor'
 import { useAgentStore } from '../../stores/agent'
 import { DEFAULT_CLI_PARAMS } from '../../types/executor'
 import type { ExecutorCliParams } from '../../types/executor'
 import { openFileDialog, openDirectoryDialog } from '../../utils/desktop-bridge'
-import { normalizeJsonValue } from '../../utils/json-helper'
-import JsonEditor from '../json-editor/JsonEditor.vue'
+import yaml from 'js-yaml'
 import { message } from 'ant-design-vue'
+import JsonEditor from '../json-editor/JsonEditor.vue'
 
 const { t } = useI18n()
 const executor = useExecutorStore()
 const agent = useAgentStore()
-
-// 用于去除 _app_ 前缀的显示标签 / Display label with _app_ prefix stripped
-function displayLabel(key: string): string {
-  return key.startsWith('_app_') ? key.slice(5) : key
-}
 
 // 环境后缀列表 / Env suffix list
 const envSuffixes = ref<string[]>([''])
@@ -39,27 +34,91 @@ const yamlFiles = ref('')
 // 加载中 / Loading
 const loading = ref(false)
 
-// 新增参数状态 / Add parameter state
-const addingParam = ref(false)
-const newKeyName = ref('')
-// 新增参数类型选择 / New parameter type selection
-const newKeyType = ref<string>('string')
-const TYPE_OPTIONS = [
-  { value: 'string', label: 'String' },
-  { value: 'number', label: 'Number' },
-  { value: 'boolean', label: 'Boolean' },
-  { value: 'Dict', label: 'Dict { }' },
-  { value: 'List', label: 'List [ ]' },
-]
-// 嵌套组内新增子属性状态 / Add sub-property inside nested group state
-const addingSubKey = ref<Record<string, boolean>>({})
-const newSubKeyName = ref<Record<string, string>>({})
-const newSubKeyType = ref<Record<string, string>>({})
+/** 去除 _app_ 前缀用于显示 / Strip _app_ prefix for display */
+function stripAppPrefix(data: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  for (const [key, val] of Object.entries(data)) {
+    result[key.startsWith('_app_') ? key.slice(5) : key] = val
+  }
+  return result
+}
 
-// JSON 编辑器模态框状态 / JSON editor modal state
-const showEnvJsonEditor = ref(false)
-const editingJsonKey = ref('')
-const editingJsonValue = ref<Record<string, unknown>>({})
+// 用于显示的 env-only 参数（去 _app_ 前缀）/ Env-only params for display (without _app_ prefix)
+const envOnlyParamsForDisplay = computed(() => stripAppPrefix(envOnlyParams.value))
+
+// ---- YAML 原文编辑（始终可编辑，自动弱校验）/ YAML raw text editing (always editable, auto subtle validation) ----
+
+const envYamlText = ref('')
+const envYamlError = ref('')
+const showFullEnvEditor = ref(false)
+
+/** 从数据模型同步 YAML 文本 / Sync YAML text from data model */
+function syncEnvYamlFromData() {
+  envYamlText.value = yaml.dump(envOnlyParamsForDisplay.value, {
+    indent: 2, lineWidth: -1, noRefs: true, sortKeys: false,
+  })
+  envYamlError.value = ''
+}
+
+/** 自动校验 YAML 语法（弱提示）/ Auto-validate YAML syntax (subtle hint) */
+function autoValidateEnvYaml() {
+  if (!envYamlText.value.trim()) {
+    envYamlError.value = ''
+    return
+  }
+  try {
+    yaml.load(envYamlText.value)
+    envYamlError.value = ''
+  } catch (e: any) {
+    envYamlError.value = e?.message || String(e)
+  }
+}
+
+/** 应用 YAML 原文编辑 → 解析并更新数据模型 / Apply YAML raw edit → parse and update data model */
+function applyEnvYamlEdit() {
+  // 空 textarea → 清空所有 env-only 参数 / Empty textarea → clear all env-only params
+  if (!envYamlText.value.trim()) {
+    envOnlyParams.value = {}
+    syncEnvYamlFromData()
+    return
+  }
+  // 有语法错误时不应用（弱提示已显示给用户）/ Don't apply when syntax error (subtle hint already shown)
+  if (envYamlError.value) return
+  try {
+    const parsed = yaml.load(envYamlText.value) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return
+    // 重新添加 _app_ 前缀给嵌套对象（与 store 的 flattenEnvConfig 保持一致，确保向后兼容）
+    // Re-add _app_ prefix for nested objects (consistent with store's flattenEnvConfig for backward compat)
+    const result: Record<string, unknown> = {}
+    for (const [key, val] of Object.entries(parsed)) {
+      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+        result[`_app_${key}`] = val
+      } else {
+        result[key] = val
+      }
+    }
+    envOnlyParams.value = result
+    syncEnvYamlFromData()
+  } catch { /* 语法错误时不做任何事 / do nothing on syntax error */ }
+}
+
+/** JsonEditor 确认回调 — 更新数据模型并刷新 textarea / JsonEditor confirm — update data model and refresh textarea */
+function onEnvEditorConfirm(value: Record<string, unknown>) {
+  const result: Record<string, unknown> = {}
+  for (const [key, val] of Object.entries(value)) {
+    if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+      result[`_app_${key}`] = val
+    } else {
+      result[key] = val
+    }
+  }
+  envOnlyParams.value = result
+  showFullEnvEditor.value = false
+  syncEnvYamlFromData()
+}
+
+// 初始化 YAML 文本 / Initialize YAML text
+syncEnvYamlFromData()
 
 onMounted(async () => {
   loading.value = true
@@ -116,6 +175,7 @@ async function loadEnvData() {
     }
 
     envOnlyParams.value = block1
+    syncEnvYamlFromData()
     cliParams.value = {
       scriptType: (block2.scriptType as string) || DEFAULT_CLI_PARAMS.scriptType,
       maxThread: Number(block2.maxThread) || DEFAULT_CLI_PARAMS.maxThread,
@@ -152,120 +212,14 @@ async function browseYamlDir() {
 
 async function handleSaveEnv() {
   try {
+    // 先应用 textarea 中的 YAML 编辑 / Apply YAML edits from textarea first
+    applyEnvYamlEdit()
     await executor.writeEnvFile(selectedSuffix.value, envOnlyParams.value)
     message.success(t('executor.envSaved'))
   } catch (e: unknown) {
     const err = e as Error
     message.error(t('executor.envSaveFailed', { reason: err?.message || String(e) }))
   }
-}
-
-// ---- Add / Delete env params / 新增/删除 env 参数 ----
-
-/** 新增顶层 env 参数（支持类型选择）/ Add top-level env param (with type selection) */
-function addEnvParam() {
-  const name = newKeyName.value.trim()
-  if (!name) return
-  switch (newKeyType.value) {
-    case 'number':
-      envOnlyParams.value[name] = 0
-      break
-    case 'boolean':
-      envOnlyParams.value[name] = false
-      break
-    case 'Dict':
-      envOnlyParams.value[name] = {}
-      break
-    case 'List':
-      envOnlyParams.value[name] = []
-      break
-    default:
-      envOnlyParams.value[name] = ''
-  }
-  newKeyName.value = ''
-  newKeyType.value = 'string'
-  addingParam.value = false
-}
-
-/** 删除顶层 env 参数 / Delete top-level env param */
-function deleteEnvParam(key: string) {
-  const updated: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(envOnlyParams.value)) {
-    if (k !== key) updated[k] = v
-  }
-  envOnlyParams.value = updated
-}
-
-/** 在嵌套对象内新增子属性（支持类型选择）/ Add sub-property inside nested object (with type selection) */
-function addSubParam(parentKey: string) {
-  const name = (newSubKeyName.value[parentKey] || '').trim()
-  if (!name) return
-  const parent = envOnlyParams.value[parentKey] as Record<string, unknown>
-  if (parent && typeof parent === 'object' && !Array.isArray(parent)) {
-    const type = newSubKeyType.value[parentKey] || 'string'
-    switch (type) {
-      case 'number':
-        parent[name] = 0
-        break
-      case 'boolean':
-        parent[name] = false
-        break
-      case 'Dict':
-        parent[name] = {}
-        break
-      case 'List':
-        parent[name] = []
-        break
-      default:
-        parent[name] = ''
-    }
-  }
-  newSubKeyName.value[parentKey] = ''
-  newSubKeyType.value[parentKey] = 'string'
-  addingSubKey.value[parentKey] = false
-}
-
-/** 删除嵌套对象内的子属性 / Delete sub-property inside nested object */
-function deleteSubParam(parentKey: string, subKey: string) {
-  const parent = envOnlyParams.value[parentKey] as Record<string, unknown>
-  if (parent && typeof parent === 'object') {
-    delete parent[subKey]
-  }
-}
-
-// ---- JSON 编辑器集成 / JSON editor integration ----
-
-/**
- * 打开 JSON 编辑器编辑只读复杂值（数组/深层对象）。
- * Open JSON editor to edit readonly complex values (arrays/deep objects).
- * 数组值包裹为 { items: val } 对象（JsonEditor 期望 Record 类型）。
- * Arrays wrapped as { items: val } (JsonEditor expects Record).
- */
-function openEnvJsonEditor(key: string, val: unknown) {
-  editingJsonKey.value = key
-  if (Array.isArray(val)) {
-    editingJsonValue.value = { items: val }
-  } else {
-    editingJsonValue.value = normalizeJsonValue(val)
-  }
-  showEnvJsonEditor.value = true
-}
-
-/**
- * JSON 编辑器确认回调：还原包裹的数组并更新 env 参数。
- * JSON editor confirm: unwrap arrays and update env params.
- */
-function onEnvJsonConfirm(value: Record<string, unknown>) {
-  if (editingJsonKey.value) {
-    const keys = Object.keys(value)
-    // 还原包裹的数组 / Unwrap the array
-    if (keys.length === 1 && keys[0] === 'items' && Array.isArray(value.items)) {
-      envOnlyParams.value[editingJsonKey.value] = value.items
-    } else {
-      envOnlyParams.value[editingJsonKey.value] = value
-    }
-  }
-  showEnvJsonEditor.value = false
 }
 
 // ---- Submit / 提交 ----
@@ -275,6 +229,9 @@ async function handleSubmit() {
     message.warning(t('executor.noExecutorRoot'))
     return
   }
+
+  // 先应用 textarea 中的 YAML 编辑 / Apply YAML edits from textarea first
+  applyEnvYamlEdit()
 
   // Block1 (env-only) 始终写入 / Always write Block1
   await executor.writeEnvFile(selectedSuffix.value, envOnlyParams.value)
@@ -325,148 +282,35 @@ async function handleSubmit() {
         </div>
         <p class="section-desc">{{ t('executor.form_block1Desc') }}</p>
 
-        <div class="param-list">
-          <template v-for="(val, key) in envOnlyParams" :key="key">
-            <!-- 标量/字符串值：可编辑输入框 + 删除按钮 / Scalar/string: editable input + delete -->
-            <div v-if="typeof val === 'string' || typeof val === 'number'" class="param-row">
-              <div class="param-row-header">
-                <label>{{ displayLabel(key) }}</label>
-                <a-button type="text" size="small" danger @click="deleteEnvParam(String(key))">✕</a-button>
-              </div>
-              <a-input
-                :value="String(val)"
-                @change="e => {
-                  const target = e.target as HTMLInputElement
-                  envOnlyParams[key] = target.value
-                }"
-              />
-            </div>
-            <!-- 嵌套对象：展开子属性（支持二级嵌套）/ Nested object: expand sub-properties (depth-2) -->
-            <div v-else-if="typeof val === 'object' && val !== null && !Array.isArray(val)" class="param-group">
-              <div class="group-header">
-                <span class="group-label">{{ displayLabel(key) }}</span>
-                <a-button type="text" size="small" danger @click="deleteEnvParam(String(key))">✕</a-button>
-              </div>
-              <div v-for="(subVal, subKey) in val as Record<string, unknown>" :key="subKey" class="param-row indent-row">
-                <div class="param-row-header">
-                  <label>{{ subKey }}</label>
-                  <a-button type="text" size="small" danger @click="deleteSubParam(String(key), String(subKey))">✕</a-button>
-                </div>
-                <!-- 标量子值 / Scalar sub-value -->
-                <a-input
-                  v-if="typeof subVal === 'string' || typeof subVal === 'number'"
-                  :value="String(subVal)"
-                  size="small"
-                  @change="e => {
-                    const target = e.target as HTMLInputElement
-                    const obj = envOnlyParams[key] as Record<string, unknown>
-                    obj[subKey] = target.value
-                  }"
-                />
-                <!-- 二级嵌套对象 / Second-level nested object -->
-                <div v-else-if="typeof subVal === 'object' && subVal !== null && !Array.isArray(subVal)" class="param-group indent-group">
-                  <span class="group-label">{{ subKey }}</span>
-                  <div v-for="(sub2Val, sub2Key) in subVal as Record<string, unknown>" :key="sub2Key" class="param-row indent-row">
-                    <label>{{ sub2Key }}</label>
-                    <a-input
-                      v-if="typeof sub2Val === 'string' || typeof sub2Val === 'number'"
-                      :value="String(sub2Val)"
-                      size="small"
-                      @change="e => {
-                        const target = e.target as HTMLInputElement
-                        const obj2 = (envOnlyParams[key] as Record<string, unknown>)[subKey] as Record<string, unknown>
-                        obj2[sub2Key] = target.value
-                      }"
-                    />
-                    <div v-else style="display: flex; align-items: center; gap: 4px;">
-                      <span class="param-value-readonly" style="flex: 1;">{{ typeof sub2Val === 'object' ? JSON.stringify(sub2Val) : String(sub2Val) }}</span>
-                      <a-button size="small" type="link" @click="openEnvJsonEditor(String(key) + '.' + String(subKey) + '.' + String(sub2Key), sub2Val)">
-                        {{ t('jsonEditor.editDetails') }}
-                      </a-button>
-                    </div>
-                  </div>
-                </div>
-                <!-- 布尔子值 / Boolean sub-value -->
-                <a-switch
-                  v-else-if="typeof subVal === 'boolean'"
-                  :checked="subVal"
-                  size="small"
-                  @change="(v: boolean) => {
-                    const obj = envOnlyParams[key] as Record<string, unknown>
-                    obj[subKey] = v
-                  }"
-                />
-                <!-- 数组/其他：只读文本 + 编辑 / Array/other: readonly text + edit -->
-                <div v-else style="display: flex; align-items: center; gap: 4px;">
-                  <span class="param-value-readonly" style="flex: 1;">{{ Array.isArray(subVal) ? JSON.stringify(subVal) : String(subVal) }}</span>
-                  <a-button size="small" type="link" @click="openEnvJsonEditor(String(key) + '.' + String(subKey), subVal)">
-                    {{ t('jsonEditor.editDetails') }}
-                  </a-button>
-                </div>
-              </div>
-              <!-- 在嵌套组内新增子属性 / Add sub-property inside nested group -->
-              <a-button v-if="!addingSubKey[key]" type="dashed" size="small" style="margin-top: 4px" @click="addingSubKey[key] = true; newSubKeyType[key] = 'string'">
-                + {{ t('executor.form_addParam') }}
-              </a-button>
-              <a-input-group v-else compact style="margin-top: 4px">
-                <a-input size="small" v-model:value="newSubKeyName[key]" :placeholder="t('executor.form_newParamHint')" style="width: 40%" />
-                <a-select v-model:value="newSubKeyType[key]" size="small" style="width: 30%">
-                  <a-select-option v-for="opt in TYPE_OPTIONS" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </a-select-option>
-                </a-select>
-                <a-button size="small" type="primary" @click="addSubParam(String(key))">{{ t('dialog.confirm') }}</a-button>
-                <a-button size="small" @click="addingSubKey[key] = false">{{ t('dialog.cancel') }}</a-button>
-              </a-input-group>
-            </div>
-            <!-- 布尔值 / Boolean -->
-            <div v-else-if="typeof val === 'boolean'" class="param-row">
-              <div class="param-row-header">
-                <label>{{ displayLabel(key) }}</label>
-                <a-button type="text" size="small" danger @click="deleteEnvParam(String(key))">✕</a-button>
-              </div>
-              <a-switch
-                :checked="val"
-                size="small"
-                @change="(v: boolean) => { envOnlyParams[key] = v }"
-              />
-            </div>
-            <!-- 数组/其他：只读文本 + 编辑 + 删除 / Array/other: readonly text + edit + delete -->
-            <div v-else class="param-row">
-              <div class="param-row-header">
-                <label>{{ displayLabel(key) }}</label>
-                <div style="display: flex; gap: 4px;">
-                  <a-button size="small" type="link" @click="openEnvJsonEditor(String(key), envOnlyParams[key])">
-                    {{ t('jsonEditor.editDetails') }}
-                  </a-button>
-                  <a-button type="text" size="small" danger @click="deleteEnvParam(String(key))">✕</a-button>
-                </div>
-              </div>
-              <span class="param-value-readonly">{{ Array.isArray(val) ? JSON.stringify(val) : String(val) }}</span>
-            </div>
-          </template>
+        <!-- YAML 原文编辑（始终可编辑，自动弱校验）/ YAML raw text editing (always editable, auto subtle validation) -->
+        <div class="env-yaml-edit-area">
+          <a-textarea
+            v-model:value="envYamlText"
+            :rows="12"
+            style="font-family: monospace; font-size: 13px;"
+            @change="autoValidateEnvYaml"
+          />
+          <div v-if="envYamlError" class="yaml-hint">
+            ⚠ {{ envYamlError }}
+          </div>
+          <div class="env-yaml-actions">
+            <a-button size="small" @click="handleSaveEnv">
+              {{ t('executor.form_saveEnv') }}
+            </a-button>
+            <a-button size="small" @click="showFullEnvEditor = true">
+              {{ t('jsonEditor.editDetails') }}
+            </a-button>
+          </div>
         </div>
 
-        <!-- 新增 env 参数 / Add env param -->
-        <div style="margin-top: 8px; display: flex; gap: 8px;">
-          <a-button v-if="!addingParam" type="dashed" size="small" @click="addingParam = true">
-            + {{ t('executor.form_addParam') }}
-          </a-button>
-          <template v-else>
-            <a-input size="small" v-model:value="newKeyName" :placeholder="t('executor.form_newParamHint')" style="width: 140px" />
-            <a-select v-model:value="newKeyType" size="small" style="width: 100px">
-              <a-select-option v-for="opt in TYPE_OPTIONS" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </a-select-option>
-            </a-select>
-            <a-button size="small" type="primary" @click="addEnvParam">{{ t('dialog.confirm') }}</a-button>
-            <a-button size="small" @click="addingParam = false">{{ t('dialog.cancel') }}</a-button>
-          </template>
-        </div>
-
-        <a-button size="small" @click="handleSaveEnv" style="margin-top: 8px">
-          {{ t('executor.form_saveEnv') }}
-        </a-button>
+        <!-- JsonEditor 弹窗（可视化编辑）/ JsonEditor modal (visual editing) -->
+        <JsonEditor
+          :visible="showFullEnvEditor"
+          :value="envOnlyParamsForDisplay"
+          :title="t('executor.form_block1Title')"
+          @confirm="onEnvEditorConfirm"
+          @cancel="showFullEnvEditor = false"
+        />
       </div>
 
       <!-- Block 2: CLI 参数 / CLI params -->
@@ -522,15 +366,6 @@ async function handleSubmit() {
       </div>
     </a-spin>
 
-    <!-- JsonEditor 模态框（复杂值编辑）/ JsonEditor modal (complex value editing) -->
-    <JsonEditor
-      :visible="showEnvJsonEditor"
-      :value="editingJsonValue"
-      :title="editingJsonKey"
-      @confirm="onEnvJsonConfirm"
-      @cancel="showEnvJsonEditor = false"
-    />
-
     <!-- 提交 / Submit -->
     <div class="form-footer">
       <a-button type="primary" size="large" block @click="handleSubmit">
@@ -562,6 +397,20 @@ async function handleSubmit() {
   font-size: 12px;
   color: #999;
   margin: 4px 0 8px 0;
+}
+/* YAML 原文编辑（始终可编辑）/ YAML raw text editing (always editable) */
+.env-yaml-edit-area {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.env-yaml-actions {
+  display: flex;
+  gap: 8px;
+}
+.yaml-hint {
+  color: #faad14;
+  font-size: 12px;
 }
 .block-header {
   display: flex;

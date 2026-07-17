@@ -174,9 +174,8 @@ export const useExecutorStore = defineStore('executor', () => {
    * 从 YAML env 文件解析参数。
    * Parse parameters from YAML env file.
    *
-   * 使用 js-yaml 解析，结果扁平化为 _app_ 前缀格式与 ExecutorForm 兼容。
-   * Uses js-yaml for parsing; flattens nested app blocks with _app_ prefix
-   * for compatibility with ExecutorForm's loadEnvData().
+   * 使用 js-yaml 解析，返回原始 YAML 结构（不再 flatten 为 _app_ 前缀格式）。
+   * Uses js-yaml for parsing; returns raw YAML structure (no longer flattens with _app_ prefix).
    */
   async function readEnvFile(envSuffix: string): Promise<Record<string, unknown>> {
     const rootDir = await getExecutorRootDir()
@@ -187,7 +186,7 @@ export const useExecutorStore = defineStore('executor', () => {
     try {
       const content = await readFile(envPath)
       const parsed = yaml.load(content)
-      return flattenEnvConfig(parsed)
+      return (parsed as Record<string, unknown>) ?? {}
     } catch (e: unknown) {
       const err = e as Error
       const msg = err?.message || String(e)
@@ -257,22 +256,61 @@ export const useExecutorStore = defineStore('executor', () => {
   }
 
   /**
-   * 将扁平化数据应用到 YAML Document 上，原地修改保留注释。
-   * Apply flattened data onto YAML Document in-place, preserving comments.
+   * 将数据应用到 YAML Document 上，原地修改保留注释。
+   * Apply data onto YAML Document in-place, preserving comments.
    *
-   * _app_ 前缀的键视为嵌套对象，null/undefined 值视为删除。
-   * _app_-prefixed keys are treated as nested objects; null/undefined values trigger deletion.
+   * _app_ 前缀的键视为嵌套对象（向后兼容），非前缀嵌套对象直接作为 YAML 映射处理，
+   * null/undefined 值视为删除。
+   * _app_-prefixed keys are treated as nested objects (backward compat),
+   * non-prefixed nested objects are treated as YAML maps directly,
+   * null/undefined values trigger deletion.
    */
   function applyEnvOverrides(doc: YAML.Document, data: Record<string, unknown>): void {
+    // 第一步：删除文档中存在但 data 中不存在的 key（处理字段删除，保留注释）
+    // Step 1: Remove keys in doc that are NOT in data (handle field deletion, preserves comments)
+    if (doc.contents && YAML.isMap(doc.contents)) {
+      const dataKeys = new Set(Object.keys(data))
+      // 收集需要删除的 key（同时也处理 _app_ 前缀的嵌套对象 key）
+      // Collect keys to delete (also handles _app_-prefixed nested object keys)
+      const keysToDelete: string[] = []
+      for (const item of doc.contents.items) {
+        const docKey = String(item.key.value)
+        if (!dataKeys.has(docKey)) {
+          // 检查是否有对应的 _app_ 前缀 key 在 data 中 / Check if corresponding _app_-prefixed key is in data
+          if (!dataKeys.has(`_app_${docKey}`)) {
+            keysToDelete.push(docKey)
+          }
+        }
+      }
+      for (const key of keysToDelete) {
+        doc.delete(key)
+      }
+    }
+
+    // 第二步：设置/更新 data 中的每个 key（处理新增和修改，保留注释）
+    // Step 2: Set/update each key in data (handle add and modify, preserves comments)
     for (const [key, val] of Object.entries(data)) {
       if (key.startsWith('_app_')) {
-        // _app_<name> 是嵌套对象 / _app_<name> is a nested object
+        // _app_<name> 是嵌套对象（向后兼容）/ _app_<name> is a nested object (backward compat)
         const appName = key.slice(5)
-        const appNode = doc.getIn([appName], true)
         if (val && typeof val === 'object' && !Array.isArray(val)) {
           const obj = val as Record<string, unknown>
+          const appNode = doc.getIn([appName], true)
           if (appNode && YAML.isMap(appNode)) {
-            // 在现有映射节点上原地更新子键 / Update sub-keys in-place on existing map node
+            // 先删除 appNode 中存在但 obj 中不存在的子键（处理嵌套字段删除，保留注释）
+            // Delete sub-keys in appNode that are NOT in obj (handle nested field deletion, preserves comments)
+            const newSubKeys = new Set(Object.keys(obj))
+            const subKeysToDelete: string[] = []
+            for (const subItem of appNode.items) {
+              const subDocKey = String(subItem.key.value)
+              if (!newSubKeys.has(subDocKey)) {
+                subKeysToDelete.push(subDocKey)
+              }
+            }
+            for (const key of subKeysToDelete) {
+              appNode.delete(key)
+            }
+            // 然后在现有映射节点上原地更新/新增子键 / Then update/add sub-keys in-place on existing map node
             for (const [subKey, subVal] of Object.entries(obj)) {
               appNode.set(subKey, subVal)
             }
@@ -281,9 +319,38 @@ export const useExecutorStore = defineStore('executor', () => {
             doc.setIn([appName], obj)
           }
         }
+        // _app_ 键的删除：如果 val 为 null/undefined，删除对应嵌套对象 / Delete _app_ key: remove nested object if null/undefined
+        if (val === undefined || val === null) {
+          doc.delete(appName)
+        }
       } else if (val === undefined || val === null) {
         // null/undefined → 删除键 / delete key
         doc.delete(key)
+      } else if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+        // 非前缀嵌套对象 → 作为 YAML 映射处理 / Non-prefixed nested object → treat as YAML map
+        const obj = val as Record<string, unknown>
+        const existingNode = doc.getIn([key], true)
+        if (existingNode && YAML.isMap(existingNode)) {
+          // 先删除 existingNode 中存在但 obj 中不存在的子键（处理嵌套字段删除，保留注释）
+          // Delete sub-keys in existingNode that are NOT in obj (handle nested field deletion, preserves comments)
+          const newSubKeys = new Set(Object.keys(obj))
+          const subKeysToDelete: string[] = []
+          for (const subItem of existingNode.items) {
+            const subDocKey = String(subItem.key.value)
+            if (!newSubKeys.has(subDocKey)) {
+              subKeysToDelete.push(subDocKey)
+            }
+          }
+          for (const key of subKeysToDelete) {
+            existingNode.delete(key)
+          }
+          // 然后在现有映射节点上原地更新/新增子键 / Then update/add sub-keys in-place on existing map node
+          for (const [subKey, subVal] of Object.entries(obj)) {
+            existingNode.set(subKey, subVal)
+          }
+        } else {
+          doc.set(key, obj)
+        }
       } else {
         // 标量或数组：直接设置 / Scalar or array: set directly
         doc.set(key, val)

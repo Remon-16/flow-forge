@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { useAgentStore } from '../../stores/agent'
@@ -35,23 +35,54 @@ const loadingConfig = ref(false)
 // 其他配置覆盖值 / Other config overrides
 const configOverrides = ref<Record<string, any>>({})
 
-// extra_params 结构化编辑（使用 JsonEditor 模态框）/ extra_params structured editing (uses JsonEditor modal)
+// extra_params（textArea 直接编辑 + JsonEditor 可视化编辑）/ extra_params (textArea direct edit + JsonEditor visual edit)
 const extraParams = ref<Record<string, unknown>>({})
-const extraParamsOriginalJson = ref('')  // JSON string for dirty comparison / 用于脏检查的 JSON 字符串
+
+// ---- YAML 原文编辑（始终可编辑，自动弱校验）/ YAML raw text editing (always editable, auto subtle validation) ----
+
+const extraParamsYamlText = ref('')
+const extraParamsYamlError = ref('')
 const showExtraParamsEditor = ref(false)
 
-// 计算属性：是否有未保存的修改 / Computed: whether there are unsaved changes
-const extraParamsEdited = computed(() =>
-  JSON.stringify(extraParams.value) !== extraParamsOriginalJson.value
-)
+/** 从数据模型同步 YAML 文本 / Sync YAML text from data model */
+function syncExtraParamsYamlFromData() {
+  extraParamsYamlText.value = yaml.dump(extraParams.value, {
+    indent: 2, lineWidth: -1, noRefs: true, sortKeys: false, flowLevel: -1,
+  })
+  extraParamsYamlError.value = ''
+}
 
-// 格式化摘要显示（截断过长的 JSON）/ Format summary for display (truncate long JSON)
-const extraParamsSummary = computed(() => {
-  const keys = Object.keys(extraParams.value)
-  if (keys.length === 0) return '(empty)'
-  const json = JSON.stringify(extraParams.value)
-  return json.length > 80 ? json.slice(0, 80) + '…' : json
-})
+/** 自动校验 YAML 语法（弱提示）/ Auto-validate YAML syntax (subtle hint) */
+function autoValidateExtraParamsYaml() {
+  if (!extraParamsYamlText.value.trim()) {
+    extraParamsYamlError.value = ''
+    return
+  }
+  try {
+    yaml.load(extraParamsYamlText.value)
+    extraParamsYamlError.value = ''
+  } catch (e: any) {
+    extraParamsYamlError.value = e?.message || String(e)
+  }
+}
+
+/** 应用 YAML 原文编辑 → 解析并更新 extraParams / Apply YAML raw edit → parse and update extraParams */
+function applyExtraParamsYamlEdit() {
+  // 空 textarea → 清空 extraParams / Empty textarea → clear extraParams
+  if (!extraParamsYamlText.value.trim()) {
+    extraParams.value = {}
+    syncExtraParamsYamlFromData()
+    return
+  }
+  // 有语法错误时不应用（弱提示已显示给用户）/ Don't apply when syntax error (subtle hint already shown)
+  if (extraParamsYamlError.value) return
+  try {
+    const parsed = yaml.load(extraParamsYamlText.value) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return
+    extraParams.value = parsed
+    syncExtraParamsYamlFromData()
+  } catch { /* 语法错误时不做任何事 / do nothing on syntax error */ }
+}
 
 // 浏览目录 / Browse directory
 async function browseDir(target: 'output') {
@@ -111,11 +142,10 @@ async function loadYamlConfig() {
       // 加载 extra_params 为对象供 JsonEditor 编辑 / Load extra_params as object for JsonEditor
       if (parsed.llm.extra_params && typeof parsed.llm.extra_params === 'object') {
         extraParams.value = parsed.llm.extra_params as Record<string, unknown>
-        extraParamsOriginalJson.value = JSON.stringify(extraParams.value)
       } else {
         extraParams.value = {}
-        extraParamsOriginalJson.value = '{}'
       }
+      syncExtraParamsYamlFromData()
     }
 
     // 完整配置数据给 ConfigPanel / Full config for ConfigPanel
@@ -148,6 +178,8 @@ async function loadYamlConfig() {
 async function saveLlmConfig() {
   if (!agent.config.agentRootDir) return
   try {
+    // 先应用 textarea 中的 YAML 编辑 / Apply YAML edits from textarea first
+    applyExtraParamsYamlEdit()
     const { writeFile } = await import('../../utils/desktop-bridge')
     const configPath = `${agent.config.agentRootDir}/env.yaml`
     const content = await readFile(configPath)
@@ -166,11 +198,9 @@ async function saveLlmConfig() {
       llmNode.set(key, val)
     }
 
-    // 更新 extra_params（如果有编辑，直接使用对象，无需 JSON.parse）/ Update extra_params if edited (use object directly, no JSON.parse needed)
-    if (extraParamsEdited.value) {
-      llmNode.set('extra_params', extraParams.value)
-      extraParamsOriginalJson.value = JSON.stringify(extraParams.value)
-    }
+    // 更新 extra_params（applyExtraParamsYamlEdit 已确保值是最新的）
+    // Update extra_params (applyExtraParamsYamlEdit ensures value is up-to-date)
+    llmNode.set('extra_params', extraParams.value)
 
     await writeFile(configPath, doc.toString())
     message.success(t('agent.form_llmSaved'))
@@ -179,9 +209,24 @@ async function saveLlmConfig() {
   }
 }
 
+/** 深层设置对象属性（点分隔路径）/ Deep-set object property by dot-separated path */
+function deepSet(obj: Record<string, any>, path: string, value: any): void {
+  const parts = path.split('.')
+  let current = obj
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (!(parts[i] in current) || typeof current[parts[i]] !== 'object') {
+      current[parts[i]] = {}
+    }
+    current = current[parts[i]]
+  }
+  current[parts[parts.length - 1]] = value
+}
+
 // 处理配置覆盖 / Handle config override
 function handleConfigChange(path: string, value: any) {
   configOverrides.value[path] = value
+  // 同步更新 fullConfig 以便 ConfigPanel 重渲染 / Sync fullConfig for ConfigPanel re-render
+  deepSet(fullConfig.value, path, value)
 }
 
 // 提交 / Submit
@@ -320,39 +365,53 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
             <a-input v-model:value="llmConfig[key]" size="small" />
           </template>
         </div>
-        <!-- extra_params 编辑（JsonEditor 模态框）/ extra_params editing (JsonEditor modal) -->
+        <!-- extra_params YAML 原文编辑（始终可编辑，自动弱校验）/ extra_params YAML raw editing (always editable, auto subtle validation) -->
         <div class="form-row">
           <label>extra_params
             <span style="color: #999; font-weight: 400; font-size: 11px;">
               ({{ t('agent.form_extraParamsHint') }})
             </span>
           </label>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="extra-params-summary">{{ extraParamsSummary }}</span>
-            <a-button size="small" @click="showExtraParamsEditor = true">
-              {{ t('jsonEditor.editDetails') }}
-            </a-button>
+          <div class="extra-params-yaml-area">
+            <a-textarea
+              v-model:value="extraParamsYamlText"
+              :rows="10"
+              style="font-family: monospace; font-size: 13px;"
+              @change="autoValidateExtraParamsYaml"
+            />
+            <div v-if="extraParamsYamlError" class="yaml-hint">
+              ⚠ {{ extraParamsYamlError }}
+            </div>
+            <div class="yaml-edit-actions">
+              <a-button size="small" type="primary" @click="saveLlmConfig">
+                {{ t('agent.form_llmSave') }}
+              </a-button>
+              <a-button size="small" @click="showExtraParamsEditor = true">
+                {{ t('jsonEditor.editDetails') }}
+              </a-button>
+            </div>
           </div>
         </div>
-        <a-button size="small" type="primary" @click="saveLlmConfig" style="margin-top: 8px;">
-          {{ t('agent.form_llmSave') }}
-        </a-button>
-      </div>
 
-      <!-- JsonEditor 模态框（extra_params 编辑）/ JsonEditor modal (extra_params editing) -->
-      <JsonEditor
-        :visible="showExtraParamsEditor"
-        :value="extraParams"
-        :title="'extra_params'"
-        @confirm="(v: Record<string, unknown>) => { extraParams = v; showExtraParamsEditor = false }"
-        @cancel="showExtraParamsEditor = false"
-      />
+        <!-- JsonEditor 弹窗（可视化编辑）/ JsonEditor modal (visual editing) -->
+        <JsonEditor
+          :visible="showExtraParamsEditor"
+          :value="extraParams"
+          :title="'extra_params'"
+          @confirm="(v: Record<string, unknown>) => { extraParams = v; showExtraParamsEditor = false; syncExtraParamsYamlFromData(); }"
+          @cancel="showExtraParamsEditor = false"
+        />
+      </div>
     </div>
 
     <!-- 其他配置 / Other config -->
     <div class="form-section">
       <h4>{{ t('agent.form_otherConfig') }}</h4>
-      <ConfigPanel :config-data="fullConfig" @change="handleConfigChange" />
+      <ConfigPanel
+        :config-data="fullConfig"
+        :inline-array-sections="['validation', 'plugins', 'skills']"
+        @change="handleConfigChange"
+      />
     </div>
 
     <!-- 提交 / Submit -->
@@ -412,15 +471,18 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
   position: sticky;
   bottom: 0;
 }
-/* extra_params 摘要显示样式 / extra_params summary display style */
-.extra-params-summary {
+/* YAML 原文编辑（始终可编辑）/ YAML raw text editing (always editable) */
+.extra-params-yaml-area {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.yaml-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+.yaml-hint {
+  color: #faad14;
   font-size: 12px;
-  color: #666;
-  padding: 4px 8px;
-  background: #f5f5f5;
-  border-radius: 3px;
-  word-break: break-all;
-  font-family: monospace;
-  flex: 1;
 }
 </style>

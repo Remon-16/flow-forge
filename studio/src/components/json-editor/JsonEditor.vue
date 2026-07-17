@@ -134,53 +134,53 @@ function updateNodeValue(idx: number, value: unknown) {
   >
     <!-- Paste area -->
     <div style="margin-bottom: 12px;">
-      <a-textarea
-        v-model:value="pasteText"
-        :placeholder="t('jsonEditor.pasteHint')"
-        :rows="3"
-        style="font-family: monospace; font-size: 12px;"
-      />
-      <div style="margin-top: 4px; display: flex; gap: 8px; align-items: center;">
-        <a-button size="small" @click="handleParse">
-          {{ t('jsonEditor.parse') }}
+        <a-textarea
+          v-model:value="pasteText"
+          :placeholder="t('jsonEditor.pasteHint')"
+          :rows="3"
+          style="font-family: monospace; font-size: 12px;"
+        />
+        <div style="margin-top: 4px; display: flex; gap: 8px; align-items: center;">
+          <a-button size="small" @click="handleParse">
+            {{ t('jsonEditor.parse') }}
+          </a-button>
+          <span v-if="parseError" style="color: #ff4d4f; font-size: 12px;">
+            {{ parseError }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Tree editor -->
+      <div class="json-editor-tree">
+        <div v-if="nodes.length === 0" style="color: #999; text-align: center; padding: 20px;">
+          <template v-if="pasteText">
+            {{ t('jsonEditor.parseError') }}
+          </template>
+          <p v-else style="margin-bottom: 8px;">{{ t('jsonEditor.emptyHint') }}</p>
+        </div>
+
+        <JsonNodeComponent
+          v-for="(node, idx) in nodes"
+          :key="idx"
+          :node="node"
+          :index="idx"
+          :depth="0"
+          :is-list-item="false"
+          @update:key="(k: string) => updateNodeKey(idx, k)"
+          @update:type="(t: string) => updateNodeType(idx, t)"
+          @update:value="(v: unknown) => updateNodeValue(idx, v)"
+          @remove="() => removeNode(idx)"
+        />
+
+        <a-button
+          size="small"
+          type="dashed"
+          block
+          style="margin-top: 8px;"
+          @click="addField"
+        >
+          + {{ t('jsonEditor.addField') }}
         </a-button>
-        <span v-if="parseError" style="color: #ff4d4f; font-size: 12px;">
-          {{ parseError }}
-        </span>
       </div>
-    </div>
-
-    <!-- Tree editor -->
-    <div class="json-editor-tree">
-      <div v-if="nodes.length === 0" style="color: #999; text-align: center; padding: 20px;">
-        <template v-if="pasteText">
-          {{ t('jsonEditor.parseError') }}
-        </template>
-        <p v-else style="margin-bottom: 8px;">{{ t('jsonEditor.emptyHint') }}</p>
-      </div>
-
-      <JsonNodeComponent
-        v-for="(node, idx) in nodes"
-        :key="idx"
-        :node="node"
-        :index="idx"
-        :depth="0"
-        :is-list-item="false"
-        @update:key="(k: string) => updateNodeKey(idx, k)"
-        @update:type="(t: string) => updateNodeType(idx, t)"
-        @update:value="(v: unknown) => updateNodeValue(idx, v)"
-        @remove="() => removeNode(idx)"
-      />
-
-      <a-button
-        size="small"
-        type="dashed"
-        block
-        style="margin-top: 8px;"
-        @click="addField"
-      >
-        + {{ t('jsonEditor.addField') }}
-      </a-button>
-    </div>
   </a-modal>
 </template>

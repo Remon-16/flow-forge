@@ -81,6 +81,7 @@
     },
     "details": "详情",
     "editDetails": "编辑详情",
+    "save": "保存",
     "noData": "暂无数据",
     "emptyHint": "暂无字段，请点击下方「添加字段」按钮开始填写，或在上方粘贴 JSON 字符串后点击「解析」",
     "parseError": "JSON 解析失败，请检查格式"
@@ -321,7 +322,7 @@
     "form_llmConfig": "LLM 配置",
     "form_llmSave": "保存到配置文件",
     "form_llmSaved": "LLM 配置已保存",
-    "form_extraParamsHint": "JSON 格式，直接传递给 LLM API",
+    "form_extraParamsHint": "YAML 格式，直接传递给 LLM API",
     "form_otherConfig": "其他配置",
     "form_submit": "提交任务",
     "form_save": "保存",
