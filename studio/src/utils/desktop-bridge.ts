@@ -106,6 +106,25 @@ export async function exists(filePath: string): Promise<boolean> {
   return false
 }
 
+/**
+ * 使用自定义 Tauri 命令检查文件是否存在（不受 plugin-fs scope 限制）。
+ * Check file existence using custom Tauri command (not limited by plugin-fs scope).
+ *
+ * 与 exists 不同，此函数通过 read_file_text 自定义命令实现，
+ * 该命令使用 std::fs::read_to_string，无 FS scope 限制。
+ * Unlike exists, this uses the custom read_file_text command which
+ * delegates to std::fs::read_to_string with no FS scope restrictions.
+ */
+export async function fileExists(filePath: string): Promise<boolean> {
+  if (!isDesktop) return false
+  try {
+    await invoke<string>('read_file_text', { path: filePath })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function mkdir(dirPath: string): Promise<void> {
   if (isDesktop) {
     await tauriMkdir(dirPath, { recursive: true })

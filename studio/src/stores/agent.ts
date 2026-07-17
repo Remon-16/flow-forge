@@ -69,8 +69,17 @@ export const useAgentStore = defineStore('agent', () => {
     configLoaded.value = true
   }
 
+  /**
+   * 保存配置并标记需要重新加载。
+   * Save config and mark for reload.
+   * 重置 configLoaded 确保下次读取时从磁盘重新加载最新数据。
+   * Reset configLoaded to ensure fresh data is read from disk next time.
+   */
   async function saveConfig(): Promise<void> {
     await saveSettingsFile(CONFIG_FILE, config.value)
+    // 标记需要重新加载，防止 getExecutorRootDir 等函数使用过期内存数据
+    // Mark for reload to prevent stale in-memory data in getExecutorRootDir etc.
+    configLoaded.value = false
   }
 
   // ---- Task registry actions / 任务注册表操作 ----

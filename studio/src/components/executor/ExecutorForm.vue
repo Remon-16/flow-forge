@@ -50,6 +50,23 @@ watch(selectedSuffix, async () => {
   await loadEnvData()
 })
 
+// 监听 agent config 中 executorRootDir 的变化，路径变更后重新扫描 env 文件
+// Watch executorRootDir changes in agent config; re-scan env files when path changes
+watch(() => agent.config.executorRootDir, async (newVal, oldVal) => {
+  if (newVal && newVal !== oldVal) {
+    loading.value = true
+    try {
+      envSuffixes.value = await executor.readEnvSuffixes()
+      if (envSuffixes.value.length > 0) {
+        selectedSuffix.value = envSuffixes.value[0]
+        await loadEnvData()
+      }
+    } finally {
+      loading.value = false
+    }
+  }
+})
+
 async function loadEnvData() {
   const data = await executor.readEnvFile(selectedSuffix.value)
   // 分离 Block1 (env-only) 和 Block2 (CLI available) 参数
@@ -103,8 +120,9 @@ async function handleSaveEnv() {
   try {
     await executor.writeEnvFile(selectedSuffix.value, envOnlyParams.value)
     message.success(t('executor.envSaved'))
-  } catch {
-    message.error(t('executor.envSaveFailed'))
+  } catch (e: unknown) {
+    const err = e as Error
+    message.error(t('executor.envSaveFailed', { reason: err?.message || String(e) }))
   }
 }
 

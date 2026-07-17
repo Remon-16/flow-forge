@@ -164,6 +164,10 @@ export const useConverterStore = defineStore('converter', () => {
     try {
       const { useAgentStore } = await import('./agent')
       const agentStore = useAgentStore()
+      // 确保 agent config 已从磁盘加载 / Ensure agent config is loaded from disk
+      if (!agentStore.configLoaded) {
+        await agentStore.loadConfig()
+      }
       const pythonExe = resolvePythonExe(agentStore.config)
       await spawnConverter(
         sessionId,

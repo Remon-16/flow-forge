@@ -1,7 +1,7 @@
 // Settings Store — File-based settings persistence for packaged EXE.
 // 设置存储 — 用于 EXE 打包后的文件持久化。
 
-import { isDesktop, readFile, writeFile, exists, mkdir } from './desktop-bridge'
+import { isDesktop, readFile, writeFile, fileExists, mkdir } from './desktop-bridge'
 
 const APP_NAME = 'flow-forge-studio'
 
@@ -55,7 +55,9 @@ export async function loadSettingsFile<T>(
   const dir = await getAppDataDir()
   const path = `${dir}/${filename}`
 
-  if (!(await exists(path))) return defaults
+  // 使用 fileExists 而非 exists，避免 @tauri-apps/plugin-fs scope 限制
+  // Use fileExists over exists to avoid @tauri-apps/plugin-fs scope restrictions
+  if (!(await fileExists(path))) return defaults
 
   try {
     const raw = await readFile(path)
@@ -83,7 +85,7 @@ export async function saveSettingsFile<T>(
   const path = `${dir}/${filename}`
 
   // 确保目录存在 / Ensure directory exists
-  if (!(await exists(dir))) {
+  if (!(await fileExists(dir))) {
     await mkdir(dir)
   }
 

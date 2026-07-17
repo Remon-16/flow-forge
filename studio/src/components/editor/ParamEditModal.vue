@@ -56,13 +56,25 @@ watch(() => props.visible, async (v) => {
   loaded.value = true
 })
 
-function handleSave() {
+/**
+ * 保存参数到 store 并写入 env 文件。
+ * Save params to store and write to env file.
+ * 异步等待写入完成后再关闭模态框，失败时弹错误提示。
+ * Awaits write completion before closing; shows error on failure.
+ */
+async function handleSave() {
   // 保存 CLI 参数到 store / Save CLI params to store
   executor.setEditorCliParams(props.filePath || '__default__', { ...cliParams.value })
 
   // Executor mode: 写 env-only 参数到 env 文件 / Write env-only params to env
   if (isExecutor.value && selectedSuffix.value) {
-    executor.writeEnvFile(selectedSuffix.value, envOnlyParams.value)
+    try {
+      await executor.writeEnvFile(selectedSuffix.value, envOnlyParams.value)
+    } catch (e: unknown) {
+      const err = e as Error
+      message.error(t('executor.envSaveFailed', { reason: err?.message || String(e) }))
+      return
+    }
   }
 
   // 如果同步开关打开，写 CLI 参数到 env / If sync toggle on, write CLI params to env
@@ -74,7 +86,13 @@ function handleSave() {
       reportName: cliParams.value.reportName,
       apiMode: cliParams.value.apiMode,
     }
-    executor.writeEnvFile(selectedSuffix.value, { ...envOnlyParams.value, ...cliForEnv })
+    try {
+      await executor.writeEnvFile(selectedSuffix.value, { ...envOnlyParams.value, ...cliForEnv })
+    } catch (e: unknown) {
+      const err = e as Error
+      message.error(t('executor.envSaveFailed', { reason: err?.message || String(e) }))
+      return
+    }
   }
 
   message.success(t('editor.paramEdit.saved'))

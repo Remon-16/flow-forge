@@ -9,7 +9,8 @@ import type { LogEntry } from '../types/agent'
 import { spawnExecutor, killExecutor, listenToExecutorEvents } from '../utils/executor-bridge'
 import { resolvePythonExe } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
-import { readFile, writeFile, exists } from '../utils/desktop-bridge'
+import { readFile, writeFile, exists, listDirectoryAll } from '../utils/desktop-bridge'
+import yaml from 'js-yaml'
 
 const SESSIONS_FILE = 'executor_sessions.json'
 const SETTINGS_FILE = 'executor_config.json'
@@ -51,6 +52,31 @@ export const useExecutorStore = defineStore('executor', () => {
 
   async function saveSettings(): Promise<void> {
     await saveSettingsFile(SETTINGS_FILE, settings.value)
+  }
+
+  /**
+   * 获取执行器根目录（从 AgentConfig 共享配置读取）。
+   * Get executor root directory from shared AgentConfig.
+   *
+   * AgentSettings.vue 将 executorRootDir 写入 agent.config，
+   * executor 自身的 settings.executorRootDir 无 UI 写入入口。
+   * 如果 agent config 尚未从磁盘加载，则先懒加载。
+   * AgentSettings.vue writes executorRootDir to agent.config;
+   * the executor's own settings.executorRootDir is never written by any UI.
+   * Lazily loads agent config from disk if not already loaded.
+   */
+  async function getExecutorRootDir(): Promise<string> {
+    try {
+      const { useAgentStore } = await import('./agent')
+      const agentStore = useAgentStore()
+      if (!agentStore.configLoaded) {
+        await agentStore.loadConfig()
+      }
+      return agentStore.config.executorRootDir
+    } catch (e) {
+      console.error('[executor] getExecutorRootDir failed:', e)
+      return ''
+    }
   }
 
   // ---- Sessions / 会话管理 ----
@@ -120,110 +146,134 @@ export const useExecutorStore = defineStore('executor', () => {
 
   // ---- 从 env 文件读取 / Read from env file ----
 
+  /**
+   * 扫描执行器根目录下的 env-*.yml 文件，返回后缀列表。
+   * Scan executor root for env-*.yml files, return suffix list.
+   * 默认包含空后缀（env.yml），额外后缀通过目录扫描获得。
+   * Default includes empty suffix (env.yml); additional suffixes from directory scan.
+   */
   async function readEnvSuffixes(): Promise<string[]> {
-    // 扫描执行器根目录下的 env-*.yml 文件 / Scan env-*.yml files in executor root
     const suffixes: string[] = ['']
     try {
-      const rootDir = settings.value.executorRootDir
+      const rootDir = await getExecutorRootDir()
       if (!rootDir) return suffixes
-      // 简单尝试读取常见后缀 / Try reading common suffixes
-      const commonSuffixes = ['local', 'dev', 'prod', 'test', 'staging']
-      for (const suffix of commonSuffixes) {
-        const envPath = `${rootDir}/env-${suffix}.yml`.replace(/\\/g, '/')
-        try {
-          const envExists = await exists(envPath)
-          if (envExists) suffixes.push(suffix)
-        } catch { /* skip */ }
+      const entries = await listDirectoryAll(rootDir)
+      for (const entry of entries) {
+        if (entry.isDirectory) continue
+        const match = entry.name.match(/^env-(.+)\.yml$/)
+        if (match) suffixes.push(match[1])
       }
-    } catch { /* browser mode */ }
+    } catch (e) {
+      console.error('[executor] readEnvSuffixes failed:', e)
+    }
     return suffixes
   }
 
+  /**
+   * 从 YAML env 文件解析参数。
+   * Parse parameters from YAML env file.
+   *
+   * 使用 js-yaml 解析，结果扁平化为 _app_ 前缀格式与 ExecutorForm 兼容。
+   * Uses js-yaml for parsing; flattens nested app blocks with _app_ prefix
+   * for compatibility with ExecutorForm's loadEnvData().
+   */
   async function readEnvFile(envSuffix: string): Promise<Record<string, unknown>> {
     try {
-      const rootDir = settings.value.executorRootDir
+      const rootDir = await getExecutorRootDir()
       if (!rootDir) return {}
       const envPath = envSuffix
         ? `${rootDir}/env-${envSuffix}.yml`.replace(/\\/g, '/')
         : `${rootDir}/env.yml`.replace(/\\/g, '/')
       const content = await readFile(envPath)
-      // 简单 YAML 解析（仅提取顶层标量 + apps 的 baseURL 等）
-      // Simple YAML parsing — extract top-level scalars and app configs
-      const result: Record<string, unknown> = {}
-      let currentApp: string | null = null
-      for (const line of content.split('\n')) {
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('#')) continue
-        // 检测 App 块 / Detect app block
-        const appMatch = trimmed.match(/^(\w+):\s*$/)
-        if (appMatch && !['processor_configs'].includes(appMatch[1]) && !line.startsWith(' ')) {
-          currentApp = appMatch[1]
-          result[`_app_${currentApp}`] = {}
-          continue
-        }
-        // 检测简单键值对 / Detect key-value pairs
-        const kvMatch = trimmed.match(/^(\w+):\s*(.+)$/)
-        if (kvMatch) {
-          const key = kvMatch[1]
-          const val = kvMatch[2].trim().replace(/^['"]|['"]$/g, '')
-          if (currentApp) {
-            const appObj = result[`_app_${currentApp}`] as Record<string, unknown>
-            appObj[key] = val
-          } else {
-            result[key] = val
-          }
-        }
-      }
-      return result
-    } catch {
+      const parsed = yaml.load(content)
+      return flattenEnvConfig(parsed)
+    } catch (e) {
+      console.error('[executor] readEnvFile failed:', e)
       return {}
     }
   }
 
-  async function writeEnvFile(envSuffix: string, data: Record<string, unknown>): Promise<void> {
-    // 写入 env-only 参数到 env 文件 / Write env-only params to env file
-    try {
-      const rootDir = settings.value.executorRootDir
-      if (!rootDir) return
-      const envPath = envSuffix
-        ? `${rootDir}/env-${envSuffix}.yml`.replace(/\\/g, '/')
-        : `${rootDir}/env.yml`.replace(/\\/g, '/')
-      // 读取原始文件内容，替换对应行 / Read original content, replace matching lines
-      const original = await readFile(envPath)
-      const lines = original.split('\n')
-      const result: string[] = []
-      let currentApp: string | null = null
-      for (const line of lines) {
-        const trimmed = line.trim()
-        const appMatch = trimmed.match(/^(\w+):\s*$/)
-        if (appMatch && !line.startsWith(' ') && data[`_app_${appMatch[1]}`]) {
-          currentApp = appMatch[1]
-          result.push(line)
-          continue
-        }
-        if (currentApp && trimmed === '') {
-          currentApp = null
-        }
-        const kvMatch = trimmed.match(/^(\w+):\s*(.+)$/)
-        if (kvMatch) {
-          const key = kvMatch[1]
-          if (currentApp) {
-            const appData = data[`_app_${currentApp}`] as Record<string, unknown> | undefined
-            if (appData && key in appData) {
-              result.push(`  ${key}: ${appData[key]}`)
-              continue
-            }
-          } else if (key in data) {
-            result.push(`${key}: ${data[key]}`)
-            continue
-          }
-        }
-        result.push(line)
+  /**
+   * 将 js-yaml 解析结果扁平化：嵌套对象用 _app_ 前缀标记。
+   * Flatten js-yaml parse result: nested objects prefixed with _app_.
+   */
+  function flattenEnvConfig(parsed: unknown): Record<string, unknown> {
+    const result: Record<string, unknown> = {}
+    if (parsed === null || parsed === undefined) return result
+    if (typeof parsed !== 'object') return result
+    if (Array.isArray(parsed)) return result
+
+    const obj = parsed as Record<string, unknown>
+    for (const [key, val] of Object.entries(obj)) {
+      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+        // 嵌套对象 → _app_ 前缀 / Nested object → _app_ prefix
+        result[`_app_${key}`] = val
+      } else {
+        // 顶层标量或数组 → 保持原样 / Top-level scalar or array → as-is
+        result[key] = val
       }
-      await writeFile(envPath, result.join('\n'))
-    } catch {
-      // 静默失败 / Silently fail
     }
+    return result
+  }
+
+  /**
+   * 将 env-only 参数写入 YAML env 文件。
+   * Write env-only parameters to YAML env file.
+   *
+   * 读取现有 YAML → 扁平化 → 合并新数据 → 还原嵌套 → js-yaml 写入。
+   * 支持新增键（不只是替换已有行），文件不存在时自动创建。
+   * Read existing YAML → flatten → merge incoming → unflatten → write via js-yaml.
+   * Supports adding new keys (not just replacing existing lines);
+   * auto-creates file if missing. Errors propagate to callers (no silent swallow).
+   */
+  async function writeEnvFile(envSuffix: string, data: Record<string, unknown>): Promise<void> {
+    const rootDir = await getExecutorRootDir()
+    if (!rootDir) throw new Error('Executor root directory not set')
+
+    const envPath = envSuffix
+      ? `${rootDir}/env-${envSuffix}.yml`.replace(/\\/g, '/')
+      : `${rootDir}/env.yml`.replace(/\\/g, '/')
+
+    // 读取现有 YAML（不存在则用空对象）/ Read existing YAML (empty if missing)
+    let existing: Record<string, unknown> = {}
+    try {
+      const content = await readFile(envPath)
+      const parsed = yaml.load(content)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        existing = parsed as Record<string, unknown>
+      }
+    } catch {
+      // 文件不存在或无法解析，从头创建 / File missing or unparseable, start fresh
+    }
+
+    // 扁平化 → 合并 → 还原嵌套 → 写入 / Flatten → merge → unflatten → write
+    const flatExisting = flattenEnvConfig(existing)
+    const merged = { ...flatExisting, ...data }
+    const nested = unflattenEnvConfig(merged)
+    const yamlStr = yaml.dump(nested, { lineWidth: -1, noRefs: true })
+    await writeFile(envPath, yamlStr)
+  }
+
+  /**
+   * 将扁平化数据还原为嵌套 YAML 结构。
+   * Restore flattened _app_ prefixed data to nested YAML-compatible structure.
+   */
+  function unflattenEnvConfig(data: Record<string, unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {}
+    const apps: Record<string, unknown> = {}
+
+    for (const [key, val] of Object.entries(data)) {
+      if (key.startsWith('_app_')) {
+        const appName = key.slice(5) // remove _app_ prefix / 去掉 _app_ 前缀
+        apps[appName] = val
+      } else {
+        result[key] = val
+      }
+    }
+
+    // 将 app 块合并回顶层 / Merge app blocks back to top level
+    Object.assign(result, apps)
+    return result
   }
 
   // ---- Subprocess lifecycle / 子进程生命周期 ----
@@ -278,7 +328,7 @@ export const useExecutorStore = defineStore('executor', () => {
       const pythonExe = resolvePythonExe(agentStore.config)
       await spawnExecutor(
         sessionId,
-        settings.value.executorRootDir,
+        agentStore.config.executorRootDir,
         pythonExe,
         args,
       )

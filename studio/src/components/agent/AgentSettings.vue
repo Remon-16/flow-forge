@@ -93,10 +93,21 @@ async function browseVenvDir() {
 
 // ---- 保存/读取 / Save / Load ----
 
+/**
+ * 保存设置到磁盘。
+ * Save settings to disk.
+ * 失败时弹错误提示，避免静默失败。
+ * Shows error on failure instead of silently failing.
+ */
 async function handleSave() {
-  agent.config = { ...local.value }
-  await agent.saveConfig()
-  emit('update:visible', false)
+  try {
+    agent.config = { ...local.value }
+    await agent.saveConfig()
+    emit('update:visible', false)
+  } catch (e: unknown) {
+    const err = e as Error
+    message.error(t('agent.settings_savedFailed', { reason: err?.message || String(e) }))
+  }
 }
 
 function handleCancel() {
@@ -118,10 +129,10 @@ function handleCancel() {
       <!-- Python 环境类型 / Python environment type -->
       <div class="settings-field">
         <label>{{ t('settings.envType') }}</label>
-        <a-radio-group v-model:value="local.envType">
-          <a-radio value="system">{{ t('settings.envTypeSystem') }}</a-radio>
-          <a-radio value="venv">{{ t('settings.envTypeVenv') }}</a-radio>
-          <a-radio value="conda">{{ t('settings.envTypeConda') }}</a-radio>
+        <a-radio-group v-model:value="local.envType" button-style="solid" size="small">
+          <a-radio-button value="system">{{ t('settings.envTypeSystem') }}</a-radio-button>
+          <a-radio-button value="venv">{{ t('settings.envTypeVenv') }}</a-radio-button>
+          <a-radio-button value="conda">{{ t('settings.envTypeConda') }}</a-radio-button>
         </a-radio-group>
       </div>
 
@@ -154,10 +165,10 @@ function handleCancel() {
         <p class="sync-desc">{{ t('settings.condaAutoResolve') }}</p>
       </div>
 
-      <!-- 解析后路径预览 / Resolved path preview -->
-      <div class="settings-field">
-        <label>{{ t('settings.resolvedExe') }}</label>
-        <a-input :value="resolvedExe" disabled style="color: #666;" />
+      <!-- Python 路径预览 / Python path preview -->
+      <div class="path-preview">
+        <span class="path-preview-label">{{ t('settings.resolvedExe') }}</span>
+        <code class="path-preview-value">{{ resolvedExe }}</code>
       </div>
 
       <a-divider style="margin: 4px 0" />
@@ -218,7 +229,7 @@ function handleCancel() {
   font-size: 13px;
   margin: 0;
 }
-.settings-field label {
+.settings-field > label {
   display: block;
   font-size: 13px;
   font-weight: 500;
@@ -245,5 +256,34 @@ function handleCancel() {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 8px;
+}
+.path-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.path-preview-label {
+  font-size: 12px;
+  color: #999;
+  white-space: nowrap;
+}
+.path-preview-value {
+  font-size: 12px;
+  color: #555;
+  background: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 3px;
+  word-break: break-all;
+}
+
+/* Radio 按钮组样式 / Radio button group styling */
+.settings-field :deep(.ant-radio-group) {
+  display: inline-flex;
+  gap: 4px;
+}
+.settings-field :deep(.ant-radio-button-wrapper) {
+  border-radius: 4px;
+  transition: all 0.2s;
 }
 </style>
