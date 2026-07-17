@@ -5,7 +5,9 @@ import { message } from 'ant-design-vue'
 import { useAgentStore } from '../../stores/agent'
 import { openDirectoryDialog, openFileDialog, readFile, isDesktop } from '../../utils/desktop-bridge'
 import yaml from 'js-yaml'
+import YAML from 'yaml'
 import ConfigPanel from './ConfigPanel.vue'
+import JsonEditor from '../json-editor/JsonEditor.vue'
 
 const { t } = useI18n()
 const agent = useAgentStore()
@@ -33,6 +35,24 @@ const loadingConfig = ref(false)
 // 其他配置覆盖值 / Other config overrides
 const configOverrides = ref<Record<string, any>>({})
 
+// extra_params 结构化编辑（使用 JsonEditor 模态框）/ extra_params structured editing (uses JsonEditor modal)
+const extraParams = ref<Record<string, unknown>>({})
+const extraParamsOriginalJson = ref('')  // JSON string for dirty comparison / 用于脏检查的 JSON 字符串
+const showExtraParamsEditor = ref(false)
+
+// 计算属性：是否有未保存的修改 / Computed: whether there are unsaved changes
+const extraParamsEdited = computed(() =>
+  JSON.stringify(extraParams.value) !== extraParamsOriginalJson.value
+)
+
+// 格式化摘要显示（截断过长的 JSON）/ Format summary for display (truncate long JSON)
+const extraParamsSummary = computed(() => {
+  const keys = Object.keys(extraParams.value)
+  if (keys.length === 0) return '(empty)'
+  const json = JSON.stringify(extraParams.value)
+  return json.length > 80 ? json.slice(0, 80) + '…' : json
+})
+
 // 浏览目录 / Browse directory
 async function browseDir(target: 'output') {
   try {
@@ -59,13 +79,8 @@ function splitPaths(input: string): string[] {
   return input.split(/[;\n]+/).map(s => s.trim()).filter(Boolean)
 }
 
-// 加载配置文件 / Load config file
+// 加载配置文件（固定文件名为 env.yaml）/ Load config file (hardcoded filename: env.yaml)
 async function loadYamlConfig() {
-  // 检查配置文件名是否已设置 / Check if config file name is set
-  if (!agent.config.configFileName) {
-    configError.value = t('agent.form_configNotSet')
-    return
-  }
   if (!agent.config.agentRootDir) {
     configError.value = t('agent.form_agentRootNotSet')
     return
@@ -73,7 +88,7 @@ async function loadYamlConfig() {
   loadingConfig.value = true
   configError.value = ''
   try {
-    const configPath = `${agent.config.agentRootDir}/${agent.config.configFileName}`
+    const configPath = `${agent.config.agentRootDir}/env.yaml`
     const content = await readFile(configPath)
     const parsed = yaml.load(content) as Record<string, any> | null
 
@@ -83,7 +98,7 @@ async function loadYamlConfig() {
     }
 
     // 提取各节 / Extract sections
-    // LLM 配置 / LLM config
+    // LLM 配置 — 标量值 / LLM config — scalar values
     if (parsed.llm && typeof parsed.llm === 'object') {
       const llm: Record<string, any> = {}
       for (const [k, v] of Object.entries(parsed.llm as Record<string, unknown>)) {
@@ -92,6 +107,15 @@ async function loadYamlConfig() {
         }
       }
       llmConfig.value = llm
+
+      // 加载 extra_params 为对象供 JsonEditor 编辑 / Load extra_params as object for JsonEditor
+      if (parsed.llm.extra_params && typeof parsed.llm.extra_params === 'object') {
+        extraParams.value = parsed.llm.extra_params as Record<string, unknown>
+        extraParamsOriginalJson.value = JSON.stringify(extraParams.value)
+      } else {
+        extraParams.value = {}
+        extraParamsOriginalJson.value = '{}'
+      }
     }
 
     // 完整配置数据给 ConfigPanel / Full config for ConfigPanel
@@ -108,7 +132,7 @@ async function loadYamlConfig() {
     const msg = e?.message || String(e)
     // 文件不存在 → 友好提示 / File not found → friendly message
     if (msg.includes('os error 2') || msg.includes('No such file') || msg.includes('not found')) {
-      configError.value = t('agent.form_configNotFound', { path: agent.config.configFileName })
+      configError.value = t('agent.form_configNotFound', { path: 'env.yaml' })
     } else {
       configError.value = msg
     }
@@ -117,36 +141,38 @@ async function loadYamlConfig() {
   }
 }
 
-// 保存 LLM 配置到 YAML / Save LLM config to YAML
+/**
+ * 保存 LLM 配置到 YAML（使用 yaml Document API 原地修改，保留所有注释）。
+ * Save LLM config to YAML (in-place modification via yaml Document API; preserves all comments).
+ */
 async function saveLlmConfig() {
   if (!agent.config.agentRootDir) return
   try {
     const { writeFile } = await import('../../utils/desktop-bridge')
-    const configPath = `${agent.config.agentRootDir}/${agent.config.configFileName}`
+    const configPath = `${agent.config.agentRootDir}/env.yaml`
     const content = await readFile(configPath)
-    // 替换 llm 节 / Replace llm section
-    const lines = content.split('\n')
-    let inLlm = false
-    const resultLines: string[] = []
-    const written = new Set<string>()
-    for (const line of lines) {
-      if (/^llm\s*:/.test(line.trim())) {
-        inLlm = true
-        resultLines.push('llm:')
-        for (const [key, val] of Object.entries(llmConfig.value)) {
-          const yamlVal = typeof val === 'string' ? `"${val}"` : String(val)
-          resultLines.push(`  ${key}: ${yamlVal}`)
-          written.add(key)
-        }
-        continue
-      }
-      if (inLlm && /^\w/.test(line.trim()) && !line.trim().startsWith('#')) {
-        inLlm = false
-      }
-      if (inLlm) continue // 跳过旧的 llm 行 / Skip old llm lines
-      resultLines.push(line)
+
+    // 使用 yaml 包解析文档（保留注释和格式）/ Parse with yaml package (preserves comments & formatting)
+    const doc = YAML.parseDocument(content)
+    let llmNode = doc.get('llm', true) // true = keep as YAMLMap node
+
+    if (!llmNode || !YAML.isMap(llmNode)) {
+      llmNode = doc.createMap()
+      doc.set('llm', llmNode)
     }
-    await writeFile(configPath, resultLines.join('\n'))
+
+    // 更新标量值 / Update scalar values
+    for (const [key, val] of Object.entries(llmConfig.value)) {
+      llmNode.set(key, val)
+    }
+
+    // 更新 extra_params（如果有编辑，直接使用对象，无需 JSON.parse）/ Update extra_params if edited (use object directly, no JSON.parse needed)
+    if (extraParamsEdited.value) {
+      llmNode.set('extra_params', extraParams.value)
+      extraParamsOriginalJson.value = JSON.stringify(extraParams.value)
+    }
+
+    await writeFile(configPath, doc.toString())
     message.success(t('agent.form_llmSaved'))
   } catch (e: any) {
     message.error(e?.message || 'Save failed')
@@ -178,22 +204,37 @@ async function handleSubmit() {
   const cliArgs: string[] = []
   for (const [path, val] of Object.entries(configOverrides.value)) {
     if (val === undefined || val === null || val === '') continue
-    // 将 pipeline.max_steps 转为 --max-steps
     const parts = path.split('.')
     const section = parts[0]
-    const key = parts[1]
 
     if (section === 'pipeline') {
+      const key = parts[1]
       if (key === 'auto') { if (val) cliArgs.push('--auto'); continue }
       if (key === 'case_type') { cliArgs.push('--case-type', String(val)); continue }
+      // 跳过 Python 解析器中不存在的参数 / Skip CLI args that don't exist in Python parser
+      if (key === 'max_steps_no_progress') continue
       cliArgs.push(`--${key.replace(/_/g, '-')}`, String(val))
-    } else if (section === 'validation' && key === 'enabled') {
-      cliArgs.push(val ? '--validation' : '--no-validation')
+    } else if (section === 'validation') {
+      // 支持嵌套路径 validation.url_doc_match_validation.enable 等 / Support nested paths
+      const fieldPath = parts.slice(1).join('_')
+      // url_doc_match_validation.enable → --url-doc-match-enabled / --no-url-doc-match-enabled
+      if (fieldPath === 'url_doc_match_validation_enable') {
+        cliArgs.push(val ? '--url-doc-match-enabled' : '--no-url-doc-match-enabled')
+      } else if (fieldPath === 'url_doc_match_validation_max_retries') {
+        cliArgs.push('--url-doc-match-max-retries', String(val))
+      }
+      // 注意：不存在 --validation/--no-validation 参数 / Note: no --validation/--no-validation flag
     } else if (section === 'plugins') {
-      cliArgs.push(val ? '--plugins' : '--no-plugins')
+      if (parts[1] === 'enabled') {
+        cliArgs.push(val ? '--plugins' : '--no-plugins')
+      }
+      // modules 无 CLI 映射 / modules has no CLI mapping
     } else if (section === 'skills') {
-      cliArgs.push(val ? '--skills' : '--no-skills')
-    } else if (section === 'logging' && key === 'log_to_output' && val) {
+      if (parts[1] === 'enabled') {
+        cliArgs.push(val ? '--skills' : '--no-skills')
+      }
+      // agents 无 CLI 映射 / agents has no CLI mapping
+    } else if (section === 'logging' && parts[1] === 'log_to_output' && val) {
       cliArgs.push('--log-to-output')
     }
   }
@@ -261,7 +302,7 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
         :loading="loadingConfig"
         @click="loadYamlConfig"
       >
-        {{ t('agent.form_loadConfig', { name: agent.config.configFileName }) }}
+        {{ t('agent.form_loadConfig', { name: 'env.yaml' }) }}
       </a-button>
 
       <a-alert v-if="configError" type="warning" :message="configError" show-icon style="margin-bottom: 8px;" />
@@ -279,10 +320,33 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
             <a-input v-model:value="llmConfig[key]" size="small" />
           </template>
         </div>
+        <!-- extra_params 编辑（JsonEditor 模态框）/ extra_params editing (JsonEditor modal) -->
+        <div class="form-row">
+          <label>extra_params
+            <span style="color: #999; font-weight: 400; font-size: 11px;">
+              ({{ t('agent.form_extraParamsHint') }})
+            </span>
+          </label>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="extra-params-summary">{{ extraParamsSummary }}</span>
+            <a-button size="small" @click="showExtraParamsEditor = true">
+              {{ t('jsonEditor.editDetails') }}
+            </a-button>
+          </div>
+        </div>
         <a-button size="small" type="primary" @click="saveLlmConfig" style="margin-top: 8px;">
           {{ t('agent.form_llmSave') }}
         </a-button>
       </div>
+
+      <!-- JsonEditor 模态框（extra_params 编辑）/ JsonEditor modal (extra_params editing) -->
+      <JsonEditor
+        :visible="showExtraParamsEditor"
+        :value="extraParams"
+        :title="'extra_params'"
+        @confirm="(v: Record<string, unknown>) => { extraParams = v; showExtraParamsEditor = false }"
+        @cancel="showExtraParamsEditor = false"
+      />
     </div>
 
     <!-- 其他配置 / Other config -->
@@ -347,5 +411,16 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
   border-top: 1px solid #f0f0f0;
   position: sticky;
   bottom: 0;
+}
+/* extra_params 摘要显示样式 / extra_params summary display style */
+.extra-params-summary {
+  font-size: 12px;
+  color: #666;
+  padding: 4px 8px;
+  background: #f5f5f5;
+  border-radius: 3px;
+  word-break: break-all;
+  font-family: monospace;
+  flex: 1;
 }
 </style>

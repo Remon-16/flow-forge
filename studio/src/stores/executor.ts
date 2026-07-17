@@ -11,6 +11,7 @@ import { resolvePythonExe } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
 import { readFile, writeFile, exists, listDirectoryAll } from '../utils/desktop-bridge'
 import yaml from 'js-yaml'
+import YAML from 'yaml'
 
 const SESSIONS_FILE = 'executor_sessions.json'
 const SETTINGS_FILE = 'executor_config.json'
@@ -225,14 +226,12 @@ export const useExecutorStore = defineStore('executor', () => {
   }
 
   /**
-   * 将 env-only 参数写入 YAML env 文件。
-   * Write env-only parameters to YAML env file.
+   * 将 env-only 参数写入 YAML env 文件（保留注释）。
+   * Write env-only parameters to YAML env file (comments preserved).
    *
-   * 读取现有 YAML → 扁平化 → 合并新数据 → 还原嵌套 → js-yaml 写入。
-   * 支持新增键（不只是替换已有行），文件不存在时自动创建。
-   * Read existing YAML → flatten → merge incoming → unflatten → write via js-yaml.
-   * Supports adding new keys (not just replacing existing lines);
-   * auto-creates file if missing. Errors propagate to callers (no silent swallow).
+   * 使用 yaml Document API 原地修改，仅更新变更的键，保留原始注释和格式。
+   * Uses yaml Document API for in-place modification; only changed keys are touched,
+   * preserving original comments and formatting.
    */
   async function writeEnvFile(envSuffix: string, data: Record<string, unknown>): Promise<void> {
     const rootDir = await getExecutorRootDir()
@@ -242,24 +241,54 @@ export const useExecutorStore = defineStore('executor', () => {
       ? `${rootDir}/env-${envSuffix}.yml`.replace(/\\/g, '/')
       : `${rootDir}/env.yml`.replace(/\\/g, '/')
 
-    // 读取现有 YAML（不存在则用空对象）/ Read existing YAML (empty if missing)
-    let existing: Record<string, unknown> = {}
+    // 解析现有 YAML（保留注释），不存在则创建空文档 / Parse existing (keep comments), or empty doc
+    let doc: YAML.Document
     try {
       const content = await readFile(envPath)
-      const parsed = yaml.load(content)
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        existing = parsed as Record<string, unknown>
-      }
+      doc = YAML.parseDocument(content)
     } catch {
-      // 文件不存在或无法解析，从头创建 / File missing or unparseable, start fresh
+      doc = new YAML.Document({})
     }
 
-    // 扁平化 → 合并 → 还原嵌套 → 写入 / Flatten → merge → unflatten → write
-    const flatExisting = flattenEnvConfig(existing)
-    const merged = { ...flatExisting, ...data }
-    const nested = unflattenEnvConfig(merged)
-    const yamlStr = yaml.dump(nested, { lineWidth: -1, noRefs: true })
-    await writeFile(envPath, yamlStr)
+    // 在 Document 上原地修改 / Modify in-place on Document
+    applyEnvOverrides(doc, data)
+
+    await writeFile(envPath, doc.toString())
+  }
+
+  /**
+   * 将扁平化数据应用到 YAML Document 上，原地修改保留注释。
+   * Apply flattened data onto YAML Document in-place, preserving comments.
+   *
+   * _app_ 前缀的键视为嵌套对象，null/undefined 值视为删除。
+   * _app_-prefixed keys are treated as nested objects; null/undefined values trigger deletion.
+   */
+  function applyEnvOverrides(doc: YAML.Document, data: Record<string, unknown>): void {
+    for (const [key, val] of Object.entries(data)) {
+      if (key.startsWith('_app_')) {
+        // _app_<name> 是嵌套对象 / _app_<name> is a nested object
+        const appName = key.slice(5)
+        const appNode = doc.getIn([appName], true)
+        if (val && typeof val === 'object' && !Array.isArray(val)) {
+          const obj = val as Record<string, unknown>
+          if (appNode && YAML.isMap(appNode)) {
+            // 在现有映射节点上原地更新子键 / Update sub-keys in-place on existing map node
+            for (const [subKey, subVal] of Object.entries(obj)) {
+              appNode.set(subKey, subVal)
+            }
+          } else {
+            // 节点不存在或不是映射，整体设置 / Node missing or not a map, set as a whole
+            doc.setIn([appName], obj)
+          }
+        }
+      } else if (val === undefined || val === null) {
+        // null/undefined → 删除键 / delete key
+        doc.delete(key)
+      } else {
+        // 标量或数组：直接设置 / Scalar or array: set directly
+        doc.set(key, val)
+      }
+    }
   }
 
   /**

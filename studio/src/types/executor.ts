@@ -64,7 +64,6 @@ export interface ExecutorSession {
 /** Block2: 可通过 CLI 传递的执行器参数。 */
 export interface ExecutorCliParams {
   scriptType: string
-  envName: string
   maxThread: number
   reportName: string
   apiMode: string
@@ -73,7 +72,6 @@ export interface ExecutorCliParams {
 /** 默认 CLI 参数 / Default CLI params */
 export const DEFAULT_CLI_PARAMS: ExecutorCliParams = {
   scriptType: 'APITest',
-  envName: 'local',
   maxThread: 5,
   reportName: 'APIReport',
   apiMode: 'all',

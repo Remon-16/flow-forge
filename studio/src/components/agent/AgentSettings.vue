@@ -20,7 +20,6 @@ const local = ref({
   venvPath: '',
   agentRootDir: '',
   executorRootDir: '',
-  configFileName: '',
   saveToEnvFile: false,
   envType: 'system' as 'system' | 'venv' | 'conda',
   condaEnvName: '',
@@ -200,15 +199,6 @@ function handleCancel() {
         </a-input-group>
       </div>
 
-      <!-- 配置文件名（Agent 根目录下的 YAML 配置文件）/ Config file name (YAML config in Agent root dir) -->
-      <div class="settings-field">
-        <label>{{ t('settings.configFileName') }}</label>
-        <a-input
-          v-model:value="local.configFileName"
-          :placeholder="t('settings.configFileNameHint')"
-        />
-      </div>
-
       <a-divider style="margin: 4px 0" />
 
       <!-- env 文件同步控制 / Env file sync controls -->
@@ -301,5 +291,10 @@ function handleCancel() {
    Hide Ant Design default ::before divider (conflicts with gap, causing orphan line). */
 .settings-field :deep(.ant-radio-button-wrapper::before) {
   display: none;
+}
+/* 为非首个按钮补回左边框（Ant Design :not(:first-child) 移除了 border-left，用 ::before 替代，
+   现 ::before 已隐藏，需手动补回）。Restore left border for non-first buttons. */
+.settings-field :deep(.ant-radio-button-wrapper:not(:first-child)) {
+  border-left: 1px solid #d9d9d9;
 }
 </style>

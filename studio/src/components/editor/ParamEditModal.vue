@@ -37,6 +37,12 @@ const loaded = ref(false)
 const envOnlyParams = ref<Record<string, unknown>>({})
 const selectedSuffix = ref('')
 
+// 新增参数状态 / Add parameter state
+const addingParam = ref(false)
+const newKeyName = ref('')
+const addingSubKey = ref<Record<string, boolean>>({})
+const newSubKeyName = ref<Record<string, string>>({})
+
 watch(() => props.visible, async (v) => {
   if (!v) return
 
@@ -51,7 +57,7 @@ watch(() => props.visible, async (v) => {
     if (selectedSuffix.value) {
       const raw = await executor.readEnvFile(selectedSuffix.value)
       // 过滤 CLI 键，仅保留 env-only 参数 / Filter CLI keys, keep only env-only params
-      const cliKeys = ['scriptType', 'envName', 'maxThread', 'reportName', 'apiMode', 'caseFilePath']
+      const cliKeys = ['scriptType', 'maxThread', 'reportName', 'apiMode', 'caseFilePath']
       const filtered: Record<string, unknown> = {}
       for (const [key, val] of Object.entries(raw)) {
         if (key.startsWith('_app_')) {
@@ -92,7 +98,6 @@ async function handleSave() {
   if (agent.config.saveToEnvFile && isExecutor.value && selectedSuffix.value) {
     const cliForEnv: Record<string, unknown> = {
       scriptType: cliParams.value.scriptType,
-      envName: cliParams.value.envName,
       maxThread: cliParams.value.maxThread,
       reportName: cliParams.value.reportName,
       apiMode: cliParams.value.apiMode,
@@ -121,6 +126,42 @@ const title = computed(() =>
 // 用于去除 _app_ 前缀的显示标签 / Display label with _app_ prefix stripped
 function displayLabel(key: string): string {
   return key.startsWith('_app_') ? key.slice(5) : key
+}
+
+// ---- 新增/删除 env 参数 / Add/Delete env params ----
+
+function addEnvParam() {
+  const name = newKeyName.value.trim()
+  if (!name) return
+  envOnlyParams.value[name] = ''
+  newKeyName.value = ''
+  addingParam.value = false
+}
+
+function deleteEnvParam(key: string) {
+  const updated: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(envOnlyParams.value)) {
+    if (k !== key) updated[k] = v
+  }
+  envOnlyParams.value = updated
+}
+
+function addSubParam(parentKey: string) {
+  const name = (newSubKeyName.value[parentKey] || '').trim()
+  if (!name) return
+  const parent = envOnlyParams.value[parentKey] as Record<string, unknown>
+  if (parent && typeof parent === 'object') {
+    parent[name] = ''
+  }
+  newSubKeyName.value[parentKey] = ''
+  addingSubKey.value[parentKey] = false
+}
+
+function deleteSubParam(parentKey: string, subKey: string) {
+  const parent = envOnlyParams.value[parentKey] as Record<string, unknown>
+  if (parent && typeof parent === 'object') {
+    delete parent[subKey]
+  }
 }
 </script>
 
@@ -168,9 +209,12 @@ function displayLabel(key: string): string {
             <span class="section-title">{{ t('executor.form_block1Title') }}</span>
             <p class="hint">{{ t('executor.form_block1Desc') }}</p>
             <template v-for="(val, key) in envOnlyParams" :key="String(key)">
-              <!-- 标量/字符串值：可编辑输入框 / Scalar/string: editable input -->
+              <!-- 标量/字符串值：可编辑输入框 + 删除 / Scalar/string: editable input + delete -->
               <div v-if="typeof val === 'string' || typeof val === 'number'" class="param-row">
-                <label>{{ displayLabel(key) }}</label>
+                <div class="param-row-header">
+                  <label>{{ displayLabel(key) }}</label>
+                  <a-button type="text" size="small" danger @click="deleteEnvParam(String(key))">✕</a-button>
+                </div>
                 <a-input
                   :value="String(val)"
                   size="small"
@@ -180,11 +224,17 @@ function displayLabel(key: string): string {
                   }"
                 />
               </div>
-              <!-- 嵌套对象：展开子属性 / Nested object: expand sub-properties -->
+              <!-- 嵌套对象：展开子属性（支持二级嵌套）/ Nested object: expand sub-properties (depth-2) -->
               <div v-else-if="typeof val === 'object' && val !== null && !Array.isArray(val)" class="param-group">
-                <span class="group-label">{{ displayLabel(key) }}</span>
+                <div class="group-header">
+                  <span class="group-label">{{ displayLabel(key) }}</span>
+                  <a-button type="text" size="small" danger @click="deleteEnvParam(String(key))">✕</a-button>
+                </div>
                 <div v-for="(subVal, subKey) in val as Record<string, unknown>" :key="subKey" class="param-row indent-row">
-                  <label>{{ subKey }}</label>
+                  <div class="param-row-header">
+                    <label>{{ subKey }}</label>
+                    <a-button type="text" size="small" danger @click="deleteSubParam(String(key), String(subKey))">✕</a-button>
+                  </div>
                   <a-input
                     v-if="typeof subVal === 'string' || typeof subVal === 'number'"
                     :value="String(subVal)"
@@ -195,15 +245,78 @@ function displayLabel(key: string): string {
                       obj[subKey] = target.value
                     }"
                   />
-                  <span v-else class="param-value-readonly">{{ String(subVal) }}</span>
+                  <!-- 二级嵌套对象 / Second-level nested object -->
+                  <div v-else-if="typeof subVal === 'object' && subVal !== null && !Array.isArray(subVal)" class="param-group indent-group">
+                    <span class="group-label">{{ subKey }}</span>
+                    <div v-for="(sub2Val, sub2Key) in subVal as Record<string, unknown>" :key="sub2Key" class="param-row indent-row">
+                      <label>{{ sub2Key }}</label>
+                      <a-input
+                        v-if="typeof sub2Val === 'string' || typeof sub2Val === 'number'"
+                        :value="String(sub2Val)"
+                        size="small"
+                        @change="e => {
+                          const target = e.target as HTMLInputElement
+                          const obj2 = (envOnlyParams[key] as Record<string, unknown>)[subKey] as Record<string, unknown>
+                          obj2[sub2Key] = target.value
+                        }"
+                      />
+                      <span v-else class="param-value-readonly">{{ typeof sub2Val === 'object' ? JSON.stringify(sub2Val) : String(sub2Val) }}</span>
+                    </div>
+                  </div>
+                  <a-switch
+                    v-else-if="typeof subVal === 'boolean'"
+                    :checked="subVal"
+                    size="small"
+                    @change="(v: boolean) => {
+                      const obj = envOnlyParams[key] as Record<string, unknown>
+                      obj[subKey] = v
+                    }"
+                  />
+                  <span v-else class="param-value-readonly">{{ Array.isArray(subVal) ? JSON.stringify(subVal) : String(subVal) }}</span>
                 </div>
+                <!-- 嵌套组内新增子属性 / Add sub-property inside nested group -->
+                <a-button v-if="!addingSubKey[key]" type="dashed" size="small" style="margin-top: 4px" @click="addingSubKey[key] = true">
+                  + {{ t('executor.form_addParam') }}
+                </a-button>
+                <a-input-group v-else compact style="margin-top: 4px">
+                  <a-input size="small" v-model:value="newSubKeyName[key]" :placeholder="t('executor.form_newParamHint')" style="width: 60%" />
+                  <a-button size="small" type="primary" @click="addSubParam(String(key))">{{ t('dialog.confirm') }}</a-button>
+                  <a-button size="small" @click="addingSubKey[key] = false">{{ t('dialog.cancel') }}</a-button>
+                </a-input-group>
               </div>
-              <!-- 数组/布尔/其他：只读文本 / Array/boolean/other: readonly text -->
+              <!-- 布尔值 / Boolean -->
+              <div v-else-if="typeof val === 'boolean'" class="param-row">
+                <div class="param-row-header">
+                  <label>{{ displayLabel(key) }}</label>
+                  <a-button type="text" size="small" danger @click="deleteEnvParam(String(key))">✕</a-button>
+                </div>
+                <a-switch
+                  :checked="val"
+                  size="small"
+                  @change="(v: boolean) => { envOnlyParams[key] = v }"
+                />
+              </div>
+              <!-- 数组/其他：只读文本 + 删除 / Array/other: readonly text + delete -->
               <div v-else class="param-row">
-                <label>{{ displayLabel(key) }}</label>
+                <div class="param-row-header">
+                  <label>{{ displayLabel(key) }}</label>
+                  <a-button type="text" size="small" danger @click="deleteEnvParam(String(key))">✕</a-button>
+                </div>
                 <span class="param-value-readonly">{{ Array.isArray(val) ? JSON.stringify(val) : String(val) }}</span>
               </div>
             </template>
+
+            <!-- 新增 env 参数 / Add env param -->
+            <div style="margin-top: 8px; display: flex; gap: 8px;">
+              <a-button v-if="!addingParam" type="dashed" size="small" @click="addingParam = true">
+                + {{ t('executor.form_addParam') }}
+              </a-button>
+              <template v-else>
+                <a-input size="small" v-model:value="newKeyName" :placeholder="t('executor.form_newParamHint')" style="width: 160px" />
+                <a-button size="small" type="primary" @click="addEnvParam">{{ t('dialog.confirm') }}</a-button>
+                <a-button size="small" @click="addingParam = false">{{ t('dialog.cancel') }}</a-button>
+              </template>
+            </div>
           </div>
         </template>
 
@@ -264,6 +377,26 @@ function displayLabel(key: string): string {
   color: #555;
   display: block;
   margin-bottom: 4px;
+}
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.param-row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.param-row-header label {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 0;
+}
+.indent-group {
+  margin-left: 6px;
+  margin-top: 4px;
 }
 .indent-row {
   margin-left: 12px;
