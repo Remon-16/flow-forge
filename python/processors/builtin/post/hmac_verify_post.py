@@ -50,12 +50,12 @@ class HmacVerifyPostProcessor(PostProcessor):
         case_config: Dict[str, Any],
         global_config: Dict[str, Any],
     ) -> None:
+        # 合并配置：case 级覆盖 env 默认值 / case-level config overrides env defaults
         proc_configs = global_config.get("processor_configs", {})
         if isinstance(proc_configs, dict):
             env_config = proc_configs.get(self.name, {})
         else:
             env_config = {}
-        # case 级配置覆盖 env 默认值 / case-level config overrides env defaults
         cfg = {**env_config, **case_config}
 
         algorithm = cfg.get("algorithm", "sha256").lower()

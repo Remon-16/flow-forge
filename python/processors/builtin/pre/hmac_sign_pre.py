@@ -42,7 +42,7 @@ class HmacSignPreProcessor(PreProcessor):
         case_config: Dict[str, Any],
         global_config: Dict[str, Any],
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        # Merge config: global processor_configs take precedence for secrets
+        # 合并配置：case 级覆盖 env 默认值 / case-level config overrides env defaults
         proc_configs = global_config.get("processor_configs", {})
         if isinstance(proc_configs, dict):
             env_config = proc_configs.get(self.name, {})

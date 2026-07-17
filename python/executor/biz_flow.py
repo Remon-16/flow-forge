@@ -128,7 +128,7 @@ class BizFlowExecutor(BaseExecutor):
         inherit_data = step.get("inherit", "")
 
         app_config = get_app(app_name) if app_name else {}
-        base_url = app_config.get("baseURL", "") if app_config else {}
+        base_url = app_config.get("baseURL", "") if app_config else ""
         url = self._build_url(base_url, path)
         url, body, cleared_params = self._resolve_url_placeholders(url, body)
 
