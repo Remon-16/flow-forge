@@ -135,10 +135,27 @@ export async function mkdir(dirPath: string): Promise<void> {
 
 export function getPlatform(): string {
   if (isDesktop) {
-    // platform() returns a Promise, but we need synchronous behavior
     return 'desktop'
   }
   return 'browser'
+}
+
+let _cachedOsPlatform: string | null = null
+
+/**
+ * 获取当前 OS 平台标识（从 Rust 后端获取，准确可靠）。
+ * Get current OS platform identifier from Rust backend (accurate and reliable).
+ * 返回值 / Returns: "windows" | "macos" | "linux"
+ * 浏览器模式下回退为 navigator.platform / Falls back to navigator.platform in browser mode.
+ */
+export async function getOsPlatform(): Promise<string> {
+  if (_cachedOsPlatform) return _cachedOsPlatform
+  if (isDesktop) {
+    _cachedOsPlatform = await invoke<string>('get_os_platform')
+  } else {
+    _cachedOsPlatform = (typeof navigator !== 'undefined' ? navigator.platform : '') || 'unknown'
+  }
+  return _cachedOsPlatform
 }
 
 export async function listDirectoryAll(dirPath: string): Promise<FileEntry[]> {

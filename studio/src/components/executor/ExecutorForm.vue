@@ -233,10 +233,8 @@ async function handleSubmit() {
   // 先应用 textarea 中的 YAML 编辑 / Apply YAML edits from textarea first
   applyEnvYamlEdit()
 
-  // Block1 (env-only) 始终写入 / Always write Block1
-  await executor.writeEnvFile(selectedSuffix.value, envOnlyParams.value)
-
-  // Block2 (CLI) 根据同步开关决定是否写 env / Sync Block2 based on toggle
+  // 构建完整 env 数据，根据同步开关决定是否包含 CLI 参数 / Build complete env data
+  let envData: Record<string, unknown> = { ...envOnlyParams.value }
   if (agent.config.saveToEnvFile) {
     const cliForEnv: Record<string, unknown> = {
       scriptType: cliParams.value.scriptType,
@@ -245,8 +243,10 @@ async function handleSubmit() {
       apiMode: cliParams.value.apiMode,
     }
     if (caseFilePath.value) cliForEnv['caseFilePath'] = caseFilePath.value
-    await executor.writeEnvFile(selectedSuffix.value, { ...envOnlyParams.value, ...cliForEnv })
+    envData = { ...envData, ...cliForEnv }
   }
+  // 单次写入 / Single write
+  await executor.writeEnvFile(selectedSuffix.value, envData)
 
   const sessionId = executor.createSession({
     envSuffix: selectedSuffix.value,

@@ -303,18 +303,31 @@ async function handleConvertCaseSelectConfirm(selectedIds: string[]) {
   if (selectedIds.length === 0) return
   try {
     const tempPath = await writeTempYaml(selectedIds)
-    const outputPath = tempPath.replace(/\.yaml$/i, '_converted')
+    // 提取 temp 文件所在目录作为 yaml2excel 输入 / Extract temp file dir as yaml2excel input
+    const tempDir = tempPath.replace(/[/\\][^/\\]+\.yaml$/i, '')
+
+    // 保存对话框选择输出路径 / Save dialog for output path
+    let outputPath = ''
+    try {
+      const { saveFileDialog } = await import('../utils/desktop-bridge')
+      const picked = await saveFileDialog({
+        defaultPath: tempDir + '/selected_cases.xlsx',
+        filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+      })
+      if (picked) outputPath = picked
+    } catch { /* 浏览器模式或用户取消 / browser mode or cancelled */ }
+    if (!outputPath) outputPath = tempDir + '/selected_cases.xlsx'
+
     const sessionId = converter.createSession({
       direction: 'yaml2excel',
       inputPath: '',
       outputPath,
       interfacesDir: '',
-      singleCasesDir: '',
-      bizFlowsDir: '',
+      singleCasesDir: tempDir,
+      bizFlowsDir: tempDir,
       configDir: '',
       processorsDir: '',
     })
-    // Write temp YAML first, then pass to yaml2excel
     await converter.startSession(sessionId)
   } catch (e: unknown) {
     message.error(String(e))

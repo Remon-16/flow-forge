@@ -13,7 +13,7 @@ import type {
   CompletionSummary,
 } from '../types/agent'
 import { spawnAgent, sendToAgent, killAgent, listenToAgentEvents } from '../utils/agent-bridge'
-import { resolvePythonExe } from '../utils/resolve-python'
+import { resolvePythonExe, resolvePythonCommand } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
 
 const CONFIG_FILE = 'agent_config.json'
@@ -185,10 +185,12 @@ export const useAgentStore = defineStore('agent', () => {
 
     // Spawn subprocess / 启动子进程
     try {
+      const cmd = resolvePythonCommand(config.value)
       await spawnAgent(
         taskId,
         config.value.agentRootDir,
-        resolvePythonExe(config.value),
+        cmd.exe,
+        cmd.preArgs,
         args,
       )
       appendLog(taskId, 'info', 'Agent process started')

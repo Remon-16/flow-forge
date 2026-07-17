@@ -223,13 +223,18 @@ fn _spawn_python_process(
     task_id: &str,
     working_dir: &str,
     python_exe: &str,
+    pre_args: &[String],
     args: &[String],
     stdout_event: &str,
     stderr_event: &str,
 ) -> Result<(), String> {
     // 启动子进程 / Spawn the subprocess
-    let mut child = Command::new(python_exe)
-        .args(args)
+    // 构建命令：先添加前置参数（如 conda run -n env python），再添加主参数
+    // Build command: pre_args first (e.g. conda run -n env python), then main args
+    let mut cmd = Command::new(python_exe);
+    cmd.args(pre_args);
+    cmd.args(args);
+    let mut child = cmd
         .current_dir(working_dir)
         .stdout(Stdio::piped())
         .stdin(Stdio::piped())
@@ -293,6 +298,15 @@ fn has_running_agents(
     state.has_running()
 }
 
+/// 返回当前 OS 平台标识，用于前端跨平台路径解析。
+/// Returns current OS platform identifier for cross-platform path resolution.
+#[tauri::command]
+fn get_os_platform() -> String {
+    if cfg!(target_os = "windows") { "windows".into() }
+    else if cfg!(target_os = "macos") { "macos".into() }
+    else { "linux".into() }
+}
+
 /// 终止所有 agent 子进程并退出应用。
 /// Kill all agent subprocesses and exit the app.
 #[tauri::command]
@@ -314,10 +328,11 @@ fn spawn_agent(
     task_id: String,
     working_dir: String,
     python_exe: String,
+    pre_args: Vec<String>,
     args: Vec<String>,
 ) -> Result<(), String> {
     // 构建完整的命令行参数 / Build full command-line args
-    // argv: [python_exe, main.py, --studio, ...user_args]
+    // argv: [python_exe, ...pre_args, main.py, --studio, ...user_args]
     let mut full_args: Vec<String> = vec![
         "main.py".to_string(),
         "--studio".to_string(),
@@ -326,7 +341,7 @@ fn spawn_agent(
 
     _spawn_python_process(
         &app, &state, &task_id, &working_dir, &python_exe,
-        &full_args, "agent-stdout", "agent-stderr",
+        &pre_args, &full_args, "agent-stdout", "agent-stderr",
     )
 }
 
@@ -341,14 +356,15 @@ fn spawn_executor(
     task_id: String,
     working_dir: String,
     python_exe: String,
+    pre_args: Vec<String>,
     args: Vec<String>,
 ) -> Result<(), String> {
     // 执行器直接使用传入的 args，前端负责构建完整的 CLI 参数
     // Executor uses args as-is; the frontend constructs the full CLI
-    // argv: [python_exe, main.py, --config, ..., --yamlFiles, ...]
+    // argv: [python_exe, ...pre_args, main.py, --config, ..., --yamlFiles, ...]
     _spawn_python_process(
         &app, &state, &task_id, &working_dir, &python_exe,
-        &args, "executor-stdout", "executor-stderr",
+        &pre_args, &args, "executor-stdout", "executor-stderr",
     )
 }
 
@@ -363,14 +379,15 @@ fn spawn_converter(
     task_id: String,
     working_dir: String,
     python_exe: String,
+    pre_args: Vec<String>,
     args: Vec<String>,
 ) -> Result<(), String> {
     // 转换器直接使用传入的 args，前端负责构建完整的 CLI 参数
     // Converter uses args as-is; the frontend constructs the full CLI
-    // argv: [python_exe, converter_main.py, excel2yaml, --input, ..., --output, ...]
+    // argv: [python_exe, ...pre_args, converter_main.py, excel2yaml, --input, ..., --output, ...]
     _spawn_python_process(
         &app, &state, &task_id, &working_dir, &python_exe,
-        &args, "converter-stdout", "converter-stderr",
+        &pre_args, &args, "converter-stdout", "converter-stderr",
     )
 }
 
@@ -543,6 +560,7 @@ pub fn run() {
             copy_file_or_dir,
             move_file_or_dir,
             open_in_explorer,
+            get_os_platform,
             has_running_agents,
             force_quit_app,
             spawn_agent,

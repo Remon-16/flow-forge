@@ -17,10 +17,11 @@ export async function spawnConverter(
   sessionId: string,
   workingDir: string,
   pythonExe: string,
+  preArgs: string[],
   args: string[],
 ): Promise<void> {
   if (!isDesktop) throw new Error('Converter requires desktop mode')
-  await invoke('spawn_converter', { taskId: sessionId, workingDir, pythonExe, args })
+  await invoke('spawn_converter', { taskId: sessionId, workingDir, pythonExe, preArgs, args })
 }
 
 /**

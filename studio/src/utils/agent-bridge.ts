@@ -18,10 +18,11 @@ export async function spawnAgent(
   taskId: string,
   workingDir: string,
   pythonExe: string,
+  preArgs: string[],
   args: string[],
 ): Promise<void> {
   if (!isDesktop) throw new Error('Agent execution requires desktop mode')
-  await invoke('spawn_agent', { taskId, workingDir, pythonExe, args })
+  await invoke('spawn_agent', { taskId, workingDir, pythonExe, preArgs, args })
 }
 
 /**

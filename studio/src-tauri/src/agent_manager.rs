@@ -128,8 +128,10 @@ impl AgentManager {
     pub fn kill_all(&self) -> Result<(), String> {
         let mut agents = self.agents.lock().map_err(|e| e.to_string())?;
         for (_id, mut handle) in agents.drain() {
+            // 非阻塞回收僵尸进程，与 kill() 保持一致
+            // Non-blocking zombie reaping, consistent with kill()
             let _ = handle.child.kill();
-            let _ = handle.child.wait();
+            let _ = handle.child.try_wait();
         }
         Ok(())
     }

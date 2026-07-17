@@ -83,27 +83,21 @@ async function handleSave() {
   // 保存 CLI 参数到 store / Save CLI params to store
   executor.setEditorCliParams(props.filePath || '__default__', { ...cliParams.value })
 
-  // Executor mode: 写 env-only 参数到 env 文件 / Write env-only params to env
+  // 构建完整 env 数据，根据同步开关决定是否包含 CLI 参数 / Build complete env data
   if (isExecutor.value && selectedSuffix.value) {
-    try {
-      await executor.writeEnvFile(selectedSuffix.value, envOnlyParams.value)
-    } catch (e: unknown) {
-      const err = e as Error
-      message.error(t('executor.envSaveFailed', { reason: err?.message || String(e) }))
-      return
-    }
-  }
-
-  // 如果同步开关打开，写 CLI 参数到 env / If sync toggle on, write CLI params to env
-  if (agent.config.saveToEnvFile && isExecutor.value && selectedSuffix.value) {
-    const cliForEnv: Record<string, unknown> = {
-      scriptType: cliParams.value.scriptType,
-      maxThread: cliParams.value.maxThread,
-      reportName: cliParams.value.reportName,
-      apiMode: cliParams.value.apiMode,
+    let envData: Record<string, unknown> = { ...envOnlyParams.value }
+    if (agent.config.saveToEnvFile) {
+      const cliForEnv: Record<string, unknown> = {
+        scriptType: cliParams.value.scriptType,
+        maxThread: cliParams.value.maxThread,
+        reportName: cliParams.value.reportName,
+        apiMode: cliParams.value.apiMode,
+      }
+      envData = { ...envData, ...cliForEnv }
     }
     try {
-      await executor.writeEnvFile(selectedSuffix.value, { ...envOnlyParams.value, ...cliForEnv })
+      // 单次写入 / Single write
+      await executor.writeEnvFile(selectedSuffix.value, envData)
     } catch (e: unknown) {
       const err = e as Error
       message.error(t('executor.envSaveFailed', { reason: err?.message || String(e) }))

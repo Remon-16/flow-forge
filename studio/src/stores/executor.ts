@@ -7,8 +7,9 @@ import type { ExecutorSession, ExecutorSettings, ExecutorCliParams } from '../ty
 import { DEFAULT_CLI_PARAMS, DEFAULT_EXECUTOR_SETTINGS } from '../types/executor'
 import type { LogEntry } from '../types/agent'
 import { spawnExecutor, killExecutor, listenToExecutorEvents } from '../utils/executor-bridge'
-import { resolvePythonExe } from '../utils/resolve-python'
+import { resolvePythonCommand } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
+import { useAgentStore } from './agent'
 import { readFile, writeFile, exists, listDirectoryAll } from '../utils/desktop-bridge'
 import yaml from 'js-yaml'
 import YAML from 'yaml'
@@ -68,7 +69,6 @@ export const useExecutorStore = defineStore('executor', () => {
    */
   async function getExecutorRootDir(): Promise<string> {
     try {
-      const { useAgentStore } = await import('./agent')
       const agentStore = useAgentStore()
       if (!agentStore.configLoaded) {
         await agentStore.loadConfig()
@@ -427,13 +427,16 @@ export const useExecutorStore = defineStore('executor', () => {
     // 启动子进程 / Spawn subprocess
     try {
       // Python 路径优先使用 agent config（共享设置）/ Use agent config python path
-      const { useAgentStore } = await import('./agent')
       const agentStore = useAgentStore()
-      const pythonExe = resolvePythonExe(agentStore.config)
+      if (!agentStore.configLoaded) {
+        await agentStore.loadConfig()
+      }
+      const cmd = resolvePythonCommand(agentStore.config)
       await spawnExecutor(
         sessionId,
         agentStore.config.executorRootDir,
-        pythonExe,
+        cmd.exe,
+        cmd.preArgs,
         args,
       )
       appendLog(sessionId, 'info', 'Executor process started')

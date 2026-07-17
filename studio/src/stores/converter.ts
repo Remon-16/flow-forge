@@ -6,8 +6,9 @@ import { ref, computed } from 'vue'
 import type { ConverterSession, ConverterDirection } from '../types/converter'
 import type { LogEntry } from '../types/agent'
 import { spawnConverter, killConverter, listenToConverterEvents } from '../utils/converter-bridge'
-import { resolvePythonExe } from '../utils/resolve-python'
+import { resolvePythonCommand } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
+import { useAgentStore } from './agent'
 
 const SESSIONS_FILE = 'converter_sessions.json'
 
@@ -162,17 +163,17 @@ export const useConverterStore = defineStore('converter', () => {
 
     // 启动子进程 / Spawn subprocess
     try {
-      const { useAgentStore } = await import('./agent')
       const agentStore = useAgentStore()
       // 确保 agent config 已从磁盘加载 / Ensure agent config is loaded from disk
       if (!agentStore.configLoaded) {
         await agentStore.loadConfig()
       }
-      const pythonExe = resolvePythonExe(agentStore.config)
+      const cmd = resolvePythonCommand(agentStore.config)
       await spawnConverter(
         sessionId,
         agentStore.config.executorRootDir, // 转换器和执行器在同一目录 / Converter and executor share directory
-        pythonExe,
+        cmd.exe,
+        cmd.preArgs,
         args,
       )
       appendLog(sessionId, 'info', 'Converter process started')

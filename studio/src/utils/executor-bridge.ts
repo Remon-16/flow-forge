@@ -17,10 +17,11 @@ export async function spawnExecutor(
   sessionId: string,
   workingDir: string,
   pythonExe: string,
+  preArgs: string[],
   args: string[],
 ): Promise<void> {
   if (!isDesktop) throw new Error('Executor requires desktop mode')
-  await invoke('spawn_executor', { taskId: sessionId, workingDir, pythonExe, args })
+  await invoke('spawn_executor', { taskId: sessionId, workingDir, pythonExe, preArgs, args })
 }
 
 /**
