@@ -67,7 +67,7 @@ async function browseDir(field: 'interfaces' | 'singleCases' | 'bizFlows' | 'con
 }
 
 async function handleSubmit() {
-  if (!agent.config.executorRootDir) {
+  if (!agent.config.agentRootDir) {
     message.warning(t('converter.noRootDir'))
     return
   }

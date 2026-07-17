@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // LogPanel — 编辑器底部可折叠 CLI 日志面板。
 // Collapsible CLI log panel at the bottom of editor views.
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useExecutorStore } from '../../stores/executor'
 import { useConverterStore } from '../../stores/converter'
@@ -47,6 +47,16 @@ function toggleCollapse() {
 }
 
 const panelHeight = computed(() => collapsed.value ? '32px' : '220px')
+
+// 日志容器 DOM 引用 / Log container DOM ref
+const logBodyRef = ref<HTMLElement | null>(null)
+
+// 新日志到达时自动滚动到底部 / Auto-scroll to bottom when new logs arrive
+watch(() => displayLogs.value.length, async () => {
+  if (!autoScroll.value || !logBodyRef.value) return
+  await nextTick()
+  logBodyRef.value.scrollTop = logBodyRef.value.scrollHeight
+})
 </script>
 
 <template>
@@ -86,7 +96,7 @@ const panelHeight = computed(() => collapsed.value ? '32px' : '220px')
     </div>
 
     <!-- Log body / 日志主体 -->
-    <div v-if="!collapsed" class="panel-body" ref="logBody">
+    <div v-if="!collapsed" class="panel-body" ref="logBodyRef">
       <div
         v-for="(line, i) in displayLogs"
         :key="i"

@@ -12,7 +12,7 @@ import type {
   AgentCommand,
   CompletionSummary,
 } from '../types/agent'
-import { spawnAgent, sendToAgent, killAgent, listenToAgentEvents } from '../utils/agent-bridge'
+import { spawnAgent, sendToAgent, killAgent, checkAgentRunning, listenToAgentEvents } from '../utils/agent-bridge'
 import { resolvePythonExe, resolvePythonCommand } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
 
@@ -49,6 +49,9 @@ export const useAgentStore = defineStore('agent', () => {
 
   // 每个运行中任务的 listener 清理函数 / Listener cleanup per running task
   const _listeners = new Map<string, () => void>()
+
+  // 每个运行中任务的健康检查 interval / Health check interval per running task
+  const _healthChecks = new Map<string, ReturnType<typeof setInterval>>()
 
   // ---- Getters / 计算属性 ----
 
@@ -194,6 +197,7 @@ export const useAgentStore = defineStore('agent', () => {
         args,
       )
       appendLog(taskId, 'info', 'Agent process started')
+      _startHealthCheck(taskId)
     } catch (e: any) {
       task.status = 'error'
       task.error = e?.message || String(e)
@@ -227,13 +231,16 @@ export const useAgentStore = defineStore('agent', () => {
     _listeners.set(taskId, unlisten)
 
     try {
+      const cmd = resolvePythonCommand(config.value)
       await spawnAgent(
         taskId,
         config.value.agentRootDir,
-        resolvePythonExe(config.value),
+        cmd.exe,
+        cmd.preArgs,
         args,
       )
       appendLog(taskId, 'info', 'Agent process started (resume mode)')
+      _startHealthCheck(taskId)
     } catch (e: any) {
       task.status = 'error'
       task.error = e?.message || String(e)
@@ -330,9 +337,45 @@ export const useAgentStore = defineStore('agent', () => {
 
   // ---- Cleanup / 清理 ----
 
+  /**
+   * 启动进程健康检查 — 每 5 秒检查子进程是否存活。
+   * Start process health check — poll every 5s to see if subprocess is still alive.
+   * 若进程已退出但状态仍为 running，标记为 error（进程可能崩溃）。
+   * If the process exited but status is still running, mark as error (process may have crashed).
+   */
+  function _startHealthCheck(taskId: string): void {
+    const interval = setInterval(async () => {
+      const t = tasks.value.find(x => x.id === taskId)
+      if (!t || t.status !== 'running') {
+        clearInterval(interval)
+        _healthChecks.delete(taskId)
+        return
+      }
+      try {
+        const alive = await checkAgentRunning(taskId)
+        if (!alive) {
+          t.status = 'error'
+          t.error = 'Process exited unexpectedly'
+          appendLog(taskId, 'error', 'Process exited unexpectedly — 进程可能已崩溃 / may have crashed')
+          cleanupListener(taskId)
+          clearInterval(interval)
+          _healthChecks.delete(taskId)
+          await saveTaskRegistry()
+        }
+      } catch { /* 忽略检查错误 / ignore check errors */ }
+    }, 5000)
+    _healthChecks.set(taskId, interval)
+  }
+
   function cleanupListener(taskId: string): void {
     _listeners.get(taskId)?.()
     _listeners.delete(taskId)
+    // 清理健康检查 / Clean up health check
+    const hc = _healthChecks.get(taskId)
+    if (hc) {
+      clearInterval(hc)
+      _healthChecks.delete(taskId)
+    }
   }
 
   // ---- Validation / 校验 ----

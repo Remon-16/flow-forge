@@ -5,6 +5,8 @@ import { useSettingsStore } from './stores/settings'
 import { useWorkbookStore } from './stores/workbook'
 import { useYamlStore } from './stores/yaml-store'
 import { useAgentStore } from './stores/agent'
+import { useExecutorStore } from './stores/executor'
+import { useConverterStore } from './stores/converter'
 import { isDesktop } from './utils/desktop-bridge'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppSidebar from './components/layout/AppSidebar.vue'
@@ -17,6 +19,8 @@ const settings = useSettingsStore()
 const workbook = useWorkbookStore()
 const yamlStore = useYamlStore()
 const agent = useAgentStore()
+const executorStore = useExecutorStore()
+const converterStore = useConverterStore()
 
 const isHome = computed(() => route.name === 'home')
 const isAnnotator = computed(() => route.name === 'plan-annotator')
@@ -64,11 +68,22 @@ async function handleMinimizeToTray() {
 
 async function handleTerminateAndQuit() {
   closeDialogVisible.value = false
+  // 终止 agent 任务 / Terminate agent tasks
   const runningTasks = agent.tasks.filter(
     t => t.status === 'running' || t.status === 'question'
   )
   for (const task of runningTasks) {
     await agent.terminateTask(task.id)
+  }
+  // 终止 executor 会话 / Terminate executor sessions
+  const runningExec = executorStore.sessions.filter(s => s.status === 'running')
+  for (const session of runningExec) {
+    await executorStore.terminateSession(session.id)
+  }
+  // 终止 converter 会话 / Terminate converter sessions
+  const runningConv = converterStore.sessions.filter(s => s.status === 'running')
+  for (const session of runningConv) {
+    await converterStore.terminateSession(session.id)
   }
   // 终止所有子进程后退出应用 / Kill all subprocesses then exit the app
   if (isDesktop) {
@@ -102,12 +117,15 @@ onMounted(async () => {
     const { listen } = await import('@tauri-apps/api/event')
     _closeUnlisten = await listen('window-close-requested', () => {
       const tasks = agent.tasks || []
-      const runningTasks = tasks.filter(
+      const agentRunning = tasks.filter(
         t => t.status === 'running' || t.status === 'question'
       )
-      if (runningTasks.length > 0) {
+      const execRunning = executorStore.sessions.filter(s => s.status === 'running')
+      const convRunning = converterStore.sessions.filter(s => s.status === 'running')
+      const totalRunning = agentRunning.length + execRunning.length + convRunning.length
+      if (totalRunning > 0) {
         // 有运行中任务：弹框确认 / Running tasks: show confirmation dialog
-        closeDialogRunningCount.value = runningTasks.length
+        closeDialogRunningCount.value = totalRunning
         closeDialogVisible.value = true
       } else {
         // 无运行中任务：直接退出应用 / No running tasks: quit directly
@@ -123,11 +141,14 @@ onMounted(async () => {
     _closeUnlisten = await appWindow.onCloseRequested((event) => {
       event.preventDefault()
       const tasks = agent.tasks || []
-      const runningTasks = tasks.filter(
+      const agentRunning = tasks.filter(
         t => t.status === 'running' || t.status === 'question'
       )
-      if (runningTasks.length > 0) {
-        closeDialogRunningCount.value = runningTasks.length
+      const execRunning = executorStore.sessions.filter(s => s.status === 'running')
+      const convRunning = converterStore.sessions.filter(s => s.status === 'running')
+      const totalRunning = agentRunning.length + execRunning.length + convRunning.length
+      if (totalRunning > 0) {
+        closeDialogRunningCount.value = totalRunning
         closeDialogVisible.value = true
       } else {
         handleForceQuit()

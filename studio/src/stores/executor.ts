@@ -6,7 +6,7 @@ import { ref, computed } from 'vue'
 import type { ExecutorSession, ExecutorSettings, ExecutorCliParams } from '../types/executor'
 import { DEFAULT_CLI_PARAMS, DEFAULT_EXECUTOR_SETTINGS } from '../types/executor'
 import type { LogEntry } from '../types/agent'
-import { spawnExecutor, killExecutor, listenToExecutorEvents } from '../utils/executor-bridge'
+import { spawnExecutor, killExecutor, checkExecutorRunning, listenToExecutorEvents } from '../utils/executor-bridge'
 import { resolvePythonCommand } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
 import { useAgentStore } from './agent'
@@ -34,6 +34,9 @@ export const useExecutorStore = defineStore('executor', () => {
 
   // 每个运行中会话的 listener 清理函数 / Listener cleanup per running session
   const _listeners = new Map<string, () => void>()
+
+  // 每个运行中会话的健康检查 interval / Health check interval per running session
+  const _healthChecks = new Map<string, ReturnType<typeof setInterval>>()
 
   // ---- Getters / 计算属性 ----
 
@@ -440,6 +443,7 @@ export const useExecutorStore = defineStore('executor', () => {
         args,
       )
       appendLog(sessionId, 'info', 'Executor process started')
+      _startHealthCheck(sessionId)
     } catch (e: unknown) {
       const err = e as Error
       session.status = 'error'
@@ -450,6 +454,35 @@ export const useExecutorStore = defineStore('executor', () => {
     }
 
     await saveSessions()
+  }
+
+  /**
+   * 启动进程健康检查 — 每 5 秒检查子进程是否存活。
+   * Start process health check — poll every 5s to see if subprocess is still alive.
+   */
+  function _startHealthCheck(sessionId: string): void {
+    const interval = setInterval(async () => {
+      const s = sessions.value.find(x => x.id === sessionId)
+      if (!s || s.status !== 'running') {
+        clearInterval(interval)
+        _healthChecks.delete(sessionId)
+        return
+      }
+      try {
+        const alive = await checkExecutorRunning(sessionId)
+        if (!alive) {
+          s.status = 'error'
+          s.error = 'Process exited unexpectedly'
+          appendLog(sessionId, 'error', 'Process exited unexpectedly — 进程可能已崩溃 / may have crashed')
+          _listeners.get(sessionId)?.()
+          _listeners.delete(sessionId)
+          clearInterval(interval)
+          _healthChecks.delete(sessionId)
+          await saveSessions()
+        }
+      } catch { /* 忽略检查错误 / ignore check errors */ }
+    }, 5000)
+    _healthChecks.set(sessionId, interval)
   }
 
   async function terminateSession(sessionId: string): Promise<void> {
@@ -466,6 +499,12 @@ export const useExecutorStore = defineStore('executor', () => {
 
     _listeners.get(sessionId)?.()
     _listeners.delete(sessionId)
+    // 清理健康检查 / Clean up health check
+    const hc = _healthChecks.get(sessionId)
+    if (hc) {
+      clearInterval(hc)
+      _healthChecks.delete(sessionId)
+    }
     await saveSessions()
   }
 
@@ -501,6 +540,8 @@ export const useExecutorStore = defineStore('executor', () => {
         session.updatedAt = Date.now()
         _listeners.get(sessionId)?.()
         _listeners.delete(sessionId)
+        const hc = _healthChecks.get(sessionId)
+        if (hc) { clearInterval(hc); _healthChecks.delete(sessionId) }
         saveSessions()
       }
     } catch {

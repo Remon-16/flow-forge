@@ -8,7 +8,7 @@ import { useConverterStore } from '../stores/converter'
 import { useAgentStore } from '../stores/agent'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
-import { writeFile, deleteToTrash } from '../utils/desktop-bridge'
+import { writeFile, deleteToTrash, mkdir } from '../utils/desktop-bridge'
 import { getAppDataDir } from '../utils/settings-store'
 import yaml from 'js-yaml'
 import ApiDefEditor from '../components/editor/ApiDefEditor.vue'
@@ -121,6 +121,8 @@ async function writeTempYaml(caseFilter: 'all' | 'single' | 'biz' | string[]): P
   // Use temp/ subdirectory under appDataDir, works in dev and after MSI install
   const appDir = await getAppDataDir()
   const tempDir = `${appDir}/temp`.replace(/\\/g, '/')
+  // 确保 temp 目录存在（首次运行或清理后）/ Ensure temp dir exists (first run or after cleanup)
+  await mkdir(tempDir)
   const tempPath = `${tempDir}/_studio_temp_${Date.now()}.yaml`
 
   // 写入临时文件 / Write temp file
@@ -284,13 +286,48 @@ function handleConvertAll() {
   handleConvert('excel2yaml')
 }
 
-function handleConvertSingle() {
-  // For Excel, single cases conversion means writing temp Excel and converting
-  handleConvert('excel2yaml')
+async function handleConvertSingle() {
+  if (!workbookPath.value) {
+    message.warning(t('editor.toolbar.noFile'))
+    return
+  }
+  try {
+    const tempPath = await writeTempYaml('single')
+    const tempDir = tempPath.replace(/[/\\][^/\\]+\.yaml$/i, '')
+    const sessionId = converter.createSession({
+      direction: 'yaml2excel',
+      inputPath: '',
+      outputPath: workbookPath.value.replace(/\.xlsx$/i, '_single.xlsx'),
+      interfacesDir: '',
+      singleCasesDir: tempDir,
+      bizFlowsDir: '',
+      configDir: '',
+      processorsDir: '',
+    })
+    await converter.startSession(sessionId)
+  } catch (e: unknown) { message.error(String(e)) }
 }
 
-function handleConvertBiz() {
-  handleConvert('excel2yaml')
+async function handleConvertBiz() {
+  if (!workbookPath.value) {
+    message.warning(t('editor.toolbar.noFile'))
+    return
+  }
+  try {
+    const tempPath = await writeTempYaml('biz')
+    const tempDir = tempPath.replace(/[/\\][^/\\]+\.yaml$/i, '')
+    const sessionId = converter.createSession({
+      direction: 'yaml2excel',
+      inputPath: '',
+      outputPath: workbookPath.value.replace(/\.xlsx$/i, '_biz.xlsx'),
+      interfacesDir: '',
+      singleCasesDir: '',
+      bizFlowsDir: tempDir,
+      configDir: '',
+      processorsDir: '',
+    })
+    await converter.startSession(sessionId)
+  } catch (e: unknown) { message.error(String(e)) }
 }
 
 function handleConvertSelect() {
