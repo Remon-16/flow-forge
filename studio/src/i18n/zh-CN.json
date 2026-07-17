@@ -457,6 +457,7 @@
     "param_output": "输出路径",
     "form_submit": "开始转换",
     "noRootDir": "请先在设置中配置执行器根目录",
+    "noExecutorRoot": "请先在设置中配置执行器根目录（Executor Root Directory）",
     "running": "转换中...",
     "completed": "转换完成",
     "outputOpen": "在文件资源管理器中打开",

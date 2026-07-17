@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { message } from 'ant-design-vue'
 import type { AnnotationData } from '../annotator/MarkdownPreview.vue'
 import { readFile, exists, writeFile } from '../../utils/desktop-bridge'
 
@@ -18,6 +19,10 @@ const emit = defineEmits<{
 const planContent = ref('')
 const annotations = ref<AnnotationData[]>([])
 const loading = ref(false)
+
+// 自动保存 / Auto-save
+const autoSaveStatus = ref('')
+let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 const commentsPath = computed(() => {
   if (!props.memoryDir) return ''
@@ -52,6 +57,21 @@ watch(
   },
   { immediate: true },
 )
+
+// 批注变更时自动保存到磁盘（500ms debounce） / Auto-save annotations to disk on change (500ms debounce)
+watch(annotations, () => {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(async () => {
+    if (!commentsPath.value) return
+    try {
+      await writeFile(commentsPath.value, JSON.stringify(annotations.value, null, 2))
+      autoSaveStatus.value = '✓'
+      setTimeout(() => { autoSaveStatus.value = '' }, 1500)
+    } catch (e: any) {
+      message.error(e?.message || 'Failed to save annotations')
+    }
+  }, 500)
+}, { deep: true })
 
 // 添加批注 / Add annotation
 function handleAddAnnotation(selectedText: string, lineNumber: number) {
@@ -94,6 +114,7 @@ function handleDeleteAnnotation(idx: number) {
       <div class="annotation-list">
         <div class="annotation-list-header">
           {{ t('annotator.currentAnnotations') }} ({{ annotations.length }})
+          <span v-if="autoSaveStatus" class="auto-save-indicator">{{ autoSaveStatus }}</span>
         </div>
         <div
           v-for="(ann, i) in annotations"
@@ -170,4 +191,5 @@ function handleDeleteAnnotation(idx: number) {
 .ann-line { color: #1677ff; }
 .ann-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .no-annotations { color: #999; font-style: italic; padding: 8px; }
+.auto-save-indicator { color: #52c41a; font-size: 11px; margin-left: 4px; }
 </style>

@@ -174,7 +174,7 @@ export const useConverterStore = defineStore('converter', () => {
       const cmd = resolvePythonCommand(agentStore.config)
       await spawnConverter(
         sessionId,
-        agentStore.config.agentRootDir, // converter_main.py 与 main.py 同目录 / converter_main.py lives alongside main.py
+        agentStore.config.executorRootDir, // converter_main.py 位于 python/ 目录（与 executor main.py 同级） / converter_main.py is in python/ dir (alongside executor main.py)
         cmd.exe,
         cmd.preArgs,
         args,

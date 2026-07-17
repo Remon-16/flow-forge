@@ -457,6 +457,7 @@
     "param_output": "Output Path",
     "form_submit": "Start Conversion",
     "noRootDir": "Please configure the executor root directory in Settings first",
+    "noExecutorRoot": "Please configure the Executor Root Directory in Settings first",
     "running": "Converting...",
     "completed": "Conversion Complete",
     "outputOpen": "Open in File Explorer",
