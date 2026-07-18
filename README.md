@@ -96,6 +96,15 @@ npm run dev          # 开发模式
 npm run build        # 生产构建 → src-tauri/target/release/
 ```
 
+### 平台兼容性说明
+
+Flow Forge Studio 当前主要在 **Windows** 上进行开发和测试。
+
+- **Windows**：✅ 完整支持，包括子进程自动终止（Job Object）、进程树强制清理等。
+- **Linux / macOS**：⚠️ 未经充分测试。
+
+> **⚠️ 重要风险提示**：在非 Windows 系统上，如果 Studio 进程异常终止（如崩溃、`kill -9` 强杀、系统强制结束进程），正在运行的 Python 子进程（agent / executor / converter）可能成为孤儿进程继续执行。若 agent 正在调用付费 LLM API，可能产生意外的 API 费用。Windows 上通过 Job Object 机制可以自动避免此问题。**强烈建议非 Windows 用户使用 [CLI 命令行](python/README.md) 执行任务。**
+
 ### Studio 六大功能入口
 
 | 入口 | 说明 |
