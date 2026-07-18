@@ -27,6 +27,15 @@ npm run dev
 
 > Flow Forge Studio 面向**桌面模式**使用，请通过 `npm run dev` 启动。
 
+## 平台兼容性说明
+
+Flow Forge Studio 当前主要在 **Windows** 上进行开发和测试。
+
+- **Windows**：✅ 完整支持，包括子进程自动终止（Job Object）、日志实时输出、进程树强制清理等全部功能。
+- **Linux / macOS**：⚠️ 未经充分测试。子进程管理的跨平台实现（进程组终止等）通过了编译检查，但未在真实 Linux/macOS 环境中运行验证，可能存在进程残留或日志丢失的风险。**建议在非 Windows 系统上直接使用 [CLI 命令行](../python/README.md) 执行代码。**
+
+如果你在非 Windows 系统上使用 Studio 并遇到问题，欢迎提交 Issue。
+
 ## 常用命令
 
 ```bash

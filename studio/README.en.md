@@ -27,6 +27,15 @@ npm run dev
 
 > Flow Forge Studio targets **desktop mode** — launch it with `npm run dev`.
 
+## Platform Compatibility
+
+Flow Forge Studio is primarily developed and tested on **Windows**.
+
+- **Windows**: ✅ Fully supported — automatic child process termination (Job Object), real-time log output, full process tree cleanup.
+- **Linux / macOS**: ⚠️ Not thoroughly tested. The cross-platform subprocess management (process group termination, etc.) passes compilation checks but has not been verified in real Linux/macOS environments. Potential risks include orphaned processes and log loss. **On non-Windows systems, we recommend using the [CLI](../python/README.en.md) directly to execute code.**
+
+If you encounter issues on non-Windows systems, please file an Issue.
+
 ## Common Commands
 
 ```bash

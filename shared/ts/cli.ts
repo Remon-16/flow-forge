@@ -26,7 +26,7 @@ export interface CliArgDef {
   required?: boolean
   help_zh: string
   help_en: string
-  section: string | null
+  section?: string | null
   studio: { editable: boolean; field_type?: string }
 }
 
@@ -43,7 +43,7 @@ export interface CliSchema {
   description_zh: string
   description_en: string
   flag_style: string
-  args: CliArgDef[]
+  args?: CliArgDef[]
   subcommands?: Record<string, SubcommandDef>
 }
 
@@ -81,7 +81,7 @@ export function getEditableDestSet(entry: string, section: string): Set<string> 
   const schema = SCHEMAS[entry]
   if (!schema) return new Set()
   const result = new Set<string>()
-  for (const a of schema.args) {
+  for (const a of schema.args ?? []) {
     if (a.studio?.editable && a.section === section) {
       result.add(a.dest)
     }
@@ -106,7 +106,7 @@ export function getEditableArgs(entry: string): CliArgDef[] {
     }
     return result
   }
-  return schema.args.filter(a => a.studio?.editable)
+  return (schema.args ?? []).filter(a => a.studio?.editable)
 }
 
 /**
@@ -120,7 +120,7 @@ export function getInternalDestSet(entry: string): Set<string> {
   const schema = SCHEMAS[entry]
   if (!schema) return new Set()
   const result = new Set<string>()
-  for (const a of schema.args) {
+  for (const a of schema.args ?? []) {
     if (!a.studio?.editable) {
       result.add(a.dest)
     }
@@ -139,7 +139,7 @@ export function getFlagMap(entry: string, section: string): Map<string, string> 
   const schema = SCHEMAS[entry]
   if (!schema) return new Map()
   const result = new Map<string, string>()
-  for (const a of schema.args) {
+  for (const a of schema.args ?? []) {
     if (a.section === section && a.studio?.editable) {
       result.set(a.dest, a.flag)
     }

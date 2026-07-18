@@ -10,8 +10,11 @@ use tauri::{
     AppHandle, Emitter, Manager, State, WindowEvent,
 };
 
-mod agent_manager;
-use agent_manager::{AgentHandle, AgentManager};
+mod process_manager;
+mod process_utils;
+mod job_manager;
+use process_manager::{ProcessHandle, ProcessManager};
+use job_manager::JobManager;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -219,7 +222,7 @@ struct AgentLinePayload {
 /// Generic Python process spawner — shared by agent, executor, and converter commands.
 fn _spawn_python_process(
     app: &AppHandle,
-    state: &AgentManager,
+    state: &ProcessManager,
     task_id: &str,
     working_dir: &str,
     python_exe: &str,
@@ -242,6 +245,18 @@ fn _spawn_python_process(
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
+    // Python 无缓冲输出：防止 CREATE_NO_WINDOW 导致全量缓冲后日志不实时显示
+    // Unbuffered Python I/O: prevent full buffering when no TTY is detected
+    cmd.env("PYTHONUNBUFFERED", "1");
+
+    // Unix: 设置进程组，使子进程及其后代在同一组中，便于 kill_process_tree 用 kill -9 -pgid 整体终止
+    // Unix: set process group so child + descendants are in one group for tree kill
+    #[cfg(not(target_os = "windows"))]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+
     let mut child = cmd
         .current_dir(working_dir)
         .stdout(Stdio::piped())
@@ -249,6 +264,12 @@ fn _spawn_python_process(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to spawn process: {}", e))?;
+
+    // Windows: 将子进程分配到 Job Object，确保父进程退出时子进程被 OS 自动终止
+    // Windows: assign child to Job Object so OS auto-kills it when parent exits
+    if let Some(jm) = app.try_state::<JobManager>() {
+        jm.assign(child.id());
+    }
 
     let stdin = child.stdin.take()
         .ok_or_else(|| "Failed to open stdin".to_string())?;
@@ -292,7 +313,7 @@ fn _spawn_python_process(
     });
 
     // 存储进程句柄 / Store process handle
-    state.insert(task_id.to_string(), AgentHandle { child, stdin })?;
+    state.insert(task_id.to_string(), ProcessHandle { child, stdin })?;
 
     Ok(())
 }
@@ -301,7 +322,7 @@ fn _spawn_python_process(
 /// Check whether any agent subprocess is running.
 #[tauri::command]
 fn has_running_agents(
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
 ) -> Result<bool, String> {
     state.has_running()
 }
@@ -319,7 +340,7 @@ fn get_os_platform() -> String {
 /// Kill all agent subprocesses and exit the app.
 #[tauri::command]
 fn force_quit_app(
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
     app: AppHandle,
 ) -> Result<(), String> {
     // 终止所有 agent / Kill all agents
@@ -332,7 +353,7 @@ fn force_quit_app(
 #[tauri::command]
 fn spawn_agent(
     app: AppHandle,
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
     task_id: String,
     working_dir: String,
     python_exe: String,
@@ -360,7 +381,7 @@ fn spawn_agent(
 #[tauri::command]
 fn spawn_executor(
     app: AppHandle,
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
     task_id: String,
     working_dir: String,
     python_exe: String,
@@ -383,7 +404,7 @@ fn spawn_executor(
 #[tauri::command]
 fn spawn_converter(
     app: AppHandle,
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
     task_id: String,
     working_dir: String,
     python_exe: String,
@@ -401,7 +422,7 @@ fn spawn_converter(
 
 #[tauri::command]
 fn send_to_agent(
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
     task_id: String,
     command: String,
 ) -> Result<(), String> {
@@ -410,7 +431,7 @@ fn send_to_agent(
 
 #[tauri::command]
 fn kill_agent(
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
     task_id: String,
 ) -> Result<(), String> {
     state.kill(&task_id)
@@ -418,7 +439,7 @@ fn kill_agent(
 
 #[tauri::command]
 fn check_agent_running(
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
     task_id: String,
 ) -> Result<bool, String> {
     // 先尝试清理已退出的进程 / First try to clean up exited processes
@@ -430,11 +451,11 @@ fn check_agent_running(
     }
 }
 
-// ---- 执行器/转换器的 kill/check 复用 AgentManager，仅注册新命令名 / Executor/converter kill/check reuse AgentManager ----
+// ---- 执行器/转换器的 kill/check 复用 ProcessManager，仅注册新命令名 / Executor/converter kill/check reuse ProcessManager ----
 
 #[tauri::command]
 fn kill_executor(
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
     task_id: String,
 ) -> Result<(), String> {
     state.kill(&task_id)
@@ -442,7 +463,7 @@ fn kill_executor(
 
 #[tauri::command]
 fn kill_converter(
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
     task_id: String,
 ) -> Result<(), String> {
     state.kill(&task_id)
@@ -450,7 +471,7 @@ fn kill_converter(
 
 #[tauri::command]
 fn check_executor_running(
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
     task_id: String,
 ) -> Result<bool, String> {
     let code = state.cleanup(&task_id)?;
@@ -463,7 +484,7 @@ fn check_executor_running(
 
 #[tauri::command]
 fn check_converter_running(
-    state: State<'_, AgentManager>,
+    state: State<'_, ProcessManager>,
     task_id: String,
 ) -> Result<bool, String> {
     let code = state.cleanup(&task_id)?;
@@ -483,7 +504,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .manage(agent_manager::AgentManager::new())
+        .manage(process_manager::ProcessManager::new())
+        .manage(JobManager::new())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -514,7 +536,7 @@ pub fn run() {
                     }
                     "quit" => {
                         // 强制退出前终止所有 agent / Kill all agents before exit
-                        if let Some(state) = app.try_state::<AgentManager>() {
+                        if let Some(state) = app.try_state::<ProcessManager>() {
                             let _ = state.kill_all();
                         }
                         app.exit(0);

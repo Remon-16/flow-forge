@@ -5,6 +5,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import JsonEditor from '../json-editor/JsonEditor.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
+import { snakeToCamel } from '../../utils/string-utils'
 
 const { t } = useI18n()
 
@@ -71,6 +72,21 @@ function isNumeric(v: unknown): v is number {
 function formatReadonly(v: unknown): string {
   if (Array.isArray(v)) return JSON.stringify(v)
   return String(v)
+}
+
+/**
+ * 根据 YAML 配置键查找 i18n 翻译标签，未找到则回退到原始键名。
+ * Look up i18n translation label by YAML config key; fall back to raw key if not found.
+ * YAML 键为 snake_case，i18n 键为 agent.config_ + camelCase。
+ * YAML keys are snake_case; i18n keys are agent.config_ + camelCase.
+ */
+function labelFor(key: string | number): string {
+  const keyStr = String(key)
+  const camelKey = snakeToCamel(keyStr)
+  const i18nKey = 'agent.config_' + camelKey
+  const translated = t(i18nKey)
+  // t() 在未找到翻译时返回键名本身 / t() returns the key itself when translation is missing
+  return translated !== i18nKey ? translated : keyStr
 }
 
 /** 判断某个 section 是否使用内联数组编辑 / Check if section uses inline array editing */
@@ -179,7 +195,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
         <template v-for="(val, key) in getSectionData(sec.key)" :key="String(key)">
           <!-- 标量/字符串：输入框 / Scalar/string: input -->
           <div v-if="isScalar(val)" class="config-field">
-            <label>{{ key }}</label>
+            <label>{{ labelFor(key) }}</label>
             <a-input-number
               v-if="isNumeric(val)"
               :value="val"
@@ -200,7 +216,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
 
           <!-- 布尔：开关 / Boolean: switch -->
           <div v-else-if="isBool(val)" class="config-field">
-            <label>{{ key }}</label>
+            <label>{{ labelFor(key) }}</label>
             <a-switch
               :checked="val"
               size="small"
@@ -210,10 +226,10 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
 
           <!-- 嵌套对象：展开子属性 / Nested object: expand sub-properties -->
           <div v-else-if="isNestedObject(val)" class="config-group">
-            <span class="config-group-label">{{ key }}</span>
+            <span class="config-group-label">{{ labelFor(key) }}</span>
             <template v-for="(subVal, subKey) in val" :key="String(subKey)">
               <div v-if="isScalar(subVal)" class="config-field indent-field">
-                <label>{{ subKey }}</label>
+                <label>{{ labelFor(subKey) }}</label>
                 <a-input-number
                   v-if="isNumeric(subVal)"
                   :value="subVal"
@@ -233,13 +249,13 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
               </div>
               <!-- 二级嵌套对象：递归展开 / Second-level nested: recurse -->
               <div v-else-if="isNestedObject(subVal)" class="config-group indent-group">
-                <span class="config-group-label">{{ subKey }}</span>
+                <span class="config-group-label">{{ labelFor(subKey) }}</span>
                 <div
                   v-for="(subSubVal, subSubKey) in subVal"
                   :key="String(subSubKey)"
                   class="config-field indent-field-2"
                 >
-                  <label>{{ subSubKey }}</label>
+                  <label>{{ labelFor(subSubKey) }}</label>
                   <a-input
                     v-if="isScalar(subSubVal)"
                     :value="String(subSubVal)"
@@ -257,9 +273,9 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                   />
                   <!-- 内联 section 二级嵌套对象展开 / Inline section depth-2 nested object expand -->
                   <div v-else-if="isInlineSection(sec.key) && isNestedObject(subSubVal)" class="config-group" style="margin-left: 6px;">
-                    <span class="config-group-label">{{ subSubKey }}</span>
+                    <span class="config-group-label">{{ labelFor(subSubKey) }}</span>
                     <div v-for="(deepVal, deepKey) in subSubVal" :key="String(deepKey)" class="config-field indent-field-2">
-                      <label>{{ deepKey }}</label>
+                      <label>{{ labelFor(deepKey) }}</label>
                       <a-input
                         v-if="typeof deepVal === 'string' || typeof deepVal === 'number'"
                         :value="String(deepVal)"
@@ -288,7 +304,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                 </div>
               </div>
               <div v-else-if="isBool(subVal)" class="config-field indent-field">
-                <label>{{ subKey }}</label>
+                <label>{{ labelFor(subKey) }}</label>
                 <a-switch
                   :checked="subVal"
                   size="small"
@@ -297,7 +313,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
               </div>
               <!-- 内联 section 字符串数组 / Inline section string array -->
               <div v-else-if="isInlineSection(sec.key) && Array.isArray(subVal) && (subVal.length === 0 || typeof subVal[0] === 'string' || typeof subVal[0] === 'number')" class="config-array indent-field">
-                <label>{{ subKey }}</label>
+                <label>{{ labelFor(subKey) }}</label>
                 <div v-for="(item, idx) in subVal" :key="idx" class="array-item-row">
                   <a-input :value="String(item)" size="small" style="flex: 1"
                     @change="(e: Event) => updateArrayItem(sec.key, String(key) + '.' + String(subKey), idx, (e.target as HTMLInputElement).value)" />
@@ -309,7 +325,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
               </div>
               <!-- 内联 section 对象数组 / Inline section object array -->
               <div v-else-if="isInlineSection(sec.key) && Array.isArray(subVal)" class="config-array indent-field">
-                <label>{{ subKey }}</label>
+                <label>{{ labelFor(subKey) }}</label>
                 <div v-for="(item, idx) in subVal" :key="idx" class="array-item-card">
                   <div class="array-item-card-header">
                     <span>#{{ idx + 1 }}</span>
@@ -317,7 +333,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                   </div>
                   <template v-for="(fieldVal, fieldKey) in item" :key="String(fieldKey)">
                     <div v-if="typeof fieldVal === 'string' || typeof fieldVal === 'number'" class="config-field" style="margin-left: 8px;">
-                      <label>{{ fieldKey }}</label>
+                      <label>{{ labelFor(fieldKey) }}</label>
                       <a-input-number
                         v-if="typeof fieldVal === 'number'"
                         :value="fieldVal" size="small" style="width: 100%"
@@ -327,7 +343,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                         @change="(e: Event) => updateArrayItemField(sec.key, String(key) + '.' + String(subKey), idx, String(fieldKey), (e.target as HTMLInputElement).value)" />
                     </div>
                     <div v-else-if="typeof fieldVal === 'boolean'" class="config-field" style="margin-left: 8px;">
-                      <label>{{ fieldKey }}</label>
+                      <label>{{ labelFor(fieldKey) }}</label>
                       <a-switch :checked="fieldVal" size="small"
                         @change="(v: boolean) => updateArrayItemField(sec.key, String(key) + '.' + String(subKey), idx, String(fieldKey), v)" />
                     </div>
@@ -339,7 +355,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
               </div>
               <!-- 非内联 section：只读文本 + 编辑 / Non-inline: readonly text + edit -->
               <div v-else class="config-field indent-field">
-                <label>{{ subKey }}</label>
+                <label>{{ labelFor(subKey) }}</label>
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <span class="config-readonly" style="flex: 1;">{{ formatReadonly(subVal) }}</span>
                   <a-button size="small" type="link" @click="openFieldJsonEditor(sec.key, String(key) + '.' + String(subKey), subVal)">
@@ -352,7 +368,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
 
           <!-- 内联 section 的字符串数组编辑 / Inline section string array editing -->
           <div v-else-if="isInlineSection(sec.key) && Array.isArray(val) && (val.length === 0 || typeof val[0] === 'string' || typeof val[0] === 'number')" class="config-array">
-            <label>{{ key }}</label>
+            <label>{{ labelFor(key) }}</label>
             <div v-for="(item, idx) in val" :key="idx" class="array-item-row">
               <a-input :value="String(item)" size="small" style="flex: 1"
                 @change="(e: Event) => updateArrayItem(sec.key, String(key), idx, (e.target as HTMLInputElement).value)" />
@@ -364,7 +380,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
           </div>
           <!-- 内联 section 的对象数组编辑 / Inline section object array editing -->
           <div v-else-if="isInlineSection(sec.key) && Array.isArray(val)" class="config-array">
-            <label>{{ key }}</label>
+            <label>{{ labelFor(key) }}</label>
             <div v-for="(item, idx) in val" :key="idx" class="array-item-card">
               <div class="array-item-card-header">
                 <span>#{{ idx + 1 }}</span>
@@ -372,7 +388,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
               </div>
               <template v-for="(fieldVal, fieldKey) in item" :key="String(fieldKey)">
                 <div v-if="typeof fieldVal === 'string' || typeof fieldVal === 'number'" class="config-field" style="margin-left: 8px;">
-                  <label>{{ fieldKey }}</label>
+                  <label>{{ labelFor(fieldKey) }}</label>
                   <a-input-number
                     v-if="typeof fieldVal === 'number'"
                     :value="fieldVal" size="small" style="width: 100%"
@@ -382,7 +398,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                     @change="(e: Event) => updateArrayItemField(sec.key, String(key), idx, String(fieldKey), (e.target as HTMLInputElement).value)" />
                 </div>
                 <div v-else-if="typeof fieldVal === 'boolean'" class="config-field" style="margin-left: 8px;">
-                  <label>{{ fieldKey }}</label>
+                  <label>{{ labelFor(fieldKey) }}</label>
                   <a-switch :checked="fieldVal" size="small"
                     @change="(v: boolean) => updateArrayItemField(sec.key, String(key), idx, String(fieldKey), v)" />
                 </div>
@@ -394,7 +410,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
           </div>
           <!-- 非内联 section：只读 + JsonEditor / Non-inline: readonly + JsonEditor -->
           <div v-else class="config-field">
-            <label>{{ key }}</label>
+            <label>{{ labelFor(key) }}</label>
             <div style="display: flex; align-items: center; gap: 8px;">
               <span class="config-readonly" style="flex: 1;">{{ formatReadonly(val) }}</span>
               <a-button size="small" type="link" @click="openFieldJsonEditor(sec.key, String(key), val)">
