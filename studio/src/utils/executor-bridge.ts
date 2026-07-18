@@ -2,7 +2,7 @@
 // 执行器桥接 — Tauri invoke 封装，用于执行器子进程管理。
 
 import { invoke } from '@tauri-apps/api/core'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { listen } from '@tauri-apps/api/event'
 import { isDesktop } from './desktop-bridge'
 
 // ============================================================================
@@ -51,26 +51,29 @@ export async function checkExecutorRunning(sessionId: string): Promise<boolean> 
  * Listen to executor subprocess output events (stdout + stderr).
  * Returns an unlisten function to clean up.
  */
-export function listenToExecutorEvents(
+export async function listenToExecutorEvents(
   sessionId: string,
   handler: (line: string, level: 'info' | 'error') => void,
-): () => void {
-  const unlisteners: UnlistenFn[] = []
+): Promise<() => void> {
+  // 先注册监听器再返回，确保 spawn 进程前事件通道已就绪。
+  // Await listener registration before returning so the event channel
+  // is ready before the process is spawned — prevents race-condition data loss.
 
   // 监听 stdout 事件 / Listen to stdout events
-  listen<{ task_id: string; line: string }>('executor-stdout', (event) => {
+  const unlistenStdout = await listen<{ task_id: string; line: string }>('executor-stdout', (event) => {
     if (event.payload.task_id !== sessionId) return
     handler(event.payload.line, 'info')
-  }).then((fn) => unlisteners.push(fn))
+  })
 
   // 监听 stderr 事件 / Listen to stderr events
-  listen<{ task_id: string; line: string }>('executor-stderr', (event) => {
+  const unlistenStderr = await listen<{ task_id: string; line: string }>('executor-stderr', (event) => {
     if (event.payload.task_id !== sessionId) return
     handler(event.payload.line, 'error')
-  }).then((fn) => unlisteners.push(fn))
+  })
 
   // 返回清理函数 / Return cleanup function
   return () => {
-    unlisteners.forEach((fn) => fn())
+    unlistenStdout()
+    unlistenStderr()
   }
 }

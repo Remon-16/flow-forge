@@ -236,6 +236,9 @@ fn _spawn_python_process(
     // Build command: pre_args first (e.g. conda run -n env python), then main args
     let mut cmd = Command::new(python_exe);
     cmd.args(pre_args);
+    // Python -u 强制无缓冲 stdout/stderr，与 PYTHONUNBUFFERED 环境变量双重保障
+    // Python -u forces unbuffered stdout/stderr, alongside PYTHONUNBUFFERED env var
+    cmd.arg("-u");
     cmd.args(args);
 
     // 跨平台：禁止控制台弹窗 / Cross-platform: suppress console window

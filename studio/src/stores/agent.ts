@@ -182,8 +182,9 @@ export const useAgentStore = defineStore('agent', () => {
       ...cliArgs,
     ]
 
-    // Register event listener / 注册事件监听
-    const unlisten = listenToAgentEvents(taskId, (event: AgentEvent) => {
+    // 注册事件监听（先 await 监听器就绪，再 spawn 进程，防止事件丢失）
+    // Register event listener (await listener readiness before spawn to prevent event loss)
+    const unlisten = await listenToAgentEvents(taskId, (event: AgentEvent) => {
       handleAgentEvent(taskId, event)
     })
     _listeners.set(taskId, unlisten)
@@ -227,7 +228,9 @@ export const useAgentStore = defineStore('agent', () => {
       ...cliArgs,
     ]
 
-    const unlisten = listenToAgentEvents(taskId, (event: AgentEvent) => {
+    // 注册事件监听（先 await 监听器就绪，再 spawn 进程，防止事件丢失）
+    // Register event listener (await listener readiness before spawn to prevent event loss)
+    const unlisten = await listenToAgentEvents(taskId, (event: AgentEvent) => {
       handleAgentEvent(taskId, event)
     })
     _listeners.set(taskId, unlisten)

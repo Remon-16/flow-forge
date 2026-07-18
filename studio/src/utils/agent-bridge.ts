@@ -2,7 +2,7 @@
 // 智能体桥接 — Tauri invoke 封装，用于 agent 子进程管理。
 
 import { invoke } from '@tauri-apps/api/core'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { listen } from '@tauri-apps/api/event'
 import { isDesktop } from './desktop-bridge'
 import type { AgentEvent } from '../types/agent'
 
@@ -64,14 +64,16 @@ export async function checkAgentRunning(taskId: string): Promise<boolean> {
  * Listen to agent subprocess output events (stdout + stderr).
  * Returns an unlisten function to clean up.
  */
-export function listenToAgentEvents(
+export async function listenToAgentEvents(
   taskId: string,
   handler: (event: AgentEvent) => void,
-): () => void {
-  const unlisteners: UnlistenFn[] = []
+): Promise<() => void> {
+  // 先注册监听器再返回，确保 spawn 进程前事件通道已就绪。
+  // Await listener registration before returning so the event channel
+  // is ready before the process is spawned — prevents race-condition data loss.
 
   // 监听 stdout JSON 事件 / Listen to stdout JSON events
-  listen<{ task_id: string; line: string }>('agent-stdout', (event) => {
+  const unlistenStdout = await listen<{ task_id: string; line: string }>('agent-stdout', (event) => {
     if (event.payload.task_id !== taskId) return
     try {
       const parsed = JSON.parse(event.payload.line) as AgentEvent
@@ -85,10 +87,10 @@ export function listenToAgentEvents(
         ts: new Date().toLocaleTimeString(),
       })
     }
-  }).then((fn) => unlisteners.push(fn))
+  })
 
   // 监听 stderr 事件 / Listen to stderr events
-  listen<{ task_id: string; line: string }>('agent-stderr', (event) => {
+  const unlistenStderr = await listen<{ task_id: string; line: string }>('agent-stderr', (event) => {
     if (event.payload.task_id !== taskId) return
     handler({
       type: 'log',
@@ -96,10 +98,11 @@ export function listenToAgentEvents(
       message: event.payload.line,
       ts: new Date().toLocaleTimeString(),
     })
-  }).then((fn) => unlisteners.push(fn))
+  })
 
   // 返回清理函数 / Return cleanup function
   return () => {
-    unlisteners.forEach((fn) => fn())
+    unlistenStdout()
+    unlistenStderr()
   }
 }

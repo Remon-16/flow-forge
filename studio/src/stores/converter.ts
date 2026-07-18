@@ -162,8 +162,9 @@ export const useConverterStore = defineStore('converter', () => {
 
     const args = buildCliArgs(session)
 
-    // 注册事件监听 / Register event listener
-    const unlisten = listenToConverterEvents(sessionId, (line, level) => {
+    // 注册事件监听（先 await 监听器就绪，再 spawn 进程，防止事件丢失）
+    // Register event listener (await listener readiness before spawn to prevent event loss)
+    const unlisten = await listenToConverterEvents(sessionId, (line, level) => {
       appendLog(sessionId, level, line)
       tryParseCompletion(sessionId, line)
     })
