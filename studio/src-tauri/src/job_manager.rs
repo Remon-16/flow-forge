@@ -1,11 +1,19 @@
-// Windows Job Object 管理器 — 父进程退出时自动终止所有子进程。
-// Windows Job Object manager — auto-terminate all child processes when parent exits.
+// Windows Job Object 句柄 — 父进程退出或句柄释放时自动终止 Job 内所有子进程。
+// Windows Job Object handle — auto-terminate all processes in the Job when handle is closed.
 //
-// 原理：将每个子进程分配到 Windows Job Object，设置 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE。
-// 当 Tauri 进程以任何方式终止时（包括任务管理器强杀），OS 自动终止 Job 内所有进程。
-// Principle: assign each child to a Job Object with KILL_ON_JOB_CLOSE flag.
-// When the Tauri process exits for ANY reason (incl. Task Manager kill), the OS
-// automatically terminates all processes in the Job.
+// 每个子进程拥有独立的 JobHandle。当 ProcessHandle 被 drop（任务终止或应用退出），
+// JobHandle::drop() 调用 CloseHandle，OS 通过 KILL_ON_JOB_CLOSE 强制终止 Job 内所有进程。
+// Each subprocess owns its own JobHandle. When the ProcessHandle is dropped (task kill or
+// app exit), JobHandle::drop() calls CloseHandle, and the OS forcibly terminates all
+// processes in that Job via KILL_ON_JOB_CLOSE.
+//
+// 原理：Windows Job Object 递归追踪 Job 内所有进程及其后代进程。即使中间进程（如
+// conda.exe→python.exe）已退出，孙子进程仍在 Job 中。KILL_ON_JOB_CLOSE 由 OS 内核
+// 强制执行，比用户态工具（taskkill）更可靠。
+// Principle: Windows Job Objects recursively track all processes spawned within the job,
+// including descendants. Even if an intermediate process (e.g. conda.exe→python.exe) exits,
+// grandchild processes remain in the job. KILL_ON_JOB_CLOSE is enforced by the OS kernel
+// and is more reliable than user-mode tools like taskkill.
 
 // Windows FFI 类型与常量 / Windows FFI types and constants
 #[cfg(target_os = "windows")]
@@ -79,19 +87,25 @@ mod win32 {
     }
 }
 
-/// 全局 Job Object 管理器。
-/// Global Job Object manager.
-pub struct JobManager {
+/// 单个任务的 Windows Job Object 句柄。
+/// Per-task Windows Job Object handle.
+///
+/// 创建时设置 KILL_ON_JOB_CLOSE，drop 时关闭句柄触发 OS 终止所有 Job 内进程。
+/// Created with KILL_ON_JOB_CLOSE; closing the handle on drop triggers OS termination.
+pub struct JobHandle {
     /// Windows Job Object HANDLE（非 Windows 平台不分配）。
     /// Windows Job Object HANDLE (not allocated on non-Windows).
     #[cfg(target_os = "windows")]
     handle: win32::HANDLE,
 }
 
-impl JobManager {
-    /// 创建 Job Object 并设置 KILL_ON_JOB_CLOSE 策略。
-    /// Create a Job Object with KILL_ON_JOB_CLOSE policy.
-    pub fn new() -> Self {
+impl JobHandle {
+    /// 创建新的 Job Object 并设置 KILL_ON_JOB_CLOSE 策略。
+    /// Create a new Job Object with KILL_ON_JOB_CLOSE policy.
+    ///
+    /// 返回 None 表示创建失败（此时回退到 taskkill 方式终止进程）。
+    /// Returns None on failure (fall back to taskkill-based process termination).
+    pub fn new() -> Option<Self> {
         #[cfg(target_os = "windows")]
         {
             use std::ptr;
@@ -103,8 +117,8 @@ impl JobManager {
                 if handle == 0 {
                     // 创建失败不影响应用运行，子进程管理回退到 taskkill 方式
                     // Creation failure is non-fatal; fall back to taskkill-based cleanup
-                    log::warn!("[JobManager] CreateJobObjectW failed");
-                    return Self { handle: 0 };
+                    log::warn!("[JobHandle] CreateJobObjectW failed, will rely on taskkill fallback");
+                    return None;
                 }
 
                 // 设置扩展限制信息 / Set extended limit info
@@ -118,23 +132,26 @@ impl JobManager {
                     std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as DWORD,
                 );
                 if result == 0 {
-                    log::warn!("[JobManager] SetInformationJobObject failed");
+                    log::warn!("[JobHandle] SetInformationJobObject failed, will rely on taskkill fallback");
                     CloseHandle(handle);
-                    return Self { handle: 0 };
+                    return None;
                 }
 
-                Self { handle }
+                log::debug!("[JobHandle] created successfully");
+                Some(Self { handle })
             }
         }
 
         #[cfg(not(target_os = "windows"))]
         {
-            Self {}
+            // 非 Windows 平台：Job Object 不可用，始终返回 None
+            // Non-Windows: Job Object not available, always return None
+            None
         }
     }
 
-    /// 将进程分配给 Job Object。
-    /// Assign a process to the Job Object.
+    /// 将进程分配给此 Job Object。
+    /// Assign a process to this Job Object.
     /// `pid` 是进程 ID / `pid` is the process ID.
     pub fn assign(&self, _pid: u32) {
         #[cfg(target_os = "windows")]
@@ -152,6 +169,7 @@ impl JobManager {
                 let h_process = OpenProcess(PROCESS_SET_QUOTA_AND_TERMINATE, 0, _pid);
                 if h_process == 0 {
                     // 进程可能在打开前已退出 / Process may have exited before we could open it
+                    log::debug!("[JobHandle] OpenProcess failed for PID {} (process may have exited)", _pid);
                     return;
                 }
 
@@ -159,6 +177,9 @@ impl JobManager {
                 if result == 0 {
                     // 分配失败不影响应用（进程可能已退出或被其他 Job 管理）
                     // Assignment failure is non-fatal (process may have exited or be in another job)
+                    log::warn!("[JobHandle] AssignProcessToJobObject failed for PID {} (may already be in another job)", _pid);
+                } else {
+                    log::debug!("[JobHandle] assigned PID {} to job", _pid);
                 }
 
                 CloseHandle(h_process);
@@ -167,12 +188,13 @@ impl JobManager {
     }
 }
 
-impl Drop for JobManager {
+impl Drop for JobHandle {
     fn drop(&mut self) {
         #[cfg(target_os = "windows")]
         {
             use win32::*;
             if self.handle != 0 {
+                log::debug!("[JobHandle] dropping — OS will terminate all processes in this job");
                 unsafe { CloseHandle(self.handle); }
             }
         }

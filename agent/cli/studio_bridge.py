@@ -213,6 +213,11 @@ def run_studio_protocol(
         except GraphInterrupt:
             return None
 
+    # 诊断：确认 run_studio_protocol 被调用，验证 stdout 管道可用。
+    # Diagnostic: confirm run_studio_protocol is reached, verify stdout pipe works.
+    sys.stdout.write('{"type":"log","level":"info","message":"[studio_bridge] Protocol started"}\n')
+    sys.stdout.flush()
+
     bridge = StudioBridge()
 
     # 检测 auto 模式：意外中断时自动 skip 而非阻塞等待用户输入。

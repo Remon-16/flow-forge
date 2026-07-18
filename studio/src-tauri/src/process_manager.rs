@@ -11,17 +11,24 @@ use std::io::Write;
 use std::process::Child;
 use std::sync::Mutex;
 
-use crate::process_utils::{kill_process_tree, terminate_python_process};
+use crate::job_manager::JobHandle;
+use crate::process_utils::terminate_python_process;
 
 // ============================================================================
 // Types / 类型定义
 // ============================================================================
 
-/// 子进程句柄 — 持有子进程对象及其 stdin 管道。
-/// Process handle — holds the child process and its stdin pipe.
+/// 子进程句柄 — 持有子进程对象、stdin 管道及 Job Object 句柄。
+/// Process handle — holds the child process, stdin pipe, and Job Object handle.
 pub struct ProcessHandle {
     pub child: Child,
     pub stdin: std::process::ChildStdin,
+    /// Windows Job Object 句柄（非 Windows 为 None）。
+    /// drop 时关闭句柄，OS 通过 KILL_ON_JOB_CLOSE 终止 Job 内所有进程。
+    /// Windows Job Object handle (None on non-Windows).
+    /// Dropping this closes the handle; OS kills all processes in the Job via KILL_ON_JOB_CLOSE.
+    #[allow(dead_code)]
+    pub job_handle: Option<JobHandle>,
 }
 
 /// 全局进程注册表 — 将 task_id 映射到子进程句柄。
@@ -42,10 +49,10 @@ impl ProcessManager {
     /// Insert (or replace) a subprocess.
     pub fn insert(&self, task_id: String, handle: ProcessHandle) -> Result<(), String> {
         let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
-        // 如果已有同名任务，先 kill 旧进程（无需优雅终止，因为已被替换）
-        // If task_id already exists, kill old one first (no graceful shutdown needed for replacement)
+        // 如果已有同名任务，先通过统一终止入口 kill 旧进程（含优雅 stdin 通知）
+        // If task_id already exists, kill old one via unified terminate entry (incl. graceful stdin notify)
         if let Some(mut old_handle) = processes.remove(&task_id) {
-            kill_process_tree(&mut old_handle.child);
+            terminate_python_process(&mut old_handle.child, &mut old_handle.stdin);
         }
         processes.insert(task_id, handle);
         Ok(())
@@ -91,6 +98,8 @@ impl ProcessManager {
             match handle.child.try_wait() {
                 Ok(Some(status)) => {
                     let code = status.code();
+                    // 诊断：记录进程退出码 / Diagnostic: log process exit code
+                    log::info!("[cleanup] task={} exited code={:?}", task_id, code);
                     // 确认已退出，移除句柄 / Confirmed dead, remove handle
                     processes.remove(task_id);
                     Ok(code)

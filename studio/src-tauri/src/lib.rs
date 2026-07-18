@@ -14,7 +14,7 @@ mod process_manager;
 mod process_utils;
 mod job_manager;
 use process_manager::{ProcessHandle, ProcessManager};
-use job_manager::JobManager;
+use job_manager::JobHandle;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -232,6 +232,13 @@ fn _spawn_python_process(
     stderr_event: &str,
 ) -> Result<(), String> {
     // 启动子进程 / Spawn the subprocess
+
+    // 非 Windows 平台守卫：禁止创建子进程，防止在无 Job Object 保护的环境下产生孤儿进程。
+    // Non-Windows guard: refuse to spawn to prevent orphaned processes without Job Object protection.
+    if cfg!(not(target_os = "windows")) {
+        return Err("Flow Forge Studio only supports Windows. Please use CLI tools instead.".into());
+    }
+
     // 构建命令：先添加前置参数（如 conda run -n env python），再添加主参数
     // Build command: pre_args first (e.g. conda run -n env python), then main args
     let mut cmd = Command::new(python_exe);
@@ -260,16 +267,27 @@ fn _spawn_python_process(
         .spawn()
         .map_err(|e| format!("Failed to spawn process: {}", e))?;
 
-    // Windows: 将子进程分配到 Job Object，确保父进程退出时子进程被 OS 自动终止
-    // Windows: assign child to Job Object so OS auto-kills it when parent exits
-    if let Some(jm) = app.try_state::<JobManager>() {
-        jm.assign(child.id());
+    let child_pid = child.id();
+    // 诊断：记录子进程 spawn 信息，便于排查输出管道问题
+    // Diagnostic: log spawn info to aid output pipeline troubleshooting
+    log::info!("[spawn] task={} pid={} exe={} dir={}", task_id, child_pid, python_exe, working_dir);
+
+    // Windows: 为每个子进程创建独立的 Job Object，确保任务终止或应用退出时
+    // OS 通过 KILL_ON_JOB_CLOSE 强制终止该 Job 内所有进程（含孤儿孙进程）。
+    // Windows: create a per-task Job Object so the OS forcibly terminates all
+    // processes in this Job (including orphaned grandchildren) via KILL_ON_JOB_CLOSE
+    // when the JobHandle is dropped.
+    let job_handle = JobHandle::new();
+    if let Some(ref jh) = job_handle {
+        jh.assign(child_pid);
     }
 
     let stdin = child.stdin.take()
         .ok_or_else(|| "Failed to open stdin".to_string())?;
 
     // stdout 后台读取线程 / stdout background reader thread
+    // 诊断增强：记录每行 trace 日志 + emit 失败告警，便于排查输出丢失问题
+    // Diagnostic enhancement: trace each line + warn on emit failure
     let stdout = child.stdout.take()
         .ok_or_else(|| "Failed to open stdout".to_string())?;
     let app_stdout = app.clone();
@@ -277,18 +295,30 @@ fn _spawn_python_process(
     let evt_stdout = stdout_event.to_string();
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
+        let mut count: u64 = 0;
         for line in reader.lines() {
             match line {
                 Ok(l) => {
-                    let _ = app_stdout.emit(&evt_stdout,
-                        AgentLinePayload { task_id: tid_stdout.clone(), line: l });
+                    count += 1;
+                    log::trace!("[stdout] task={} line#{}: {}", tid_stdout, count, &l);
+                    if let Err(e) = app_stdout.emit(&evt_stdout,
+                        AgentLinePayload { task_id: tid_stdout.clone(), line: l })
+                    {
+                        log::warn!("[stdout] emit FAILED task={}: {}", tid_stdout, e);
+                    }
                 }
-                Err(_) => break,
+                Err(e) => {
+                    log::debug!("[stdout] reader end task={} count={} err={}", tid_stdout, count, e);
+                    break;
+                }
             }
         }
+        log::debug!("[stdout] reader exited task={} total_lines={}", tid_stdout, count);
     });
 
     // stderr 后台读取线程 / stderr background reader thread
+    // 诊断增强：记录每行 trace 日志 + emit 失败告警，便于排查输出丢失问题
+    // Diagnostic enhancement: trace each line + warn on emit failure
     let stderr = child.stderr.take()
         .ok_or_else(|| "Failed to open stderr".to_string())?;
     let app_stderr = app.clone();
@@ -296,19 +326,29 @@ fn _spawn_python_process(
     let evt_stderr = stderr_event.to_string();
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
+        let mut count: u64 = 0;
         for line in reader.lines() {
             match line {
                 Ok(l) => {
-                    let _ = app_stderr.emit(&evt_stderr,
-                        AgentLinePayload { task_id: tid_stderr.clone(), line: l });
+                    count += 1;
+                    log::trace!("[stderr] task={} line#{}: {}", tid_stderr, count, &l);
+                    if let Err(e) = app_stderr.emit(&evt_stderr,
+                        AgentLinePayload { task_id: tid_stderr.clone(), line: l })
+                    {
+                        log::warn!("[stderr] emit FAILED task={}: {}", tid_stderr, e);
+                    }
                 }
-                Err(_) => break,
+                Err(e) => {
+                    log::debug!("[stderr] reader end task={} count={} err={}", tid_stderr, count, e);
+                    break;
+                }
             }
         }
+        log::debug!("[stderr] reader exited task={} total_lines={}", tid_stderr, count);
     });
 
     // 存储进程句柄 / Store process handle
-    state.insert(task_id.to_string(), ProcessHandle { child, stdin })?;
+    state.insert(task_id.to_string(), ProcessHandle { child, stdin, job_handle })?;
 
     Ok(())
 }
@@ -331,6 +371,15 @@ fn get_os_platform() -> String {
     else { "linux".into() }
 }
 
+/// 终止所有子进程并退出应用 — 所有退出路径的统一入口。
+/// Kill all subprocesses and exit — single entry point for all exit paths.
+fn _kill_all_and_exit(state: &ProcessManager, app: &AppHandle) {
+    if let Err(e) = state.kill_all() {
+        log::warn!("[_kill_all_and_exit] kill_all error: {}", e);
+    }
+    app.exit(0);
+}
+
 /// 终止所有 agent 子进程并退出应用。
 /// Kill all agent subprocesses and exit the app.
 #[tauri::command]
@@ -338,10 +387,7 @@ fn force_quit_app(
     state: State<'_, ProcessManager>,
     app: AppHandle,
 ) -> Result<(), String> {
-    // 终止所有 agent / Kill all agents
-    state.kill_all()?;
-    // 退出应用 / Exit the app
-    app.exit(0);
+    _kill_all_and_exit(&state, &app);
     Ok(())
 }
 
@@ -500,8 +546,19 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(process_manager::ProcessManager::new())
-        .manage(JobManager::new())
         .setup(|app| {
+            // 非 Windows 平台守卫：弹窗告警后退出，防止用户在无 Job Object 保护的环境下运行子进程。
+            // Non-Windows guard: show warning dialog and exit to prevent running without Job Object.
+            if cfg!(not(target_os = "windows")) {
+                use tauri_plugin_dialog::DialogExt;
+                app.handle().dialog()
+                    .message("Flow Forge Studio 仅支持 Windows 平台。\n\nFlow Forge Studio is Windows-only.\n\n请使用命令行工具代替：\nPlease use the CLI tools instead:\n  cd agent && python main.py ...\n  cd python && python main.py ...")
+                    .title("平台不支持 / Platform Not Supported")
+                    .show(|_| {
+                        std::process::exit(1);
+                    });
+            }
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -530,11 +587,12 @@ pub fn run() {
                         }
                     }
                     "quit" => {
-                        // 强制退出前终止所有 agent / Kill all agents before exit
+                        // 统一退出入口 / Single exit entry point
                         if let Some(state) = app.try_state::<ProcessManager>() {
-                            let _ = state.kill_all();
+                            _kill_all_and_exit(&state, app);
+                        } else {
+                            app.exit(0);
                         }
-                        app.exit(0);
                     }
                     _ => {}
                 })

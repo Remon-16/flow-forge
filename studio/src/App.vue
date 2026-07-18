@@ -68,24 +68,8 @@ async function handleMinimizeToTray() {
 
 async function handleTerminateAndQuit() {
   closeDialogVisible.value = false
-  // 终止 agent 任务 / Terminate agent tasks
-  const runningTasks = agent.tasks.filter(
-    t => t.status === 'running' || t.status === 'question'
-  )
-  for (const task of runningTasks) {
-    await agent.terminateTask(task.id)
-  }
-  // 终止 executor 会话 / Terminate executor sessions
-  const runningExec = executorStore.sessions.filter(s => s.status === 'running')
-  for (const session of runningExec) {
-    await executorStore.terminateSession(session.id)
-  }
-  // 终止 converter 会话 / Terminate converter sessions
-  const runningConv = converterStore.sessions.filter(s => s.status === 'running')
-  for (const session of runningConv) {
-    await converterStore.terminateSession(session.id)
-  }
-  // 终止所有子进程后退出应用 / Kill all subprocesses then exit the app
+  // 统一退出入口：kill_all() 会处理所有注册的子进程（含优雅 stdin 通知）
+  // Unified exit entry: kill_all() handles all registered subprocesses (incl. graceful stdin notify)
   if (isDesktop) {
     const { invoke } = await import('@tauri-apps/api/core')
     await invoke('force_quit_app')

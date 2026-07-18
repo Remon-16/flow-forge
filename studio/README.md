@@ -29,14 +29,12 @@ npm run dev
 
 ## 平台兼容性说明
 
-Flow Forge Studio 当前主要在 **Windows** 上进行开发和测试。
+**Flow Forge Studio 仅支持 Windows 平台。** Studio 的进程管理依赖 Windows Job Object 机制（`KILL_ON_JOB_CLOSE`）来保证子进程（agent / executor / converter）在任务终止或应用退出时被操作系统强制终止，这是 Windows 内核提供的功能，其他平台无等价替代。
 
-- **Windows**：✅ 完整支持，包括子进程自动终止（Job Object）、日志实时输出、进程树强制清理等全部功能。
-- **Linux / macOS**：⚠️ 未经充分测试。子进程管理的跨平台实现（进程组终止等）通过了编译检查，但未在真实 Linux/macOS 环境中运行验证，可能存在进程残留或日志丢失的风险。**建议在非 Windows 系统上直接使用 [CLI 命令行](../python/README.md) 执行代码。**
+- **Windows**：✅ 唯一支持平台。子进程自动终止（Job Object）、日志实时输出、进程树强制清理等全部功能完整可用。
+- **Linux / macOS**：❌ 不支持。Studio 无法编译为 Linux/macOS 可执行文件，也不应在这些平台上运行。
 
-> **⚠️ 重要风险提示**：在非 Windows 系统上，如果 Studio 进程异常终止（如崩溃、`kill -9` 强杀、系统强制结束进程），正在运行的 Python 子进程（agent / executor / converter）可能成为孤儿进程继续执行。若 agent 正在调用付费 LLM API，可能产生意外的 API 费用。Windows 上通过 Job Object 机制可以自动避免此问题。**强烈建议非 Windows 用户使用 [CLI 命令行](../python/README.md) 执行任务。**
-
-如果你在非 Windows 系统上使用 Studio 并遇到问题，欢迎提交 Issue。
+> **非 Windows 用户请直接使用 [CLI 命令行](../python/README.md) 执行 agent / executor / converter 任务。** 命令行工具是跨平台的，在 Windows、Linux、macOS 上均可正常运行。
 
 ## 常用命令
 
