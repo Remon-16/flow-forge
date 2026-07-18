@@ -34,6 +34,8 @@ Flow Forge Studio is primarily developed and tested on **Windows**.
 - **Windows**: ✅ Fully supported — automatic child process termination (Job Object), real-time log output, full process tree cleanup.
 - **Linux / macOS**: ⚠️ Not thoroughly tested. The cross-platform subprocess management (process group termination, etc.) passes compilation checks but has not been verified in real Linux/macOS environments. Potential risks include orphaned processes and log loss. **On non-Windows systems, we recommend using the [CLI](../python/README.en.md) directly to execute code.**
 
+> **⚠️ Important Risk Notice**: On non-Windows systems, if the Studio process terminates abnormally (e.g., crash, `kill -9`, system-forced termination), running Python subprocesses (agent / executor / converter) may become orphaned and continue executing. If an agent is actively calling paid LLM APIs, this could result in unexpected API charges. Windows avoids this automatically via the Job Object mechanism. **Non-Windows users are strongly advised to use the [CLI](../python/README.en.md) to execute tasks.**
+
 If you encounter issues on non-Windows systems, please file an Issue.
 
 ## Common Commands

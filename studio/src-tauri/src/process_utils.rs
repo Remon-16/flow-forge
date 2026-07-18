@@ -8,6 +8,54 @@
 use std::io::Write;
 use std::process::{Child, ChildStdin, Command};
 
+// ============================================================================
+// 跨平台 spawn 配置 / Cross-platform spawn configuration
+// ============================================================================
+
+/// 禁止子进程弹出控制台/终端窗口（跨平台）。
+/// Suppress console/terminal window for child process (cross-platform).
+///
+/// Windows: 设置 CREATE_NO_WINDOW 标志，禁止 CMD 窗口弹出。
+/// Windows: set CREATE_NO_WINDOW flag to prevent CMD window from appearing.
+///
+/// Unix (Linux/macOS): GUI 应用启动的子进程默认不会创建终端窗口，
+/// 此处显式保留为 no-op 以表达跨平台意图，同时防止未来平台行为变更。
+/// Unix: child processes from GUI apps don't create terminal windows by default;
+/// kept as explicit no-op to express cross-platform intent and guard against future changes.
+pub fn suppress_console_window(cmd: &mut Command) {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Unix: 默认不弹窗，显式 no-op / Unix: no terminal window by default, explicit no-op
+        let _ = cmd;
+    }
+}
+
+/// 设置进程组，使子进程及其后代在同一组中，便于 kill_process_tree 整体终止。
+/// Set process group so child + descendants are in one group for tree kill.
+///
+/// 仅 Unix 系统需要；Windows 使用 taskkill /T 实现进程树终止。
+/// Only needed on Unix; Windows uses taskkill /T for process tree termination.
+pub fn apply_process_group(cmd: &mut Command) {
+    #[cfg(not(target_os = "windows"))]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = cmd;
+    }
+}
+
+// ============================================================================
+// Kill 函数 / Kill functions
+// ============================================================================
+
 /// 强制终止子进程及其所有后代进程（跨平台）。
 /// Force-kill a child process and all its descendants (cross-platform).
 ///

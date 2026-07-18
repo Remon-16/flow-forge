@@ -89,19 +89,22 @@ export const useConverterStore = defineStore('converter', () => {
   }
 
   async function removeSession(sessionId: string): Promise<void> {
-    // 1. 先从 UI 中移除（同步，立即生效）/ Remove from UI first (sync, immediate)
+    // 1. 先终止子进程，确保进程已 kill 再从 UI 移除 / Kill subprocess first; remove from UI after
+    if (_listeners.has(sessionId)) {
+      try { await killConverter(sessionId); } catch { /* process may already be dead */ }
+      _listeners.get(sessionId)?.()
+      _listeners.delete(sessionId)
+      // 同步清理健康检查 / Clean up health check too
+      const hc = _healthChecks.get(sessionId)
+      if (hc) { clearInterval(hc); _healthChecks.delete(sessionId) }
+    }
+
+    // 2. 确认子进程已终止，从 UI 移除 / Confirm process is dead, then remove from UI
     sessions.value = sessions.value.filter((s) => s.id !== sessionId)
     if (activeSessionId.value === sessionId) {
       activeSessionId.value = sessions.value[0]?.id ?? null
     }
-
-    // 2. 再异步清理子进程和持久化（后台进行，不阻塞 UI）/ Then cleanup async (background)
-    if (_listeners.has(sessionId)) {
-      killConverter(sessionId).catch(() => {})
-      _listeners.get(sessionId)?.()
-      _listeners.delete(sessionId)
-    }
-    saveSessions().catch(() => {})
+    await saveSessions()
   }
 
   // ---- CLI args builder / CLI 参数构建 ----

@@ -238,12 +238,8 @@ fn _spawn_python_process(
     cmd.args(pre_args);
     cmd.args(args);
 
-    // Windows: 禁止创建 CMD 窗口 / Suppress console window creation
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
+    // 跨平台：禁止控制台弹窗 / Cross-platform: suppress console window
+    process_utils::suppress_console_window(&mut cmd);
 
     // Python 无缓冲输出：防止 CREATE_NO_WINDOW 导致全量缓冲后日志不实时显示
     // Unbuffered Python I/O: prevent full buffering when no TTY is detected
@@ -251,11 +247,7 @@ fn _spawn_python_process(
 
     // Unix: 设置进程组，使子进程及其后代在同一组中，便于 kill_process_tree 用 kill -9 -pgid 整体终止
     // Unix: set process group so child + descendants are in one group for tree kill
-    #[cfg(not(target_os = "windows"))]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
+    process_utils::apply_process_group(&mut cmd);
 
     let mut child = cmd
         .current_dir(working_dir)

@@ -135,6 +135,9 @@ export const useAgentStore = defineStore('agent', () => {
       await killAgent(taskId)
       _listeners.get(taskId)?.()
       _listeners.delete(taskId)
+      // 同步清理健康检查 / Clean up health check too
+      const hc = _healthChecks.get(taskId)
+      if (hc) { clearInterval(hc); _healthChecks.delete(taskId) }
     }
 
     tasks.value = tasks.value.filter((t) => t.id !== taskId)
