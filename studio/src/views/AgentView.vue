@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Modal } from 'ant-design-vue'
@@ -19,6 +19,12 @@ const agent = useAgentStore()
 
 const settingsVisible = ref(false)
 const isDesktopMode = isDesktop
+
+// 是否为计划审核状态 — 决定 content-question 是否水平分栏
+// Whether currently in plan review mode — controls horizontal split layout
+const isPlanReview = computed(() =>
+  agent.activeTask?.pendingPrompt?.kind === 'plan_review'
+)
 
 onMounted(async () => {
   await agent.initialize()
@@ -82,8 +88,11 @@ onMounted(async () => {
             <RunningView />
           </div>
 
-          <!-- Question: log view + prompt interaction -->
-          <div v-else-if="agent.activeTask.status === 'question'" class="content-question">
+          <!-- Question: 审核时水平分栏（日志左 + 面板右），其他保持垂直布局 -->
+          <!-- Question: horizontal split for review (logs left + panel right), vertical for others -->
+          <div v-else-if="agent.activeTask.status === 'question'"
+               class="content-question"
+               :class="{ 'layout-review': isPlanReview }">
             <RunningView />
             <QuestionPrompt />
           </div>
@@ -188,6 +197,21 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+/* 计划审核水平分栏：日志左侧，审核面板右侧 */
+/* Plan review horizontal split: logs left, review panel right */
+.content-question.layout-review {
+  flex-direction: row;
+}
+.content-question.layout-review > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.content-question.layout-review > :last-child {
+  width: 460px;
+  min-width: 360px;
+  border-left: 2px solid #fa8c16;
+  overflow-y: auto;
 }
 .content-completed, .content-error {
   flex: 1;

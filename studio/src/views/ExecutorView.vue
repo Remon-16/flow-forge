@@ -287,9 +287,9 @@ function browsePath(path: string) {
   flex-shrink: 0;
   font-size: 12px;
 }
-.log-info .log-msg { color: #d4d4d4; }
-.log-warn .log-msg { color: #e6db74; }
-.log-error .log-msg { color: #f92672; }
+.log-info .log-msg { color: #e0e0e0; }
+.log-warn .log-msg { color: #ffd54f; }
+.log-error .log-msg { color: #ef5350; }
 
 /* Completed / 完成 */
 .completed-card {

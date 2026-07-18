@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { isDesktop } from './desktop-bridge'
 import type { AgentEvent } from '../types/agent'
+import { parseStderrLine } from './log-parser'
 
 // ============================================================================
 // Subprocess operations / 子进程操作
@@ -89,13 +90,15 @@ export async function listenToAgentEvents(
     }
   })
 
-  // 监听 stderr 事件 / Listen to stderr events
+  // 监听 stderr 事件 — JSON 解析提取级别（兜底非 JSON 行按 info 处理）
+  // Listen to stderr events — JSON parse for level (non-JSON fallback to info)
   const unlistenStderr = await listen<{ task_id: string; line: string }>('agent-stderr', (event) => {
     if (event.payload.task_id !== taskId) return
+    const parsed = parseStderrLine(event.payload.line)
     handler({
       type: 'log',
-      level: 'error',
-      message: event.payload.line,
+      level: parsed.level,
+      message: parsed.message,
       ts: new Date().toLocaleTimeString(),
     })
   })

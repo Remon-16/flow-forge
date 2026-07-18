@@ -134,9 +134,12 @@ function handleDeleteAnnotation(idx: number) {
   border: 1px solid #e8e8e8;
   border-radius: 8px;
   margin-top: 12px;
-  max-height: 400px;
   overflow-y: auto;
   background: #fff;
+  /* max-height 由父容器控制，右侧面板模式下自动撑满可用空间 */
+  /* max-height is controlled by parent; fills available space in right-panel mode */
+  flex: 1;
+  min-height: 0;
 }
 .drawer-loading, .drawer-empty {
   padding: 24px;
@@ -145,7 +148,9 @@ function handleDeleteAnnotation(idx: number) {
 }
 .drawer-content {
   display: flex;
-  max-height: 400px;
+  /* max-height 由父容器控制 / controlled by parent */
+  flex: 1;
+  min-height: 0;
 }
 .plan-preview {
   flex: 1;

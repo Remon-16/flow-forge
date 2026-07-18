@@ -254,6 +254,9 @@ fn _spawn_python_process(
     // Python 无缓冲输出：防止 CREATE_NO_WINDOW 导致全量缓冲后日志不实时显示
     // Unbuffered Python I/O: prevent full buffering when no TTY is detected
     cmd.env("PYTHONUNBUFFERED", "1");
+    // 通知 Python 端使用 JSON stderr 格式（shared/py/flow_forge_logging 模块检测此变量）
+    // Notify Python side to use JSON stderr format (detected by flow_forge_logging)
+    cmd.env("FLOW_FORGE_STUDIO", "1");
 
     // Unix: 设置进程组，使子进程及其后代在同一组中，便于 kill_process_tree 用 kill -9 -pgid 整体终止
     // Unix: set process group so child + descendants are in one group for tree kill

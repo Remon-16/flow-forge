@@ -31,14 +31,9 @@ from reporter.html_writer import HTMLReportWriter
 logger = logging.getLogger(__name__)
 
 
-def _setup_logging(verbose: bool = False) -> None:
-    """Configure logging with consistent format."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+# 委托给 shared/py/flow_forge_logging 模块，确保与 agent/converter 格式统一
+# Delegate to shared/py/flow_forge_logging for consistent format across all subprocesses
+from flow_forge_logging import setup_studio_logging as _setup_logging
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:

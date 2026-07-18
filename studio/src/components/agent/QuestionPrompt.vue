@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { useAgentStore } from '../../stores/agent'
@@ -17,7 +17,19 @@ const clarifyText = ref('')
 // 计划审核状态 / Plan review state
 const reviewMode = ref<'approve' | 'annotations' | 'text' | null>(null)
 const reviewText = ref('')
-const reviewDrawerVisible = ref(false)
+// 计划审核时默认打开抽屉，其他类型默认关闭
+// Auto-open drawer for plan review; closed for other prompt types
+const reviewDrawerVisible = ref(prompt.value?.kind === 'plan_review')
+
+// 监听新 prompt 到达：plan_review 类型自动打开审核抽屉（含 re-review 场景）
+// Watch new prompt arrival: auto-open review drawer for plan_review (incl. re-review)
+watch(() => prompt.value?.id, (newId, oldId) => {
+  if (newId && newId !== oldId && prompt.value?.kind === 'plan_review') {
+    reviewDrawerVisible.value = true
+    reviewMode.value = null
+    reviewText.value = ''
+  }
+})
 
 // 检测批注行为 → 自动选择按批注修改 / Detect annotation → auto-select revise-by-annotations
 function onAnnotationActivity() {
@@ -98,7 +110,7 @@ const promptData = computed(() => getPromptData())
 </script>
 
 <template>
-  <div class="question-prompt" v-if="promptData">
+  <div class="question-prompt" :class="{ 'is-review': promptData?.kind === 'plan_review' }" v-if="promptData">
     <!-- API 澄清 / API Clarification -->
     <div v-if="promptData?.kind === 'api_clarification'" class="clarify-section">
       <div class="prompt-title">{{ t('agent.prompt_clarificationTitle') }}</div>
@@ -181,6 +193,11 @@ const promptData = computed(() => getPromptData())
   border-top: 2px solid #fa8c16;
   padding: 16px;
   background: #fff7e6;
+}
+/* 计划审核 — 水平分栏时去掉顶部边框，由父组件添加左侧边框 */
+/* Plan review — remove top border in horizontal layout; parent adds left border */
+.question-prompt.is-review {
+  border-top: none;
 }
 .prompt-title {
   font-weight: 600;

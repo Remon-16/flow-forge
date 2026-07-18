@@ -108,7 +108,7 @@ function onScroll() {
   color: #666;
   flex-shrink: 0;
 }
-.log-info .log-msg { color: #d4d4d4; }
-.log-warn .log-msg { color: #dcdcaa; }
-.log-error .log-msg { color: #f44747; }
+.log-info .log-msg { color: #e0e0e0; }
+.log-warn .log-msg { color: #ffd54f; }
+.log-error .log-msg { color: #ef5350; }
 </style>

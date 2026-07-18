@@ -33,14 +33,9 @@ from i18n import _
 logger = logging.getLogger("converter")
 
 
-def _setup_logging(verbose: bool = False) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-    root = logging.getLogger()
-    root.setLevel(level)
-    root.handlers = []
-    root.addHandler(handler)
+# 委托给 shared/py/flow_forge_logging 模块，确保与 agent/executor 格式统一
+# Delegate to shared/py/flow_forge_logging for consistent format across all subprocesses
+from flow_forge_logging import setup_studio_logging as _setup_logging
 
 
 def _cmd_excel2yaml(args: argparse.Namespace) -> int:

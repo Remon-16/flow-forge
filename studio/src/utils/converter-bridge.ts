@@ -4,6 +4,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { isDesktop } from './desktop-bridge'
+import { parseStderrLine } from './log-parser'
 
 // ============================================================================
 // Subprocess operations / 子进程操作
@@ -53,7 +54,7 @@ export async function checkConverterRunning(sessionId: string): Promise<boolean>
  */
 export async function listenToConverterEvents(
   sessionId: string,
-  handler: (line: string, level: 'info' | 'error') => void,
+  handler: (line: string, level: 'info' | 'warn' | 'error') => void,
 ): Promise<() => void> {
   // 先注册监听器再返回，确保 spawn 进程前事件通道已就绪。
   // Await listener registration before returning so the event channel
@@ -65,10 +66,12 @@ export async function listenToConverterEvents(
     handler(event.payload.line, 'info')
   })
 
-  // 监听 stderr 事件 / Listen to stderr events
+  // 监听 stderr 事件 — JSON 解析提取级别（兜底非 JSON 行按 info 处理）
+  // Listen to stderr events — JSON parse for level (non-JSON fallback to info)
   const unlistenStderr = await listen<{ task_id: string; line: string }>('converter-stderr', (event) => {
     if (event.payload.task_id !== sessionId) return
-    handler(event.payload.line, 'error')
+    const parsed = parseStderrLine(event.payload.line)
+    handler(parsed.message, parsed.level)
   })
 
   // 返回清理函数 / Return cleanup function
