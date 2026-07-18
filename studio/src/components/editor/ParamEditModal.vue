@@ -212,7 +212,7 @@ function deleteSubParam(parentKey: string, subKey: string) {
                 <a-input
                   :value="String(val)"
                   size="small"
-                  @change="e => {
+                  @change="(e: Event) => {
                     const target = e.target as HTMLInputElement
                     envOnlyParams[key] = target.value
                   }"
@@ -233,7 +233,7 @@ function deleteSubParam(parentKey: string, subKey: string) {
                     v-if="typeof subVal === 'string' || typeof subVal === 'number'"
                     :value="String(subVal)"
                     size="small"
-                    @change="e => {
+                    @change="(e: Event) => {
                       const target = e.target as HTMLInputElement
                       const obj = envOnlyParams[key] as Record<string, unknown>
                       obj[subKey] = target.value
@@ -248,7 +248,7 @@ function deleteSubParam(parentKey: string, subKey: string) {
                         v-if="typeof sub2Val === 'string' || typeof sub2Val === 'number'"
                         :value="String(sub2Val)"
                         size="small"
-                        @change="e => {
+                        @change="(e: Event) => {
                           const target = e.target as HTMLInputElement
                           const obj2 = (envOnlyParams[key] as Record<string, unknown>)[subKey] as Record<string, unknown>
                           obj2[sub2Key] = target.value

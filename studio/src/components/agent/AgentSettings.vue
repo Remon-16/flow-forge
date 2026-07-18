@@ -13,7 +13,7 @@ const { t } = useI18n()
 const agent = useAgentStore()
 
 const props = defineProps<{ visible: boolean }>()
-const emit = defineEmits<{ 'update:visible': (v: boolean) => void }>()
+const emit = defineEmits<{ 'update:visible': [value: boolean] }>()
 
 const local = ref({
   pythonExePath: '',

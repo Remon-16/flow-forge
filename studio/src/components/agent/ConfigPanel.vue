@@ -191,8 +191,8 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
               v-else
               :value="String(val)"
               size="small"
-              @change="e => {
-                const target = e.target as HTMLInputElement
+              @change="(e: Event) => {
+                const target = (e.target as HTMLInputElement)
                 emitChange(sec.key, key, target.value)
               }"
             />
@@ -225,8 +225,8 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                   v-else
                   :value="String(subVal)"
                   size="small"
-                  @change="e => {
-                    const target = e.target as HTMLInputElement
+                  @change="(e: Event) => {
+                    const target = (e.target as HTMLInputElement)
                     emitChange(sec.key, key + '.' + subKey, target.value)
                   }"
                 />
@@ -244,8 +244,8 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                     v-if="isScalar(subSubVal)"
                     :value="String(subSubVal)"
                     size="small"
-                    @change="e => {
-                      const target = e.target as HTMLInputElement
+                    @change="(e: Event) => {
+                      const target = (e.target as HTMLInputElement)
                       emitChange(sec.key, key + '.' + subKey + '.' + subSubKey, target.value)
                     }"
                   />
@@ -264,8 +264,8 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                         v-if="typeof deepVal === 'string' || typeof deepVal === 'number'"
                         :value="String(deepVal)"
                         size="small"
-                        @change="e => {
-                          const target = e.target as HTMLInputElement
+                        @change="(e: Event) => {
+                          const target = (e.target as HTMLInputElement)
                           emitChange(sec.key, key + '.' + subKey + '.' + subSubKey + '.' + deepKey, target.value)
                         }"
                       />
@@ -300,7 +300,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                 <label>{{ subKey }}</label>
                 <div v-for="(item, idx) in subVal" :key="idx" class="array-item-row">
                   <a-input :value="String(item)" size="small" style="flex: 1"
-                    @change="e => updateArrayItem(sec.key, String(key) + '.' + String(subKey), idx, (e.target as HTMLInputElement).value)" />
+                    @change="(e: Event) => updateArrayItem(sec.key, String(key) + '.' + String(subKey), idx, (e.target as HTMLInputElement).value)" />
                   <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key) + '.' + String(subKey), idx)">✕</a-button>
                 </div>
                 <a-button size="small" type="dashed" @click="addArrayItem(sec.key, String(key) + '.' + String(subKey), '')">
@@ -324,7 +324,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                         @change="(v: any) => updateArrayItemField(sec.key, String(key) + '.' + String(subKey), idx, String(fieldKey), v)" />
                       <a-input
                         v-else :value="fieldVal" size="small"
-                        @change="e => updateArrayItemField(sec.key, String(key) + '.' + String(subKey), idx, String(fieldKey), (e.target as HTMLInputElement).value)" />
+                        @change="(e: Event) => updateArrayItemField(sec.key, String(key) + '.' + String(subKey), idx, String(fieldKey), (e.target as HTMLInputElement).value)" />
                     </div>
                     <div v-else-if="typeof fieldVal === 'boolean'" class="config-field" style="margin-left: 8px;">
                       <label>{{ fieldKey }}</label>
@@ -355,7 +355,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
             <label>{{ key }}</label>
             <div v-for="(item, idx) in val" :key="idx" class="array-item-row">
               <a-input :value="String(item)" size="small" style="flex: 1"
-                @change="e => updateArrayItem(sec.key, String(key), idx, (e.target as HTMLInputElement).value)" />
+                @change="(e: Event) => updateArrayItem(sec.key, String(key), idx, (e.target as HTMLInputElement).value)" />
               <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key), idx)">✕</a-button>
             </div>
             <a-button size="small" type="dashed" @click="addArrayItem(sec.key, String(key), '')">
@@ -379,7 +379,7 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                     @change="(v: any) => updateArrayItemField(sec.key, String(key), idx, String(fieldKey), v)" />
                   <a-input
                     v-else :value="fieldVal" size="small"
-                    @change="e => updateArrayItemField(sec.key, String(key), idx, String(fieldKey), (e.target as HTMLInputElement).value)" />
+                    @change="(e: Event) => updateArrayItemField(sec.key, String(key), idx, String(fieldKey), (e.target as HTMLInputElement).value)" />
                 </div>
                 <div v-else-if="typeof fieldVal === 'boolean'" class="config-field" style="margin-left: 8px;">
                   <label>{{ fieldKey }}</label>

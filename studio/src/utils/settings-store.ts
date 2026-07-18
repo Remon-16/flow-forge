@@ -3,6 +3,20 @@
 
 import { isDesktop, readFile, writeFile, fileExists, mkdir } from './desktop-bridge'
 
+// 环境回退：当 Tauri path API 不可用时使用 APPDATA 环境变量。
+// Fallback: use APPDATA env var when Tauri path API is unavailable.
+const _getFallbackAppDir = (): string => {
+  try {
+    // 浏览器/Node 环境兼容：通过 any 访问 process.env / Browser/Node compat: access process.env via any
+    const env: Record<string, string | undefined> | undefined =
+      (typeof (globalThis as any).process !== 'undefined')
+        ? (globalThis as any).process?.env
+        : undefined
+    if (env?.APPDATA) return `${env.APPDATA}/${APP_NAME}`
+  } catch { /* ignore */ }
+  return ''
+}
+
 const APP_NAME = 'flow-forge-studio'
 
 let _appDataDir: string | null = null
@@ -24,9 +38,7 @@ export async function getAppDataDir(): Promise<string> {
       return _appDataDir!
     } catch {
       // Fallback: use APPDATA env var on Windows
-      const home = (typeof process !== 'undefined' && process.env?.APPDATA)
-        || (typeof window !== 'undefined' ? '' : '')
-      _appDataDir = home ? `${home}/${APP_NAME}` : `./${APP_NAME}`
+      _appDataDir = _getFallbackAppDir() || `./${APP_NAME}`
       return _appDataDir
     }
   }

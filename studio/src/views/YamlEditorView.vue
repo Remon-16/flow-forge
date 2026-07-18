@@ -6,7 +6,6 @@ import { useYamlStore } from '../stores/yaml-store'
 import { useEditorStore } from '../stores/editor'
 import { useExecutorStore } from '../stores/executor'
 import { useConverterStore } from '../stores/converter'
-import { useAgentStore } from '../stores/agent'
 import YamlFileTree from '../components/yaml-editor/YamlFileTree.vue'
 import YamlTabBar from '../components/yaml-editor/YamlTabBar.vue'
 import SingleCaseForm from '../components/yaml-editor/SingleCaseForm.vue'
@@ -29,7 +28,6 @@ const yamlStore = useYamlStore()
 const editorStore = useEditorStore()
 const executor = useExecutorStore()
 const converter = useConverterStore()
-const agent = useAgentStore()
 
 // ============================================================================
 // Editor toolbar state / 编辑器工具栏状态
@@ -41,13 +39,13 @@ const paramEditMode = ref<'executor' | 'converter'>('executor')
 // 当前激活文件的路径 / Current active file path
 const currentFilePath = computed(() => {
   const tab = yamlStore.openTabs[yamlStore.activeTabIndex]
-  return tab?.filePath || ''
+  return tab?.path || ''
 })
 
 // 当前激活文件的目录 / Current active file directory
 const currentDir = computed(() => {
   const tab = yamlStore.openTabs[yamlStore.activeTabIndex]
-  return tab?.filePath ? tab.filePath.replace(/[/\\][^/\\]+$/, '') : ''
+  return tab?.path ? tab.path.replace(/[/\\][^/\\]+$/, '') : ''
 })
 
 // ============================================================================

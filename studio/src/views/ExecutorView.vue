@@ -6,7 +6,6 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Modal } from 'ant-design-vue'
 import { useExecutorStore } from '../stores/executor'
-import { useAgentStore } from '../stores/agent'
 import { isDesktop, openInExplorer } from '../utils/desktop-bridge'
 import { SettingOutlined } from '@ant-design/icons-vue'
 import AgentSettings from '../components/agent/AgentSettings.vue'
@@ -16,7 +15,6 @@ import ExecutorForm from '../components/executor/ExecutorForm.vue'
 const router = useRouter()
 const { t } = useI18n()
 const executor = useExecutorStore()
-const agent = useAgentStore()
 
 const settingsVisible = ref(false)
 const isDesktopMode = isDesktop

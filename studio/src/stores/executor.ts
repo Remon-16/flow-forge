@@ -10,7 +10,7 @@ import { spawnExecutor, killExecutor, checkExecutorRunning, listenToExecutorEven
 import { resolvePythonCommand } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
 import { useAgentStore } from './agent'
-import { readFile, writeFile, exists, listDirectoryAll } from '../utils/desktop-bridge'
+import { readFile, writeFile, listDirectoryAll } from '../utils/desktop-bridge'
 import yaml from 'js-yaml'
 import YAML from 'yaml'
 
@@ -205,29 +205,6 @@ export const useExecutorStore = defineStore('executor', () => {
   }
 
   /**
-   * 将 js-yaml 解析结果扁平化：嵌套对象用 _app_ 前缀标记。
-   * Flatten js-yaml parse result: nested objects prefixed with _app_.
-   */
-  function flattenEnvConfig(parsed: unknown): Record<string, unknown> {
-    const result: Record<string, unknown> = {}
-    if (parsed === null || parsed === undefined) return result
-    if (typeof parsed !== 'object') return result
-    if (Array.isArray(parsed)) return result
-
-    const obj = parsed as Record<string, unknown>
-    for (const [key, val] of Object.entries(obj)) {
-      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-        // 嵌套对象 → _app_ 前缀 / Nested object → _app_ prefix
-        result[`_app_${key}`] = val
-      } else {
-        // 顶层标量或数组 → 保持原样 / Top-level scalar or array → as-is
-        result[key] = val
-      }
-    }
-    return result
-  }
-
-  /**
    * 将 env-only 参数写入 YAML env 文件（保留注释）。
    * Write env-only parameters to YAML env file (comments preserved).
    *
@@ -277,7 +254,7 @@ export const useExecutorStore = defineStore('executor', () => {
       // Collect keys to delete (also handles _app_-prefixed nested object keys)
       const keysToDelete: string[] = []
       for (const item of doc.contents.items) {
-        const docKey = String(item.key.value)
+        const docKey = String((item.key as YAML.Scalar).value)
         if (!dataKeys.has(docKey)) {
           // 检查是否有对应的 _app_ 前缀 key 在 data 中 / Check if corresponding _app_-prefixed key is in data
           if (!dataKeys.has(`_app_${docKey}`)) {
@@ -305,7 +282,7 @@ export const useExecutorStore = defineStore('executor', () => {
             const newSubKeys = new Set(Object.keys(obj))
             const subKeysToDelete: string[] = []
             for (const subItem of appNode.items) {
-              const subDocKey = String(subItem.key.value)
+              const subDocKey = String((subItem.key as YAML.Scalar).value)
               if (!newSubKeys.has(subDocKey)) {
                 subKeysToDelete.push(subDocKey)
               }
@@ -339,7 +316,7 @@ export const useExecutorStore = defineStore('executor', () => {
           const newSubKeys = new Set(Object.keys(obj))
           const subKeysToDelete: string[] = []
           for (const subItem of existingNode.items) {
-            const subDocKey = String(subItem.key.value)
+            const subDocKey = String((subItem.key as YAML.Scalar).value)
             if (!newSubKeys.has(subDocKey)) {
               subKeysToDelete.push(subDocKey)
             }
@@ -359,28 +336,6 @@ export const useExecutorStore = defineStore('executor', () => {
         doc.set(key, val)
       }
     }
-  }
-
-  /**
-   * 将扁平化数据还原为嵌套 YAML 结构。
-   * Restore flattened _app_ prefixed data to nested YAML-compatible structure.
-   */
-  function unflattenEnvConfig(data: Record<string, unknown>): Record<string, unknown> {
-    const result: Record<string, unknown> = {}
-    const apps: Record<string, unknown> = {}
-
-    for (const [key, val] of Object.entries(data)) {
-      if (key.startsWith('_app_')) {
-        const appName = key.slice(5) // remove _app_ prefix / 去掉 _app_ 前缀
-        apps[appName] = val
-      } else {
-        result[key] = val
-      }
-    }
-
-    // 将 app 块合并回顶层 / Merge app blocks back to top level
-    Object.assign(result, apps)
-    return result
   }
 
   // ---- Subprocess lifecycle / 子进程生命周期 ----

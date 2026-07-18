@@ -73,16 +73,6 @@ watch(annotations, () => {
   }, 500)
 }, { deep: true })
 
-// 添加批注 / Add annotation
-function handleAddAnnotation(selectedText: string, lineNumber: number) {
-  annotations.value.push({
-    line_number: lineNumber,
-    selected_text: selectedText,
-    review_comment: '',
-  })
-  emit('annotationActivity')
-}
-
 // 编辑批注 / Edit annotation
 function handleEditAnnotation(idx: number) {
   const ann = annotations.value[idx]

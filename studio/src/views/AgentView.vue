@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Modal, message } from 'ant-design-vue'
+import { Modal } from 'ant-design-vue'
 import { useAgentStore } from '../stores/agent'
 import { isDesktop } from '../utils/desktop-bridge'
 import { SettingOutlined } from '@ant-design/icons-vue'

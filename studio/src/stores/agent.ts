@@ -6,14 +6,13 @@ import { ref, computed } from 'vue'
 import type {
   AgentTask,
   AgentConfig,
-  TaskStatus,
   LogEntry,
   AgentEvent,
   AgentCommand,
   CompletionSummary,
 } from '../types/agent'
 import { spawnAgent, sendToAgent, killAgent, checkAgentRunning, listenToAgentEvents } from '../utils/agent-bridge'
-import { resolvePythonExe, resolvePythonCommand } from '../utils/resolve-python'
+import { resolvePythonCommand } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
 
 const CONFIG_FILE = 'agent_config.json'

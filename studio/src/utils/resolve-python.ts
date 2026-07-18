@@ -27,12 +27,6 @@ export async function initPlatformCache(): Promise<void> {
   }
 }
 
-/** 判断当前是否为 Windows 平台 / Check if current platform is Windows */
-function isWindowsPlatform(): boolean {
-  const plat = _platformCache || (typeof navigator !== 'undefined' ? navigator.platform : '')
-  return plat.toLowerCase().includes('win')
-}
-
 // ============================================================================
 // 接口 / Interfaces
 // ============================================================================

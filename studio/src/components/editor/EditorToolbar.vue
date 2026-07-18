@@ -3,7 +3,6 @@
 // Editor toolbar with independent dropdown selectors, action buttons, and param edit.
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Dropdown, Menu, MenuItem, MenuDivider } from 'ant-design-vue'
 import { PlayCircleOutlined, RetweetOutlined, MoreOutlined } from '@ant-design/icons-vue'
 
 const { t } = useI18n()
@@ -46,7 +45,6 @@ const defaultRunAction = ref<RunAction>('all')
 const defaultConvertAction = ref<ConvertAction>('all')
 
 // Simple per-file memory (not persisted across sessions)
-const memoryKey = computed(() => `${props.editorType}:${props.filePath || ''}`)
 
 // ============================================================================
 // Action items (without icons — icons are rendered as separate components)

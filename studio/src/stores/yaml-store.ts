@@ -165,9 +165,12 @@ export const useYamlStore = defineStore('yaml', () => {
     let targetPath: string | null | undefined = filePath
     if (!targetPath) {
       if (isDesktop) {
-        targetPath = await openFileDialog(
+        const picked = await openFileDialog(
           [{ name: 'YAML Files', extensions: ['yaml', 'yml'] }],
         )
+        if (picked && !Array.isArray(picked)) {
+          targetPath = picked
+        }
       } else {
         // Browser fallback
         targetPath = await new Promise<string | null>((resolve) => {

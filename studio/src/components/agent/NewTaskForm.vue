@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { useAgentStore } from '../../stores/agent'
-import { openDirectoryDialog, openFileDialog, readFile, isDesktop } from '../../utils/desktop-bridge'
+import { openDirectoryDialog, openFileDialog, readFile } from '../../utils/desktop-bridge'
 import yaml from 'js-yaml'
 import YAML from 'yaml'
 import ConfigPanel from './ConfigPanel.vue'
@@ -104,12 +104,6 @@ async function browseFile(target: 'requirement' | 'api') {
   } catch { /* cancelled */ }
 }
 
-// 解析路径字符串为数组 / Parse path string to array
-function splitPaths(input: string): string[] {
-  if (!input.trim()) return []
-  return input.split(/[;\n]+/).map(s => s.trim()).filter(Boolean)
-}
-
 // 加载配置文件（固定文件名为 env.yaml）/ Load config file (hardcoded filename: env.yaml)
 async function loadYamlConfig() {
   if (!agent.config.agentRootDir) {
@@ -186,10 +180,12 @@ async function saveLlmConfig() {
 
     // 使用 yaml 包解析文档（保留注释和格式）/ Parse with yaml package (preserves comments & formatting)
     const doc = YAML.parseDocument(content)
-    let llmNode = doc.get('llm', true) // true = keep as YAMLMap node
-
-    if (!llmNode || !YAML.isMap(llmNode)) {
-      llmNode = doc.createMap()
+    let llmNode: YAML.YAMLMap
+    const existing = doc.get('llm', true)
+    if (existing && YAML.isMap(existing)) {
+      llmNode = existing
+    } else {
+      llmNode = doc.createNode({}) as YAML.YAMLMap
       doc.set('llm', llmNode)
     }
 
@@ -286,9 +282,6 @@ async function handleSubmit() {
 
   await agent.startTask(taskId, cliArgs)
 }
-
-// 桌面检测 / Desktop detection
-const isDesktopMode = isDesktop
 
 // 自动加载配置 / Auto-load config if agent root is set
 if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {

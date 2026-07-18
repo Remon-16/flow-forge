@@ -5,7 +5,6 @@ import { useEditorStore } from '../stores/editor'
 import { useWorkbookStore } from '../stores/workbook'
 import { useExecutorStore } from '../stores/executor'
 import { useConverterStore } from '../stores/converter'
-import { useAgentStore } from '../stores/agent'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { writeFile, deleteToTrash, mkdir } from '../utils/desktop-bridge'
@@ -28,7 +27,6 @@ const editor = useEditorStore()
 const workbook = useWorkbookStore()
 const executor = useExecutorStore()
 const converter = useConverterStore()
-const agent = useAgentStore()
 
 // ============================================================================
 // Editor toolbar state / 编辑器工具栏状态
