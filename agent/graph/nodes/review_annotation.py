@@ -597,12 +597,26 @@ def _regenerate_mermaid_for_flow(
     agent.reset_steps()
     mermaid_content = agent.call_llm(prompt, system_msg)
 
-    # 找到对应的 chunk 并更新 mermaid 字段 / Find matching chunk and update mermaid
+    # 找到对应的 chunk 并更新 mermaid 字段和 content
+    # Find matching chunk, update mermaid field and content
     chunk_id = flow.get("chunk_id", "")
     biz_key = f"biz_{chunk_id}"
     for sec in sections.get("sections", []):
         if sec.get("key") == biz_key or sec.get("chunk_id") == biz_key:
+            old_mermaid = sec.get("mermaid", "")
             sec["mermaid"] = mermaid_content
+            # 同步更新 content：替换旧 mermaid 或 prepend 新 mermaid
+            # Sync content: replace old mermaid or prepend new one
+            current_content = sec.get("content", "")
+            if old_mermaid and old_mermaid.strip() in current_content:
+                current_content = current_content.replace(
+                    old_mermaid.strip(), mermaid_content.strip()
+                )
+            elif mermaid_content.strip() not in current_content:
+                current_content = (
+                    mermaid_content.strip() + "\n\n" + current_content
+                )
+            sec["content"] = current_content
             break
 
 
@@ -639,7 +653,13 @@ def _fix_biz_chunk(
         language=get_language_name(),
     )
     agent.reset_steps()
-    chunk["content"] = agent.call_llm(prompt, system_msg)
+    new_content = agent.call_llm(prompt, system_msg)
+    # 将当前 mermaid 注入到新生成的 biz content 前
+    # Prepend current mermaid to regenerated biz content
+    mermaid = chunk.get("mermaid", "")
+    if mermaid and mermaid.strip() and mermaid.strip() not in new_content:
+        new_content = mermaid.strip() + "\n\n" + new_content
+    chunk["content"] = new_content
 
 
 # ============================================================================

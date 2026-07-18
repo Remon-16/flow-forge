@@ -312,6 +312,45 @@ class PlanGenerator(BaseAgent):
             # Skip → empty dict to match Phase return type and downstream .get()/in/.keys() usage
             biz_sections = {}
 
+        # ====================================================================
+        # 将 Mermaid 流程图注入对应的 biz section content
+        # Inject Mermaid diagrams into corresponding biz section content
+        # 使用与 _save_sections_artifact 相同的批次遍历逻辑进行匹配
+        # Uses the same batch iteration logic as _save_sections_artifact for matching
+        # 确保 plan.md 和 plan_chunks_progress.json 都包含流程图
+        # Ensures both plan.md and plan_chunks_progress.json include flowcharts
+        # ====================================================================
+        _mermaid_chunks = plan_parts.get("mermaid_chunks", {})
+        if _mermaid_chunks and biz_sections and case_type in ("both", "biz"):
+            for j, batch in enumerate(biz_batches):
+                if not batch:
+                    continue
+                for flow in batch:
+                    chunk_id = flow.get("chunk_id", "")
+                    if chunk_id not in _mermaid_chunks:
+                        continue
+                    mermaid_content = _mermaid_chunks[chunk_id]
+                    if not mermaid_content or not mermaid_content.strip():
+                        continue
+                    # 确定 section key（与 _phase_c_biz_sections 逻辑一致）
+                    # Determine section key (same logic as _phase_c_biz_sections)
+                    if len(batch) == 1:
+                        section_key = f"biz_{flow.get('name', '')}"
+                    else:
+                        section_key = f"biz_batch_{j}"
+                    if section_key in biz_sections:
+                        current = biz_sections[section_key]
+                        if mermaid_content.strip() not in current:
+                            biz_sections[section_key] = (
+                                mermaid_content.strip() + "\n\n" + current
+                            )
+                # 同步更新 plan_parts，确保持久化到 plan_chunks_progress.json
+                # Sync to plan_parts so plan_chunks_progress.json is also updated
+                plan_parts["biz_sections"] = biz_sections
+            # 注入完成后保存一次 chunk 进度
+            # Save chunk progress after injection
+            self._save_chunk_progress(memory_dir, plan_parts)
+
         # 保存分块结构到 plan_sections.json / Save section structure for revision
         self._save_sections_artifact(
             memory_dir=memory_dir,

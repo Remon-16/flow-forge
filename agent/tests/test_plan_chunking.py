@@ -169,6 +169,8 @@ class TestPlanChunking:
             # 验证拼接顺序 / Verify assembly order
             assert plan_md.index("GLOBAL_CONTEXT") < plan_md.index("FIRST_GROUP_SECTION")
             assert plan_md.index("FIRST_GROUP_SECTION") < plan_md.index("SECOND_GROUP_SECTION")
+            # 验证 Mermaid 图已注入到 biz section 前 / Verify Mermaid injected before biz section
+            assert plan_md.index("MERMAID_FLOW") < plan_md.index("BIZ_FLOW_SECTION")
 
     def should_raise_error_when_outline_missing(self):
         """outline 缺失时 generate_plan_node 报错 / Error when outline is None."""
@@ -224,6 +226,8 @@ class TestPlanChunking:
             )
 
             assert "BIZ_FLOW_SECTION" in plan_md
+            # 验证 Mermaid 图已注入到 biz section 前 / Verify Mermaid injected before biz section
+            assert plan_md.index("MERMAID_FLOW") < plan_md.index("BIZ_FLOW_SECTION")
             # 已真正触达保存逻辑 (memory_dir 非空) / Save logic was actually reached
             mock_save.assert_called_once()
 
@@ -369,6 +373,16 @@ class TestPlanChunkResumeProgress:
             progress = json.loads(progress_path.read_text(encoding="utf-8"))
             biz_sections = progress["plan_parts"].get("biz_sections", {})
             assert len(biz_sections) >= 2
+            # 验证 biz_sections 内容已包含 Mermaid 图 / Verify biz sections include Mermaid
+            for key, content in biz_sections.items():
+                if "batch" in key:
+                    # 多 flow 批次应包含所有 flow 的 Mermaid
+                    # Multi-flow batch should contain Mermaid for all flows
+                    assert "MERMAID_1" in content or "MERMAID_2" in content or "MERMAID_3" in content, \
+                        f"Biz section '{key}' should contain Mermaid content"
+                else:
+                    assert "MERMAID" in content, \
+                        f"Biz section '{key}' should contain Mermaid content"
 
     def should_skip_phase_a_when_global_context_present(self, tmp_path):
         """预置 global_context → Phase A 不调 LLM。
