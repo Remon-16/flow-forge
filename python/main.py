@@ -7,6 +7,8 @@ Usage:
     python main.py --config /path/to/env.yml
 """
 
+from __future__ import annotations
+
 import argparse
 import logging
 import os
@@ -40,23 +42,13 @@ def _setup_logging(verbose: bool = False) -> None:
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """解析命令行参数 — 参数定义来自 shared/schemas/cli/executor.json。
+    Parse CLI args — arg definitions from shared/schemas/cli/executor.json."""
+    # 从 shared schema 自动生成 parser / Auto-generate parser from shared schema
+    from flow_forge_schemas.cli import load_cli_schema, add_args_to_parser
+    schema = load_cli_schema("executor")
     parser = argparse.ArgumentParser(description="Flow Forge API Test Executor")
-    parser.add_argument(
-        "--config", type=str, default=None,
-        help="Path to env.yml (default: env.yml next to this script)",
-    )
-    parser.add_argument("--scriptType", type=str, default=None, help="Script type")
-    parser.add_argument("--envName", type=str, default=None, help="Environment name")
-    parser.add_argument("--caseFilePath", type=str, default=None, help="Path to Excel test case file")
-    parser.add_argument("--maxThread", type=int, default=None, help="Maximum number of threads")
-    parser.add_argument("--reportName", type=str, default=None, help="Report name")
-    parser.add_argument("--apiMode", type=str, default=None,
-                        help="Test mode: single, biz, or all")
-    parser.add_argument("--yamlDir", type=str, default=None,
-                        help="Directory containing YAML test case files")
-    parser.add_argument("--yamlFiles", type=str, default=None,
-                        help="Comma-separated YAML file paths")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
+    add_args_to_parser(parser, schema)
     return parser.parse_args(argv)
 
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // ConfigPanel — 动态配置节编辑器。根据实际 configData 渲染所有键值，取代预定义字段列表。
 // Dynamic config section editor. Renders all keys from actual configData, replacing predefined field lists.
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import JsonEditor from '../json-editor/JsonEditor.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
@@ -29,13 +29,13 @@ const editingFieldValue = ref<Record<string, unknown>>({})
 
 // 配置节定义（仅 key + 标签，字段从实际数据动态渲染）
 // Section definitions (key + label only; fields rendered dynamically from actual data)
-const sections = [
+const sections = computed(() => [
   { key: 'pipeline', label: t('agent.config_pipeline') },
   { key: 'validation', label: t('agent.config_validation') },
   { key: 'plugins', label: t('agent.config_plugins') },
   { key: 'skills', label: t('agent.config_skills') },
   { key: 'logging', label: t('agent.config_logging') },
-]
+])
 
 // 从 configData 获取某 section 的实际数据 / Get actual data for a section from configData
 function getSectionData(sectionKey: string): Record<string, unknown> {

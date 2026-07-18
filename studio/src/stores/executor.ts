@@ -340,6 +340,8 @@ export const useExecutorStore = defineStore('executor', () => {
 
   // ---- Subprocess lifecycle / 子进程生命周期 ----
 
+  // 参数定义来自 shared/schemas/cli/executor.json（与 Python main.py parser 同步）
+  // Arg definitions from shared/schemas/cli/executor.json (synced with Python main.py parser)
   function buildCliArgs(session: ExecutorSession): string[] {
     const args: string[] = ['main.py']
     const cp = session.cliParams

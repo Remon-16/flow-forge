@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { useAgentStore } from '../../stores/agent'
 import { openDirectoryDialog, openFileDialog, readFile } from '../../utils/desktop-bridge'
+import { getEditableDestSet, getFlagMap } from '../../utils/cli-schema'
 import yaml from 'js-yaml'
 import YAML from 'yaml'
 import ConfigPanel from './ConfigPanel.vue'
@@ -142,9 +143,17 @@ async function loadYamlConfig() {
       syncExtraParamsYamlFromData()
     }
 
-    // 完整配置数据给 ConfigPanel / Full config for ConfigPanel
+    // 完整配置数据给 ConfigPanel — 仅包含有 CLI 映射的字段 / Full config for ConfigPanel — only CLI-mapped fields
+    const pipelineCliDests = getEditableDestSet('agent', 'pipeline')
+    const rawPipeline = (parsed.pipeline && typeof parsed.pipeline === 'object')
+      ? parsed.pipeline as Record<string, unknown>
+      : {}
     fullConfig.value = {
-      pipeline: (parsed.pipeline && typeof parsed.pipeline === 'object') ? parsed.pipeline : {},
+      // 过滤 pipeline：只保留有对应 CLI 参数的字段（如 plan_biz_flow_batch_size 是 settings-only，不显示）
+      // Filter pipeline: only keep fields with corresponding CLI args (settings-only keys like plan_biz_flow_batch_size are hidden)
+      pipeline: Object.fromEntries(
+        Object.entries(rawPipeline).filter(([k]) => pipelineCliDests.has(k))
+      ),
       validation: (parsed.validation && typeof parsed.validation === 'object') ? parsed.validation : {},
       plugins: (parsed.plugins && typeof parsed.plugins === 'object') ? parsed.plugins : {},
       skills: (parsed.skills && typeof parsed.skills === 'object') ? parsed.skills : {},
@@ -242,6 +251,10 @@ async function handleSubmit() {
   })
 
   // 构建 CLI 覆盖参数 / Build CLI override args
+  // 从 shared schema 获取 flag 映射（一次性，避免循环内重复构建）
+  // Fetch flag maps from shared schema once (avoid rebuilding in loop)
+  const pipelineFlagMap = getFlagMap('agent', 'pipeline')
+
   const cliArgs: string[] = []
   for (const [path, val] of Object.entries(configOverrides.value)) {
     if (val === undefined || val === null || val === '') continue
@@ -250,11 +263,15 @@ async function handleSubmit() {
 
     if (section === 'pipeline') {
       const key = parts[1]
+      // auto 和 case_type 是布尔标志，仅当为 true 时才添加 / auto and case_type are boolean flags, only add when true
       if (key === 'auto') { if (val) cliArgs.push('--auto'); continue }
       if (key === 'case_type') { cliArgs.push('--case-type', String(val)); continue }
-      // 跳过 Python 解析器中不存在的参数 / Skip CLI args that don't exist in Python parser
-      if (key === 'max_steps_no_progress') continue
-      cliArgs.push(`--${key.replace(/_/g, '-')}`, String(val))
+      // 从 shared schema 获取 CLI flag（不在 schema 中的 key 被静默跳过）
+      // Look up CLI flag from shared schema (keys not in schema are silently skipped)
+      const flag = pipelineFlagMap.get(key)
+      if (flag) {
+        cliArgs.push(flag, String(val))
+      }
     } else if (section === 'validation') {
       // 支持嵌套路径 validation.url_doc_match_validation.enable 等 / Support nested paths
       const fieldPath = parts.slice(1).join('_')

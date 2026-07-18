@@ -1,0 +1,118 @@
+{
+  "entry": "executor",
+  "description_zh": "Flow Forge — API 测试执行器",
+  "description_en": "Flow Forge — API Test Executor",
+  "flag_style": "camelCase",
+  "args": [
+    {
+      "flag": "--config",
+      "short": null,
+      "dest": "config",
+      "type": "str",
+      "default": null,
+      "help_zh": "env.yml 配置文件路径（默认：脚本旁 env.yml）",
+      "help_en": "Path to env.yml (default: env.yml next to this script)",
+      "section": null,
+      "studio": { "editable": false }
+    },
+    {
+      "flag": "--scriptType",
+      "short": null,
+      "dest": "scriptType",
+      "type": "str",
+      "default": null,
+      "help_zh": "脚本类型",
+      "help_en": "Script type",
+      "section": null,
+      "studio": { "editable": true, "field_type": "text" }
+    },
+    {
+      "flag": "--envName",
+      "short": null,
+      "dest": "envName",
+      "type": "str",
+      "default": null,
+      "help_zh": "环境名称",
+      "help_en": "Environment name",
+      "section": null,
+      "studio": { "editable": true, "field_type": "text" }
+    },
+    {
+      "flag": "--caseFilePath",
+      "short": null,
+      "dest": "caseFilePath",
+      "type": "str",
+      "default": null,
+      "help_zh": "Excel 测试用例文件路径",
+      "help_en": "Path to Excel test case file",
+      "section": null,
+      "studio": { "editable": true, "field_type": "text" }
+    },
+    {
+      "flag": "--maxThread",
+      "short": null,
+      "dest": "maxThread",
+      "type": "int",
+      "default": null,
+      "help_zh": "最大线程数",
+      "help_en": "Maximum number of threads",
+      "section": null,
+      "studio": { "editable": true, "field_type": "number" }
+    },
+    {
+      "flag": "--reportName",
+      "short": null,
+      "dest": "reportName",
+      "type": "str",
+      "default": null,
+      "help_zh": "报告名称",
+      "help_en": "Report name",
+      "section": null,
+      "studio": { "editable": true, "field_type": "text" }
+    },
+    {
+      "flag": "--apiMode",
+      "short": null,
+      "dest": "apiMode",
+      "type": "str",
+      "default": null,
+      "help_zh": "测试模式: single, biz, 或 all",
+      "help_en": "Test mode: single, biz, or all",
+      "section": null,
+      "studio": { "editable": true, "field_type": "select" }
+    },
+    {
+      "flag": "--yamlDir",
+      "short": null,
+      "dest": "yamlDir",
+      "type": "str",
+      "default": null,
+      "help_zh": "包含 YAML 测试用例文件的目录",
+      "help_en": "Directory containing YAML test case files",
+      "section": null,
+      "studio": { "editable": true, "field_type": "text" }
+    },
+    {
+      "flag": "--yamlFiles",
+      "short": null,
+      "dest": "yamlFiles",
+      "type": "str",
+      "default": null,
+      "help_zh": "逗号分隔的 YAML 文件路径",
+      "help_en": "Comma-separated YAML file paths",
+      "section": null,
+      "studio": { "editable": true, "field_type": "text" }
+    },
+    {
+      "flag": "--verbose",
+      "short": "-v",
+      "dest": "verbose",
+      "type": "bool_store_true",
+      "default": false,
+      "help_zh": "启用调试日志",
+      "help_en": "Enable debug logging",
+      "section": null,
+      "studio": { "editable": false }
+    }
+  ]
+}

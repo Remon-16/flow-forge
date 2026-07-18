@@ -106,6 +106,8 @@ export const useConverterStore = defineStore('converter', () => {
 
   // ---- CLI args builder / CLI 参数构建 ----
 
+  // 参数定义来自 shared/schemas/cli/converter.json（与 Python converter_main.py parser 同步）
+  // Arg definitions from shared/schemas/cli/converter.json (synced with Python converter_main.py parser)
   function buildCliArgs(session: ConverterSession): string[] {
     const args: string[] = ['converter_main.py']
 

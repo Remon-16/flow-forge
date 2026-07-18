@@ -234,6 +234,14 @@ fn _spawn_python_process(
     let mut cmd = Command::new(python_exe);
     cmd.args(pre_args);
     cmd.args(args);
+
+    // Windows: 禁止创建 CMD 窗口 / Suppress console window creation
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
     let mut child = cmd
         .current_dir(working_dir)
         .stdout(Stdio::piped())
