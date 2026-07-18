@@ -119,9 +119,13 @@ export function resolvePythonCommand(config: AgentConfig, platform?: string): Py
 
   // 3. Conda 模式 — 拆分为 exe + 前置参数，确保 Rust Command::new 正确解析
   // Conda mode — split into exe + pre-args so Rust Command::new parses correctly
+  // --no-capture-output：禁用 conda run 的 stdout/stderr 捕获缓冲，确保实时输出流。
+  // 从 conda 4.9（2020 年发布）起可用，兼容性非常广泛。
+  // --no-capture-output: disable conda run's stdout/stderr capture for real-time streaming.
+  // Available since conda 4.9 (released 2020), very widely compatible.
   if (config.envType === 'conda' && config.condaEnvName && config.condaEnvName.trim()) {
     const envName = config.condaEnvName.trim()
-    return { exe: 'conda', preArgs: ['run', '-n', envName, 'python'] }
+    return { exe: 'conda', preArgs: ['run', '--no-capture-output', '-n', envName, 'python'] }
   }
 
   // 4. 兜底 / Fallback

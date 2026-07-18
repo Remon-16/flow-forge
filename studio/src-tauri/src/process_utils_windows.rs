@@ -13,10 +13,14 @@ use std::os::windows::process::CommandExt;
 /// 禁止子进程弹出控制台窗口。
 /// Suppress console window for child process.
 ///
-/// DETACHED_PROCESS：不继承父进程控制台，比 CREATE_NO_WINDOW 对 Python CRT I/O 兼容性更好。
-/// DETACHED_PROCESS: don't inherit parent console; better Python CRT I/O compatibility.
+/// CREATE_NO_WINDOW (0x08000000)：创建隐藏控制台 — CRT I/O 正常但窗口不可见。
+/// DETACHED_PROCESS (0x00000008) 不阻止控制台程序（conda.exe/python.exe）创建新的可见窗口，
+/// 因此改用 CREATE_NO_WINDOW 在提供控制台的同时彻底隐藏窗口。
+/// CREATE_NO_WINDOW (0x08000000): creates a hidden console — CRT I/O works but window is invisible.
+/// DETACHED_PROCESS (0x00000008) doesn't prevent console apps (conda.exe/python.exe) from
+/// creating a new visible window, so we use CREATE_NO_WINDOW instead.
 pub fn suppress_console_window(cmd: &mut Command) {
-    cmd.creation_flags(0x00000008); // DETACHED_PROCESS
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 }
 
 /// Windows 不需要进程组。
