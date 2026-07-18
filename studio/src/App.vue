@@ -218,11 +218,11 @@ onUnmounted(() => {
         <a-button @click="closeDialogVisible = false">
           {{ t('dialog.cancel') }}
         </a-button>
-        <a-button danger @click="handleTerminateAndQuit">
-          {{ t('tray.terminateAndQuit') }}
-        </a-button>
-        <a-button type="primary" @click="handleMinimizeToTray">
+        <a-button @click="handleMinimizeToTray">
           {{ t('tray.minimizeToTray') }}
+        </a-button>
+        <a-button type="primary" danger @click="handleTerminateAndQuit">
+          {{ t('tray.terminateAndQuit') }}
         </a-button>
       </div>
     </template>

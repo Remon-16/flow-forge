@@ -215,6 +215,10 @@ def run_studio_protocol(
 
     bridge = StudioBridge()
 
+    # 检测 auto 模式：意外中断时自动 skip 而非阻塞等待用户输入。
+    # Detect auto mode: auto-skip unexpected interrupts instead of blocking on stdin.
+    auto_mode = initial.get("auto_mode", False)
+
     # 通知 Studio 已进入 studio 模式
     bridge.emit("log", level="info", message=_("studio.mode_enabled"))
 
@@ -238,110 +242,124 @@ def run_studio_protocol(
         # 中断点 1: API 分析确认 / analyze_api — clarification prompt
         # ------------------------------------------------------------------
         if pending == "analyze_api":
-            api_summary = state_values.get("api_summary", [])
-            uncertainties = _extract_uncertainties(api_summary)
-
-            cmd = bridge.send_prompt(
-                kind="api_clarification",
-                message=_("review.prompt_clarify"),
-                data={"uncertainties": uncertainties},
-            )
-
-            if cmd.get("command") == "skip":
+            # auto 模式安全兜底：意外中断时自动 skip，不阻塞 stdin
+            # Auto mode safety net: auto-skip unexpected interrupt instead of blocking
+            if auto_mode:
                 bridge.emit("log", level="info",
-                            message=_("studio.clarification_skipped"))
+                            message=_("studio.auto_skip", node="analyze_api"))
                 result = _resume("skip")
-            elif cmd.get("command") == "respond":
-                text = cmd.get("text", "")
-                bridge.emit("log", level="info",
-                            message=_("studio.clarification_response", text=text[:80]))
-                result = _resume(text)
-            elif cmd.get("command") == "terminate":
-                bridge.emit("error", message=_("studio.terminated_by_user"))
-                return state_values
             else:
-                # 未知命令，默认 skip / Unknown command, default to skip
-                bridge.emit("log", level="warn",
-                            message=_("studio.unknown_command", cmd=str(cmd)))
-                result = _resume("skip")
+                api_summary = state_values.get("api_summary", [])
+                uncertainties = _extract_uncertainties(api_summary)
+
+                cmd = bridge.send_prompt(
+                    kind="api_clarification",
+                    message=_("review.prompt_clarify"),
+                    data={"uncertainties": uncertainties},
+                )
+
+                if cmd.get("command") == "skip":
+                    bridge.emit("log", level="info",
+                                message=_("studio.clarification_skipped"))
+                    result = _resume("skip")
+                elif cmd.get("command") == "respond":
+                    text = cmd.get("text", "")
+                    bridge.emit("log", level="info",
+                                message=_("studio.clarification_response", text=text[:80]))
+                    result = _resume(text)
+                elif cmd.get("command") == "terminate":
+                    bridge.emit("error", message=_("studio.terminated_by_user"))
+                    return state_values
+                else:
+                    # 未知命令，默认 skip / Unknown command, default to skip
+                    bridge.emit("log", level="warn",
+                                message=_("studio.unknown_command", cmd=str(cmd)))
+                    result = _resume("skip")
 
         # ------------------------------------------------------------------
         # 中断点 2: 测试计划审核 / human_confirm — plan review
         # ------------------------------------------------------------------
         elif pending == "human_confirm":
-            memory_dir = state_values.get("memory_dir", "")
-            plan_md = state_values.get("plan_md", "")
-
-            cmd = bridge.send_prompt(
-                kind="plan_review",
-                message=_("review.interrupt_title"),
-                data={
-                    "memory_dir": memory_dir,
-                    "plan_preview": plan_md[:1000] if plan_md else "",
-                },
-            )
-
-            if cmd.get("command") == "approve":
+            # auto 模式安全兜底：意外中断时自动 approve，不阻塞 stdin
+            # Auto mode safety net: auto-approve unexpected interrupt instead of blocking
+            if auto_mode:
                 bridge.emit("log", level="info",
-                            message=_("review.approved"))
+                            message=_("studio.auto_approve", node="human_confirm"))
                 result = _resume("approved")
-
-            elif cmd.get("command") == "revise_annotations":
-                # 从磁盘读取 plan_comments.json（Studio 已写入）
-                # Read plan_comments.json from disk (Studio has written it)
-                from cli.interactive import _handle_annotation_revision
-
-                success = _handle_annotation_revision(graph, config)
-                if not success:
-                    # 批注文件不存在或为空 → 返回 prompt 让用户重选
-                    # Annotations file missing/empty → return to prompt
-                    bridge.emit("log", level="warn",
-                                message=_("review.annotations_not_found",
-                                          path=str(Path(memory_dir) / "plan_comments.json")))
-                    bridge.send_prompt(
-                        kind="plan_review",
-                        message=_("review.interrupt_title"),
-                        data={
-                            "memory_dir": memory_dir,
-                            "plan_preview": plan_md[:1000] if plan_md else "",
-                            "error": _("review.annotations_not_found_short"),
-                        },
-                    )
-                    # 重新等待命令
-                    # Re-prompt — this is a second prompt after the failed one
-                    cmd2 = bridge.wait_for_command()
-                    if cmd2.get("command") == "approve":
-                        result = _resume("approved")
-                    elif cmd2.get("command") == "revise_text":
-                        from cli.interactive import _handle_text_revision
-                        _handle_text_revision(graph, config, cmd2.get("text", ""))
-                    elif cmd2.get("command") == "terminate":
-                        bridge.emit("error", message=_("studio.terminated_by_user"))
-                        return state_values
-                    else:
-                        result = _resume("approved")
-                # result is set via graph.update_state in _handle_annotation_revision
-                # The loop will re-enter human_confirm
-
-            elif cmd.get("command") == "revise_text":
-                from cli.interactive import _handle_text_revision
-                feedback = cmd.get("text", "")
-                if not feedback.strip():
-                    bridge.emit("log", level="warn",
-                                message=_("review.feedback_empty"))
-                    continue  # Re-prompt
-                _handle_text_revision(graph, config, feedback)
-                # graph.update_state done, loop back to human_confirm
-
-            elif cmd.get("command") == "terminate":
-                bridge.emit("error", message=_("studio.terminated_by_user"))
-                return state_values
-
             else:
-                # 未知命令，默认 approve / Unknown command, default to approve
-                bridge.emit("log", level="warn",
-                            message=_("studio.unknown_command", cmd=str(cmd)))
-                result = _resume("approved")
+                memory_dir = state_values.get("memory_dir", "")
+                plan_md = state_values.get("plan_md", "")
+
+                cmd = bridge.send_prompt(
+                    kind="plan_review",
+                    message=_("review.interrupt_title"),
+                    data={
+                        "memory_dir": memory_dir,
+                        "plan_preview": plan_md[:1000] if plan_md else "",
+                    },
+                )
+
+                if cmd.get("command") == "approve":
+                    bridge.emit("log", level="info",
+                                message=_("review.approved"))
+                    result = _resume("approved")
+
+                elif cmd.get("command") == "revise_annotations":
+                    # 从磁盘读取 plan_comments.json（Studio 已写入）
+                    # Read plan_comments.json from disk (Studio has written it)
+                    from cli.interactive import _handle_annotation_revision
+
+                    success = _handle_annotation_revision(graph, config)
+                    if not success:
+                        # 批注文件不存在或为空 → 返回 prompt 让用户重选
+                        # Annotations file missing/empty → return to prompt
+                        bridge.emit("log", level="warn",
+                                    message=_("review.annotations_not_found",
+                                              path=str(Path(memory_dir) / "plan_comments.json")))
+                        bridge.send_prompt(
+                            kind="plan_review",
+                            message=_("review.interrupt_title"),
+                            data={
+                                "memory_dir": memory_dir,
+                                "plan_preview": plan_md[:1000] if plan_md else "",
+                                "error": _("review.annotations_not_found_short"),
+                            },
+                        )
+                        # 重新等待命令
+                        # Re-prompt — this is a second prompt after the failed one
+                        cmd2 = bridge.wait_for_command()
+                        if cmd2.get("command") == "approve":
+                            result = _resume("approved")
+                        elif cmd2.get("command") == "revise_text":
+                            from cli.interactive import _handle_text_revision
+                            _handle_text_revision(graph, config, cmd2.get("text", ""))
+                        elif cmd2.get("command") == "terminate":
+                            bridge.emit("error", message=_("studio.terminated_by_user"))
+                            return state_values
+                        else:
+                            result = _resume("approved")
+                    # result is set via graph.update_state in _handle_annotation_revision
+                    # The loop will re-enter human_confirm
+
+                elif cmd.get("command") == "revise_text":
+                    from cli.interactive import _handle_text_revision
+                    feedback = cmd.get("text", "")
+                    if not feedback.strip():
+                        bridge.emit("log", level="warn",
+                                    message=_("review.feedback_empty"))
+                        continue  # Re-prompt
+                    _handle_text_revision(graph, config, feedback)
+                    # graph.update_state done, loop back to human_confirm
+
+                elif cmd.get("command") == "terminate":
+                    bridge.emit("error", message=_("studio.terminated_by_user"))
+                    return state_values
+
+                else:
+                    # 未知命令，默认 approve / Unknown command, default to approve
+                    bridge.emit("log", level="warn",
+                                message=_("studio.unknown_command", cmd=str(cmd)))
+                    result = _resume("approved")
 
         else:
             # 不在中断点列表中的节点 → 退出循环

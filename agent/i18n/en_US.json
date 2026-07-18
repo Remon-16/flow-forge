@@ -295,5 +295,7 @@
   "studio.terminated_by_user": "Execution terminated by user",
   "studio.unknown_command": "Unknown Studio command: {cmd}",
   "studio.clarification_skipped": "API clarification skipped",
-  "studio.clarification_response": "Clarification response received: {text}"
+  "studio.clarification_response": "Clarification response received: {text}",
+  "studio.auto_skip": "Auto mode: automatically skipping interrupt node {node}, continuing",
+  "studio.auto_approve": "Auto mode: automatically approving interrupt node {node}, continuing"
 }

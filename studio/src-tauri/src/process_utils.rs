@@ -59,33 +59,74 @@ pub fn apply_process_group(cmd: &mut Command) {
 /// 强制终止子进程及其所有后代进程（跨平台）。
 /// Force-kill a child process and all its descendants (cross-platform).
 ///
-/// Windows: child.kill() + taskkill /F /T /PID
-/// Unix:    child.kill() + kill -9 -PGID（进程组整体终止）
+/// Windows: taskkill /F /T /PID 先于 child.kill()，确保进程树在父进程存活时被枚举。
+/// Unix:    kill -9 -PGID 先于 child.kill()，确保进程组信号在 leader 终止前发出。
+///
+/// 重要：必须先通过平台工具终止进程树，再 child.kill() 兜底。
+/// 若先 child.kill() 再杀进程树，父进程已死后 taskkill 无法枚举子进程。
+/// Windows: taskkill /F /T /PID BEFORE child.kill() — tree must be intact for enumeration.
+/// Unix:    kill -9 -PGID BEFORE child.kill() — signal must reach group before leader dies.
 pub fn kill_process_tree(child: &mut Child) {
     let pid = child.id();
 
-    // 终止直接子进程 / Kill the direct child process
-    let _ = child.kill();
-    // 非阻塞回收僵尸进程 / Non-blocking zombie reaping
-    let _ = child.try_wait();
-
     // Windows: 使用 taskkill /T 终止整个进程树（含孙子进程）
-    // Windows: kill the entire process tree (including grandchildren)
+    // 必须在 child.kill() 之前执行，否则父进程已死无法枚举子进程。
+    // Windows: kill entire process tree (including grandchildren) BEFORE child.kill(),
+    // or the dead parent can't be found by taskkill to enumerate children.
     #[cfg(target_os = "windows")]
     {
-        let _ = Command::new("taskkill")
+        match Command::new("taskkill")
             .args(["/F", "/T", "/PID", &pid.to_string()])
-            .output();
+            .output()
+        {
+            Ok(out) => {
+                if !out.status.success() {
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    log::warn!(
+                        "[kill_process_tree] taskkill failed for PID {}: {}",
+                        pid,
+                        stderr.trim()
+                    );
+                }
+            }
+            Err(e) => {
+                log::warn!("[kill_process_tree] taskkill spawn failed for PID {}: {}", pid, e);
+            }
+        }
     }
 
     // Unix: 使用进程组终止所有后代（需要 spawn 时设置了 process_group(0)）
-    // Unix: kill the entire process group (requires process_group(0) at spawn time)
+    // 必须在 child.kill() 之前执行，确保信号在组 leader 终止前发出。
+    // Unix: kill entire process group BEFORE child.kill(), so the signal reaches
+    // all descendants while the group leader is still alive.
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = Command::new("kill")
+        match Command::new("kill")
             .args(["-9", &format!("-{}", pid)])
-            .output();
+            .output()
+        {
+            Ok(out) => {
+                if !out.status.success() {
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    log::warn!(
+                        "[kill_process_tree] kill -9 -{} failed: {}",
+                        pid,
+                        stderr.trim()
+                    );
+                }
+            }
+            Err(e) => {
+                log::warn!("[kill_process_tree] kill spawn failed for PID {}: {}", pid, e);
+            }
+        }
     }
+
+    // 兜底：终止直接子进程并回收僵尸（此时进程树已由上述平台工具处理）
+    // Fallback: kill direct child and reap zombie (tree already handled above)
+    if let Err(e) = child.kill() {
+        log::warn!("[kill_process_tree] child.kill() failed for PID {}: {}", pid, e);
+    }
+    let _ = child.try_wait();
 }
 
 /// 终止 Python 子进程：先发送优雅终止通知，再强制 kill 进程树。

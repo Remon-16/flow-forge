@@ -295,5 +295,7 @@
   "studio.terminated_by_user": "用户终止执行",
   "studio.unknown_command": "未知 Studio 命令: {cmd}",
   "studio.clarification_skipped": "已跳过 API 澄清询问",
-  "studio.clarification_response": "收到澄清回复: {text}"
+  "studio.clarification_response": "收到澄清回复: {text}",
+  "studio.auto_skip": "Auto 模式：自动跳过中断节点 {node}，继续执行",
+  "studio.auto_approve": "Auto 模式：自动批准中断节点 {node}，继续执行"
 }

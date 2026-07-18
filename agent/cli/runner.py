@@ -482,14 +482,15 @@ def main() -> int:
             "save_interfaces", "analyze_requirement", "generate_outline",
             "generate_plan", "human_confirm",
         }
-        if next_stage in _PRE_CONFIRM_STAGES and not _auto_mode:
-            if getattr(args, 'studio', False):
-                from cli.studio_bridge import run_studio_protocol
-                logger.info(_("resume.interactive_mode", stage=next_stage))
-                result = run_studio_protocol(graph, initial, config, session_logger)
-            else:
-                logger.info(_("resume.interactive_mode", stage=next_stage))
-                result = run_interactive(graph, initial, config, session_logger)
+        # --studio 优先：Studio 模式下始终使用 JSON 协议输出。
+        # --studio takes priority: always emit JSON progress in Studio mode.
+        if getattr(args, 'studio', False):
+            from cli.studio_bridge import run_studio_protocol
+            logger.info(_("resume.interactive_mode", stage=next_stage))
+            result = run_studio_protocol(graph, initial, config, session_logger)
+        elif next_stage in _PRE_CONFIRM_STAGES and not _auto_mode:
+            logger.info(_("resume.interactive_mode", stage=next_stage))
+            result = run_interactive(graph, initial, config, session_logger)
         else:
             result = graph.invoke(initial, config)
 
@@ -608,11 +609,13 @@ def main() -> int:
     }
     save_run_config(str(memory_dir), _run_config)
 
-    if auto_mode:
-        result = graph.invoke(initial, config)
-    elif getattr(args, 'studio', False):
+    # --studio 优先于 auto_mode：Studio 模式下始终使用 JSON 协议输出进度事件。
+    # --studio takes priority over auto_mode: always emit JSON progress events in Studio mode.
+    if getattr(args, 'studio', False):
         from cli.studio_bridge import run_studio_protocol
         result = run_studio_protocol(graph, initial, config, session_logger)
+    elif auto_mode:
+        result = graph.invoke(initial, config)
     else:
         result = run_interactive(graph, initial, config, session_logger)
 
