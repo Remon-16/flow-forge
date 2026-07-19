@@ -15,8 +15,6 @@ from graph.nodes.review_annotation import (
     _augment_guidance,
     _bind_actions_to_batch,
     _consolidate_annotations,
-    _find_flow_by_chunk_id,
-    _find_group_by_chunk_id,
     _map_annotations_to_sections,
     _validate_intent_actions,
 )
@@ -248,36 +246,6 @@ class TestConsolidateAnnotations:
 # ============================================================================
 # TestFindByChunkId — chunk_id 查找 / Find by chunk_id
 # ============================================================================
-
-
-class TestFindByChunkId:
-    """Tests for _find_flow_by_chunk_id() and _find_group_by_chunk_id()."""
-
-    def should_find_flow_by_chunk_id(self):
-        outline = {
-            "biz_flows": [
-                {"chunk_id": "biz_user_register", "name": "User Register"},
-            ],
-        }
-        flow = _find_flow_by_chunk_id(outline, "biz_user_register")
-        assert flow is not None
-        assert flow["name"] == "User Register"
-
-    def should_find_group_by_chunk_id(self):
-        outline = {
-            "api_groups": [
-                {"chunk_id": "api_auth", "group_name": "Auth"},
-            ],
-        }
-        group = _find_group_by_chunk_id(outline, "api_auth")
-        assert group is not None
-        assert group["group_name"] == "Auth"
-
-    def should_return_none_for_missing_flow(self):
-        assert _find_flow_by_chunk_id({}, "biz_nonexistent") is None
-
-    def should_return_none_for_missing_group(self):
-        assert _find_group_by_chunk_id({"api_groups": []}, "api_nonexistent") is None
 
 
 # ============================================================================

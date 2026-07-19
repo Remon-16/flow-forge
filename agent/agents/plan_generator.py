@@ -385,7 +385,6 @@ class PlanGenerator(BaseAgent):
 
         prompt = render_prompt(
             PLAN_CHUNK_GLOBAL_USER,
-            outline=outline_json,
             requirement_analysis=requirement_json,
             api_summary=api_summary_json,
             user_guidance=user_guidance or "(none)",
@@ -395,7 +394,6 @@ class PlanGenerator(BaseAgent):
         self.reset_steps()
         system_msg = render_prompt(
             PLAN_CHUNK_GLOBAL_SYSTEM,
-            outline=outline_json,
             language=get_language_name(),
         )
         global_context = self.call_llm(prompt, system_msg)
@@ -492,7 +490,6 @@ class PlanGenerator(BaseAgent):
             # 注入全局上下文 / Inject global context into system prompt
             system_with_context = render_prompt(
                 PLAN_CHUNK_API_SECTION_SYSTEM,
-                outline=outline_json,
                 global_context=global_context,
                 group_name=group_name,
                 test_focus=group.get("test_focus", ""),
@@ -607,7 +604,6 @@ class PlanGenerator(BaseAgent):
 
             system_with_context = render_prompt(
                 PLAN_CHUNK_BIZ_SECTION_SYSTEM,
-                outline=outline_json,
                 global_context=global_context,
                 flows_list=flows_list,
                 language=get_language_name(),
@@ -678,6 +674,8 @@ class PlanGenerator(BaseAgent):
                     "name": group.get("group_name", ""),
                     "section": "single_api",
                     "content": content,
+                    "api_ids": group.get("api_ids", []),
+                    "test_focus": group.get("test_focus", ""),
                 })
 
         biz_flows: List[dict] = []
@@ -708,6 +706,8 @@ class PlanGenerator(BaseAgent):
                         "section": "biz_flows",
                         "content": content,
                         "mermaid": flow_mermaid,
+                        "involved_apis": flow.get("involved_apis", []),
+                        "description": flow.get("description", ""),
                     })
 
         save_pipeline_artifact(memory_dir, "plan_sections.json", {

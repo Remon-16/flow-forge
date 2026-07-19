@@ -147,19 +147,6 @@ def _map_annotations_to_sections(
 
 
 
-def _section_base_line(plan_md: str, content: str):
-    """Chunk 内容在整篇 plan_md 中的起始行 (1-based) / Section start line, or None."""
-    if not plan_md or not content:
-        return None
-    first_line = content.lstrip().split("\n", 1)[0]
-    if not first_line:
-        return None
-    idx = plan_md.find(first_line)
-    if idx == -1:
-        return None
-    return plan_md[:idx].count("\n") + 1
-
-
 # ============================================================================
 # 意图分析 / Intent Analysis
 # ============================================================================
@@ -387,6 +374,8 @@ def _bind_actions_to_batch(actions: List[dict], batch: List[dict]):
 
 # ============================================================================
 # Chunk 级操作执行器 / Chunk-level Action Executor
+# 所有操作只读写 plan_sections.json，不再依赖 outline
+# All operations only read/write plan_sections.json; outline is no longer used
 # ============================================================================
 
 
@@ -402,10 +391,9 @@ def _execute_chunk_actions(
 
     - noop → 跳过 / skip
     - fix → 重生成 chunk / regenerate chunk
-    - delete_chunk → 从 outline + sections 移除 / remove from outline + sections
-    - add_chunk → 更新 outline + 生成新 chunk / update outline + generate new chunk
+    - delete_chunk → 从 sections 移除 / remove from sections
+    - add_chunk → 新增 chunk 到 sections / add new chunk to sections
     """
-    outline = state.get("plan_outline", {})
     interfaces = state.get("interfaces", [])
     user_guidance = state.get("user_guidance", "")
 
@@ -435,7 +423,7 @@ def _execute_chunk_actions(
 
         if "delete_chunk" in action_types:
             # 删除整个 chunk / Delete entire chunk
-            _execute_delete_chunk(sections, outline, chunk_id)
+            _execute_delete_chunk(sections, chunk_id)
             logger.info(_("review.deleted_chunk", key=chunk_id))
             continue
 
@@ -444,15 +432,15 @@ def _execute_chunk_actions(
             add_action = next(a for a in chunk_actions if a.get("action") == "add_chunk")
             section_type = add_action.get("section", "")
             _execute_add_chunk(
-                sections, outline, chunk_id, section_type, fix_text,
-                agent, iface_by_id, analysis, api_summary, user_guidance, state,
+                sections, chunk_id, section_type, fix_text,
+                agent, iface_by_id, analysis, api_summary, user_guidance,
             )
             continue
 
         if "fix" in action_types:
             # 重生成现有 chunk / Regenerate existing chunk
             if chunk_id == "__global__":
-                _fix_global_chunk(sections, fix_text, outline, analysis, api_summary,
+                _fix_global_chunk(sections, fix_text, analysis, api_summary,
                                   agent, user_guidance)
                 logger.info(_("review.fixed_global"))
                 continue
@@ -464,29 +452,16 @@ def _execute_chunk_actions(
 
             chunk_type = chunk.get("type", "")
             if chunk_type == "api":
-                group = _find_group_by_chunk_id(outline, chunk_id)
-                if group:
-                    _fix_api_chunk(chunk, group, fix_text, outline, analysis,
-                                   api_summary, iface_by_id, agent, user_guidance)
-                    logger.info(_("review.fixed_chunk", key=chunk_id))
+                _fix_api_chunk(chunk, fix_text, analysis,
+                               api_summary, iface_by_id, agent, user_guidance)
+                logger.info(_("review.fixed_chunk", key=chunk_id))
             elif chunk_type == "biz":
-                flow = _find_flow_by_chunk_id(outline, chunk_id)
-                if flow:
-                    # 先重画 Mermaid / Regenerate Mermaid first
-                    _regenerate_mermaid_for_flow(flow, iface_by_id, sections, agent)
-                    # 再生成计划文本 / Then regenerate plan text
-                    _fix_biz_chunk(chunk, flow, fix_text, outline, analysis,
-                                   api_summary, iface_by_id, agent, user_guidance)
-                    logger.info(_("review.fixed_chunk", key=chunk_id))
-
-    # 回写 state 确保 resume 后状态一致 / Write back to state for consistent resume
-    state["plan_outline"] = outline
-
-    # 保存更新后的 outline / Save updated outline
-    memory_dir = state.get("memory_dir", "")
-    if memory_dir:
-        from graph.nodes.helpers import save_pipeline_artifact
-        save_pipeline_artifact(memory_dir, "plan_outline.json", outline)
+                # 先重画 Mermaid / Regenerate Mermaid first
+                _regenerate_mermaid_for_flow(chunk, iface_by_id, sections, agent)
+                # 再生成计划文本 / Then regenerate plan text
+                _fix_biz_chunk(chunk, fix_text, analysis,
+                               api_summary, iface_by_id, agent, user_guidance)
+                logger.info(_("review.fixed_chunk", key=chunk_id))
 
 
 # ============================================================================
@@ -495,19 +470,17 @@ def _execute_chunk_actions(
 
 
 def _fix_global_chunk(
-    sections: dict, fix_text: str, outline: dict,
+    sections: dict, fix_text: str,
     analysis: dict, api_summary: list,
     agent: PlanGenerator, user_guidance: str,
 ):
     """重新生成 global (Business Understanding) chunk / Regenerate global chunk."""
     augmented = _augment_guidance(user_guidance, fix_text)
-    outline_json = json.dumps(outline, ensure_ascii=False, indent=2)
     analysis_json = json.dumps(analysis, ensure_ascii=False, indent=2)
     api_summary_json = json.dumps(api_summary or [], ensure_ascii=False, indent=2)
 
     prompt = render_prompt(
         PLAN_CHUNK_GLOBAL_USER,
-        outline=outline_json,
         requirement_analysis=analysis_json,
         api_summary=api_summary_json,
         user_guidance=augmented,
@@ -516,7 +489,6 @@ def _fix_global_chunk(
     )
     system_msg = render_prompt(
         PLAN_CHUNK_GLOBAL_SYSTEM,
-        outline=outline_json,
         language=get_language_name(),
     )
     agent.reset_steps()
@@ -524,16 +496,21 @@ def _fix_global_chunk(
 
 
 def _fix_api_chunk(
-    chunk: dict, group: dict, fix_text: str,
-    outline: dict, analysis: dict, api_summary: list,
+    chunk: dict, fix_text: str,
+    analysis: dict, api_summary: list,
     iface_by_id: dict, agent: PlanGenerator, user_guidance: str,
 ):
-    """重新生成 API group chunk / Regenerate API group chunk from outline."""
+    """重新生成 API group chunk / Regenerate API group chunk from section data.
+
+    不再依赖 outline group，所有数据直接从 chunk 自身获取。
+    No longer depends on outline group; all data taken directly from chunk.
+    """
     augmented = _augment_guidance(user_guidance, fix_text)
-    outline_json = json.dumps(outline, ensure_ascii=False, indent=2)
     global_context = sections_get_global_for_fix(analysis, api_summary)
-    group_name = group.get("group_name", "")
-    api_ids = group.get("api_ids", [])
+    # 从 chunk 自身获取 / Get from chunk directly
+    group_name = chunk.get("name", "")
+    api_ids = chunk.get("api_ids", [])
+    test_focus = chunk.get("test_focus", "")
     group_ifaces = [iface_by_id[aid] for aid in api_ids if aid in iface_by_id]
 
     prompt = render_prompt(
@@ -544,10 +521,9 @@ def _fix_api_chunk(
     )
     system_msg = render_prompt(
         PLAN_CHUNK_API_SECTION_SYSTEM,
-        outline=outline_json,
         global_context=global_context,
         group_name=group_name,
-        test_focus=group.get("test_focus", ""),
+        test_focus=test_focus,
         group_api_ids=json.dumps(api_ids),
         language=get_language_name(),
     )
@@ -556,62 +532,64 @@ def _fix_api_chunk(
 
 
 def _regenerate_mermaid_for_flow(
-    flow: dict, iface_by_id: dict,
+    chunk: dict, iface_by_id: dict,
     sections: dict, agent: PlanGenerator,
 ):
     """重新绘制单个业务流的 Mermaid 图 / Re-draw Mermaid for a biz flow.
 
-    只更新 sec["mermaid"] 字段，不修改 sec["content"]。
-    Only updates sec["mermaid"]; does NOT modify sec["content"].
-    Mermaid 在 _assemble_plan() 时才与 content 合并。
-    Mermaid is merged with content only during _assemble_plan().
+    只更新 chunk["mermaid"] 字段，不修改 chunk["content"]。
+    Only updates chunk["mermaid"]; does NOT modify chunk["content"].
+    所有数据从 chunk 自身获取（不再需要 outline flow 参数）。
+    All data taken from chunk directly (no outline flow parameter needed).
     """
-    api_ids = flow.get("involved_apis", [])
+    api_ids = chunk.get("involved_apis", [])
     flow_ifaces = [iface_by_id[aid] for aid in api_ids if aid in iface_by_id]
     global_context = sections.get("business_understanding", "")
+    flow_name = chunk.get("name", "")
+    flow_description = chunk.get("description", "")
 
     prompt = render_prompt(
         PLAN_CHUNK_MERMAID_USER,
-        flow_name=flow.get("name", ""),
-        flow_description=flow.get("description", ""),
+        flow_name=flow_name,
+        flow_description=flow_description,
         interface_defs=json.dumps(flow_ifaces, ensure_ascii=False, indent=2),
     )
     system_msg = render_prompt(
         PLAN_CHUNK_MERMAID_SYSTEM,
-        flow_name=flow.get("name", ""),
-        flow_description=flow.get("description", ""),
+        flow_name=flow_name,
+        flow_description=flow_description,
         flow_api_ids=", ".join(api_ids),
         global_context=global_context,
         language=get_language_name(),
     )
     agent.reset_steps()
     mermaid_content = agent.call_llm(prompt, system_msg)
-
-    # 找到对应的 biz section 并只更新 mermaid 字段
-    # Find matching biz section; update only the mermaid field
-    chunk_id = flow.get("chunk_id", "")
-    for sec in _iter_all_sections(sections):
-        if sec.get("key") == chunk_id or sec.get("chunk_id") == chunk_id:
-            sec["mermaid"] = mermaid_content
-            break
+    chunk["mermaid"] = mermaid_content
 
 
 def _fix_biz_chunk(
-    chunk: dict, flow: dict, fix_text: str,
-    outline: dict, analysis: dict, api_summary: list,
+    chunk: dict, fix_text: str,
+    analysis: dict, api_summary: list,
     iface_by_id: dict, agent: PlanGenerator, user_guidance: str,
 ):
-    """重新生成 biz flow chunk（Mermaid 已重画）/ Regenerate biz flow chunk (Mermaid done)."""
+    """重新生成 biz flow chunk（Mermaid 已重画）/ Regenerate biz flow chunk (Mermaid done).
+
+    所有数据从 chunk 自身获取（不再需要 outline flow 参数）。
+    All data taken from chunk directly (no outline flow parameter needed).
+    """
     augmented = _augment_guidance(user_guidance, fix_text)
-    outline_json = json.dumps(outline, ensure_ascii=False, indent=2)
     global_context = sections_get_global_for_fix(analysis, api_summary)
-    api_ids = flow.get("involved_apis", [])
+    # 从 chunk 自身获取 / Get from chunk directly
+    api_ids = chunk.get("involved_apis", [])
     flow_ifaces = [iface_by_id[aid] for aid in api_ids if aid in iface_by_id]
+    flow_name = chunk.get("name", "?")
+    flow_description = chunk.get("description", "")
+    involved_apis = chunk.get("involved_apis", [])
 
     flows_desc = [
-        f"- Name: {flow.get('name', '?')}\n"
-        f"  Description: {flow.get('description', '')}\n"
-        f"  APIs: {', '.join(flow.get('involved_apis', []))}"
+        f"- Name: {flow_name}\n"
+        f"  Description: {flow_description}\n"
+        f"  APIs: {', '.join(involved_apis)}"
     ]
     flows_list = "\n\n".join(flows_desc)
 
@@ -623,7 +601,6 @@ def _fix_biz_chunk(
     )
     system_msg = render_prompt(
         PLAN_CHUNK_BIZ_SECTION_SYSTEM,
-        outline=outline_json,
         global_context=global_context,
         flows_list=flows_list,
         language=get_language_name(),
@@ -641,85 +618,79 @@ def _fix_biz_chunk(
 # ============================================================================
 
 
-def _execute_delete_chunk(sections: dict, outline: dict, chunk_id: str):
-    """从 sections 和 outline 中移除 chunk / Remove chunk from sections and outline."""
-    # 从 single_api 和 biz_flows 中移除 / Remove from single_api and biz_flows
+def _execute_delete_chunk(sections: dict, chunk_id: str):
+    """从 sections 中移除 chunk / Remove chunk from sections only.
+
+    outline 不再维护 — plan_sections.json 是唯一数据源。
+    outline is no longer maintained — plan_sections.json is the single source of truth.
+    """
     for arr_name in ("single_api", "biz_flows"):
         arr = sections.get(arr_name, [])
         sections[arr_name] = [
             s for s in arr
             if s.get("key") != chunk_id and s.get("chunk_id") != chunk_id
         ]
-    # 从 outline 中移除 / Remove from outline
-    if chunk_id.startswith("api_"):
-        outline["api_groups"] = [
-            g for g in outline.get("api_groups", [])
-            if g.get("chunk_id", "") != chunk_id
-        ]
-    elif chunk_id.startswith("biz_"):
-        outline["biz_flows"] = [
-            f for f in outline.get("biz_flows", [])
-            if f.get("chunk_id", "") != chunk_id
-        ]
 
 
 def _execute_add_chunk(
-    sections: dict, outline: dict, chunk_id: str,
+    sections: dict, chunk_id: str,
     section_type: str, fix_text: str,
     agent: PlanGenerator, iface_by_id: dict,
     analysis: dict, api_summary: list,
-    user_guidance: str, state: GraphState,
+    user_guidance: str,
 ):
-    """新增 chunk: 更新 outline + 生成内容 / Add chunk: update outline + generate content."""
+    """新增 chunk 到 sections / Add new chunk to sections.
+
+    outline 不再维护 — plan_sections.json 是唯一数据源。
+    outline is no longer maintained — plan_sections.json is the single source of truth.
+
+    若 chunk_id 已存在则自动追加后缀去重 / Auto-append suffix if chunk_id already exists.
+    """
+    # chunk_id 去重 / Dedup: avoid overwriting existing chunks
+    original = chunk_id
+    suffix = 1
+    while _find_section_by_key(sections, chunk_id):
+        suffix += 1
+        chunk_id = f"{original}_{suffix}"
+    if chunk_id != original:
+        logger.info(_("review.chunk_id_dedup", original=original, assigned=chunk_id))
+
     # 确定 section 类型 (代码级路由兜底) / Determine section type (code-level fallback)
     if section_type not in ("single_api", "biz_flows"):
-        # 从 chunk_id 前缀推断 / Infer from chunk_id prefix
         section_type = "single_api" if chunk_id.startswith("api_") else "biz_flows"
 
     if section_type == "single_api":
-        # 新增 API group
-        new_group = {
-            "chunk_id": chunk_id.replace("api_", ""),
-            "group_name": chunk_id.replace("api_", "").replace("_", " ").title(),
-            "api_ids": [],
-            "test_focus": "",
-        }
-        outline.setdefault("api_groups", []).append(new_group)
         new_chunk = {
             "chunk_id": chunk_id,
             "key": chunk_id,
             "type": "api",
-            "name": new_group["group_name"],
+            "name": chunk_id.replace("api_", "").replace("_", " ").title(),
             "section": "single_api",
             "content": "",
+            "api_ids": [],
+            "test_focus": "",
         }
         sections.setdefault("single_api", []).append(new_chunk)
         if fix_text:
-            _fix_api_chunk(new_chunk, new_group, fix_text, outline,
-                          analysis, api_summary, iface_by_id, agent, user_guidance)
+            _fix_api_chunk(new_chunk, fix_text, analysis,
+                          api_summary, iface_by_id, agent, user_guidance)
     else:
-        # 新增 biz flow
-        new_flow = {
-            "chunk_id": chunk_id.replace("biz_", ""),
-            "name": chunk_id.replace("biz_", "").replace("_", " ").title(),
-            "description": "",
-            "involved_apis": [],
-        }
-        outline.setdefault("biz_flows", []).append(new_flow)
         new_chunk = {
             "chunk_id": chunk_id,
             "key": chunk_id,
             "type": "biz",
-            "name": new_flow["name"],
+            "name": chunk_id.replace("biz_", "").replace("_", " ").title(),
             "section": "biz_flows",
             "content": "",
             "mermaid": "",
+            "involved_apis": [],
+            "description": "",
         }
         sections.setdefault("biz_flows", []).append(new_chunk)
         if fix_text:
-            _regenerate_mermaid_for_flow(new_flow, iface_by_id, sections, agent)
-            _fix_biz_chunk(new_chunk, new_flow, fix_text, outline,
-                          analysis, api_summary, iface_by_id, agent, user_guidance)
+            _regenerate_mermaid_for_flow(new_chunk, iface_by_id, sections, agent)
+            _fix_biz_chunk(new_chunk, fix_text, analysis,
+                          api_summary, iface_by_id, agent, user_guidance)
 
 
 # ============================================================================
@@ -740,22 +711,6 @@ def _consolidate_annotations(annots: List[dict]) -> str:
             if sel:
                 parts.append(f"  Regarding: \"{sel}\"")
     return "\n".join(parts)
-
-
-def _find_flow_by_chunk_id(outline: dict, chunk_id: str) -> Optional[dict]:
-    """按 chunk_id 查找 biz flow / Find biz flow by chunk_id."""
-    for f in outline.get("biz_flows", []):
-        if f.get("chunk_id", "") == chunk_id:
-            return f
-    return None
-
-
-def _find_group_by_chunk_id(outline: dict, chunk_id: str) -> Optional[dict]:
-    """按 chunk_id 查找 API group / Find API group by chunk_id."""
-    for g in outline.get("api_groups", []):
-        if g.get("chunk_id", "") == chunk_id:
-            return g
-    return None
 
 
 def _augment_guidance(user_guidance: str, fix_text: str) -> str:

@@ -52,6 +52,15 @@
         "content": {
           "type": "string",
           "description": "markdown 文本描述 / Markdown text description"
+        },
+        "api_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "该 group 包含的接口 test_id 列表。用于 fix 操作时查找 InterfaceDef 构造 LLM prompt。\n作用节点: plan_generator._phase_b_api_sections() (初次生成 Phase B) / review_annotation._fix_api_chunk() (r 模式修订 fix) / review_text._text_revision() (n 模式修订 fix)。\nList of interface test_ids in this group. Used in fix operations to look up InterfaceDef for LLM prompt construction.\nUsed by: plan_generator._phase_b_api_sections() (initial Phase B) / review_annotation._fix_api_chunk() (r-mode fix) / review_text._text_revision() (n-mode fix)."
+        },
+        "test_focus": {
+          "type": "string",
+          "description": "该 API group 的测试重点描述 (1 句话)。作为 LLM prompt 上下文补充给 PLAN_CHUNK_API_SECTION_SYSTEM 的 test_focus 占位符。\n作用节点: 同 api_ids。\nKey testing focus for this API group (1 sentence). Passed as LLM prompt context to PLAN_CHUNK_API_SECTION_SYSTEM's test_focus placeholder.\nUsed by: same nodes as api_ids."
         }
       }
     },
@@ -89,6 +98,15 @@
         "mermaid": {
           "type": "string",
           "description": "Mermaid 流程图，仅此字段存流程图 / Mermaid flowchart, only this field stores the flowchart"
+        },
+        "involved_apis": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "该业务流涉及的接口 test_id 列表。用于 fix 和 regenerate_mermaid 操作时查找 InterfaceDef 构造 LLM prompt (PLAN_CHUNK_MERMAID_USER 的 interface_defs / PLAN_CHUNK_BIZ_SECTION_SYSTEM 的 flows_list.APIs)。\n作用节点: plan_generator._generate_mermaid_for_flow() (初次生成 Mermaid) / plan_generator._phase_c_biz_sections() (初次生成 biz content) / review_annotation._fix_biz_chunk() (r 模式 fix) / review_annotation._regenerate_mermaid_for_flow() (r 模式重画 Mermaid) / review_text._text_revision() (n 模式 fix)。\nList of interface test_ids involved in this flow. Used in fix & regenerate_mermaid to look up InterfaceDef for LLM prompt.\nUsed by: plan_generator._generate_mermaid_for_flow() (initial Mermaid) / plan_generator._phase_c_biz_sections() (initial biz content) / review_annotation._fix_biz_chunk() (r-mode fix) / review_annotation._regenerate_mermaid_for_flow() (r-mode mermaid regen) / review_text._text_revision() (n-mode fix)."
+        },
+        "description": {
+          "type": "string",
+          "description": "该业务流的文字描述 (1-2 句话)。作为 LLM prompt 上下文传给 PLAN_CHUNK_MERMAID_USER/SYSTEM 的 flow_description 和 PLAN_CHUNK_BIZ_SECTION_SYSTEM 的 flows_list.Description。\n作用节点: 同 involved_apis。\nHuman-readable description of this flow (1-2 sentences). Passed as LLM prompt context for flow_description and flows_list.Description.\nUsed by: same nodes as involved_apis."
         }
       }
     }

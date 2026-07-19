@@ -88,6 +88,17 @@ class PlanParser(BaseAgent):
         plan = self._build_testplan(result)
         plan.business_summary = business_summary
 
+        # 从 sections 填充 mermaid_flows / Populate mermaid_flows from sections
+        # key 为 flow name（匹配 _make_partial_biz_plan 的按名称过滤逻辑）
+        # key is flow name (matching _make_partial_biz_plan's name-based filtering)
+        # 值保持原样（含 ```mermaid 包裹），下游只加 heading 不再重复包裹
+        # value kept as-is (with ```mermaid wrapper); downstream only adds heading
+        for biz_sec in biz_flows:
+            name = biz_sec.get("name", "")
+            mermaid = biz_sec.get("mermaid", "")
+            if name and mermaid:
+                plan.mermaid_flows[name] = mermaid
+
         # Fallback interfaces
         if not plan.api_definitions and interfaces:
             plan.api_definitions = [

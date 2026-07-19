@@ -24,6 +24,8 @@ class ApiSection(TypedDict):
     name: str
     section: Literal["single_api"]
     content: str       # markdown 文本描述 / Markdown text description
+    api_ids: List[str]         # 该 group 包含的接口 test_id 列表。fix 时查 InterfaceDef 用 / Interface test_ids in this group; used in fix to look up InterfaceDef
+    test_focus: str            # 该 group 的测试重点描述。fix 时作为 LLM prompt 补充 / Testing focus description; used as LLM prompt context during fix
 
 
 class BizSection(TypedDict):
@@ -35,6 +37,8 @@ class BizSection(TypedDict):
     section: Literal["biz_flows"]
     content: str       # markdown 文本描述，不含 Mermaid / Markdown text, no Mermaid
     mermaid: str       # Mermaid 流程图 / Mermaid flowchart diagram
+    involved_apis: List[str]   # 该业务流涉及的接口 test_id 列表。fix/重画 Mermaid 时查 InterfaceDef 用 / Interface test_ids involved; used in fix/mermaid regen
+    description: str           # 该业务流的文字描述。fix/重画 Mermaid 时作为 LLM prompt 上下文 / Flow description; used as LLM prompt context during fix/mermaid regen
 
 
 class PlanSections(TypedDict):

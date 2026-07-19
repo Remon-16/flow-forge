@@ -92,7 +92,6 @@ export interface PlanReviewData {
   message: string
   data: {
     memory_dir: string
-    plan_preview: string
     error?: string
   }
 }
@@ -159,6 +158,8 @@ export interface ApiSection {
   name: string
   section: 'single_api'
   content: string       // markdown，不含 Mermaid
+  api_ids?: string[]    // 该 group 的接口 test_id 列表。fix 时查 InterfaceDef 用 / Interface test_ids; used in fix to look up InterfaceDef
+  test_focus?: string   // 该 group 的测试重点描述。fix 时 LLM prompt 补充 / Testing focus; used as LLM prompt context during fix
 }
 
 /** 业务链路用例 section / Business flow test case section */
@@ -170,6 +171,8 @@ export interface BizSection {
   section: 'biz_flows'
   content: string       // markdown，不含 Mermaid
   mermaid: string       // Mermaid 流程图
+  involved_apis?: string[]  // 该流涉及的接口 test_id 列表。fix/重画 Mermaid 时查 InterfaceDef / Interface test_ids; used in fix/mermaid regen
+  description?: string      // 该流的文字描述。fix/重画 Mermaid 时 LLM prompt 上下文 / Flow description; used as LLM prompt context
 }
 
 /** plan_sections.json 顶层结构 / Top-level structure */

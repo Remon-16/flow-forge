@@ -285,7 +285,8 @@ class CaseGenerator(BaseAgent):
         if plan.mermaid_flows:
             parts.append("\n## Business Flow Diagrams")
             for name, diagram in plan.mermaid_flows.items():
-                parts.append(f"\n### {name}\n```mermaid\n{diagram}\n```")
+                # diagram 已含 ```mermaid 包裹，不再重复添加 / diagram already wrapped; no double-wrap
+                parts.append(f"\n### {name}\n{diagram}")
 
         if plan.biz_flow_scenarios:
             parts.append("\n## Business Flow Scenarios")

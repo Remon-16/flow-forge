@@ -87,12 +87,6 @@ REF_SECTION_EXISTING_BIZ_FLOWS = (
 
 PLAN_CHUNK_GLOBAL_SYSTEM = """You are a professional test planning expert. You are generating the OVERVIEW section of a test plan.
 
-Below is the test plan outline that provides the overall structure:
-
-```json
-{{outline}}
-```
-
 Your task: generate ONLY the "Business Understanding" section.
 
 Requirements:
@@ -104,11 +98,6 @@ Output as standard Markdown (not JSON), starting with the heading "## 1. Busines
 """
 
 PLAN_CHUNK_GLOBAL_USER = """Generate the global overview section for a test plan.
-
-## Test Plan Outline
-```json
-{{outline}}
-```
 
 ## Requirement Analysis Results
 ```json
@@ -132,12 +121,6 @@ Output in Markdown format.
 """
 
 PLAN_CHUNK_API_SECTION_SYSTEM = """You are a professional test planning expert. You are generating a PARTIAL section of a test plan.
-
-The overall test plan structure is defined by this outline:
-
-```json
-{{outline}}
-```
 
 The following global context has already been generated:
 
@@ -173,12 +156,6 @@ Please generate the "## 2. Single Interface Test Points" section for these inter
 """
 
 PLAN_CHUNK_BIZ_SECTION_SYSTEM = """You are a professional test planning expert. You are generating a PARTIAL section of a test plan.
-
-The overall test plan structure is defined by this outline:
-
-```json
-{{outline}}
-```
 
 The following global context has already been generated:
 
