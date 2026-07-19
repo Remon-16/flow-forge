@@ -195,7 +195,7 @@ Main entry point: `python main.py`. Full argument list (matching `cli/parser.py`
 | `--api PATH` | API documentation path (OpenAPI `.yaml`/`.json` or Markdown `.md`) |
 | `--output PATH` | Output root directory (default `./output_<timestamp>`) |
 | `--output-format {yaml,excel,both}` | Output format (default `both`; falls back to `env.yaml` when omitted) |
-| `--parse-mode {raw,rule,llm}`, `-m` | API doc parse mode (default `raw`): `raw` = LLM analyzes the raw text, `rule` = rule-based parser, `llm` = LLM pre-extraction |
+| `--parse-mode {llm,rule}`, `-m` | API doc parse mode (default `llm`): `llm` = LLM pre-extraction, `rule` = rule-based parser (OpenAPI/Markdown) |
 | `--parser-path PATH` | Custom parser `.py` path (only effective with `--parse-mode rule`) |
 | `--reference-dir PATH` | Reference directory for incremental updates |
 | `--prompt TEXT`, `-p` | Additional user guidance, injected into the plan and case generation prompts |

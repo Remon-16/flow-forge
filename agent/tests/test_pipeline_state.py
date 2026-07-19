@@ -362,7 +362,7 @@ remark: ""
                 "requirement_texts": [],
                 "api_raw_text": "",
                 "interfaces": [{"test_id": "api_old", "method": "GET", "url": "/old"}],
-                "parse_mode": "raw",
+                "parse_mode": "llm",
             })
             save_pipeline_state(str(memory_dir), "parse_docs")
             save_pipeline_state(str(memory_dir), "save_interfaces")
@@ -396,7 +396,7 @@ remark: ""
                 "requirement_texts": [],
                 "api_raw_text": "",
                 "interfaces": [{"test_id": "api_from_parsed"}],
-                "parse_mode": "raw",
+                "parse_mode": "llm",
             })
             save_pipeline_state(str(memory_dir), "parse_docs")
             save_pipeline_state(str(memory_dir), "save_interfaces")

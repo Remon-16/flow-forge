@@ -38,6 +38,7 @@
   "resume.state_not_found": "Resume 模式: 未找到 pipeline_state.json（{path}）。请使用 --resume-overwrite 重新开始",
   "resume.state_corrupted": "Resume 模式: pipeline_state.json 已损坏（{error}）。请使用 --resume-overwrite 重新开始",
   "resume.plan_mismatch": "警告: 解析后的计划（{parsed} 个接口）与 plan.md 可能不同步，建议重新确认计划",
+  "resume.memory_dir_empty": "memory_dir 未设置，流水线中间产物将不会保存，resume 功能不可用",
 
   "cli.no_api_key": "错误: LLM_API_KEY 未设置。请在 env.yaml 中配置。\n  cp env.example.yaml env.yaml\n  # 编辑 env.yaml 并填入 API 密钥",
   "cli.session_log_dir": "[Session] 日志目录: {path}",

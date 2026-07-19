@@ -56,7 +56,7 @@ class TestApiFeedbackPersistence:
                 "requirement_texts": [],
                 "api_raw_text": "",
                 "interfaces": [],
-                "parse_mode": "raw",
+                "parse_mode": "llm",
             })
             save_pipeline_state(str(memory_dir), "parse_docs")
 
@@ -88,7 +88,7 @@ class TestApiFeedbackPersistence:
                 "requirement_texts": [],
                 "api_raw_text": "",
                 "interfaces": [],
-                "parse_mode": "raw",
+                "parse_mode": "llm",
             })
             save_pipeline_state(str(memory_dir), "parse_docs")
 
@@ -167,7 +167,7 @@ class TestPlanFeedbackPersistence:
                 "requirement_texts": [],
                 "api_raw_text": "",
                 "interfaces": [],
-                "parse_mode": "raw",
+                "parse_mode": "llm",
             })
             save_pipeline_state(str(memory_dir), "parse_docs")
 
@@ -283,7 +283,7 @@ class TestResumeRoutingWithPendingFeedback:
                 "feedback": "test feedback",
                 "api_summary": [],
             })
-            save_pipeline_state(str(memory_dir), "validate_urls")
+            save_pipeline_state(str(memory_dir), "validate_interface_urls")
 
             state = {"memory_dir": str(memory_dir)}
             result = _route_resume(state)

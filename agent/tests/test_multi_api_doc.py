@@ -1,8 +1,8 @@
-"""多 API 文档独立分析测试 / Multi-API-doc independent analysis tests.
+"""多 API 文档解析测试 / Multi-API-doc parsing tests.
 
 覆盖 / Covers:
-  - parse_docs_node 构建 api_raw_texts / parse_docs_node builds api_raw_texts
-  - analyze_api_node 逐文件分析 / analyze_api_node per-file analysis
+  - parse_docs_node 构建 api_raw_text / parse_docs_node builds api_raw_text
+  - analyze_api_node 统一路径（analyze）/ analyze_api_node unified path (analyze)
   - batch.py fallback 读取全部文件 / batch.py fallback reads all files
 
 所有 LLM 调用均已 mock，不发生实际费用。
@@ -29,11 +29,10 @@ def _make_mock_settings():
     """构造测试用 Settings 对象。
 
     使用真实 Settings 实例而非 MagicMock，以防 configure() 将 MagicMock
-    属性写入 BaseAgent 类变量后污染后续测试（如 _default_max_concurrency）。
+    属性写入 BaseAgent 类变量后污染后续测试。
 
     Use a real Settings instance instead of MagicMock so configure()
-    writes proper values (not MagicMock proxies) to BaseAgent class
-    variables, avoiding test pollution across modules.
+    writes proper values to BaseAgent class variables.
     """
     from config.settings import Settings
     return Settings(
@@ -60,30 +59,26 @@ def _make_mock_settings():
     )
 
 
-def _make_mock_analyze_raw_text(mock_results):
-    """构造 mock analyze_raw_text，按顺序返回结果。
-
-    Build a mock analyze_raw_text that returns results in order.
-    使用 MagicMock(side_effect=...) 以支持 call_count 断言。
-    """
-    return MagicMock(side_effect=list(mock_results))
-
-
 # ============================================================================
-# parse_docs_node — api_raw_texts 构建 / api_raw_texts construction
+# parse_docs_node — api_raw_text 构建 / api_raw_text construction
 # ============================================================================
 
-class TestParseDocsApiRawTexts:
-    """测试 parse_docs_node 构建 api_raw_texts 字段。"""
+class TestParseDocsLLMMode:
+    """测试 parse_docs_node 在默认 llm 模式下的行为。"""
 
-    def should_build_api_raw_texts_for_multiple_files(self, tmp_path):
-        """多个 API 文件时，api_raw_texts 包含逐文件原文。
-        With multiple API files, api_raw_texts includes per-file raw texts.
+    @patch("graph.nodes.parse_docs.DocParserAgent")
+    def should_merge_raw_texts_for_multiple_files(self, MockDocParser, tmp_path):
+        """多个 API 文件时，api_raw_text 拼接所有文件的原文。
+        With multiple API files, api_raw_text merges all files' raw text.
         """
         from graph.nodes.parse_docs import parse_docs_node
         from graph.nodes.helpers import configure
 
-        # 创建多个临时 API 文档 / Create multiple temp API docs
+        # Mock DocParserAgent 避免实际 LLM 调用 / Mock to avoid real LLM calls
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = []
+        MockDocParser.return_value = mock_parser
+
         file1 = tmp_path / "api_a.md"
         file1.write_text("# Auth API\nPOST /auth/login\nGET /auth/logout", encoding="utf-8")
         file2 = tmp_path / "api_b.md"
@@ -95,7 +90,7 @@ class TestParseDocsApiRawTexts:
         state = {
             "requirement_paths": [],
             "api_paths": [str(file1), str(file2)],
-            "parse_mode": "raw",
+            "parse_mode": "llm",
             "output_dir": str(tmp_path),
             "cases_dir": str(tmp_path),
             "memory_dir": str(tmp_path),
@@ -103,28 +98,28 @@ class TestParseDocsApiRawTexts:
 
         result = parse_docs_node(state)
 
-        # 校验 api_raw_texts / Verify api_raw_texts
-        assert "api_raw_texts" in result
-        assert len(result["api_raw_texts"]) == 2
-        assert result["api_raw_texts"][0]["path"] == str(file1)
-        assert result["api_raw_texts"][0]["text"] == "# Auth API\nPOST /auth/login\nGET /auth/logout"
-        assert result["api_raw_texts"][1]["path"] == str(file2)
-        assert result["api_raw_texts"][1]["text"] == "# Order API\nPOST /orders\nGET /orders/{id}"
-
-        # 校验 api_raw_text（拼接文本仍保留） / Verify api_raw_text (merged text still present)
-        assert "---" in result["api_raw_text"]
+        # 校验 api_raw_text 拼接 / Verify api_raw_text merge
+        assert result["api_raw_text"] != ""
         assert "# Auth API" in result["api_raw_text"]
         assert "# Order API" in result["api_raw_text"]
 
-    def should_build_api_raw_texts_for_single_file(self, tmp_path):
-        """单个 API 文件时，api_raw_texts 包含一项。
-        With a single API file, api_raw_texts has one entry.
+        # 校验 interface_extraction_method / Verify interface_extraction_method
+        assert result["interface_extraction_method"] == "llm"
+
+    @patch("graph.nodes.parse_docs.DocParserAgent")
+    def should_build_api_raw_text_for_single_file(self, MockDocParser, tmp_path):
+        """单个 API 文件时，api_raw_text 包含该文件内容。
+        With a single API file, api_raw_text contains that file's content.
         """
         from graph.nodes.parse_docs import parse_docs_node
         from graph.nodes.helpers import configure
 
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = []
+        MockDocParser.return_value = mock_parser
+
         file1 = tmp_path / "api.md"
-        file1.write_text("# Single API", encoding="utf-8")
+        file1.write_text("# Single API\nGET /users", encoding="utf-8")
 
         mock_settings = _make_mock_settings()
         configure(mock_settings, None)
@@ -132,7 +127,7 @@ class TestParseDocsApiRawTexts:
         state = {
             "requirement_paths": [],
             "api_paths": [str(file1)],
-            "parse_mode": "raw",
+            "parse_mode": "llm",
             "output_dir": str(tmp_path),
             "cases_dir": str(tmp_path),
             "memory_dir": str(tmp_path),
@@ -140,13 +135,43 @@ class TestParseDocsApiRawTexts:
 
         result = parse_docs_node(state)
 
-        assert "api_raw_texts" in result
-        assert len(result["api_raw_texts"]) == 1
-        assert result["api_raw_texts"][0]["text"] == "# Single API"
+        assert "# Single API" in result["api_raw_text"]
+        assert result["interface_extraction_method"] == "llm"
 
-    def should_have_empty_api_raw_texts_when_no_api_files(self, tmp_path):
-        """无 API 文件时，api_raw_texts 为空列表。
-        With no API files, api_raw_texts is an empty list.
+    @patch("graph.nodes.parse_docs.DocParserAgent")
+    def should_interfaces_be_empty_when_doc_parser_returns_nothing(self, MockDocParser, tmp_path):
+        """DocParserAgent 无接口返回时，interfaces 为空。
+        When DocParserAgent returns nothing, interfaces is empty.
+        """
+        from graph.nodes.parse_docs import parse_docs_node
+        from graph.nodes.helpers import configure
+
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = []
+        MockDocParser.return_value = mock_parser
+
+        file1 = tmp_path / "api.md"
+        file1.write_text("# No API here\nJust some text", encoding="utf-8")
+
+        mock_settings = _make_mock_settings()
+        configure(mock_settings, None)
+
+        state = {
+            "requirement_paths": [],
+            "api_paths": [str(file1)],
+            "parse_mode": "llm",
+            "output_dir": str(tmp_path),
+            "cases_dir": str(tmp_path),
+            "memory_dir": str(tmp_path),
+        }
+
+        result = parse_docs_node(state)
+
+        assert result["interfaces"] == []
+
+    def should_have_empty_api_raw_text_when_no_api_files(self, tmp_path):
+        """无 API 文件时，api_raw_text 为空字符串。
+        With no API files, api_raw_text is empty.
         """
         from graph.nodes.parse_docs import parse_docs_node
         from graph.nodes.helpers import configure
@@ -157,7 +182,7 @@ class TestParseDocsApiRawTexts:
         state = {
             "requirement_paths": [],
             "api_paths": [],
-            "parse_mode": "raw",
+            "parse_mode": "llm",
             "output_dir": str(tmp_path),
             "cases_dir": str(tmp_path),
             "memory_dir": str(tmp_path),
@@ -165,20 +190,21 @@ class TestParseDocsApiRawTexts:
 
         result = parse_docs_node(state)
 
-        assert "api_raw_texts" in result
-        assert result["api_raw_texts"] == []
+        assert result["api_raw_text"] == ""
+        assert result["interfaces"] == []
+        assert result["interface_extraction_method"] == "none"
 
 
 # ============================================================================
-# analyze_api_node — 逐文件分析 / per-file analysis
+# analyze_api_node — 统一路径 / unified path
 # ============================================================================
 
-class TestAnalyzeApiPerFile:
-    """测试 analyze_api_node 在 raw 模式下的逐文件分析行为。"""
+class TestAnalyzeApiUnified:
+    """测试 analyze_api_node 在去掉 raw 后的统一 analyze 路径。"""
 
-    def should_analyze_each_file_independently(self):
-        """多文件时，每个文件独立调用 analyze_raw_text。
-        With multiple files, each file gets its own analyze_raw_text call.
+    def should_call_analyze_not_analyze_raw_text(self):
+        """正常路径应调用 agent.analyze(interfaces)，而非 analyze_raw_text。
+        Normal path should call agent.analyve(interfaces), not analyze_raw_text.
         """
         from graph.nodes.analyze_api import analyze_api_node
         from graph.nodes.helpers import configure
@@ -186,88 +212,22 @@ class TestAnalyzeApiPerFile:
         mock_settings = _make_mock_settings()
         configure(mock_settings, None)
 
-        file1_summary = [
-            {"api_path": "/auth/login", "method": "POST", "description": "Login",
-             "auth_type": "none", "need_token": False, "request_summary": "",
-             "response_summary": "", "notes": ""},
-        ]
-        file2_summary = [
-            {"api_path": "/orders", "method": "POST", "description": "Create order",
-             "auth_type": "bearer", "need_token": True, "request_summary": "",
-             "response_summary": "", "notes": ""},
-        ]
-
-        with patch("agents.api_analyzer.ApiAnalyzer") as MockAnalyzer:
-            mock_agent = MagicMock()
-            mock_agent.analyze_raw_text = _make_mock_analyze_raw_text([file1_summary, file2_summary])
-            mock_agent._merge_raw_results = MagicMock(return_value=file1_summary + file2_summary)
-            mock_agent.revise = MagicMock()
-            MockAnalyzer.return_value = mock_agent
-
-            state = {
-                "errors": [],
-                "interfaces": [],
-                "api_raw_text": "/auth/login\n/orders",  # 保留用于其他逻辑 / kept for other logic
-                "api_raw_texts": [
-                    {"path": "/fake/api_a.md", "text": "file1 text"},
-                    {"path": "/fake/api_b.md", "text": "file2 text"},
-                ],
-                "api_summary": [],
-                "api_summary_feedback": "",
-                "api_summary_confirmed": False,
-                "api_paths": ["/fake/api_a.md", "/fake/api_b.md"],
-                "auto_mode": True,
-                "output_dir": "/tmp",
-                "cases_dir": "/tmp/cases",
-                "memory_dir": "",
-            }
-
-            result = analyze_api_node(state)
-
-            # 验证调用次数 / Verify call count
-            assert mock_agent.analyze_raw_text.call_count == 2
-
-            # 验证每次调用的参数 / Verify each call's parameters
-            calls = mock_agent.analyze_raw_text.call_args_list
-            assert calls[0][0][0] == "file1 text"  # 第一个参数 raw_text
-            assert calls[0][0][1] == "api_a.md"     # 第二个参数 file_name
-            assert calls[1][0][0] == "file2 text"
-            assert calls[1][0][1] == "api_b.md"
-
-            # 验证合并 / Verify merge
-            mock_agent._merge_raw_results.assert_called_once()
-            assert len(result["api_summary"]) == 2
-
-    def should_make_single_call_for_single_file(self):
-        """单文件时，仍为 1 次 LLM 调用，不增加开销。
-        Single file still gets 1 LLM call — no overhead added.
-        """
-        from graph.nodes.analyze_api import analyze_api_node
-        from graph.nodes.helpers import configure
-
-        mock_settings = _make_mock_settings()
-        configure(mock_settings, None)
-
-        single_summary = [
-            {"api_path": "/api/test", "method": "GET", "description": "Test",
+        summary = [
+            {"api_path": "/api/login", "method": "POST", "description": "Login",
              "auth_type": "none", "need_token": False, "request_summary": "",
              "response_summary": "", "notes": ""},
         ]
 
         with patch("agents.api_analyzer.ApiAnalyzer") as MockAnalyzer:
             mock_agent = MagicMock()
-            mock_agent.analyze_raw_text = _make_mock_analyze_raw_text([single_summary])
-            mock_agent._merge_raw_results = MagicMock()
+            mock_agent.analyze = MagicMock(return_value=summary)
             mock_agent.revise = MagicMock()
             MockAnalyzer.return_value = mock_agent
 
             state = {
                 "errors": [],
-                "interfaces": [],
-                "api_raw_text": "/api/test",
-                "api_raw_texts": [
-                    {"path": "/fake/api.md", "text": "single file text"},
-                ],
+                "interfaces": [{"test_id": "api_login", "method": "POST", "url": "/api/login"}],
+                "api_raw_text": "/api/login",
                 "api_summary": [],
                 "api_summary_feedback": "",
                 "api_summary_confirmed": False,
@@ -280,14 +240,13 @@ class TestAnalyzeApiPerFile:
 
             result = analyze_api_node(state)
 
-            assert mock_agent.analyze_raw_text.call_count == 1
-            mock_agent._merge_raw_results.assert_not_called()
-            assert mock_agent.analyze_raw_text.call_args[0][0] == "single file text"
-            assert mock_agent.analyze_raw_text.call_args[0][1] == "api.md"
+            # 应该调用 analyze 而非 analyze_raw_text / Should call analyze, not analyze_raw_text
+            mock_agent.analyze.assert_called_once()
+            assert len(result["api_summary"]) == 1
 
-    def should_fallback_to_merged_text_when_no_api_raw_texts(self):
-        """无 api_raw_texts 时回退到合并文本（兼容旧数据）。
-        Fallback to merged api_raw_text when api_raw_texts is missing (legacy compat).
+    def should_call_revise_when_feedback_present(self):
+        """有反馈时应调用 agent.revise。
+        Should call agent.revise when feedback is present.
         """
         from graph.nodes.analyze_api import analyze_api_node
         from graph.nodes.helpers import configure
@@ -295,28 +254,26 @@ class TestAnalyzeApiPerFile:
         mock_settings = _make_mock_settings()
         configure(mock_settings, None)
 
-        single_summary = [
-            {"api_path": "/api/old", "method": "GET", "description": "Old",
-             "auth_type": "none", "need_token": False, "request_summary": "",
+        revised = [
+            {"api_path": "/api/login", "method": "POST", "description": "Updated",
+             "auth_type": "bearer", "need_token": True, "request_summary": "",
              "response_summary": "", "notes": ""},
         ]
 
         with patch("agents.api_analyzer.ApiAnalyzer") as MockAnalyzer:
             mock_agent = MagicMock()
-            mock_agent.analyze_raw_text = _make_mock_analyze_raw_text([single_summary])
-            mock_agent._merge_raw_results = MagicMock()
-            mock_agent.revise = MagicMock()
+            mock_agent.analyze = MagicMock()
+            mock_agent.revise = MagicMock(return_value=revised)
             MockAnalyzer.return_value = mock_agent
 
             state = {
                 "errors": [],
-                "interfaces": [],
-                "api_raw_text": "/api/old",
-                "api_raw_texts": [],  # 缺失 / missing
-                "api_summary": [],
-                "api_summary_feedback": "",
+                "interfaces": [{"test_id": "api_login", "method": "POST", "url": "/api/login"}],
+                "api_raw_text": "/api/login",
+                "api_summary": [{"api_path": "/api/login", "method": "POST"}],
+                "api_summary_feedback": "fix auth",
                 "api_summary_confirmed": False,
-                "api_paths": ["/fake/old_api.md"],
+                "api_paths": ["/fake/api.md"],
                 "auto_mode": True,
                 "output_dir": "/tmp",
                 "cases_dir": "/tmp/cases",
@@ -325,10 +282,47 @@ class TestAnalyzeApiPerFile:
 
             result = analyze_api_node(state)
 
-            assert mock_agent.analyze_raw_text.call_count == 1
-            # 回退到拼接文本 + 第一个文件名 / Fallback to merged text + first filename
-            assert mock_agent.analyze_raw_text.call_args[0][0] == "/api/old"
-            assert mock_agent.analyze_raw_text.call_args[0][1] == "old_api.md"
+            mock_agent.revise.assert_called_once()
+            mock_agent.analyze.assert_not_called()
+            assert result["api_summary"] == revised
+
+    def should_skip_llm_on_resume_with_existing_summary(self):
+        """resume 且有 api_summary 无 feedback 时跳过 LLM。
+        On resume with existing api_summary and no feedback, skip LLM.
+        """
+        from graph.nodes.analyze_api import analyze_api_node
+        from graph.nodes.helpers import configure
+
+        mock_settings = _make_mock_settings()
+        configure(mock_settings, None)
+
+        existing = [{"api_path": "/api/login", "method": "POST"}]
+
+        with patch("agents.api_analyzer.ApiAnalyzer") as MockAnalyzer:
+            mock_agent = MagicMock()
+            mock_agent.analyze = MagicMock()
+            mock_agent.revise = MagicMock()
+            MockAnalyzer.return_value = mock_agent
+
+            state = {
+                "errors": [],
+                "interfaces": [],
+                "api_raw_text": "",
+                "api_summary": existing,
+                "api_summary_feedback": "",
+                "api_summary_confirmed": False,
+                "auto_mode": True,
+                "output_dir": "/tmp",
+                "cases_dir": "/tmp/cases",
+                "memory_dir": "",
+            }
+
+            result = analyze_api_node(state)
+
+            # resume 场景：不调用 LLM / Resume scenario: no LLM call
+            mock_agent.analyze.assert_not_called()
+            mock_agent.revise.assert_not_called()
+            assert result["api_summary"] == existing
 
 
 # ============================================================================
@@ -357,8 +351,6 @@ class TestBatchFallbackMultiFile:
             "file2": "# Doc 2\n/api/c\n/api/d",
         }.get(Path(p).name, "")
 
-        # Mock 骨架生成器和 BatchController 避免实际 LLM 调用
-        # Mock skeleton generators and BatchController to avoid real LLM calls
         mock_single_gen.return_value = MagicMock()
         mock_biz_gen.return_value = MagicMock()
 
@@ -370,8 +362,7 @@ class TestBatchFallbackMultiFile:
                     {"test_id": "test2", "api_path": "/api/c", "method": "POST", "url": "/api/c"},
                 ],
                 "api_paths": ["/fake/file1", "/fake/file2"],
-                "api_raw_text": "",  # 空：触发 fallback / empty: trigger fallback
-                "api_raw_texts": [],
+                "api_raw_text": "",
                 "requirement_texts": [],
                 "plan_md": "",
                 "plan_parsed": MagicMock(),
@@ -389,10 +380,8 @@ class TestBatchFallbackMultiFile:
                 "resume_overwrite": False,
             }
 
-            # 调用不会因 actual BatchController 逻辑而失败 / Call won't fail on real BatchController logic
             batch_controller_node(state)
 
-            # 验证 extract_text 被调用了两次 / Verify extract_text was called twice
             assert mock_extract.call_count == 2
 
     @patch("doc_parser.text_extractor.extract_text")
@@ -421,7 +410,6 @@ class TestBatchFallbackMultiFile:
                 ],
                 "api_paths": ["/fake/single_file"],
                 "api_raw_text": "",
-                "api_raw_texts": [],
                 "requirement_texts": [],
                 "plan_md": "",
                 "plan_parsed": MagicMock(),

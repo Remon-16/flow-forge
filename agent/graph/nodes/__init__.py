@@ -3,7 +3,7 @@
 Workflow nodes — one function per stage in the main StateGraph.
 """
 
-from .helpers import configure, dicts_to_interfaces, iface_to_dict, save_snapshot, summary_to_interfaces
+from .helpers import configure, dicts_to_interfaces, iface_to_dict, save_snapshot
 
 from .parse_docs import parse_docs_node
 from .analyze_api import analyze_api_node

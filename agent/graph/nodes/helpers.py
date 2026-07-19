@@ -170,6 +170,17 @@ def load_run_config(memory_dir: str) -> dict:
         return {}
 
 
+def ensure_memory_dir(memory_dir: str) -> None:
+    """确保 memory_dir 已设置，否则记录 warning。
+
+    Ensure memory_dir is set; log warning if not.
+    流水线启动时调用，确保 resume 功能可用。
+    Called at pipeline startup to ensure resume capability.
+    """
+    if not memory_dir:
+        logger.warning(_("resume.memory_dir_empty"))
+
+
 def fmt_size(path: str) -> str:
     """格式化文件大小以供显示。
 
@@ -283,44 +294,6 @@ def iface_to_dict(i: InterfaceDef) -> Dict[str, Any]:
         "assert_dict": i.assert_dict,
         "remark": i.remark,
     }
-
-
-def summary_to_interfaces(summary: List[Dict]) -> List[Dict[str, Any]]:
-    """从 ApiAnalyzer 摘要重建接口定义字典。
-
-    Convert ApiAnalyzer summary dicts to InterfaceDef-like dicts.
-    """
-    result: List[Dict[str, Any]] = []
-    for item in summary:
-        url = str(item.get("api_path", ""))
-        method = str(item.get("method", "GET")).upper()
-        description = str(item.get("description", ""))
-
-        clean = (
-            url.strip("/").replace("/", "_").replace("-", "_")
-            .replace("{", "").replace("}", "").lower()
-        )
-        test_id = f"api_{clean}_{method.lower()}" if clean else ""
-
-        name = description or f"{method} {url}"
-        remark = description
-        notes = str(item.get("notes", ""))
-        if notes:
-            remark = f"{description} | {notes}" if description else notes
-
-        result.append({
-            "test_id": test_id,
-            "api_name": name,
-            "app_name": "default",
-            "method": method,
-            "url": url,
-            "request_head": {"Content-Type": "application/json"},
-            "request_body": {},
-            "status_code": 200,
-            "assert_dict": {"status_code": 200},
-            "remark": remark,
-        })
-    return result
 
 
 def dicts_to_interfaces(items: List[Any]) -> List[InterfaceDef]:

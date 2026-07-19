@@ -229,7 +229,7 @@ max_chunk = context_window - system_prompt_tokens - max(output_tokens, 4096) - 2
 ```
 Clamped to a floor of 1000 tokens when necessary.
 
-**Chunk notices**: Each chunk is prepended with a notice string (e.g. `REQ_CHUNK_NOTICE`, `RAW_API_CHUNK_NOTICE`, `DOC_CHUNK_NOTICE`) telling the LLM this is part of a larger document.
+**Chunk notices**: Each chunk is prepended with a notice string (e.g. `REQ_CHUNK_NOTICE`, `DOC_CHUNK_NOTICE`) telling the LLM this is part of a larger document.
 
 ### Phase 3: Context Accumulation & Compression
 
@@ -253,7 +253,7 @@ Different stages use different chunking strategies tailored to their needs:
 |------|---------|---------|------|
 | **parse_docs** (document input) | User-split (one file at a time) | Dedup interfaces by `(api_path, method)` | No auto-chunking; N files = N LLM calls |
 | **analyze_requirement** (requirement analysis) | `_process_long_text()` auto-chunking | Merge by key (`business_flows`, `roles`, `constraints`, `exceptions`), string dedup | Only triggered when single doc exceeds threshold |
-| **analyze_api** (API analysis, raw mode) | `_process_long_text()` auto-chunking | Dedup interface list by `(api_path, method)` | Triggered when single doc exceeds threshold |
+| **analyze_api** (API analysis) | Uses structured interface list to call LLM for analysis summaries | No merge/dedup needed | parse_docs already handles extraction and dedup |
 | **generate_plan** (plan generation) | Four-phase logical split (Phases A/B/C/D) | Concatenate in phase order | Not token-based; splits by **API groups and biz flow batches**; each batch is an independent LLM call with global context injected |
 | **parse_plan** (plan parsing) | Adaptive heading-level split + `_process_long_text()` | Dedup by `test_id` + `url` | Uses `detect_section_level()` to auto-detect the plan's primary heading level, then delegates to `_process_long_text()` for token-aware chunked LLM parsing |
 | **batch_controller** (case generation) | `skeleton_batch_size` controls test points per batch | Concatenate case lists | Not token-based; splits by **test point count** per batch |

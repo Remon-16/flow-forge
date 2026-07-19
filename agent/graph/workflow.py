@@ -38,7 +38,7 @@ STAGE_TO_NEXT_NODE = {
     "": "parse_docs",
     "parse_docs": "analyze_api",
     "analyze_api": "validate_interface_urls",
-    "validate_urls": "save_interfaces",
+    "validate_interface_urls": "save_interfaces",
     "save_interfaces": "analyze_requirement",
     "analyze_requirement": "generate_outline",
     "generate_outline": "generate_plan",

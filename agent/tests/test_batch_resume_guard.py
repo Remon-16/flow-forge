@@ -48,7 +48,7 @@ def _make_state(**overrides):
         "requirement_texts": [],
         "requirement_analysis": {},
         "requirement_paths": [],
-        "parse_mode": "raw",
+        "parse_mode": "llm",
         "parser_path": "",
         "api_summary_feedback": "",
         "api_summary_confirmed": True,

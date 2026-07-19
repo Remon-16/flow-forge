@@ -157,33 +157,28 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
         if data:
             state["requirement_texts"] = data.get("requirement_texts", [])
             state["api_raw_text"] = data.get("api_raw_text", "")
-            state["api_raw_texts"] = data.get("api_raw_texts", [])
             state["interfaces"] = data.get("interfaces", [])
-            state["parse_mode"] = data.get("parse_mode", "raw")
+            state["parse_mode"] = data.get("parse_mode", "llm")
             state["interface_extraction_method"] = data.get("interface_extraction_method", "")
 
+    # 无条件加载 API 分析反馈 / Load API analysis feedback unconditionally
+    # （崩溃时 api_analysis_feedback.json 已写入但 pipeline_state 未更新，需无条件恢复）
+    # (on crash, api_analysis_feedback.json exists but pipeline_state wasn't updated)
+    api_fb = _load_json("api_analysis_feedback.json")
+    if api_fb:
+        state["api_summary"] = api_fb.get("api_summary", state.get("api_summary", []))
+        state["api_summary_feedback"] = api_fb.get("feedback", "")
+        state["api_summary_confirmed"] = False
+
     if "analyze_api" in completed_stages:
-        data = _load_json("api_summary.json")
-        if data:
-            # 检查是否有未处理的 API 分析反馈 / Check for pending API analysis feedback
-            fb_data = _load_json("api_analysis_feedback.json")
-            if fb_data:
-                state["api_summary"] = fb_data.get("api_summary", data)
-                state["api_summary_feedback"] = fb_data.get("feedback", "")
-                state["api_summary_confirmed"] = False
-            else:
+        if not api_fb:
+            data = _load_json("api_summary.json")
+            if data:
                 state["api_summary"] = data
                 state["api_summary_confirmed"] = True
 
-            # 原始模式：从 api_summary 重建接口 / Raw mode: rebuild interfaces from api_summary
-            parse_mode = state.get("parse_mode", "")
-            if parse_mode == "raw" and not state.get("interfaces"):
-                from graph.nodes.helpers import summary_to_interfaces
-                rebuilt = summary_to_interfaces(data)
-                if rebuilt:
-                    state["interfaces"] = rebuilt
 
-    if "validate_urls" in completed_stages:
+    if "validate_interface_urls" in completed_stages:
         _load_json("url_validation.json")  # Just validate existence; errors stored in state
 
     if "analyze_requirement" in completed_stages:
@@ -322,7 +317,7 @@ def main() -> int:
         _output_format = _first(args.output_format, saved_config.get("output_format"), settings.output_format)
         _plugin_batch_size = _first(args.plugin_batch_size, saved_config.get("plugin_batch_size"), settings.plugin_batch_size)
         _auto_mode = _first(args.auto, saved_config.get("auto_mode"), settings.auto_mode)
-        _parse_mode = _first(args.parse_mode, saved_config.get("parse_mode"), "raw")
+        _parse_mode = _first(args.parse_mode, saved_config.get("parse_mode"), "llm")
         _user_guidance = _first(args.prompt, saved_config.get("user_guidance"), "")
         _parser_path = _first(args.parser_path, saved_config.get("parser_path"), "")
         _reference_dir = _first(args.reference_dir, saved_config.get("reference_dir"), "")
@@ -461,11 +456,14 @@ def main() -> int:
             "requirement_texts": loaded.get("requirement_texts", []),
             "interfaces": loaded.get("interfaces", []),
             "api_raw_text": loaded.get("api_raw_text", ""),  # 恢复拼接文本供 URL 校验 / Restore merged text for URL validation
-            "api_raw_texts": loaded.get("api_raw_texts", []),  # 恢复逐文件原文 / Restore per-file raw texts
             "plan_md": loaded.get("plan_md", ""),
             "plan_confirmed": loaded.get("plan_confirmed", True),
             "api_summary_confirmed": loaded.get("api_summary_confirmed", True),
             "api_summary": loaded.get("api_summary", []),
+            "api_summary_feedback": loaded.get("api_summary_feedback", ""),
+            "plan_feedback": loaded.get("plan_feedback", ""),
+            "plan_feedback_type": loaded.get("plan_feedback_type", "text"),
+            "plan_annotations": loaded.get("plan_annotations", []),
             "requirement_analysis": loaded.get("requirement_analysis", {}),
             "plan_parsed": loaded.get("plan_parsed"),
             "user_guidance": _user_guidance,
@@ -497,6 +495,8 @@ def main() -> int:
             logger.info(_("resume.interactive_mode", stage=next_stage))
             result = run_interactive(graph, initial, config, session_logger)
         else:
+            from graph.nodes.helpers import ensure_memory_dir
+            ensure_memory_dir(initial.get("memory_dir", ""))
             result = graph.invoke(initial, config)
 
         if result.get("errors"):
@@ -612,6 +612,8 @@ def main() -> int:
         "url_doc_match_strategy": _first(args.url_doc_match_strategy, settings.url_doc_match_strategy),
         "consecutive_batch_failure_limit": _first(args.consecutive_batch_failure_limit, settings.consecutive_batch_failure_limit),
     }
+    from graph.nodes.helpers import ensure_memory_dir
+    ensure_memory_dir(str(memory_dir))
     save_run_config(str(memory_dir), _run_config)
 
     # --studio 优先于 auto_mode：Studio 模式下始终使用 JSON 协议输出进度事件。

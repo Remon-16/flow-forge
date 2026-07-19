@@ -38,6 +38,7 @@
   "resume.state_not_found": "Resume mode: pipeline_state.json not found at {path}. Use --resume-overwrite to start a fresh pipeline",
   "resume.state_corrupted": "Resume mode: pipeline_state.json is corrupted ({error}). Use --resume-overwrite to start a fresh pipeline",
   "resume.plan_mismatch": "Warning: Parsed plan ({parsed} APIs) may be out of sync with plan.md; consider re-confirming the plan",
+  "resume.memory_dir_empty": "memory_dir is not set; pipeline artifacts will not be saved and resume will be unavailable",
 
   "cli.no_api_key": "Error: LLM_API_KEY not set. Configure it in env.yaml.\n  cp env.example.yaml env.yaml\n  # Edit env.yaml and add your API key",
   "cli.session_log_dir": "[Session] Log directory: {path}",

@@ -195,7 +195,7 @@ logging:
 | `--api PATH` | 接口文档路径（OpenAPI `.yaml`/`.json` 或 Markdown `.md`） |
 | `--output PATH` | 输出根目录（默认 `./output_<timestamp>`） |
 | `--output-format {yaml,excel,both}` | 输出格式（默认 `both`，留空时取自 `env.yaml`） |
-| `--parse-mode {raw,rule,llm}`, `-m` | API 文档解析模式（默认 `raw`）：`raw`=LLM 分析原文，`rule`=规则解析器，`llm`=LLM 预提取 |
+| `--parse-mode {llm,rule}`, `-m` | API 文档解析模式（默认 `llm`）：`llm`=LLM 预提取接口，`rule`=规则解析器(OpenAPI/Markdown) |
 | `--parser-path PATH` | 自定义解析器 `.py` 路径（仅 `--parse-mode rule` 生效） |
 | `--reference-dir PATH` | 增量更新参考目录 |
 | `--prompt TEXT`, `-p` | 用户补充指导，注入到计划和用例生成提示词中 |

@@ -256,7 +256,7 @@ class PlanParser(BaseAgent):
         from prompts.render import render_prompt
         prompt = render_prompt(PLAN_PARSER_USER, plan_md=text)
         try:
-            return self.call_llm_json(prompt, system_msg)
+            return self.call_llm_json_object(prompt, system_msg, "api_definitions")
         except Exception as e:
             logger.warning("LLM plan parsing failed: %s", e)
             return {"api_definitions": [], "single_test_points": {}, "biz_flow_scenarios": []}

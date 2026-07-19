@@ -16,7 +16,7 @@ from models.schema import InterfaceDef
 
 from plugins.skill_loader import load_skill_extensions
 from . import helpers as _h
-from .helpers import _step, _sl, save_pipeline_artifact, save_pipeline_state, save_snapshot, summary_to_interfaces
+from .helpers import _step, _sl, save_pipeline_artifact, save_pipeline_state, save_snapshot
 from i18n import _
 
 logger = logging.getLogger(__name__)
@@ -52,57 +52,13 @@ def analyze_api_node(state: GraphState) -> GraphState:
         # Resume scenario: summary already generated, skip LLM call
         summary = api_summary
     else:
-        if api_raw_text and not interfaces:
-            logger.info(_("analyze_api.parsing_raw", model=_h._settings.llm_model))
-            if _sl():
-                _sl().log_node_start("analyze_api", "2/9")
-            if feedback:
-                summary = agent.revise([], api_summary, feedback)
-            else:
-                # 获取逐文件原文列表 / Get per-file raw text list
-                api_raw_texts = state.get("api_raw_texts", [])
-                if not api_raw_texts:
-                    # 兼容旧格式：无逐文件信息时回退到拼接文本 / Fallback for legacy data
-                    _first_api = state.get("api_paths", [""])[0]
-                    summary = agent.analyze_raw_text(api_raw_text, Path(_first_api).name)
-                    if _sl():
-                        _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
-                                        model=_h._settings.llm_model, text_length=len(api_raw_text))
-                elif len(api_raw_texts) == 1:
-                    # 单文件：直接分析 / Single file: direct analysis
-                    _item = api_raw_texts[0]
-                    summary = agent.analyze_raw_text(_item["text"], Path(_item["path"]).name)
-                    if _sl():
-                        _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
-                                        model=_h._settings.llm_model, text_length=len(_item["text"]))
-                else:
-                    # 多文件：逐文件独立分析后合并 / Multi-file: per-file independent analysis then merge
-                    all_results = []
-                    for i, item in enumerate(api_raw_texts):
-                        if not item["text"].strip():
-                            continue
-                        logger.info(
-                            "Analyzing API doc %d/%d: %s (%d chars)",
-                            i + 1, len(api_raw_texts), item["path"], len(item["text"]),
-                        )
-                        if _sl():
-                            _sl().log_event("llm_call", agent=f"ApiAnalyzer.analyze_raw_text[{i+1}/{len(api_raw_texts)}]",
-                                            model=_h._settings.llm_model, file=item["path"], text_length=len(item["text"]))
-                        result = agent.analyze_raw_text(item["text"], Path(item["path"]).name)
-                        all_results.append(result)
-                    summary = agent._merge_raw_results(all_results, "")
-                    logger.info(
-                        "Merged API analysis from %d files: %d unique interfaces",
-                        len(api_raw_texts), len(summary),
-                    )
+        logger.info(_("analyze_api.llm_calling", model=_h._settings.llm_model))
+        if _sl():
+            _sl().log_node_start("analyze_api", "2/9")
+        if feedback:
+            summary = agent.revise(interfaces, api_summary, feedback)
         else:
-            logger.info(_("analyze_api.llm_calling", model=_h._settings.llm_model))
-            if _sl():
-                _sl().log_node_start("analyze_api", "2/9")
-            if feedback:
-                summary = agent.revise(interfaces, api_summary, feedback)
-            else:
-                summary = agent.analyze(interfaces)
+            summary = agent.analyze(interfaces)
 
         logger.info(_("analyze_api.generated_summaries", count=len(summary)))
         if _sl():
@@ -120,11 +76,6 @@ def analyze_api_node(state: GraphState) -> GraphState:
     if memory_dir:
         save_snapshot(memory_dir, "api_summary.json", summary)
         save_pipeline_artifact(memory_dir, "api_summary.json", summary)
-
-    # 首次运行（无 interfaces）或反馈循环后均需重建接口 / Rebuild on first run or after feedback loop
-    if api_raw_text and (not interfaces or feedback):
-        state["interfaces"] = summary_to_interfaces(summary)
-        logger.info(_("analyze_api.rebuilt_interfaces", count=len(state["interfaces"])))
 
     critical = _has_critical_uncertainties(summary)
 

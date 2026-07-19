@@ -152,6 +152,6 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
             "url_errors": url_errors,
             "corrected_count": corrected_count,
         })
-        save_pipeline_state(memory_dir, "validate_urls")
+        save_pipeline_state(memory_dir, "validate_interface_urls")
 
     return state

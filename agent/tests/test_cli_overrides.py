@@ -82,7 +82,7 @@ def _make_args(**overrides):
         "env": "env.yaml",
         "verbose": False,
         "debug": False,
-        "parse_mode": "raw",
+        "parse_mode": "llm",
         "resume": False,
         "resume_overwrite": False,
         "auto": False,

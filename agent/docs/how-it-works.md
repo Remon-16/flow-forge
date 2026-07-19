@@ -229,7 +229,7 @@ max_chunk = context_window - system_prompt_tokens - max(output_tokens, 4096) - 2
 ```
 `max_chunk` 低于 1000 时 clamp 到 1000，保证即使极限场景也能处理。
 
-**Chunk 通知**：每个 chunk 前注入通知字符串（如 `REQ_CHUNK_NOTICE`、`RAW_API_CHUNK_NOTICE`、`DOC_CHUNK_NOTICE`），告知 LLM 当前文档是部分内容，需继续处理。
+**Chunk 通知**：每个 chunk 前注入通知字符串（如 `REQ_CHUNK_NOTICE`、`DOC_CHUNK_NOTICE`），告知 LLM 当前文档是部分内容，需继续处理。
 
 ### 第三阶段：上下文累积与压缩
 
@@ -253,7 +253,7 @@ max_chunk = context_window - system_prompt_tokens - max(output_tokens, 4096) - 2
 |------|---------|---------|------|
 | **parse_docs**（文档输入） | 用户切分（每文件独立） | 接口按 `(api_path, method)` 去重 | 不做自动切分；文档数 = LLM 调用数 |
 | **analyze_requirement**（需求分析） | `_process_long_text()` 自动切分 | 按 key（`business_flows`, `roles`, `constraints`, `exceptions`）合并去重 | 仅当单文档超阈值时触发 |
-| **analyze_api**（API 分析 raw 模式） | `_process_long_text()` 自动切分 | 接口列表按 `(api_path, method)` 去重 | 单文档超阈值时触发 |
+| **analyze_api**（API 分析） | 使用结构化接口列表调用 LLM 生成分析摘要 | 无需合并/去重 | parse_docs 已完成接口提取和去重 |
 | **generate_plan**（测试计划生成） | 四阶段逻辑切分（Phase A/B/C/D） | 按阶段顺序拼接 | 不基于 token，基于**接口分组和业务流批次**拆分；每批独立 LLM 调用 + 全局上下文注入 |
 | **parse_plan**（计划解析） | plan_sections.json 结构切分 + 贪心算法 | 按 `test_id` + `url` 去重 | 从 `plan_sections.json` 读取已切好的 section，3 级策略：整体 → case_type 拆分（`single_api` / `biz_flows`）→ 贪心逐 section 累加，每批不超过 token 预算 |
 | **batch_controller**（用例生成） | `skeleton_batch_size` 控制每批测试点数 | 用例列表拼接 | 不基于 token，基于**测试点数量**分批次 |
