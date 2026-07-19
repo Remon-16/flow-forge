@@ -105,7 +105,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
             interfaces = _dispatch_rule_parser(api_path, state.get("parser_path", ""))
             for iface in interfaces:
                 d = iface_to_dict(iface)
-                key = (d.get("api_path", ""), d.get("method", ""))
+                key = (d.get("url", ""), d.get("method", ""))
                 if key not in seen_keys:
                     seen_keys.add(key)
                     all_interfaces.append(d)
@@ -139,7 +139,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
             )
             for iface in interfaces:
                 d = iface_to_dict(iface)
-                key = (d.get("api_path", ""), d.get("method", ""))
+                key = (d.get("url", ""), d.get("method", ""))
                 if key not in seen_keys:
                     seen_keys.add(key)
                     all_interfaces.append(d)

@@ -133,7 +133,7 @@ def revise_plan_node(state: GraphState) -> GraphState:
     if feedback_type == "annotations":
         annotations = state.get("plan_annotations", [])
         if not annotations:
-            logger.warning(_("review.annotations_empty"))
+            logger.warning(_("review.annotations_empty_reprompt"))
             state["plan_feedback"] = ""
             state["plan_annotations"] = []
             return state

@@ -27,6 +27,8 @@ def batch_controller_node(state: GraphState) -> GraphState:
     骨架生成 → 插件执行 → 输出
     """
     state.setdefault("errors", [])
+    # 每次进入节点时重置失败标志，确保成功执行后不会被错误路由到 END / Reset failure flag on every entry to avoid incorrect routing
+    state["_batch_failed"] = False
 
     plan = state.get("plan_parsed")
     interfaces_raw = state.get("interfaces", [])

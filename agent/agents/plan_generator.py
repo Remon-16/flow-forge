@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent
@@ -244,8 +245,17 @@ class PlanGenerator(BaseAgent):
         # Resume 初始化 / Initialize resume state
         plan_parts: Dict[str, str] = {}
         if chunk_progress:
-            plan_parts = chunk_progress.get("plan_parts", {})
-            logger.info(_("plan_gen.resume_chunk"))
+            # v2 轻量格式：从 plan_sections.json 重建 plan_parts / v2 lightweight: reconstruct from plan_sections.json
+            if chunk_progress.get("version") == 2:
+                plan_parts = self._reconstruct_plan_parts(memory_dir, outline, chunk_progress)
+                logger.info(_("plan_gen.resume_chunk_v2",
+                              phase_a=chunk_progress.get("phase_a_done"),
+                              api=len(chunk_progress.get("api_group_completed_ids", [])),
+                              biz=len(chunk_progress.get("biz_batch_completed_keys", []))))
+            else:
+                # v1 旧格式（向后兼容）/ v1 legacy format (backward compatible)
+                plan_parts = chunk_progress.get("plan_parts", {})
+                logger.info(_("plan_gen.resume_chunk"))
 
         requirement_json = json.dumps(requirement_analysis, ensure_ascii=False, indent=2)
         api_summary_json = json.dumps(api_summary or [], ensure_ascii=False, indent=2)
@@ -262,7 +272,7 @@ class PlanGenerator(BaseAgent):
             plan_parts=plan_parts,
         )
         # 保存 chunk 进度（Phase A 完成后）/ Save chunk progress after Phase A
-        self._save_chunk_progress(memory_dir, plan_parts)
+        self._save_chunk_progress(memory_dir, plan_parts, api_groups=api_groups, biz_batches=biz_batches)
 
         # Phase B: 按 API group 生成测试点 section
         # 仅 both / single 模式生成 / Only generate for both or single mode
@@ -293,6 +303,7 @@ class PlanGenerator(BaseAgent):
                 user_guidance=user_guidance,
                 plan_parts=plan_parts,
                 memory_dir=memory_dir,
+                api_groups=api_groups,
             )
         else:
             logger.info(_("plan_gen.case_type_skip_biz_sections"))
@@ -346,21 +357,151 @@ class PlanGenerator(BaseAgent):
     # Chunk 进度持久化 / Chunk progress persistence
     # -----------------------------------------------------------------------
 
-    def _save_chunk_progress(self, memory_dir: str, plan_parts: Dict[str, Any]) -> None:
-        """保存 chunk 进度以便 resume / Save chunk progress for resume.
+    def _save_chunk_progress(self, memory_dir: str, plan_parts: Dict[str, Any],
+                             api_groups: List[dict] = None,
+                             biz_batches: List[List[dict]] = None) -> None:
+        """保存 chunk 进度（轻量格式）并增量保存 plan_sections.json。
 
-        每个 chunk 完成后调用，确保中断后可从断点恢复。
-        Called after each chunk completes so interrupted runs can resume.
+        Save lightweight chunk progress + incremental plan_sections.json.
+        进度文件仅记录阶段完成状态和已完成的 chunk ID 列表，不重复存储内容；
+        内容由 plan_sections.json（增量保存）提供。
+        Progress file only records phase status and completed chunk IDs, no content;
+        content comes from plan_sections.json (saved incrementally).
         """
         if not memory_dir:
             return
-        from pathlib import Path
+
+        # 提取轻量进度信息 / Extract lightweight progress info
+        api_sections_data = plan_parts.get("api_sections", {})
+        if isinstance(api_sections_data, str):
+            try:
+                api_sections_data = json.loads(api_sections_data)
+            except (json.JSONDecodeError, TypeError):
+                api_sections_data = {}
+        biz_sections_data = plan_parts.get("biz_sections", {})
+        if isinstance(biz_sections_data, str):
+            try:
+                biz_sections_data = json.loads(biz_sections_data)
+            except (json.JSONDecodeError, TypeError):
+                biz_sections_data = {}
+
+        progress = {
+            "version": 2,
+            "phase_a_done": bool(plan_parts.get("global_context", "")),
+            "api_group_completed_ids": list(api_sections_data.keys()) if isinstance(api_sections_data, dict) else [],
+            "biz_batch_completed_keys": list(biz_sections_data.keys()) if isinstance(biz_sections_data, dict) else [],
+        }
+
         progress_path = Path(memory_dir) / "plan_chunks_progress.json"
         progress_path.parent.mkdir(parents=True, exist_ok=True)
         progress_path.write_text(
-            json.dumps({"plan_parts": plan_parts}, ensure_ascii=False, indent=2),
+            json.dumps(progress, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+        # 增量保存 plan_sections.json 用于 resume 时恢复内容
+        # Save plan_sections.json incrementally for content recovery on resume
+        if api_groups is not None:
+            global_context = plan_parts.get("global_context", "")
+            self._save_sections_artifact(
+                memory_dir, api_groups or [], api_sections_data if isinstance(api_sections_data, dict) else {},
+                biz_batches or [], biz_sections_data if isinstance(biz_sections_data, dict) else {},
+                global_context,
+            )
+
+    def _reconstruct_plan_parts(
+        self, memory_dir: str, outline: Dict[str, Any],
+        progress: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """从 plan_sections.json + outline + progress 重建 plan_parts。
+
+        Reconstruct plan_parts dict from saved content and progress for resume.
+        仅在 v2 轻量格式下使用；v1 旧格式直接返回 plan_parts 内容。
+        Only used for v2 lightweight format; v1 returns plan_parts content directly.
+        """
+        sections_path = Path(memory_dir) / "plan_sections.json"
+        if not sections_path.exists():
+            return {}
+
+        try:
+            sections = json.loads(sections_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+        plan_parts: Dict[str, Any] = {}
+
+        # Phase A: global context
+        bu = sections.get("business_understanding", "")
+        if progress.get("phase_a_done") and bu:
+            plan_parts["global_context"] = bu
+
+        # Phase B: 将 single_api 数组映射回 api_sections dict / Map single_api array back to api_sections
+        api_groups = outline.get("api_groups", [])
+        completed_api_ids = set(progress.get("api_group_completed_ids", []))
+        if api_groups and completed_api_ids:
+            # 构建 plan_sections.json 中 section 的查找表 / Build lookup from plan_sections.json
+            sections_by_key: Dict[str, dict] = {}
+            for sec in sections.get("single_api", []):
+                for k in ("key", "chunk_id"):
+                    v = sec.get(k, "")
+                    if v:
+                        sections_by_key[v] = sec
+
+            api_sections: Dict[str, str] = {}
+            for group in api_groups:
+                section_key = f"api_{group.get('group_name', '')}"
+                if section_key in completed_api_ids:
+                    chunk_id = group.get("chunk_id", "")
+                    sec = sections_by_key.get(chunk_id) or sections_by_key.get(section_key)
+                    if sec and sec.get("content", "").strip():
+                        api_sections[section_key] = sec["content"]
+            if api_sections:
+                plan_parts["api_sections"] = api_sections
+
+        # Phase C: 将 biz_flows 数组映射回 biz_sections + mermaid_chunks
+        # Map biz_flows array back to biz_sections + mermaid_chunks
+        biz_batches = outline.get("biz_flows", [])
+        completed_biz_keys = set(progress.get("biz_batch_completed_keys", []))
+        if biz_batches and completed_biz_keys:
+            # 按 batch_size 分组以匹配原 section_key / Group by batch_size to match original section_key
+            biz_batch_size = getattr(self, '_plan_biz_flow_batch_size', 1)
+            grouped = [biz_batches[i:i + biz_batch_size] for i in range(0, len(biz_batches), biz_batch_size)]
+
+            biz_sections_dict: Dict[str, Any] = {}
+            mermaid_chunks: Dict[str, str] = {}
+            for j, batch in enumerate(grouped):
+                if len(batch) == 1:
+                    section_key = f"biz_{batch[0].get('name', '')}"
+                else:
+                    section_key = f"biz_batch_{j}"
+                if section_key not in completed_biz_keys:
+                    continue
+
+                # 从 plan_sections.json 中查找对应内容 / Find matching content from plan_sections.json
+                batch_entry: Dict[str, Any] = {"content": "", "mermaids": {}}
+                for flow in batch:
+                    flow_chunk_id = flow.get("chunk_id", f"flow_{j}")
+                    for biz_sec in sections.get("biz_flows", []):
+                        if biz_sec.get("chunk_id") == flow_chunk_id or biz_sec.get("key") == flow_chunk_id:
+                            # 只取第一个匹配 flow 的 content（整批共享同一 content）
+                            # Only take first matching flow's content (batch shares same content)
+                            content = biz_sec.get("content", "")
+                            if content and not batch_entry["content"]:
+                                batch_entry["content"] = content
+                            mermaid = biz_sec.get("mermaid", "")
+                            if mermaid:
+                                mermaid_chunks[flow_chunk_id] = mermaid
+                                batch_entry["mermaids"][flow_chunk_id] = mermaid
+
+                if batch_entry["content"]:
+                    biz_sections_dict[section_key] = batch_entry
+
+            if biz_sections_dict:
+                plan_parts["biz_sections"] = biz_sections_dict
+            if mermaid_chunks:
+                plan_parts["mermaid_chunks"] = mermaid_chunks
+
+        return plan_parts
 
     # -----------------------------------------------------------------------
     # Phase 私有方法 / Private phase methods
@@ -506,7 +647,7 @@ class PlanGenerator(BaseAgent):
             section_md = self.call_llm(prompt, system_with_context)
             api_sections[section_key] = section_md
             # 保存 chunk 进度（每个 API group 后）/ Save after each API group
-            self._save_chunk_progress(memory_dir, plan_parts)
+            self._save_chunk_progress(memory_dir, plan_parts, api_groups=api_groups)
 
         plan_parts["api_sections"] = api_sections
         return api_sections
@@ -520,6 +661,7 @@ class PlanGenerator(BaseAgent):
         user_guidance: str,
         plan_parts: Dict[str, Any],
         memory_dir: str = "",
+        api_groups: List[dict] = None,
     ) -> Dict[str, Dict[str, str]]:
         """Phase C: 按批次生成业务链路测试（Mermaid + 用例内容）。
 
@@ -634,7 +776,7 @@ class PlanGenerator(BaseAgent):
                 "mermaids": batch_mermaids,  # per-flow: {chunk_id: mermaid}
             }
             # 保存 chunk 进度（每个 biz batch 后）/ Save after each biz batch
-            self._save_chunk_progress(memory_dir, plan_parts)
+            self._save_chunk_progress(memory_dir, plan_parts, api_groups=api_groups, biz_batches=biz_batches)
 
         plan_parts["biz_sections"] = biz_sections
         return biz_sections

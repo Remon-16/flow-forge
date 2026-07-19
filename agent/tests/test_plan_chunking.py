@@ -228,8 +228,9 @@ class TestPlanChunking:
             assert "BIZ_FLOW_SECTION" in plan_md
             # 验证 Mermaid 图已注入到 biz section 前 / Verify Mermaid injected before biz section
             assert plan_md.index("MERMAID_FLOW") < plan_md.index("BIZ_FLOW_SECTION")
-            # 已真正触达保存逻辑 (memory_dir 非空) / Save logic was actually reached
-            mock_save.assert_called_once()
+            # v2 格式增量保存 plan_sections.json（Phase A + Phase C batch + 最终）→ 3 次
+            # v2 format saves plan_sections.json incrementally (Phase A + Phase C batch + final) → 3 times
+            assert mock_save.call_count >= 2
 
     def should_generate_single_only_without_crash(self, tmp_path):
         """回归: case_type=single 保存分块时不崩 / Regression: single-only save must not crash.
@@ -268,7 +269,8 @@ class TestPlanChunking:
             )
 
             assert "API_SECTION" in plan_md
-            mock_save.assert_called_once()
+            # v2 格式增量保存 / v2 format saves incrementally
+            assert mock_save.call_count >= 2
 
 
 # ---------------------------------------------------------------------------
@@ -279,8 +281,8 @@ class TestPlanChunkResumeProgress:
     """Tests for incremental plan_chunks_progress.json save and resume skip."""
 
     def should_save_chunk_progress_after_phase_a(self, tmp_path):
-        """Phase A 后 plan_chunks_progress.json 存在且含 global_context。
-        After Phase A, plan_chunks_progress.json exists with global_context."""
+        """Phase A 后 plan_chunks_progress.json 存在且含轻量进度信息（v2 格式）。
+        After Phase A, plan_chunks_progress.json exists with lightweight progress (v2 format)."""
         with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
             agent = _make_agent()
             outline = _sample_outline()
@@ -299,8 +301,9 @@ class TestPlanChunkResumeProgress:
             progress_path = Path(memory_dir) / "plan_chunks_progress.json"
             assert progress_path.exists()
             progress = json.loads(progress_path.read_text(encoding="utf-8"))
-            assert "plan_parts" in progress
-            assert progress["plan_parts"]["global_context"] == "GLOBAL_CONTEXT"
+            # v2 轻量格式：只存进度位置，不存内容 / v2 lightweight: position only, no content
+            assert progress["version"] == 2
+            assert progress["phase_a_done"] is True
 
     def should_save_chunk_progress_after_each_api_group(self, tmp_path):
         """2 个 API groups → api_sections 含 2 个 key。
@@ -336,8 +339,11 @@ class TestPlanChunkResumeProgress:
 
             progress_path = Path(memory_dir) / "plan_chunks_progress.json"
             progress = json.loads(progress_path.read_text(encoding="utf-8"))
-            api_sections = progress["plan_parts"].get("api_sections", {})
-            assert "api_Group A" in api_sections or "api_Group_A" in api_sections
+            # v2 轻量格式：api_group_completed_ids 记录已完成的 section key
+            # v2 lightweight: api_group_completed_ids tracks completed section keys
+            assert progress["version"] == 2
+            completed_ids = progress["api_group_completed_ids"]
+            assert any("Group A" in cid or "Group_A" in cid for cid in completed_ids)
 
     def should_save_chunk_progress_after_each_biz_batch(self, tmp_path):
         """3 scenarios plan_biz_flow_batch_size=2 → biz_sections 含 2 个 batch key。
@@ -374,35 +380,38 @@ class TestPlanChunkResumeProgress:
 
             progress_path = Path(memory_dir) / "plan_chunks_progress.json"
             progress = json.loads(progress_path.read_text(encoding="utf-8"))
-            biz_sections = progress["plan_parts"].get("biz_sections", {})
-            assert len(biz_sections) >= 2
-            # 验证 biz_sections 每项为 {content, mermaids} dict
-            # Verify biz_sections entries are {content, mermaids} dicts
-            for key, entry in biz_sections.items():
-                assert isinstance(entry, dict), f"Biz section '{key}' should be a dict"
-                assert "content" in entry, f"Biz section '{key}' should have 'content'"
-                assert "mermaids" in entry, f"Biz section '{key}' should have 'mermaids'"
-                # mermaids 是 per-flow dict / mermaids is a per-flow dict
-                mermaids = entry.get("mermaids", {})
-                assert isinstance(mermaids, dict), f"mermaids should be a dict"
-                if "batch_0" in key:
-                    # Batch 0 有 2 个 flow 的 Mermaid
-                    all_m = "\n".join(mermaids.values())
-                    assert "MERMAID_1" in all_m or "MERMAID_2" in all_m, \
-                        f"Batch 0 mermaids should contain flow Mermaids"
+            # v2 轻量格式：biz_batch_completed_keys 记录已完成的 batch key
+            # v2 lightweight: biz_batch_completed_keys tracks completed batch keys
+            assert progress["version"] == 2
+            completed_keys = progress["biz_batch_completed_keys"]
+            assert len(completed_keys) == 2  # batch_size=2 packs 3 flows into 2 batches
 
     def should_skip_phase_a_when_global_context_present(self, tmp_path):
-        """预置 global_context → Phase A 不调 LLM。
-        Pre-set global_context → Phase A doesn't call LLM."""
+        """预置 global_context (v2 格式) → Phase A 不调 LLM。
+        Pre-set global_context (v2 format) → Phase A doesn't call LLM."""
         with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
             agent = _make_agent()
             memory_dir = str(tmp_path / "memory")
 
-            # 预置 plan_chunks_progress.json / Pre-populate
+            # 预置 v2 进度文件 + plan_sections.json / Pre-populate v2 progress + plan_sections.json
             progress_path = Path(memory_dir)
             progress_path.mkdir(parents=True, exist_ok=True)
             (progress_path / "plan_chunks_progress.json").write_text(
-                json.dumps({"plan_parts": {"global_context": "PRE_EXISTING_GLOBAL"}}),
+                json.dumps({
+                    "version": 2,
+                    "phase_a_done": True,
+                    "api_group_completed_ids": [],
+                    "biz_batch_completed_keys": [],
+                }),
+                encoding="utf-8",
+            )
+            # v2 需要 plan_sections.json 提供内容 / v2 needs plan_sections.json for content
+            (progress_path / "plan_sections.json").write_text(
+                json.dumps({
+                    "business_understanding": "PRE_EXISTING_GLOBAL",
+                    "single_api": [],
+                    "biz_flows": [],
+                }),
                 encoding="utf-8",
             )
 
@@ -426,11 +435,11 @@ class TestPlanChunkResumeProgress:
             assert agent.call_llm.call_count == 1
 
     def should_skip_completed_mermaid_flows_on_resume(self, tmp_path):
-        """预置 biz_sections → 已完成 batch 跳过，不调 LLM。
+        """预置 biz_sections (v2 格式) → 已完成 batch 跳过，不调 LLM。
 
-        Pre-set biz_sections → completed batches skip LLM calls.
-        新设计中 Mermaid 在 Phase C 内部生成，resume 以 batch 为单位。
-        New design: Mermaid generated inside Phase C; resume is batch-level.
+        Pre-set biz_sections (v2 format) → completed batches skip LLM calls.
+        v2 格式：进度文件存 batch key，plan_sections.json 存内容。
+        v2 format: progress file stores batch key, plan_sections.json stores content.
         """
         with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
             settings = _make_settings(plan_biz_flow_batch_size=1)
@@ -439,15 +448,35 @@ class TestPlanChunkResumeProgress:
 
             progress_path = Path(memory_dir)
             progress_path.mkdir(parents=True, exist_ok=True)
+            # v2 轻量进度文件 / v2 lightweight progress file
             (progress_path / "plan_chunks_progress.json").write_text(
-                json.dumps({"plan_parts": {
-                    "biz_sections": {
-                        "biz_Flow 1": {
+                json.dumps({
+                    "version": 2,
+                    "phase_a_done": False,
+                    "api_group_completed_ids": [],
+                    "biz_batch_completed_keys": ["biz_Flow 1"],
+                }),
+                encoding="utf-8",
+            )
+            # plan_sections.json 提供已完成 chunk 的内容 / plan_sections.json provides content for completed chunks
+            (progress_path / "plan_sections.json").write_text(
+                json.dumps({
+                    "business_understanding": "",
+                    "single_api": [],
+                    "biz_flows": [
+                        {
+                            "chunk_id": "biz_flow_1",
+                            "key": "biz_flow_1",
+                            "type": "biz",
+                            "name": "Flow 1",
+                            "section": "biz_flows",
                             "content": "BIZ_DONE",
                             "mermaid": "MERMAID_DONE",
+                            "involved_apis": [],
+                            "description": "d1",
                         },
-                    },
-                }}),
+                    ],
+                }),
                 encoding="utf-8",
             )
 

@@ -348,6 +348,18 @@ class BatchController:
             except ValueError:
                 return -1
 
+        # 检测插件字段冲突：多个插件声明相同 attribute 时记录 warning / Detect attribute overlap
+        seen_attrs: dict[str, str] = {}  # attribute → plugin_name
+        for p in plugins:
+            for attr in p.declaration.attributes:
+                if attr in seen_attrs:
+                    logger.warning(
+                        _("batch_controller.plugin_attribute_conflict",
+                          attr=attr, plugin_a=seen_attrs[attr], plugin_b=p.declaration.plugin_name)
+                    )
+                else:
+                    seen_attrs[attr] = p.declaration.plugin_name
+
         for plugin in plugins:
             phase_name = f"plugin_{plugin.declaration.plugin_name}"
 
@@ -704,8 +716,10 @@ class BatchController:
                                   name=decl.plugin_name, retries=decl.max_retries),
                             )
                             results.extend(batch)
+                            batch_ok = True  # 原始数据已保留，视为已处理 / Original data preserved, treat as handled
                         else:
                             results.extend(batch)
+                            batch_ok = True  # 同上 / Same
                     else:
                         logger.info(_("batch_controller.plugin_retry",
                                     name=decl.plugin_name, attempt=attempt + 1, max=decl.max_retries))
@@ -715,6 +729,13 @@ class BatchController:
             else:
                 consecutive_failures += 1
                 if self._check_consecutive_failures(consecutive_failures, f"plugin '{decl.plugin_name}'"):
+                    # 回填剩余未处理批次，避免静默丢失 / Backfill remaining unprocessed batches
+                    for remaining_batch in batches[i + 1:]:
+                        results.extend(remaining_batch)
+                    logger.error(
+                        _("batch_controller.consecutive_failures_break",
+                          name=decl.plugin_name, n=consecutive_failures, dropped=len(batches) - i - 1)
+                    )
                     break
 
             current_completed += len(batch)

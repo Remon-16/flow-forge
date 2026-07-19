@@ -9,6 +9,7 @@
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from agents.base import BaseAgent
@@ -120,6 +121,12 @@ def _text_revision(
     # 保存 + 拼接 / Save + assemble
     if memory_dir:
         _save_plan_sections(memory_dir, sections)
+        # 修订后清除旧的 chunk 进度缓存，避免 resume 时使用过时进度
+        # Delete stale chunk progress cache after revision to avoid outdated resume
+        progress_path = Path(memory_dir) / "plan_chunks_progress.json"
+        if progress_path.exists():
+            progress_path.unlink()
+            logger.debug("Deleted stale plan_chunks_progress.json after revision")
     return assemble_plan_md(sections)
 
 

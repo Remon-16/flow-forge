@@ -11,6 +11,8 @@ Checkpoint manager for resumable batch generation.
 import importlib.util
 import json
 import logging
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -48,6 +50,32 @@ class CheckpointManager:
     # save
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _atomic_write_json(path: Path, payload: Dict[str, Any]) -> None:
+        """原子写入 JSON：先写临时文件，确保落盘后原子 rename。
+        避免崩溃时文件处于部分写入状态，确保读取者要么看到完整新文件，要么看到完整旧文件。
+
+        Atomic JSON write: write to temp file, fsync, then os.replace.
+        Prevents partial writes on crash; readers see either complete new or complete old.
+        """
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(path.parent), prefix=f".{path.name}.tmp.", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())  # 确保数据落盘 / Ensure data is on disk
+            os.replace(tmp_path, str(path))  # 原子替换 / Atomic replace
+        except Exception:
+            # 清理临时文件 / Clean up temp file
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
     def save_meta(
         self,
         phase: str,
@@ -76,10 +104,7 @@ class CheckpointManager:
             payload["phases"] = phases
         if phase_progress is not None:
             payload["phase_progress"] = phase_progress
-        self.meta_path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
-            encoding="utf-8",
-        )
+        self._atomic_write_json(self.meta_path, payload)
         logger.debug("Checkpoint meta saved: phase=%s", phase)
 
     def save_data(self, phase: str, data: Dict[str, Any]) -> None:
@@ -90,10 +115,7 @@ class CheckpointManager:
             "phase": phase,
         }
         payload.update(data)
-        self.data_path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
-            encoding="utf-8",
-        )
+        self._atomic_write_json(self.data_path, payload)
         logger.debug("Checkpoint data saved: phase=%s", phase)
 
     # ------------------------------------------------------------------
