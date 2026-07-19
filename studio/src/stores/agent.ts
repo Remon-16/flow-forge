@@ -111,7 +111,7 @@ export const useAgentStore = defineStore('agent', () => {
     const task: AgentTask = {
       id,
       name,
-      outputDir: params.outputDir,
+      outputDir: params.outputDir.replace(/\\/g, '/'),
       status: 'pending',
       createdAt: Date.now(),
       updatedAt: Date.now(),

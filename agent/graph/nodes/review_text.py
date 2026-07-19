@@ -87,16 +87,12 @@ def _text_revision(
         actions = _chunk_intent_for_global(feedback, token_counter, skill_extensions=_exts)
         all_actions.extend(actions)
 
-    # section 数据使用 "type" 字段，值为 "api_group" / "biz_flow"
-    # section dicts use "type" field with values "api_group" / "biz_flow"
-    _TYPE_MAP = {"single_api": "api_group", "biz_flows": "biz_flow"}
+    # section 数据直接按顶层 key 访问 / Section data accessed directly by top-level key
+    # sections["single_api"] → type:"api", sections["biz_flows"] → type:"biz"
     for sec_type in ("single_api", "biz_flows"):
         if not section_impact.get(sec_type):
             continue
-        sec_chunks = [
-            s for s in sections.get("sections", [])
-            if s.get("type") == _TYPE_MAP.get(sec_type)
-        ]
+        sec_chunks = sections.get(sec_type, [])
         if not sec_chunks:
             continue
         actions = _chunk_intent_for_section(

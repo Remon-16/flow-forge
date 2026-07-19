@@ -89,7 +89,7 @@ function applyExtraParamsYamlEdit() {
 async function browseDir(target: 'output') {
   try {
     const dir = await openDirectoryDialog()
-    if (dir && target === 'output') outputDir.value = dir
+    if (dir && target === 'output') outputDir.value = dir.replace(/\\/g, '/')
   } catch { /* cancelled */ }
 }
 

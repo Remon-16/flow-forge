@@ -355,10 +355,13 @@ class TestPlanChunkResumeProgress:
                 ],
             }
 
-            # Phase A + 3 Mermaid flows + 2 biz batches = 6 calls
+            # Phase A + 2 batches (Mermaid per-flow inside Phase C + biz content)
+            # Batch 0: MERMAID_1, MERMAID_2 (2 flows) + BIZ_BATCH_0
+            # Batch 1: MERMAID_3 (1 flow) + BIZ_BATCH_1
             agent.call_llm = MagicMock(side_effect=[
-                "GLOBAL", "MERMAID_1", "MERMAID_2", "MERMAID_3",
-                "BIZ_BATCH_0", "BIZ_BATCH_1",
+                "GLOBAL",
+                "MERMAID_1", "MERMAID_2", "BIZ_BATCH_0",
+                "MERMAID_3", "BIZ_BATCH_1",
             ])
             memory_dir = str(tmp_path / "memory")
 
@@ -373,16 +376,17 @@ class TestPlanChunkResumeProgress:
             progress = json.loads(progress_path.read_text(encoding="utf-8"))
             biz_sections = progress["plan_parts"].get("biz_sections", {})
             assert len(biz_sections) >= 2
-            # 验证 biz_sections 内容已包含 Mermaid 图 / Verify biz sections include Mermaid
-            for key, content in biz_sections.items():
-                if "batch" in key:
-                    # 多 flow 批次应包含所有 flow 的 Mermaid
-                    # Multi-flow batch should contain Mermaid for all flows
-                    assert "MERMAID_1" in content or "MERMAID_2" in content or "MERMAID_3" in content, \
-                        f"Biz section '{key}' should contain Mermaid content"
-                else:
-                    assert "MERMAID" in content, \
-                        f"Biz section '{key}' should contain Mermaid content"
+            # 验证 biz_sections 每项为 {content, mermaid} dict
+            # Verify biz_sections entries are {content, mermaid} dicts
+            for key, entry in biz_sections.items():
+                assert isinstance(entry, dict), f"Biz section '{key}' should be a dict"
+                assert "content" in entry, f"Biz section '{key}' should have 'content'"
+                assert "mermaid" in entry, f"Biz section '{key}' should have 'mermaid'"
+                if "batch_0" in key:
+                    # Batch 0 有 2 个 flow 的 Mermaid
+                    m = entry.get("mermaid", "")
+                    assert "MERMAID_1" in m or "MERMAID_2" in m, \
+                        f"Batch 0 mermaid should contain flow Mermaids"
 
     def should_skip_phase_a_when_global_context_present(self, tmp_path):
         """预置 global_context → Phase A 不调 LLM。
@@ -419,17 +423,27 @@ class TestPlanChunkResumeProgress:
             assert agent.call_llm.call_count == 1
 
     def should_skip_completed_mermaid_flows_on_resume(self, tmp_path):
-        """预置 mermaid_chunks → 已完成 flow 不调 LLM。
-        Pre-set mermaid_chunks → completed flows don't call LLM."""
+        """预置 biz_sections → 已完成 batch 跳过，不调 LLM。
+
+        Pre-set biz_sections → completed batches skip LLM calls.
+        新设计中 Mermaid 在 Phase C 内部生成，resume 以 batch 为单位。
+        New design: Mermaid generated inside Phase C; resume is batch-level.
+        """
         with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
-            agent = _make_agent()
+            settings = _make_settings(plan_biz_flow_batch_size=1)
+            agent = _make_agent(settings=settings)
             memory_dir = str(tmp_path / "memory")
 
             progress_path = Path(memory_dir)
             progress_path.mkdir(parents=True, exist_ok=True)
             (progress_path / "plan_chunks_progress.json").write_text(
                 json.dumps({"plan_parts": {
-                    "mermaid_chunks": {"biz_flow_1": "MERMAID_DONE"},
+                    "biz_sections": {
+                        "biz_Flow 1": {
+                            "content": "BIZ_DONE",
+                            "mermaid": "MERMAID_DONE",
+                        },
+                    },
                 }}),
                 encoding="utf-8",
             )
@@ -443,8 +457,9 @@ class TestPlanChunkResumeProgress:
                 ],
             }
 
-            # Phase A + Flow 2 Mermaid only (Flow 1 skipped) + 1 biz batch = 3 calls
-            agent.call_llm = MagicMock(side_effect=["GLOBAL", "MERMAID_2", "BIZ_BATCH"])
+            # Phase A + Flow 2 Mermaid + Flow 2 biz content = 3 calls
+            # Flow 1 batch already completed → skipped
+            agent.call_llm = MagicMock(side_effect=["GLOBAL", "MERMAID_2", "BIZ_FLOW_2"])
 
             agent.generate_from_outline(
                 outline=outline,
@@ -456,7 +471,8 @@ class TestPlanChunkResumeProgress:
                 memory_dir=memory_dir,
             )
 
-            # Flow 1 Mermaid 被跳过 / Flow 1 Mermaid skipped
+            # Flow 1 被跳过，只调用了 Flow 2 的 Mermaid + biz content
+            # Flow 1 skipped; only Flow 2 Mermaid + biz content called
             assert agent.call_llm.call_count == 3
 
     def should_handle_memory_dir_empty_string(self):

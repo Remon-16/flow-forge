@@ -4,10 +4,19 @@ import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { useAgentStore } from '../../stores/agent'
 import type { AgentCommand, PromptData, PlanReviewData } from '../../types/agent'
-import PlanReviewDrawer from './PlanReviewDrawer.vue'
 
 const { t } = useI18n()
 const agent = useAgentStore()
+
+const props = defineProps<{
+  /** 右侧批注器是否可见 / Whether the right annotator is visible */
+  annotatorVisible?: boolean
+}>()
+
+const emit = defineEmits<{
+  /** 切换右侧批注器可见性 / Toggle right annotator visibility */
+  toggleAnnotator: []
+}>()
 
 const prompt = computed(() => agent.activeTask?.pendingPrompt)
 
@@ -17,26 +26,15 @@ const clarifyText = ref('')
 // 计划审核状态 / Plan review state
 const reviewMode = ref<'approve' | 'annotations' | 'text' | null>(null)
 const reviewText = ref('')
-// 计划审核时默认打开抽屉，其他类型默认关闭
-// Auto-open drawer for plan review; closed for other prompt types
-const reviewDrawerVisible = ref(prompt.value?.kind === 'plan_review')
 
-// 监听新 prompt 到达：plan_review 类型自动打开审核抽屉（含 re-review 场景）
-// Watch new prompt arrival: auto-open review drawer for plan_review (incl. re-review)
+// 监听新 prompt 到达：重置审核状态
+// Watch new prompt arrival: reset review state
 watch(() => prompt.value?.id, (newId, oldId) => {
-  if (newId && newId !== oldId && prompt.value?.kind === 'plan_review') {
-    reviewDrawerVisible.value = true
+  if (newId && newId !== oldId) {
     reviewMode.value = null
     reviewText.value = ''
   }
 })
-
-// 检测批注行为 → 自动选择按批注修改 / Detect annotation → auto-select revise-by-annotations
-function onAnnotationActivity() {
-  if (reviewMode.value === null) {
-    reviewMode.value = 'annotations'
-  }
-}
 
 async function handleSkip() {
   const cmd: AgentCommand = {
@@ -97,7 +95,6 @@ function resetState() {
   clarifyText.value = ''
   reviewMode.value = null
   reviewText.value = ''
-  reviewDrawerVisible.value = false
 }
 
 function getPromptData(): PromptData | PlanReviewData | null {
@@ -162,8 +159,8 @@ const promptData = computed(() => getPromptData())
       </div>
 
       <div class="review-actions">
-        <a-button @click="reviewDrawerVisible = !reviewDrawerVisible">
-          {{ reviewDrawerVisible ? 'Hide Plan' : 'View Plan' }}
+        <a-button @click="emit('toggleAnnotator')">
+          {{ props.annotatorVisible ? 'Hide Plan' : 'View Plan' }}
         </a-button>
         <a-button
           type="primary"
@@ -177,13 +174,6 @@ const promptData = computed(() => getPromptData())
           {{ t('agent.prompt_confirm') }}
         </a-button>
       </div>
-
-      <!-- 计划批注抽屉 / Plan review drawer -->
-      <PlanReviewDrawer
-        v-if="reviewDrawerVisible"
-        :memory-dir="(promptData as PlanReviewData).data?.memory_dir || ''"
-        @annotation-activity="onAnnotationActivity"
-      />
     </div>
   </div>
 </template>

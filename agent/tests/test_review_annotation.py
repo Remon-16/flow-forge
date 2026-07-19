@@ -33,10 +33,11 @@ class TestMapAnnotations:
 
     def should_map_to_global_when_selected_text_in_global(self):
         sections = {
-            "global": "## 1. Business Understanding\n\nThis is global content with special-text.",
-            "sections": [
-                {"key": "api_Test", "type": "api", "name": "Test", "content": "API section content"},
+            "business_understanding": "## 1. Business Understanding\n\nThis is global content with special-text.",
+            "single_api": [
+                {"key": "api_Test", "type": "api", "name": "Test", "section": "single_api", "content": "API section content"},
             ],
+            "biz_flows": [],
         }
         annotations = [
             {"line_number": 1, "selected_text": "special-text", "review_comment": "Fix global"},
@@ -47,10 +48,11 @@ class TestMapAnnotations:
 
     def should_map_to_both_global_and_sections(self):
         sections = {
-            "global": "## 1. Overview\n\nGlobal text with keyword-A.",
-            "sections": [
-                {"key": "api_Test", "type": "api", "name": "Test", "content": "API content with keyword-B."},
+            "business_understanding": "## 1. Overview\n\nGlobal text with keyword-A.",
+            "single_api": [
+                {"key": "api_Test", "type": "api", "name": "Test", "section": "single_api", "content": "API content with keyword-B."},
             ],
+            "biz_flows": [],
         }
         annotations = [
             {"line_number": 1, "selected_text": "keyword-A", "review_comment": "Fix global"},
@@ -62,10 +64,11 @@ class TestMapAnnotations:
 
     def should_match_global_before_sections(self):
         sections = {
-            "global": "## 1. Overview\n\ncommon-text appears here first.",
-            "sections": [
-                {"key": "api_Test", "type": "api", "name": "Test", "content": "API content with common-text too."},
+            "business_understanding": "## 1. Overview\n\ncommon-text appears here first.",
+            "single_api": [
+                {"key": "api_Test", "type": "api", "name": "Test", "section": "single_api", "content": "API content with common-text too."},
             ],
+            "biz_flows": [],
         }
         annotations = [
             {"line_number": 1, "selected_text": "common-text", "review_comment": "Change global"},
@@ -77,11 +80,13 @@ class TestMapAnnotations:
     def should_map_by_line_number_when_selected_text_missing(self):
         plan_md = "## 1. Overview\n\n## 2. Points\n\n### 2.1 Login\n\nrow content\n"
         sections = {
-            "global": "## 1. Overview",
-            "sections": [
+            "business_understanding": "## 1. Overview",
+            "single_api": [
                 {"key": "api_all", "type": "api", "name": "All",
+                 "section": "single_api",
                  "content": "## 2. Points\n\n### 2.1 Login\n\nrow content"},
             ],
+            "biz_flows": [],
         }
         annotations = [
             {"line_number": 5, "selected_text": "DRIFTED-TEXT", "review_comment": "fix"},
@@ -389,8 +394,8 @@ class TestParsePlanToSectionsFlexible:
             "## 4. Flowchart\n\n```mermaid\ngraph\n```"
         )
         result = _parse_plan_to_sections(plan, self.OUTLINE_BASIC)
-        assert result["global"], "global should not be empty"
-        assert len(result["sections"]) >= 2
+        assert result["business_understanding"], "business_understanding should not be empty"
+        assert len(result["single_api"]) + len(result["biz_flows"]) >= 2
 
     def should_split_by_detected_h3_level(self):
         plan = (
@@ -402,8 +407,8 @@ class TestParsePlanToSectionsFlexible:
             "### 4. Flowchart\n\nmermaid"
         )
         result = _parse_plan_to_sections(plan, self.OUTLINE_BASIC)
-        assert result["global"], "global should not be empty"
-        assert len(result["sections"]) >= 2
+        assert result["business_understanding"], "business_understanding should not be empty"
+        assert len(result["single_api"]) + len(result["biz_flows"]) >= 2
 
     def should_classify_by_en_keywords(self):
         plan = (
@@ -414,17 +419,17 @@ class TestParsePlanToSectionsFlexible:
             "## 4. Flowchart\n\nmermaid"
         )
         result = _parse_plan_to_sections(plan, self.OUTLINE_BASIC)
-        sections = result["sections"]
-        api_sections = [s for s in sections if s["type"] == "api_group"]
-        biz_sections = [s for s in sections if s["type"] == "biz_flow"]
+        api_sections = result["single_api"]
+        biz_sections = result["biz_flows"]
         assert len(api_sections) >= 1
         assert len(biz_sections) >= 1
 
     def should_handle_empty_plan(self):
         result = _parse_plan_to_sections("", None)
-        assert result == {"global": "", "sections": []}
+        assert result == {"business_understanding": "", "single_api": [], "biz_flows": []}
 
     def should_handle_plain_text_without_headings(self):
         result = _parse_plan_to_sections("Just plain text here.", None)
-        assert result["sections"] == []
-        assert "plain text" in result["global"]
+        assert result["single_api"] == []
+        assert result["biz_flows"] == []
+        assert "plain text" in result["business_understanding"]

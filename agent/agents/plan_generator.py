@@ -167,7 +167,11 @@ class PlanGenerator(BaseAgent):
             _("plan_gen.generating_outline",
               count=len(interface_names), tokens=input_tokens)
         )
-        system_msg = render_prompt(PLAN_OUTLINE_SYSTEM, language=get_language_name())
+        system_msg = render_prompt(
+            PLAN_OUTLINE_SYSTEM,
+            language=get_language_name(),
+            chunk_size_hint=str(chunk_size),
+        )
         outline = self.call_llm_json_object(prompt, system_msg, "api_groups")
         # 确保每条记录都有唯一的 chunk_id / Ensure every entry has a unique chunk_id
         outline = _normalize_chunk_ids(outline)
@@ -260,22 +264,6 @@ class PlanGenerator(BaseAgent):
         # 保存 chunk 进度（Phase A 完成后）/ Save chunk progress after Phase A
         self._save_chunk_progress(memory_dir, plan_parts)
 
-        # 逐流生成 Mermaid 图 / Per-flow Mermaid generation
-        # 仅 both / biz 模式生成 / Only generate for both or biz mode
-        mermaid_chunks: Dict[str, str] = {}
-        if case_type in ("both", "biz"):
-            for flow in biz_flows:
-                self._generate_mermaid_for_flow(
-                    flow=flow,
-                    iface_by_id=iface_by_id,
-                    outline_json=outline_json,
-                    global_context=global_context,
-                    plan_parts=plan_parts,
-                )
-                # 保存 chunk 进度（每个 Mermaid flow 后）/ Save after each Mermaid flow
-                self._save_chunk_progress(memory_dir, plan_parts)
-            mermaid_chunks = plan_parts.get("mermaid_chunks", {})
-
         # Phase B: 按 API group 生成测试点 section
         # 仅 both / single 模式生成 / Only generate for both or single mode
         if case_type in ("both", "single"):
@@ -290,12 +278,12 @@ class PlanGenerator(BaseAgent):
             )
         else:
             logger.info(_("plan_gen.case_type_skip_api_sections"))
-            # 跳过时返回空 dict 以匹配 Phase 返回类型与下游 .get()/in/.keys() 用法
-            # Skip → empty dict to match Phase return type and downstream .get()/in/.keys() usage
             api_sections = {}
 
-        # Phase C: 按批次生成业务链路测试 section
+        # Phase C: 按批次生成业务链路测试 section（Mermaid + 用例内容）
         # 仅 both / biz 模式生成 / Only generate for both or biz mode
+        # Mermaid 在 Phase C 内部逐流生成，与 biz content 天然捆绑
+        # Mermaid is generated per-flow within Phase C, naturally bundled with biz content
         if case_type in ("both", "biz"):
             biz_sections = self._phase_c_biz_sections(
                 biz_batches=biz_batches,
@@ -308,48 +296,7 @@ class PlanGenerator(BaseAgent):
             )
         else:
             logger.info(_("plan_gen.case_type_skip_biz_sections"))
-            # 跳过时返回空 dict 以匹配 Phase 返回类型与下游 .get()/in/.keys() 用法
-            # Skip → empty dict to match Phase return type and downstream .get()/in/.keys() usage
             biz_sections = {}
-
-        # ====================================================================
-        # 将 Mermaid 流程图注入对应的 biz section content
-        # Inject Mermaid diagrams into corresponding biz section content
-        # 使用与 _save_sections_artifact 相同的批次遍历逻辑进行匹配
-        # Uses the same batch iteration logic as _save_sections_artifact for matching
-        # 确保 plan.md 和 plan_chunks_progress.json 都包含流程图
-        # Ensures both plan.md and plan_chunks_progress.json include flowcharts
-        # ====================================================================
-        _mermaid_chunks = plan_parts.get("mermaid_chunks", {})
-        if _mermaid_chunks and biz_sections and case_type in ("both", "biz"):
-            for j, batch in enumerate(biz_batches):
-                if not batch:
-                    continue
-                for flow in batch:
-                    chunk_id = flow.get("chunk_id", "")
-                    if chunk_id not in _mermaid_chunks:
-                        continue
-                    mermaid_content = _mermaid_chunks[chunk_id]
-                    if not mermaid_content or not mermaid_content.strip():
-                        continue
-                    # 确定 section key（与 _phase_c_biz_sections 逻辑一致）
-                    # Determine section key (same logic as _phase_c_biz_sections)
-                    if len(batch) == 1:
-                        section_key = f"biz_{flow.get('name', '')}"
-                    else:
-                        section_key = f"biz_batch_{j}"
-                    if section_key in biz_sections:
-                        current = biz_sections[section_key]
-                        if mermaid_content.strip() not in current:
-                            biz_sections[section_key] = (
-                                mermaid_content.strip() + "\n\n" + current
-                            )
-                # 同步更新 plan_parts，确保持久化到 plan_chunks_progress.json
-                # Sync to plan_parts so plan_chunks_progress.json is also updated
-                plan_parts["biz_sections"] = biz_sections
-            # 注入完成后保存一次 chunk 进度
-            # Save chunk progress after injection
-            self._save_chunk_progress(memory_dir, plan_parts)
 
         # 保存分块结构到 plan_sections.json / Save section structure for revision
         self._save_sections_artifact(
@@ -359,11 +306,10 @@ class PlanGenerator(BaseAgent):
             biz_batches=biz_batches,
             biz_sections=biz_sections,
             global_context=global_context,
-            mermaid_chunks=mermaid_chunks,
         )
 
         # ====================================================================
-        # Phase D: 拼接 / Assemble
+        # Phase D: 拼接 plan.md / Assemble plan.md
         # ====================================================================
         parts: List[str] = [global_context]
 
@@ -372,10 +318,20 @@ class PlanGenerator(BaseAgent):
             if section_key in api_sections:
                 parts.append(api_sections[section_key])
 
-        # Phase C 已改为批次，按 section_key 顺序添加
-        # Biz sections are now batched — add in key order
+        # Biz sections: 每项含 content 和 mermaid，组装时 prepend mermaid
+        # Biz sections: each has content and mermaid; prepend mermaid when assembling
         for section_key in sorted(biz_sections.keys()):
-            parts.append(biz_sections[section_key])
+            entry = biz_sections[section_key]
+            if isinstance(entry, dict):
+                content = entry.get("content", "")
+                mermaid = entry.get("mermaid", "")
+                if mermaid and mermaid.strip():
+                    parts.append(mermaid.strip() + "\n\n" + content)
+                else:
+                    parts.append(content)
+            else:
+                # 兼容旧格式（字符串）/ Backward compat (string)
+                parts.append(entry)
 
         plan_md = "\n\n".join(parts)
         logger.info(
@@ -565,13 +521,19 @@ class PlanGenerator(BaseAgent):
         user_guidance: str,
         plan_parts: Dict[str, Any],
         memory_dir: str = "",
-    ) -> Dict[str, str]:
-        """Phase C: 按批次生成业务链路测试 / Generate biz flow test sections in batches.
+    ) -> Dict[str, Dict[str, str]]:
+        """Phase C: 按批次生成业务链路测试（Mermaid + 用例内容）。
 
-        已完成的批次 (resume) 自动跳过。接口按 batch 去重收集。
-        Each completed batch is saved to plan_chunks_progress.json for resume.
+        Generate biz flow test sections in batches (Mermaid + test content).
+        每个 batch 内：逐流生成 Mermaid → 生成 biz 用例内容。
+        Within each batch: per-flow Mermaid → biz test content.
+        每项存储为 {"content": ..., "mermaid": ...}，content 不含 Mermaid。
+        Each entry stored as {"content": ..., "mermaid": ...}; content has no Mermaid.
+
+        已完成的批次 (resume) 自动跳过。
+        Completed batches are skipped on resume.
         """
-        biz_sections = plan_parts.get("biz_sections", {})
+        biz_sections: Dict[str, Dict[str, str]] = plan_parts.get("biz_sections", {})
         if isinstance(biz_sections, str):
             biz_sections = json.loads(biz_sections)
             plan_parts["biz_sections"] = biz_sections
@@ -594,6 +556,23 @@ class PlanGenerator(BaseAgent):
             if section_key in biz_sections:
                 continue
 
+            # ================================================================
+            # Step 1: 逐流生成 Mermaid 图 / Per-flow Mermaid generation
+            # ================================================================
+            batch_mermaids: Dict[str, str] = {}
+            for flow in batch:
+                flow_name = flow.get("name", "")
+                chunk_id = flow.get("chunk_id", "")
+                mermaid_content = self._generate_mermaid_for_flow(
+                    flow=flow,
+                    iface_by_id=iface_by_id,
+                    outline_json=outline_json,
+                    global_context=global_context,
+                    plan_parts=plan_parts,
+                )
+                batch_mermaids[chunk_id] = mermaid_content
+                logger.info(_("plan_gen.mermaid_generated", flow=flow_name))
+
             # 收集本批次所有相关接口（去重）/ Collect relevant interfaces (deduped)
             seen_ids = set()
             batch_ifaces = []
@@ -613,6 +592,10 @@ class PlanGenerator(BaseAgent):
                 )
             flows_list = "\n\n".join(flows_desc)
 
+            # ================================================================
+            # Step 2: 生成 biz 用例内容（纯文本，不含 Mermaid）
+            # Step 2: Generate biz test content (plain text, no Mermaid)
+            # ================================================================
             prompt = render_prompt(
                 PLAN_CHUNK_BIZ_SECTION_USER,
                 interface_defs=json.dumps(batch_ifaces, ensure_ascii=False, indent=2),
@@ -643,7 +626,25 @@ class PlanGenerator(BaseAgent):
 
             self.reset_steps()
             section_md = self.call_llm(prompt, system_with_context)
-            biz_sections[section_key] = section_md
+
+            # ================================================================
+            # Step 3: 组装 batch entry — content 纯文本 + mermaid 独立存放
+            # Step 3: Build batch entry — plain text content + separate mermaid
+            # ================================================================
+            # 合并本批次所有 Mermaid（按 flow 顺序）
+            # Combine all Mermaids for this batch in flow order
+            combined_mermaid_parts = []
+            for flow in batch:
+                chunk_id = flow.get("chunk_id", "")
+                m = batch_mermaids.get(chunk_id, "")
+                if m and m.strip():
+                    combined_mermaid_parts.append(m.strip())
+            combined_mermaid = "\n\n".join(combined_mermaid_parts)
+
+            biz_sections[section_key] = {
+                "content": section_md,
+                "mermaid": combined_mermaid,
+            }
             # 保存 chunk 进度（每个 biz batch 后）/ Save after each biz batch
             self._save_chunk_progress(memory_dir, plan_parts)
 
@@ -656,33 +657,29 @@ class PlanGenerator(BaseAgent):
         api_groups: List[dict],
         api_sections: Dict[str, str],
         biz_batches: List[List[dict]],
-        biz_sections: Dict[str, str],
+        biz_sections: Dict[str, Dict[str, str]],
         global_context: str,
-        mermaid_chunks: Dict[str, str] | None = None,
     ):
         """保存分块结构到 plan_sections.json / Save section structure for revision.
 
-        转换 plan_parts (flat dicts) 为有序 sections 数组并持久化。
-        Mermaid 内容直接存入对应 biz chunk 的 mermaid 字段。
-        Mermaid content stored directly in the biz chunk's mermaid field.
+        输出 schema 定义的三键结构：
+        Outputs the three-key structure defined by the schema:
+          {"business_understanding": ..., "single_api": [...], "biz_flows": [...]}
+        content 为纯 markdown 文本，mermaid 独立存放。
+        content is plain markdown text; mermaid is stored separately.
         """
         if not memory_dir:
             return
 
         from graph.nodes.helpers import save_pipeline_artifact
 
-        mermaid_map = mermaid_chunks or {}
-        _sections = []
-        # API groups / 接口分组 (使用 chunk_id)
-        # API groups (use chunk_id as key)
+        single_api: List[dict] = []
         for group in api_groups:
             chunk_id = group.get("chunk_id", "")
-            # _phase_b_api_sections 用 f"api_{group_name}" 作 key
-            # _phase_b_api_sections uses f"api_{group_name}" as key
             section_key = f"api_{group.get('group_name', '')}"
             content = api_sections.get(section_key, "")
             if content and content.strip():
-                _sections.append({
+                single_api.append({
                     "chunk_id": f"api_{chunk_id}" if chunk_id else section_key,
                     "key": f"api_{chunk_id}" if chunk_id else section_key,
                     "type": "api",
@@ -690,34 +687,44 @@ class PlanGenerator(BaseAgent):
                     "section": "single_api",
                     "content": content,
                 })
-        # Biz flows / 业务流 (使用 chunk_id, 绑定 Mermaid)
-        # Biz flows (use chunk_id, bind Mermaid)
+
+        biz_flows: List[dict] = []
         for j, batch in enumerate(biz_batches):
             if not batch:
                 continue
-            for flow in batch:
-                chunk_id = flow.get("chunk_id", f"flow_{j}")
-                biz_key = f"biz_{chunk_id}"
-                # _phase_c_biz_sections 用 f"biz_{flow_name}" 或 f"biz_batch_{j}" 作 key
-                # _phase_c_biz_sections uses f"biz_{flow_name}" or f"biz_batch_{j}" as key
-                if len(batch) == 1:
-                    section_key = f"biz_{flow.get('name', '')}"
-                else:
-                    section_key = f"biz_batch_{j}"
-                content = biz_sections.get(section_key, "")
-                if content and content.strip():
-                    _sections.append({
+            # 确定 section key / Determine section key
+            if len(batch) == 1:
+                section_key = f"biz_{batch[0].get('name', '')}"
+            else:
+                section_key = f"biz_batch_{j}"
+
+            entry = biz_sections.get(section_key, {})
+            if isinstance(entry, str):
+                # 旧格式兼容 / Legacy format compat
+                content = entry
+                mermaid = ""
+            else:
+                content = entry.get("content", "")
+                mermaid = entry.get("mermaid", "")
+
+            if content and content.strip():
+                for flow in batch:
+                    chunk_id = flow.get("chunk_id", f"flow_{j}")
+                    biz_key = f"biz_{chunk_id}"
+                    biz_flows.append({
                         "chunk_id": biz_key,
                         "key": biz_key,
                         "type": "biz",
                         "name": flow.get("name", ""),
                         "section": "biz_flows",
                         "content": content,
-                        "mermaid": mermaid_map.get(chunk_id, ""),
+                        "mermaid": mermaid,
                     })
+
         save_pipeline_artifact(memory_dir, "plan_sections.json", {
-            "global": global_context,
-            "sections": _sections,
+            "business_understanding": global_context,
+            "single_api": single_api,
+            "biz_flows": biz_flows,
         })
 
 

@@ -117,7 +117,7 @@
   "plan_gen.generating_outline": "正在为 {count} 个接口生成测试计划轮廓 (~{tokens} tokens)...",
   "plan_gen.outline_result": "轮廓已生成: {groups} 个接口分组, {flows} 个业务流程",
   "plan_gen.resume_chunk": "从分块 {current}/{total} 恢复计划生成",
-  "plan_gen.phase_a_done": "Phase A 完成: 业务理解 + Mermaid 流程图",
+  "plan_gen.phase_a_done": "Phase A 完成: 业务理解",
   "plan_gen.phase_b_chunk": "Phase B 分块 {current}/{total}: {name} ({count} 个接口)",
   "plan_gen.phase_c_chunk": "Phase C 分块 {current}/{total}: {name}",
   "plan_gen.assembled": "计划拼接完成: {chunks} 个分块, {chars} 字符",

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import type { AnnotationData } from '../annotator/MarkdownPreview.vue'
 import { readFile, exists, writeFile } from '../../utils/desktop-bridge'
+import { joinPath } from '../../utils/path-utils'
 
 const { t } = useI18n()
 
@@ -26,12 +27,12 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 const commentsPath = computed(() => {
   if (!props.memoryDir) return ''
-  return props.memoryDir.replace(/[/\\]$/, '') + '/plan_comments.json'
+  return joinPath(props.memoryDir, 'plan_comments.json')
 })
 
 const planPath = computed(() => {
   if (!props.memoryDir) return ''
-  return props.memoryDir.replace(/[/\\]$/, '') + '/plan.md'
+  return joinPath(props.memoryDir, 'plan.md')
 })
 
 // 加载计划内容 / Load plan content

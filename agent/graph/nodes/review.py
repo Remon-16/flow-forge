@@ -230,26 +230,22 @@ def _load_or_parse_sections(
 def _parse_plan_to_sections(plan_md: str, outline: Optional[dict]) -> dict:
     """从 plan.md 文本解析为 sections 结构 / Parse plan.md into sections.
 
+    返回 schema 规定的三键结构：
+    Returns the three-key structure defined by the schema:
+      {"business_understanding": ..., "single_api": [...], "biz_flows": [...]}
+
     自适应标题级别 — 不硬编码 ## 或 ###。
     Heading-level adaptive — no hard-coded ## or ### levels.
 
-    流程 / Flow:
-    1. _detect_section_level() 检测主分段级别 L
-    2. 按 #{L} 标题切分文档 / Split document by #{L} headings
-    3. 用关键词分类每个区块 (global / api_group / biz_flow)
-    4. 区块内部按 #{L+1,} 标题拆分并映射到 outline
+    对 biz_flows，从 content 中提取 Mermaid 放入独立的 mermaid 字段。
+    For biz_flows, extracts Mermaid from content into separate mermaid field.
     """
-    sections: List[dict] = []
-
     section_level = _detect_section_level(plan_md)
     subsplit_level = section_level + 1
 
     raw_parts = re.split(rf"\n(?=#{{{section_level}}}\s)", plan_md)
 
-    # 第一个 part 是 section_level 标题之前的内容, 归入 global 前导文本
-    # First part is content before the first section_level heading → global preamble
     global_preamble = ""
-
     api_parts: List[str] = []
     biz_parts: List[str] = []
     global_parts: List[str] = []
@@ -259,15 +255,11 @@ def _parse_plan_to_sections(plan_md: str, outline: Optional[dict]) -> dict:
         if not stripped:
             continue
 
-        # 提取该 part 的首个标题行用于分类
-        # Extract first heading line of this part for classification
         first_line = stripped.split("\n", 1)[0].strip()
         heading_match = re.match(r"^#{1,6}\s+(.+)", first_line)
         heading_text = heading_match.group(1) if heading_match else ""
         part_level = len(heading_match.group(0).split()[0]) if heading_match else 0
 
-        # 跳过不是以 section_level 标题开头的 part (前导内容)
-        # Skip parts that don't start with section_level heading (preamble)
         if part_level != section_level and i == 0:
             global_preamble = stripped
             continue
@@ -277,8 +269,6 @@ def _parse_plan_to_sections(plan_md: str, outline: Optional[dict]) -> dict:
         if sec_type == "global":
             global_parts.append(stripped)
         elif sec_type == "api":
-            # 按 #{subsplit_level,} 标题拆分子区块
-            # Split by #{subsplit_level,} headings into subsections
             subs = re.split(rf"\n(?=#{{{subsplit_level},}}\s)", stripped)
             for sub in subs:
                 sub = sub.strip()
@@ -291,8 +281,6 @@ def _parse_plan_to_sections(plan_md: str, outline: Optional[dict]) -> dict:
                 if sub:
                     biz_parts.append(sub)
         elif sec_type == "unknown":
-            # 按位置推断: 第一个 → global, 中间的 → api 或 biz
-            # Position-based fallback: first → global, middle → api/biz
             if i <= 1:
                 global_parts.append(stripped)
             elif outline and outline.get("api_groups"):
@@ -308,14 +296,14 @@ def _parse_plan_to_sections(plan_md: str, outline: Optional[dict]) -> dict:
                     if sub:
                         biz_parts.append(sub)
 
-    # 拼接 global 内容: 前导文本 + 明确标记为 global 的区块
-    # Assemble global: preamble + explicitly classified global sections
+    # 拼接 business_understanding / Assemble business_understanding
     all_global = [global_preamble] + global_parts
-    global_content = "\n\n".join(p for p in all_global if p.strip())
+    business_understanding = "\n\n".join(p for p in all_global if p.strip())
 
-    # 映射 API groups / Map to outline API groups
+    # 构建 single_api 数组 / Build single_api array
     api_groups = outline.get("api_groups", []) if outline else []
     group_names = [g.get("group_name", "") for g in api_groups]
+    single_api: List[dict] = []
     for i, part in enumerate(api_parts):
         matched_name = ""
         for name in group_names:
@@ -324,16 +312,21 @@ def _parse_plan_to_sections(plan_md: str, outline: Optional[dict]) -> dict:
                 break
         if not matched_name:
             matched_name = f"group_{i}"
-        sections.append({
-            "key": f"api_{matched_name}",
-            "type": "api_group",
+        chunk_id = f"api_{matched_name}"
+        single_api.append({
+            "chunk_id": chunk_id,
+            "key": chunk_id,
+            "type": "api",
             "name": matched_name,
+            "section": "single_api",
             "content": part,
         })
 
-    # 映射 biz flows / Map to outline biz flows
-    biz_flows = outline.get("biz_flows", []) if outline else []
-    flow_names = [f.get("name", "") for f in biz_flows]
+    # 构建 biz_flows 数组 / Build biz_flows array
+    # 从 content 中提取 Mermaid 放入独立字段 / Extract Mermaid from content
+    biz_flows_outline = outline.get("biz_flows", []) if outline else []
+    flow_names = [f.get("name", "") for f in biz_flows_outline]
+    biz_flows: List[dict] = []
     for i, part in enumerate(biz_parts):
         matched_name = ""
         for name in flow_names:
@@ -342,14 +335,34 @@ def _parse_plan_to_sections(plan_md: str, outline: Optional[dict]) -> dict:
                 break
         if not matched_name:
             matched_name = f"flow_{i}"
-        sections.append({
-            "key": f"biz_{matched_name}",
-            "type": "biz_flow",
+        chunk_id = f"biz_{matched_name}"
+
+        # 提取 Mermaid 代码块，从 content 中移除 / Extract Mermaid block, remove from content
+        mermaid = ""
+        content = part
+        mermaid_match = re.search(
+            r"```mermaid\s*\n(.*?)```", part, re.DOTALL
+        )
+        if mermaid_match:
+            mermaid = "```mermaid\n" + mermaid_match.group(1).rstrip() + "\n```"
+            content = part[:mermaid_match.start()] + part[mermaid_match.end():]
+            content = content.strip()
+
+        biz_flows.append({
+            "chunk_id": chunk_id,
+            "key": chunk_id,
+            "type": "biz",
             "name": matched_name,
-            "content": part,
+            "section": "biz_flows",
+            "content": content,
+            "mermaid": mermaid,
         })
 
-    return {"global": global_content, "sections": sections}
+    return {
+        "business_understanding": business_understanding,
+        "single_api": single_api,
+        "biz_flows": biz_flows,
+    }
 
 
 def _save_plan_sections(memory_dir: str, sections: dict):
@@ -359,37 +372,48 @@ def _save_plan_sections(memory_dir: str, sections: dict):
 
 
 def _find_section_by_key(sections: dict, key: str) -> Optional[dict]:
-    """按 key 查找区块 / Find section by key."""
-    for sec in sections.get("sections", []):
+    """按 key 在 single_api 和 biz_flows 中查找 section。
+
+    Find section by key across single_api and biz_flows arrays.
+    """
+    for sec in sections.get("single_api", []):
+        if sec.get("key") == key:
+            return sec
+    for sec in sections.get("biz_flows", []):
         if sec.get("key") == key:
             return sec
     return None
 
 
 def _assemble_plan(sections: dict) -> str:
-    """从分块结构拼接纯 Markdown plan.md / Assemble clean plan.md from section structure.
+    """从分块结构拼接 plan.md / Assemble plan.md from section structure.
 
-    biz 类型 chunk 如有 mermaid 字段, 拼在 content 前面。
-    For biz-type chunks, prepend mermaid content before plan text.
+    按 schema 三键结构组装：
+    Assembles from the three-key schema structure:
+      1. business_understanding（业务理解）
+      2. single_api[] — 每个 content 直接拼接
+      3. biz_flows[] — 每个 prepend mermaid 再拼接 content
     """
-    parts: List[str] = [sections.get("global", "")]
-    in_biz = False
-    for sec in sections.get("sections", []):
-        sec_type = sec.get("type", "")
+    parts: List[str] = []
+
+    bu = sections.get("business_understanding", "")
+    if bu.strip():
+        parts.append(bu.strip())
+
+    for sec in sections.get("single_api", []):
         content = sec.get("content", "")
-
-        # 第一个 biz 类型前插入 section 标题 / Insert section heading before first biz
-        if sec_type in ("biz", "biz_flow") and not in_biz:
-            in_biz = True
-
-        # biz chunk: Mermaid 在前, 计划文本在后 / Mermaid first, then plan text
-        mermaid = sec.get("mermaid", "")
-        if mermaid and mermaid.strip():
-            if content.strip():
-                content = mermaid.strip() + "\n\n" + content.strip()
-            else:
-                content = mermaid.strip()
-
         if content.strip():
-            parts.append(content)
-    return "\n\n".join(filter(None, parts))
+            parts.append(content.strip())
+
+    for sec in sections.get("biz_flows", []):
+        content = sec.get("content", "")
+        mermaid = sec.get("mermaid", "")
+        combined_parts = []
+        if mermaid and mermaid.strip():
+            combined_parts.append(mermaid.strip())
+        if content and content.strip():
+            combined_parts.append(content.strip())
+        if combined_parts:
+            parts.append("\n\n".join(combined_parts))
+
+    return "\n\n".join(parts)

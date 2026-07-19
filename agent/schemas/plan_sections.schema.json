@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flow-forge/schemas/plan-sections.json",
+  "title": "Plan Sections",
+  "description": "测试计划章节结构 — 从生成到审核的全流程 source of truth / Plan section structure — source of truth from generation through review",
+  "type": "object",
+  "required": ["business_understanding", "single_api", "biz_flows"],
+  "properties": {
+    "business_understanding": {
+      "type": "string",
+      "description": "业务理解 markdown 文本 / Business understanding markdown text"
+    },
+    "single_api": {
+      "type": "array",
+      "description": "单接口用例列表 / Single API test case sections",
+      "items": { "$ref": "#/$defs/apiSection" }
+    },
+    "biz_flows": {
+      "type": "array",
+      "description": "业务链路用例列表 / Business flow test case sections",
+      "items": { "$ref": "#/$defs/bizSection" }
+    }
+  },
+  "$defs": {
+    "apiSection": {
+      "type": "object",
+      "description": "单接口用例 section / Single API test case section",
+      "required": ["chunk_id", "key", "type", "name", "section", "content"],
+      "properties": {
+        "chunk_id": {
+          "type": "string",
+          "description": "唯一标识，如 api_auth / Unique identifier, e.g. api_auth"
+        },
+        "key": {
+          "type": "string",
+          "description": "与 chunk_id 相同，用于查找 / Same as chunk_id, used for lookup"
+        },
+        "type": {
+          "type": "string",
+          "const": "api",
+          "description": "块类型，决定修改逻辑 / Chunk type, determines modification logic"
+        },
+        "name": {
+          "type": "string",
+          "description": "人类可读名称 / Human-readable name"
+        },
+        "section": {
+          "type": "string",
+          "const": "single_api",
+          "description": "所属分区 / Parent section"
+        },
+        "content": {
+          "type": "string",
+          "description": "markdown 文本描述 / Markdown text description"
+        }
+      }
+    },
+    "bizSection": {
+      "type": "object",
+      "description": "业务链路用例 section / Business flow test case section",
+      "required": ["chunk_id", "key", "type", "name", "section", "content", "mermaid"],
+      "properties": {
+        "chunk_id": {
+          "type": "string",
+          "description": "唯一标识，如 biz_balance_query / Unique identifier, e.g. biz_balance_query"
+        },
+        "key": {
+          "type": "string",
+          "description": "与 chunk_id 相同，用于查找 / Same as chunk_id, used for lookup"
+        },
+        "type": {
+          "type": "string",
+          "const": "biz",
+          "description": "块类型，决定修改逻辑 / Chunk type, determines modification logic"
+        },
+        "name": {
+          "type": "string",
+          "description": "人类可读名称 / Human-readable name"
+        },
+        "section": {
+          "type": "string",
+          "const": "biz_flows",
+          "description": "所属分区 / Parent section"
+        },
+        "content": {
+          "type": "string",
+          "description": "markdown 文本描述，不含 Mermaid / Markdown text description, no Mermaid"
+        },
+        "mermaid": {
+          "type": "string",
+          "description": "Mermaid 流程图，仅此字段存流程图 / Mermaid flowchart, only this field stores the flowchart"
+        }
+      }
+    }
+  }
+}

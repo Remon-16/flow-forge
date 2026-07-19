@@ -12,6 +12,10 @@ import NewTaskForm from '../components/agent/NewTaskForm.vue'
 import RunningView from '../components/agent/RunningView.vue'
 import QuestionPrompt from '../components/agent/QuestionPrompt.vue'
 import CompletedView from '../components/agent/CompletedView.vue'
+import AnnotatorPanel from '../components/annotator/AnnotatorPanel.vue'
+import ResizableDivider from '../components/layout/ResizableDivider.vue'
+import { useSplitter } from '../composables/useSplitter'
+import type { PlanReviewData } from '../types/agent'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -20,11 +24,49 @@ const agent = useAgentStore()
 const settingsVisible = ref(false)
 const isDesktopMode = isDesktop
 
-// 是否为计划审核状态 — 决定 content-question 是否水平分栏
-// Whether currently in plan review mode — controls horizontal split layout
+// 是否为计划审核状态 — 决定是否显示右侧批注器
+// Whether in plan review mode — controls right annotator visibility
 const isPlanReview = computed(() =>
   agent.activeTask?.pendingPrompt?.kind === 'plan_review'
 )
+
+// 是否为 API 澄清状态 — 决定是否显示下方面板（无右侧批注器）
+// Whether in API clarification mode — controls bottom panel (no right annotator)
+const isApiClarification = computed(() =>
+  agent.activeTask?.pendingPrompt?.kind === 'api_clarification'
+)
+
+// Plan review 的 memory_dir / memory_dir from plan_review prompt
+const reviewMemoryDir = computed(() => {
+  if (!isPlanReview.value) return ''
+  const promptData = agent.activeTask?.pendingPrompt as PlanReviewData | undefined
+  return promptData?.data?.memory_dir || ''
+})
+
+// 批注器显示/隐藏 / Annotator visibility toggle
+const annotatorVisible = ref(true)
+
+// ===================================================================
+// 可拖拽分隔条 / Resizable splitters
+// ===================================================================
+
+// 下方审核面板高度 (horizontal splitter)
+const bottomSplitter = useSplitter({
+  direction: 'horizontal',
+  defaultSize: 220,
+  minSize: 100,
+  maxSize: 600,
+  reverse: true,
+})
+
+// 右侧批注器宽度 (vertical splitter)
+const rightSplitter = useSplitter({
+  direction: 'vertical',
+  defaultSize: 500,
+  minSize: 300,
+  maxSize: 900,
+  reverse: true,
+})
 
 onMounted(async () => {
   await agent.initialize()
@@ -83,18 +125,55 @@ onMounted(async () => {
             <NewTaskForm @submit="() => {}" />
           </div>
 
-          <!-- Running: log view + optional prompt -->
+          <!-- Running: log view -->
           <div v-else-if="agent.activeTask.status === 'running'" class="content-running">
             <RunningView />
           </div>
 
-          <!-- Question: 审核时水平分栏（日志左 + 面板右），其他保持垂直布局 -->
-          <!-- Question: horizontal split for review (logs left + panel right), vertical for others -->
-          <div v-else-if="agent.activeTask.status === 'question'"
-               class="content-question"
-               :class="{ 'layout-review': isPlanReview }">
-            <RunningView />
-            <QuestionPrompt />
+          <!-- Question: 审核时三栏布局（日志 + 底栏 + 右侧批注器） -->
+          <!-- Question: three-column layout for review (logs + bottom panel + right annotator) -->
+          <div
+            v-else-if="agent.activeTask.status === 'question'"
+            class="content-question"
+            :class="{
+              'layout-review': isPlanReview,
+              'layout-clarify': isApiClarification,
+            }"
+          >
+            <!-- 中间区域：日志 + 下方面板 / Center: logs + bottom panel -->
+            <div class="content-center" :class="{ 'has-bottom': isPlanReview || isApiClarification }">
+              <RunningView />
+              <template v-if="isPlanReview || isApiClarification">
+                <ResizableDivider
+                  orientation="horizontal"
+                  @mousedown="bottomSplitter.onDividerMousedown"
+                />
+                <div
+                  class="bottom-panel"
+                  :style="{ height: bottomSplitter.size.value + 'px' }"
+                >
+                  <QuestionPrompt :annotator-visible="annotatorVisible"
+                    @toggle-annotator="annotatorVisible = !annotatorVisible" />
+                </div>
+              </template>
+            </div>
+
+            <!-- 右侧批注器 (仅 plan_review) / Right annotator (plan_review only) -->
+            <template v-if="isPlanReview && annotatorVisible">
+              <ResizableDivider
+                orientation="vertical"
+                @mousedown="rightSplitter.onDividerMousedown"
+              />
+              <div
+                class="annotator-right"
+                :style="{ width: rightSplitter.size.value + 'px' }"
+              >
+                <AnnotatorPanel
+                  :memory-dir="reviewMemoryDir"
+                  :show-toolbar="true"
+                />
+              </div>
+            </template>
           </div>
 
           <!-- Completed: summary -->
@@ -192,27 +271,57 @@ onMounted(async () => {
   flex: 1;
   overflow: hidden;
 }
-.content-running, .content-question {
+.content-running {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-/* 计划审核水平分栏：日志左侧，审核面板右侧 */
-/* Plan review horizontal split: logs left, review panel right */
+
+/* Question 状态 / Question state */
+.content-question {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+/* 计划审核 — 三栏 / Plan review — three columns */
 .content-question.layout-review {
   flex-direction: row;
 }
-.content-question.layout-review > :first-child {
+/* API 澄清 — 单栏 / API clarification — single column */
+.content-question.layout-clarify {
+  flex-direction: column;
+}
+
+/* 中间区域 / Center area */
+.content-center {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   min-width: 0;
 }
-.content-question.layout-review > :last-child {
-  width: 460px;
-  min-width: 360px;
-  border-left: 2px solid #fa8c16;
-  overflow-y: auto;
+.content-center.has-bottom {
+  /* RunningView 在上，QuestionPrompt 在下 */
 }
+
+/* 下方审核面板 / Bottom review panel */
+.bottom-panel {
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-top: 2px solid #fa8c16;
+  background: #fff7e6;
+}
+
+/* 右侧批注器 / Right annotator */
+.annotator-right {
+  flex-shrink: 0;
+  overflow: hidden;
+  border-left: 2px solid #fa8c16;
+  background: #fff;
+}
+
+/* Completed / Error states */
 .content-completed, .content-error {
   flex: 1;
   overflow-y: auto;

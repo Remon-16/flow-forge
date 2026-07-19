@@ -102,6 +102,14 @@ def _annotation_chunked_revision(
 # ============================================================================
 
 
+def _iter_all_sections(sections: dict):
+    """遍历所有 section（single_api + biz_flows）/ Iterate all sections from both arrays."""
+    for sec in sections.get("single_api", []):
+        yield sec
+    for sec in sections.get("biz_flows", []):
+        yield sec
+
+
 def _map_annotations_to_sections(
     sections: dict, annotations: List[dict], plan_md: str = "",
 ) -> Dict[str, List[dict]]:
@@ -115,11 +123,11 @@ def _map_annotations_to_sections(
         selected = ann.get("selected_text", "")
         # 1) selected_text 子串匹配 / substring match
         if selected:
-            if selected in sections.get("global", ""):
+            if selected in sections.get("business_understanding", ""):
                 mapping.setdefault("__global__", []).append(ann)
                 continue
             placed = False
-            for sec in sections.get("sections", []):
+            for sec in _iter_all_sections(sections):
                 if selected in sec.get("content", ""):
                     mapping.setdefault(sec["key"], []).append(ann)
                     placed = True
@@ -140,12 +148,12 @@ def _section_key_for_line(sections: dict, plan_md: str, line_number) -> Any:
     """按 line_number 落点找所属 chunk key / Find chunk key by line_number range."""
     if not isinstance(line_number, int):
         return None
-    global_content = sections.get("global", "")
+    global_content = sections.get("business_understanding", "")
     g_base = _section_base_line(plan_md, global_content)
     if g_base is not None and global_content:
         if g_base <= line_number < g_base + global_content.count("\n") + 1:
             return "__global__"
-    for sec in sections.get("sections", []):
+    for sec in _iter_all_sections(sections):
         content = sec.get("content", "")
         base = _section_base_line(plan_md, content)
         if base is None:
@@ -193,7 +201,7 @@ def _run_intent_analysis(
     """
     # 构建待分析列表 / Build pending list
     pending = []
-    for sec in sections.get("sections", []):
+    for sec in _iter_all_sections(sections):
         key = sec.get("key", "")
         if key in section_annotations:
             pending.append({
@@ -206,7 +214,7 @@ def _run_intent_analysis(
                 "key": "__global__",
                 "type": "global",
                 "name": "Global",
-                "content": sections.get("global", ""),
+                "content": sections.get("business_understanding", ""),
             },
             "annotations": section_annotations["__global__"],
         })
@@ -536,7 +544,7 @@ def _fix_global_chunk(
         language=get_language_name(),
     )
     agent.reset_steps()
-    sections["global"] = agent.call_llm(prompt, system_msg)
+    sections["business_understanding"] = agent.call_llm(prompt, system_msg)
 
 
 def _fix_api_chunk(
@@ -575,10 +583,16 @@ def _regenerate_mermaid_for_flow(
     flow: dict, iface_by_id: dict,
     sections: dict, agent: PlanGenerator,
 ):
-    """重新绘制单个业务流的 Mermaid 图 / Re-draw Mermaid for a biz flow."""
+    """重新绘制单个业务流的 Mermaid 图 / Re-draw Mermaid for a biz flow.
+
+    只更新 sec["mermaid"] 字段，不修改 sec["content"]。
+    Only updates sec["mermaid"]; does NOT modify sec["content"].
+    Mermaid 在 _assemble_plan() 时才与 content 合并。
+    Mermaid is merged with content only during _assemble_plan().
+    """
     api_ids = flow.get("involved_apis", [])
     flow_ifaces = [iface_by_id[aid] for aid in api_ids if aid in iface_by_id]
-    global_context = sections.get("global", "")
+    global_context = sections.get("business_understanding", "")
 
     prompt = render_prompt(
         PLAN_CHUNK_MERMAID_USER,
@@ -597,26 +611,13 @@ def _regenerate_mermaid_for_flow(
     agent.reset_steps()
     mermaid_content = agent.call_llm(prompt, system_msg)
 
-    # 找到对应的 chunk 并更新 mermaid 字段和 content
-    # Find matching chunk, update mermaid field and content
+    # 找到对应的 biz section 并只更新 mermaid 字段
+    # Find matching biz section; update only the mermaid field
     chunk_id = flow.get("chunk_id", "")
     biz_key = f"biz_{chunk_id}"
-    for sec in sections.get("sections", []):
+    for sec in _iter_all_sections(sections):
         if sec.get("key") == biz_key or sec.get("chunk_id") == biz_key:
-            old_mermaid = sec.get("mermaid", "")
             sec["mermaid"] = mermaid_content
-            # 同步更新 content：替换旧 mermaid 或 prepend 新 mermaid
-            # Sync content: replace old mermaid or prepend new one
-            current_content = sec.get("content", "")
-            if old_mermaid and old_mermaid.strip() in current_content:
-                current_content = current_content.replace(
-                    old_mermaid.strip(), mermaid_content.strip()
-                )
-            elif mermaid_content.strip() not in current_content:
-                current_content = (
-                    mermaid_content.strip() + "\n\n" + current_content
-                )
-            sec["content"] = current_content
             break
 
 
@@ -654,11 +655,9 @@ def _fix_biz_chunk(
     )
     agent.reset_steps()
     new_content = agent.call_llm(prompt, system_msg)
-    # 将当前 mermaid 注入到新生成的 biz content 前
-    # Prepend current mermaid to regenerated biz content
-    mermaid = chunk.get("mermaid", "")
-    if mermaid and mermaid.strip() and mermaid.strip() not in new_content:
-        new_content = mermaid.strip() + "\n\n" + new_content
+    # content 只存纯文本，mermaid 留在 chunk["mermaid"] 中
+    # content stores plain text only; mermaid stays in chunk["mermaid"]
+    # _assemble_plan() 负责合并 / _assemble_plan() handles merging
     chunk["content"] = new_content
 
 
@@ -669,11 +668,13 @@ def _fix_biz_chunk(
 
 def _execute_delete_chunk(sections: dict, outline: dict, chunk_id: str):
     """从 sections 和 outline 中移除 chunk / Remove chunk from sections and outline."""
-    # 从 sections 中移除
-    sections["sections"] = [
-        s for s in sections.get("sections", [])
-        if s.get("key") != chunk_id and s.get("chunk_id") != chunk_id
-    ]
+    # 从 single_api 和 biz_flows 中移除 / Remove from single_api and biz_flows
+    for arr_name in ("single_api", "biz_flows"):
+        arr = sections.get(arr_name, [])
+        sections[arr_name] = [
+            s for s in arr
+            if s.get("key") != chunk_id and s.get("chunk_id") != chunk_id
+        ]
     # 从 outline 中移除
     if chunk_id.startswith("api_"):
         outline["api_groups"] = [
@@ -717,7 +718,7 @@ def _execute_add_chunk(
             "section": "single_api",
             "content": "",
         }
-        sections.setdefault("sections", []).append(new_chunk)
+        sections.setdefault("single_api", []).append(new_chunk)
         if fix_text:
             _fix_api_chunk(new_chunk, new_group, fix_text, outline,
                           analysis, api_summary, iface_by_id, agent, user_guidance)
@@ -739,7 +740,7 @@ def _execute_add_chunk(
             "content": "",
             "mermaid": "",
         }
-        sections.setdefault("sections", []).append(new_chunk)
+        sections.setdefault("biz_flows", []).append(new_chunk)
         if fix_text:
             _regenerate_mermaid_for_flow(new_flow, iface_by_id, sections, agent)
             _fix_biz_chunk(new_chunk, new_flow, fix_text, outline,
