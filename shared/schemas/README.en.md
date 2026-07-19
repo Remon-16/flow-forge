@@ -11,6 +11,7 @@ This directory contains shared schema definitions for the Flow Forge project, st
 | `constants.json` | HTTP methods, tag levels, required field rules |
 | `operators.json` | Assertion rule operator patterns, valid functions, valid types |
 | `types.json` | Entity field definitions — name, type, description, example values |
+| `plan_sections.json` | Test plan section structure (JSON Schema draft 2020-12) — defines business_understanding / single_api / biz_flows three-key structure for AI agent generation and Studio annotator rendering |
 
 ## Modification Rules
 

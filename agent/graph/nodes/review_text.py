@@ -26,11 +26,11 @@ from prompts.render import render_prompt
 from . import helpers as _h
 from .helpers import _
 from .review import (
-    _assemble_plan,
     _load_or_parse_sections,
     _save_plan_sections,
 )
 from .review_annotation import _execute_chunk_actions
+from flow_forge_schemas.plan_sections import assemble_plan_md
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def _text_revision(
     section_impact = _section_impact_analysis(feedback, case_type, token_counter, skill_extensions=_exts)
     if not any(section_impact.values()):
         logger.info(_("review.no_section_affected"))
-        return _assemble_plan(sections)
+        return assemble_plan_md(sections)
 
     logger.info(
         _("review.section_impact_result",
@@ -101,7 +101,7 @@ def _text_revision(
 
     if not all_actions:
         logger.info(_("review.no_chunk_affected"))
-        return _assemble_plan(sections)
+        return assemble_plan_md(sections)
 
     # 意图分布日志 / Intent distribution log
     logger.info(_(
@@ -120,7 +120,7 @@ def _text_revision(
     # 保存 + 拼接 / Save + assemble
     if memory_dir:
         _save_plan_sections(memory_dir, sections)
-    return _assemble_plan(sections)
+    return assemble_plan_md(sections)
 
 
 # ============================================================================

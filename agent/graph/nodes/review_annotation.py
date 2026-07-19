@@ -4,7 +4,7 @@
   1. 批注 → chunk 映射 (代码级) / Map annotations to chunks (code-level)
   2. 意图分析 (LLM → noop/fix/delete_chunk/add_chunk) / Intent analysis (LLM)
   3. 执行 chunk 级操作 / Execute chunk-level actions
-  4. _assemble_plan() 拼接 / Re-assemble plan
+  4. assemble_plan_md() 拼接 / Re-assemble plan
 """
 
 import json
@@ -36,12 +36,11 @@ from prompts.render import render_prompt
 from . import helpers as _h
 from .helpers import _
 from .review import (
-    _assemble_plan,
-    _find_section_by_key,
     _load_or_parse_sections,
     _save_plan_sections,
     _scan_headings,
 )
+from flow_forge_schemas.plan_sections import assemble_plan_md, find_section_by_key
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +78,12 @@ def _annotation_chunked_revision(
     section_annotations = _map_annotations_to_sections(sections, annotations)
     if not section_annotations:
         logger.warning(_("review.no_sections_matched"))
-        return _assemble_plan(sections)
+        return assemble_plan_md(sections)
 
     # 意图分析 / Intent analysis (LLM)
     all_actions = _run_intent_analysis(sections, section_annotations, state, skill_extensions=_exts)
     if not all_actions:
-        return _assemble_plan(sections)
+        return assemble_plan_md(sections)
 
     # 执行 chunk 级操作 / Execute chunk-level actions
     _execute_chunk_actions(sections, all_actions, state, analysis, api_summary,
@@ -93,7 +92,7 @@ def _annotation_chunked_revision(
     # 保存 + 拼接 / Save + assemble
     if memory_dir:
         _save_plan_sections(memory_dir, sections)
-    return _assemble_plan(sections)
+    return assemble_plan_md(sections)
 
 
 # ============================================================================
@@ -123,7 +122,7 @@ def _map_annotations_to_sections(
         # 1) chunk_id 直接匹配 / chunk_id direct match (from Studio annotator)
         chunk_id = ann.get("chunk_id", "")
         if chunk_id:
-            found = _find_section_by_key(sections, chunk_id)
+            found = find_section_by_key(sections, chunk_id)
             if found:
                 mapping.setdefault(found["key"], []).append(ann)
                 continue
@@ -445,7 +444,7 @@ def _execute_chunk_actions(
                 logger.info(_("review.fixed_global"))
                 continue
 
-            chunk = _find_section_by_key(sections, chunk_id)
+            chunk = find_section_by_key(sections, chunk_id)
             if not chunk:
                 logger.warning(_("review.chunk_not_found", key=chunk_id))
                 continue
@@ -609,7 +608,7 @@ def _fix_biz_chunk(
     new_content = agent.call_llm(prompt, system_msg)
     # content 只存纯文本，mermaid 留在 chunk["mermaid"] 中
     # content stores plain text only; mermaid stays in chunk["mermaid"]
-    # _assemble_plan() 负责合并 / _assemble_plan() handles merging
+    # assemble_plan_md() 负责合并 / assemble_plan_md() handles merging
     chunk["content"] = new_content
 
 
@@ -649,7 +648,7 @@ def _execute_add_chunk(
     # chunk_id 去重 / Dedup: avoid overwriting existing chunks
     original = chunk_id
     suffix = 1
-    while _find_section_by_key(sections, chunk_id):
+    while find_section_by_key(sections, chunk_id):
         suffix += 1
         chunk_id = f"{original}_{suffix}"
     if chunk_id != original:

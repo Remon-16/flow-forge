@@ -202,7 +202,7 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
     if sections_path.exists() and "generate_plan" in completed_stages:
         try:
             sections_data = json.loads(sections_path.read_text(encoding="utf-8"))
-            from schemas.plan_sections import assemble_plan_md
+            from flow_forge_schemas.plan_sections import assemble_plan_md
             state["plan_md"] = assemble_plan_md(sections_data)
         except Exception:
             pass

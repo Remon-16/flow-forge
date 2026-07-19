@@ -18,6 +18,7 @@ from typing import List, Optional
 from graph.state import GraphState
 from i18n import _
 from utils.plan_sections import classify_section, detect_section_level, scan_headings
+from flow_forge_schemas.plan_sections import assemble_plan_md, find_section_by_key
 
 from . import helpers as _h
 from .helpers import _, _step, _sl, save_pipeline_artifact, save_pipeline_state
@@ -217,51 +218,3 @@ def _save_plan_sections(memory_dir: str, sections: dict):
     """保存更新后的分块结构 / Save updated section structure."""
     if memory_dir:
         save_pipeline_artifact(memory_dir, "plan_sections.json", sections)
-
-
-def _find_section_by_key(sections: dict, key: str) -> Optional[dict]:
-    """按 key 在 single_api 和 biz_flows 中查找 section。
-
-    Find section by key across single_api and biz_flows arrays.
-    """
-    for sec in sections.get("single_api", []):
-        if sec.get("key") == key:
-            return sec
-    for sec in sections.get("biz_flows", []):
-        if sec.get("key") == key:
-            return sec
-    return None
-
-
-def _assemble_plan(sections: dict) -> str:
-    """从分块结构拼接 plan.md / Assemble plan.md from section structure.
-
-    按 schema 三键结构组装：
-    Assembles from the three-key schema structure:
-      1. business_understanding（业务理解）
-      2. single_api[] — 每个 content 直接拼接
-      3. biz_flows[] — 每个 prepend mermaid 再拼接 content
-    """
-    parts: List[str] = []
-
-    bu = sections.get("business_understanding", "")
-    if bu.strip():
-        parts.append(bu.strip())
-
-    for sec in sections.get("single_api", []):
-        content = sec.get("content", "")
-        if content.strip():
-            parts.append(content.strip())
-
-    for sec in sections.get("biz_flows", []):
-        content = sec.get("content", "")
-        mermaid = sec.get("mermaid", "")
-        combined_parts = []
-        if mermaid and mermaid.strip():
-            combined_parts.append(mermaid.strip())
-        if content and content.strip():
-            combined_parts.append(content.strip())
-        if combined_parts:
-            parts.append("\n\n".join(combined_parts))
-
-    return "\n\n".join(parts)

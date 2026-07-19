@@ -3,6 +3,7 @@ import { computed, ref, onMounted, onUpdated, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownIt from 'markdown-it'
 import mermaid from 'mermaid'
+import type { PlanSections } from '@flow-forge-schemas'
 
 export interface AnnotationData {
   line_number: number
@@ -16,7 +17,7 @@ const props = defineProps<{
   annotations: AnnotationData[]
   showLineNumbers?: boolean
   /** plan_sections.json 数据，用于 chunk_id 关联 / plan_sections.json data for chunk_id association */
-  sections?: { business_understanding: string; single_api: { chunk_id: string; content: string }[]; biz_flows: { chunk_id: string; content: string; mermaid?: string }[] } | null
+  sections?: PlanSections | null
 }>()
 
 const emit = defineEmits<{

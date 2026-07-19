@@ -207,7 +207,7 @@ def summarize_reference_dir(reference_dir: str) -> str:
     if sections_path.exists():
         try:
             import json
-            from schemas.plan_sections import assemble_plan_md
+            from flow_forge_schemas.plan_sections import assemble_plan_md
             sections = json.loads(sections_path.read_text(encoding="utf-8"))
             plan_text = assemble_plan_md(sections)
             parts.append(f"{REF_SECTION_EXISTING_PLAN}{plan_text[:5000]}")

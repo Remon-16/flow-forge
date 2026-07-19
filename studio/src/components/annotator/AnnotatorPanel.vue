@@ -15,8 +15,8 @@ import HistoryAnnotationViewer from './HistoryAnnotationViewer.vue'
 import { readFile, listDirectoryAll, exists, writeFile } from '../../utils/desktop-bridge'
 import { useSettingsStore } from '../../stores/settings'
 import { joinPath } from '../../utils/path-utils'
-import type { PlanSections } from '../../types/agent'
-import { assemblePlanMd } from '../../types/agent'
+import type { PlanSections } from '@flow-forge-schemas'
+import { assemblePlanMd } from '@flow-forge-schemas'
 
 const { t } = useI18n()
 const settings = useSettingsStore()

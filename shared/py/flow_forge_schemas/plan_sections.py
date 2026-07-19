@@ -2,13 +2,13 @@
 
 Python type definitions and helper functions for plan_sections.json.
 
-对应 JSON Schema: agent/schemas/plan_sections.schema.json
-Corresponding JSON Schema: agent/schemas/plan_sections.schema.json
+对应 JSON Schema: shared/schemas/plan_sections.json
+Corresponding JSON Schema: shared/schemas/plan_sections.json
 """
 
 from __future__ import annotations
 
-from typing import List, Literal, TypedDict
+from typing import List, Literal, NotRequired, TypedDict
 
 
 # ============================================================================
@@ -23,9 +23,9 @@ class ApiSection(TypedDict):
     type: Literal["api"]
     name: str
     section: Literal["single_api"]
-    content: str       # markdown 文本描述 / Markdown text description
-    api_ids: List[str]         # 该 group 包含的接口 test_id 列表。fix 时查 InterfaceDef 用 / Interface test_ids in this group; used in fix to look up InterfaceDef
-    test_focus: str            # 该 group 的测试重点描述。fix 时作为 LLM prompt 补充 / Testing focus description; used as LLM prompt context during fix
+    content: str               # markdown 文本描述 / Markdown text description
+    api_ids: NotRequired[List[str]]    # 该 group 包含的接口 test_id 列表。fix 时查 InterfaceDef 用 / Interface test_ids in this group; used in fix to look up InterfaceDef
+    test_focus: NotRequired[str]       # 该 group 的测试重点描述。fix 时作为 LLM prompt 补充 / Testing focus description; used as LLM prompt context during fix
 
 
 class BizSection(TypedDict):
@@ -35,10 +35,10 @@ class BizSection(TypedDict):
     type: Literal["biz"]
     name: str
     section: Literal["biz_flows"]
-    content: str       # markdown 文本描述，不含 Mermaid / Markdown text, no Mermaid
-    mermaid: str       # Mermaid 流程图 / Mermaid flowchart diagram
-    involved_apis: List[str]   # 该业务流涉及的接口 test_id 列表。fix/重画 Mermaid 时查 InterfaceDef 用 / Interface test_ids involved; used in fix/mermaid regen
-    description: str           # 该业务流的文字描述。fix/重画 Mermaid 时作为 LLM prompt 上下文 / Flow description; used as LLM prompt context during fix/mermaid regen
+    content: str               # markdown 文本描述，不含 Mermaid / Markdown text, no Mermaid
+    mermaid: str               # Mermaid 流程图 / Mermaid flowchart diagram
+    involved_apis: NotRequired[List[str]]  # 该业务流涉及的接口 test_id 列表。fix/重画 Mermaid 时查 InterfaceDef 用 / Interface test_ids involved; used in fix/mermaid regen
+    description: NotRequired[str]          # 该业务流的文字描述。fix/重画 Mermaid 时作为 LLM prompt 上下文 / Flow description; used as LLM prompt context during fix/mermaid regen
 
 
 class PlanSections(TypedDict):
@@ -122,16 +122,16 @@ def assemble_plan_md(sections: PlanSections) -> str:
 
     for sec in sections.get("single_api", []):
         content = sec.get("content", "")
-        if content.strip():
+        if content and content.strip():
             parts.append(content.strip())
 
     for sec in sections.get("biz_flows", []):
         content = sec.get("content", "")
         mermaid = sec.get("mermaid", "")
         combined_parts = []
-        if mermaid.strip():
+        if mermaid and mermaid.strip():
             combined_parts.append(mermaid.strip())
-        if content.strip():
+        if content and content.strip():
             combined_parts.append(content.strip())
         if combined_parts:
             parts.append("\n\n".join(combined_parts))

@@ -75,3 +75,10 @@ export const VALID_FUNCTIONS: readonly string[] = operators.valid_functions
 
 // typeof 合法类型 / Valid types for typeof operator
 export const VALID_TYPES: readonly string[] = operators.valid_types
+
+// ============================================================================
+// plan_sections 类型与 helper / plan_sections types and helpers
+// ============================================================================
+
+export type { ApiSection, BizSection, PlanSections } from '../../shared/ts/plan_sections'
+export { assemblePlanMd } from '../../shared/ts/plan_sections'
