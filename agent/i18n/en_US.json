@@ -62,7 +62,6 @@
   "parse_docs.llm_extracted": "LLM extracted {count} interfaces",
   "parse_docs.short_text_warning": "⚠ Warning: Very little text extracted ({chars} chars). If the document contains images or scanned pages, their content will NOT be processed (text-only mode).",
 
-  "analyze_api.parsing_raw": "ApiAnalyzer identifying and analyzing interfaces from source ({model})...",
   "analyze_api.llm_calling": "ApiAnalyzer calling LLM ({model})...",
   "analyze_api.generated_summaries": "Generated {count} interface summaries",
   "analyze_api.rebuilt_interfaces": "Rebuilt {count} interface definitions from summaries",

@@ -5,6 +5,7 @@ CLI runner: main pipeline orchestration for all modes.
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional

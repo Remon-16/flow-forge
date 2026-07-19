@@ -21,10 +21,9 @@ logger = logging.getLogger(__name__)
 def parse_docs_node(state: GraphState) -> GraphState:
     """读取需求文件和 API 规范文档。
 
-    Read requirement files + API spec. Three parse modes:
-    - raw: extract text, defer analysis to analyze_api_node
-    - rule: use built-in/custom rule-based parsers
-    - llm: use DocParserAgent (LLM) to pre-extract structured interfaces
+    Read requirement files + API spec. Two parse modes:
+    - llm（默认/default）: use DocParserAgent (LLM) to pre-extract structured interfaces
+    - rule: use built-in/custom rule-based parsers (OpenAPI/Markdown)
     """
     state.setdefault("errors", [])
 
@@ -66,7 +65,7 @@ def parse_docs_node(state: GraphState) -> GraphState:
 
     # --- API（多文档独立解析 / multi-doc independent parsing）---
     api_paths = state.get("api_paths", [])
-    parse_mode = state.get("parse_mode", "raw")
+    parse_mode = state.get("parse_mode", "llm")
 
     if not api_paths:
         state["interfaces"] = []

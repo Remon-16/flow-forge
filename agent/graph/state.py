@@ -36,7 +36,7 @@ class GraphState(TypedDict, total=False):
     api_raw_text: str          # 拼接后的 API 文档原文，供 URL 校验 / Merged API doc text for URL validation
     parse_mode: str            # "llm" | "rule"
     parser_path: str           # Custom parser script path
-    interface_extraction_method: str  # "none" | "raw" | "rule" | "llm"
+    interface_extraction_method: str  # "none" | "rule" | "llm"
 
     # === 需求分析 / Requirement analysis ===
     requirement_analysis: Dict[str, Any]
