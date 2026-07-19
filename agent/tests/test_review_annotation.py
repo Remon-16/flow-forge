@@ -9,7 +9,6 @@ import pytest
 
 from graph.nodes.review import (
     _detect_section_level,
-    _parse_plan_to_sections,
     _scan_headings,
 )
 from graph.nodes.review_annotation import (
@@ -77,8 +76,8 @@ class TestMapAnnotations:
         assert "__global__" in mapping
         assert "api_Test" not in mapping
 
-    def should_map_by_line_number_when_selected_text_missing(self):
-        plan_md = "## 1. Overview\n\n## 2. Points\n\n### 2.1 Login\n\nrow content\n"
+    def should_map_by_chunk_id_when_selected_text_missing(self):
+        """chunk_id 直接匹配优先于 selected_text / chunk_id direct match takes priority."""
         sections = {
             "business_understanding": "## 1. Overview",
             "single_api": [
@@ -89,9 +88,9 @@ class TestMapAnnotations:
             "biz_flows": [],
         }
         annotations = [
-            {"line_number": 5, "selected_text": "DRIFTED-TEXT", "review_comment": "fix"},
+            {"chunk_id": "api_all", "selected_text": "DRIFTED-TEXT", "review_comment": "fix"},
         ]
-        mapping = _map_annotations_to_sections(sections, annotations, plan_md)
+        mapping = _map_annotations_to_sections(sections, annotations)
         assert "api_all" in mapping
         assert mapping["api_all"][0]["review_comment"] == "fix"
 
@@ -257,7 +256,7 @@ class TestFindByChunkId:
     def should_find_flow_by_chunk_id(self):
         outline = {
             "biz_flows": [
-                {"chunk_id": "user_register", "name": "User Register"},
+                {"chunk_id": "biz_user_register", "name": "User Register"},
             ],
         }
         flow = _find_flow_by_chunk_id(outline, "biz_user_register")
@@ -267,7 +266,7 @@ class TestFindByChunkId:
     def should_find_group_by_chunk_id(self):
         outline = {
             "api_groups": [
-                {"chunk_id": "auth", "group_name": "Auth"},
+                {"chunk_id": "api_auth", "group_name": "Auth"},
             ],
         }
         group = _find_group_by_chunk_id(outline, "api_auth")
@@ -370,66 +369,3 @@ class TestDetectSectionLevel:
 # ============================================================================
 
 
-class TestParsePlanToSectionsFlexible:
-    """Tests for _parse_plan_to_sections() — heading-level adaptive parsing."""
-
-    OUTLINE_BASIC = {
-        "api_groups": [
-            {"group_name": "Auth"},
-            {"group_name": "Products"},
-        ],
-        "biz_flows": [
-            {"name": "Purchase Flow"},
-        ],
-    }
-
-    def should_split_by_detected_h2_level(self):
-        plan = (
-            "## 1. Business Understanding\n\nContext text\n\n"
-            "## 2. Single Interface Test Points\n\n"
-            "### Auth\n\nTest case 1\n\n"
-            "### Products\n\nTest case 2\n\n"
-            "## 3. Business Flow Testing\n\n"
-            "### Purchase Flow\n\nFlow test\n\n"
-            "## 4. Flowchart\n\n```mermaid\ngraph\n```"
-        )
-        result = _parse_plan_to_sections(plan, self.OUTLINE_BASIC)
-        assert result["business_understanding"], "business_understanding should not be empty"
-        assert len(result["single_api"]) + len(result["biz_flows"]) >= 2
-
-    def should_split_by_detected_h3_level(self):
-        plan = (
-            "## Revised Plan\n\n"
-            "### 1. Business Understanding\n\ncontext\n\n"
-            "### 2. Single Interface\n\n"
-            "#### Auth\n\ntest case\n\n"
-            "### 3. Business Flow\n\nflow\n\n"
-            "### 4. Flowchart\n\nmermaid"
-        )
-        result = _parse_plan_to_sections(plan, self.OUTLINE_BASIC)
-        assert result["business_understanding"], "business_understanding should not be empty"
-        assert len(result["single_api"]) + len(result["biz_flows"]) >= 2
-
-    def should_classify_by_en_keywords(self):
-        plan = (
-            "## 1. Business Understanding\n\ncontext\n\n"
-            "## 2. Single Interface Test Points\n\n"
-            "### Auth\n\ncase\n\n"
-            "## 3. Business Flow Testing\n\nflow\n\n"
-            "## 4. Flowchart\n\nmermaid"
-        )
-        result = _parse_plan_to_sections(plan, self.OUTLINE_BASIC)
-        api_sections = result["single_api"]
-        biz_sections = result["biz_flows"]
-        assert len(api_sections) >= 1
-        assert len(biz_sections) >= 1
-
-    def should_handle_empty_plan(self):
-        result = _parse_plan_to_sections("", None)
-        assert result == {"business_understanding": "", "single_api": [], "biz_flows": []}
-
-    def should_handle_plain_text_without_headings(self):
-        result = _parse_plan_to_sections("Just plain text here.", None)
-        assert result["single_api"] == []
-        assert result["biz_flows"] == []
-        assert "plain text" in result["business_understanding"]

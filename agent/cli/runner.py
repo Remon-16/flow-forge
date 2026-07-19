@@ -196,11 +196,14 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
         if data:
             state["plan_outline"] = data
 
-    # plan.md is read by generate_plan_node itself; we set plan_md path
-    plan_path = memory_path / "plan.md"
-    if plan_path.exists() and "generate_plan" in completed_stages:
+    # plan.md 为只写文件，不再读取；从 plan_sections.json 恢复 state["plan_md"]
+    # plan.md is write-only; restore state["plan_md"] from plan_sections.json
+    sections_path = memory_path / "plan_sections.json"
+    if sections_path.exists() and "generate_plan" in completed_stages:
         try:
-            state["plan_md"] = plan_path.read_text(encoding="utf-8")
+            sections_data = json.loads(sections_path.read_text(encoding="utf-8"))
+            from schemas.plan_sections import assemble_plan_md
+            state["plan_md"] = assemble_plan_md(sections_data)
         except Exception:
             pass
 
@@ -251,14 +254,16 @@ def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
             except Exception:
                 pass
 
-    # 检测 plan_parsed 与 plan.md 是否不同步 / Check plan_parsed vs plan.md consistency
-    if state.get("plan_parsed") and state.get("plan_md"):
-        parsed_apis = len(state["plan_parsed"].api_definitions)
-        plan_api_count = state["plan_md"].count("| api_") + state["plan_md"].count("| `api_")
-        # 若 plan.md 中手动新增/删除了 API 但 plan_parsed 未更新，发出警告
-        # If plan.md was manually edited, plan_parsed may be out of sync
-        if parsed_apis > 0 and plan_api_count > 0 and abs(parsed_apis - plan_api_count) > 0:
-            logger.warning(_("resume.plan_mismatch", parsed=parsed_apis))
+    # 检测 plan_parsed 与 plan_sections 是否不同步 / Check plan_parsed vs plan_sections consistency
+    if state.get("plan_parsed") and sections_path.exists():
+        try:
+            sections_data = json.loads(sections_path.read_text(encoding="utf-8"))
+            parsed_apis = len(state["plan_parsed"].api_definitions)
+            sections_api_count = len(sections_data.get("single_api", []))
+            if parsed_apis > 0 and sections_api_count > 0 and abs(parsed_apis - sections_api_count) > 0:
+                logger.warning(_("resume.plan_mismatch", parsed=parsed_apis))
+        except Exception:
+            pass
 
     return state
 

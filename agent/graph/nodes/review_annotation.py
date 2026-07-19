@@ -55,41 +55,40 @@ _VALID_ACTIONS = {"noop", "fix", "delete_chunk", "add_chunk"}
 
 
 def _annotation_chunked_revision(
-    state: GraphState, plan_md: str, annotations_json: str,
+    state: GraphState, annotations_json: str,
     analysis: dict, api_summary: list,
 ) -> str:
     """Chunk 级精准批注修订 / Chunk-level annotation revision.
 
-    1. 加载 chunk 注册表 + 批注 → chunk 映射
+    1. 加载 chunk 注册表 + 批注 → chunk 映射（优先 chunk_id）
     2. LLM 意图分析: 每条批注 → {action: noop|fix|delete_chunk|add_chunk}
     3. 执行 chunk 级操作
     4. 保存并拼接
     """
     annotations = json.loads(annotations_json)
     memory_dir = state.get("memory_dir", "")
-    outline = state.get("plan_outline")
 
     # 加载 skill 扩展 / Load skill extensions
     _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
     _exts = load_skill_extensions('plan_generator', _h._settings, _skills_dir)
 
     # 加载 chunk 注册表 / Load chunk registry
-    sections = _load_or_parse_sections(memory_dir, plan_md, outline)
+    sections = _load_or_parse_sections(memory_dir)
 
-    # 批注 → chunk 映射 / Map annotations to chunks
-    section_annotations = _map_annotations_to_sections(sections, annotations, plan_md)
+    # 批注 → chunk 映射 (优先 chunk_id) / Map annotations to chunks (prefer chunk_id)
+    section_annotations = _map_annotations_to_sections(sections, annotations)
     if not section_annotations:
         logger.warning(_("review.no_sections_matched"))
-        return plan_md
+        return _assemble_plan(sections)
 
     # 意图分析 / Intent analysis (LLM)
     all_actions = _run_intent_analysis(sections, section_annotations, state, skill_extensions=_exts)
     if not all_actions:
-        return plan_md
+        return _assemble_plan(sections)
 
     # 执行 chunk 级操作 / Execute chunk-level actions
     _execute_chunk_actions(sections, all_actions, state, analysis, api_summary,
-                           skill_extensions=_exts, plan_md=plan_md)
+                           skill_extensions=_exts)
 
     # 保存 + 拼接 / Save + assemble
     if memory_dir:
@@ -98,7 +97,7 @@ def _annotation_chunked_revision(
 
 
 # ============================================================================
-# 批注 → Chunk 映射 (保留自旧版) / Annotation → Chunk Mapping (kept)
+# 批注 → Chunk 映射 / Annotation → Chunk Mapping
 # ============================================================================
 
 
@@ -111,17 +110,26 @@ def _iter_all_sections(sections: dict):
 
 
 def _map_annotations_to_sections(
-    sections: dict, annotations: List[dict], plan_md: str = "",
+    sections: dict, annotations: List[dict],
 ) -> Dict[str, List[dict]]:
     """将每条批注映射到其所属 chunk / Map each annotation to its chunk.
 
-    优先用 selected_text 子串匹配; 失败时用 line_number 兜底。
+    优先用 chunk_id 直接匹配；失败时用 selected_text 子串匹配兜底。
+    Priority: chunk_id direct match → selected_text substring fallback.
     Returns {section_key: [annotations]}.
     """
     mapping: Dict[str, List[dict]] = {}
     for ann in annotations:
+        # 1) chunk_id 直接匹配 / chunk_id direct match (from Studio annotator)
+        chunk_id = ann.get("chunk_id", "")
+        if chunk_id:
+            found = _find_section_by_key(sections, chunk_id)
+            if found:
+                mapping.setdefault(found["key"], []).append(ann)
+                continue
+
+        # 2) selected_text 子串匹配 / substring match
         selected = ann.get("selected_text", "")
-        # 1) selected_text 子串匹配 / substring match
         if selected:
             if selected in sections.get("business_understanding", ""):
                 mapping.setdefault("__global__", []).append(ann)
@@ -134,40 +142,9 @@ def _map_annotations_to_sections(
                     break
             if placed:
                 continue
-        # 2) line_number 落点兜底 / line_number fallback
-        if plan_md:
-            key = _section_key_for_line(sections, plan_md, ann.get("line_number"))
-            if key:
-                mapping.setdefault(key, []).append(ann)
-                continue
         logger.debug("Annotation not mapped to any section: %s", (selected or "")[:80])
     return mapping
 
-
-def _section_key_for_line(sections: dict, plan_md: str, line_number) -> Any:
-    """按 line_number 落点找所属 chunk key / Find chunk key by line_number range."""
-    if not isinstance(line_number, int):
-        return None
-    global_content = sections.get("business_understanding", "")
-    g_base = _section_base_line(plan_md, global_content)
-    if g_base is not None and global_content:
-        if g_base <= line_number < g_base + global_content.count("\n") + 1:
-            return "__global__"
-    for sec in _iter_all_sections(sections):
-        content = sec.get("content", "")
-        base = _section_base_line(plan_md, content)
-        if base is None:
-            continue
-        if base <= line_number < base + content.count("\n") + 1:
-            return sec["key"]
-    return None
-
-
-def _line_start_offset(text: str, line_number: int) -> int:
-    """1-based 行号 → 字符偏移 / 1-based line number to char offset."""
-    lines = text.split("\n")
-    line_number = max(1, min(line_number, len(lines)))
-    return sum(len(lines[i]) + 1 for i in range(line_number - 1))
 
 
 def _section_base_line(plan_md: str, content: str):
@@ -419,7 +396,6 @@ def _execute_chunk_actions(
     state: GraphState,
     analysis: dict,
     api_summary: list,
-    plan_md: str = "",
     skill_extensions: List[str] | None = None,
 ):
     """执行 chunk 级操作 / Execute chunk-level actions.
@@ -487,13 +463,13 @@ def _execute_chunk_actions(
                 continue
 
             chunk_type = chunk.get("type", "")
-            if chunk_type in ("api", "api_group"):
+            if chunk_type == "api":
                 group = _find_group_by_chunk_id(outline, chunk_id)
                 if group:
                     _fix_api_chunk(chunk, group, fix_text, outline, analysis,
                                    api_summary, iface_by_id, agent, user_guidance)
                     logger.info(_("review.fixed_chunk", key=chunk_id))
-            elif chunk_type in ("biz", "biz_flow"):
+            elif chunk_type == "biz":
                 flow = _find_flow_by_chunk_id(outline, chunk_id)
                 if flow:
                     # 先重画 Mermaid / Regenerate Mermaid first
@@ -614,9 +590,8 @@ def _regenerate_mermaid_for_flow(
     # 找到对应的 biz section 并只更新 mermaid 字段
     # Find matching biz section; update only the mermaid field
     chunk_id = flow.get("chunk_id", "")
-    biz_key = f"biz_{chunk_id}"
     for sec in _iter_all_sections(sections):
-        if sec.get("key") == biz_key or sec.get("chunk_id") == biz_key:
+        if sec.get("key") == chunk_id or sec.get("chunk_id") == chunk_id:
             sec["mermaid"] = mermaid_content
             break
 
@@ -675,16 +650,16 @@ def _execute_delete_chunk(sections: dict, outline: dict, chunk_id: str):
             s for s in arr
             if s.get("key") != chunk_id and s.get("chunk_id") != chunk_id
         ]
-    # 从 outline 中移除
+    # 从 outline 中移除 / Remove from outline
     if chunk_id.startswith("api_"):
         outline["api_groups"] = [
             g for g in outline.get("api_groups", [])
-            if f"api_{g.get('chunk_id', '')}" != chunk_id
+            if g.get("chunk_id", "") != chunk_id
         ]
     elif chunk_id.startswith("biz_"):
         outline["biz_flows"] = [
             f for f in outline.get("biz_flows", [])
-            if f"biz_{f.get('chunk_id', '')}" != chunk_id
+            if f.get("chunk_id", "") != chunk_id
         ]
 
 
@@ -770,7 +745,7 @@ def _consolidate_annotations(annots: List[dict]) -> str:
 def _find_flow_by_chunk_id(outline: dict, chunk_id: str) -> Optional[dict]:
     """按 chunk_id 查找 biz flow / Find biz flow by chunk_id."""
     for f in outline.get("biz_flows", []):
-        if f"biz_{f.get('chunk_id', '')}" == chunk_id:
+        if f.get("chunk_id", "") == chunk_id:
             return f
     return None
 
@@ -778,7 +753,7 @@ def _find_flow_by_chunk_id(outline: dict, chunk_id: str) -> Optional[dict]:
 def _find_group_by_chunk_id(outline: dict, chunk_id: str) -> Optional[dict]:
     """按 chunk_id 查找 API group / Find API group by chunk_id."""
     for g in outline.get("api_groups", []):
-        if f"api_{g.get('chunk_id', '')}" == chunk_id:
+        if g.get("chunk_id", "") == chunk_id:
             return g
     return None
 

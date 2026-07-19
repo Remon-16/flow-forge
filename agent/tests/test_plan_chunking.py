@@ -376,17 +376,20 @@ class TestPlanChunkResumeProgress:
             progress = json.loads(progress_path.read_text(encoding="utf-8"))
             biz_sections = progress["plan_parts"].get("biz_sections", {})
             assert len(biz_sections) >= 2
-            # 验证 biz_sections 每项为 {content, mermaid} dict
-            # Verify biz_sections entries are {content, mermaid} dicts
+            # 验证 biz_sections 每项为 {content, mermaids} dict
+            # Verify biz_sections entries are {content, mermaids} dicts
             for key, entry in biz_sections.items():
                 assert isinstance(entry, dict), f"Biz section '{key}' should be a dict"
                 assert "content" in entry, f"Biz section '{key}' should have 'content'"
-                assert "mermaid" in entry, f"Biz section '{key}' should have 'mermaid'"
+                assert "mermaids" in entry, f"Biz section '{key}' should have 'mermaids'"
+                # mermaids 是 per-flow dict / mermaids is a per-flow dict
+                mermaids = entry.get("mermaids", {})
+                assert isinstance(mermaids, dict), f"mermaids should be a dict"
                 if "batch_0" in key:
                     # Batch 0 有 2 个 flow 的 Mermaid
-                    m = entry.get("mermaid", "")
-                    assert "MERMAID_1" in m or "MERMAID_2" in m, \
-                        f"Batch 0 mermaid should contain flow Mermaids"
+                    all_m = "\n".join(mermaids.values())
+                    assert "MERMAID_1" in all_m or "MERMAID_2" in all_m, \
+                        f"Batch 0 mermaids should contain flow Mermaids"
 
     def should_skip_phase_a_when_global_context_present(self, tmp_path):
         """预置 global_context → Phase A 不调 LLM。

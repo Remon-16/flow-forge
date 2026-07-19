@@ -8,16 +8,19 @@ export interface AnnotationData {
   line_number: number
   selected_text: string
   review_comment: string
+  chunk_id?: string  // 所属 chunk_id / owning chunk identifier
 }
 
 const props = defineProps<{
   planContent: string
   annotations: AnnotationData[]
   showLineNumbers?: boolean
+  /** plan_sections.json 数据，用于 chunk_id 关联 / plan_sections.json data for chunk_id association */
+  sections?: { business_understanding: string; single_api: { chunk_id: string; content: string }[]; biz_flows: { chunk_id: string; content: string; mermaid?: string }[] } | null
 }>()
 
 const emit = defineEmits<{
-  'add-annotation': [selectedText: string, lineNumber: number]
+  'add-annotation': [selectedText: string, lineNumber: number, chunkId?: string]
   'edit-annotation': [index: number]
   'delete-annotation': [index: number]
 }>()
@@ -167,12 +170,42 @@ function applyAnnotationHighlights(html: string, annotations: AnnotationData[]):
 }
 
 const renderedHtml = computed(() => {
-  const blocks = splitIntoBlocks(props.planContent)
+  // 先提取 chunk 边界标记 / Extract chunk boundary markers first
+  let markdown = props.planContent
+  const chunkMarkers: { line: number; chunkId: string }[] = []
+  const markerRegex = /<!--\s*chunk:(\S+)\s*-->/g
+  let m: RegExpExecArray | null
+  while ((m = markerRegex.exec(markdown)) !== null) {
+    const lineNum = markdown.substring(0, m.index).split('\n').length
+    chunkMarkers.push({ line: lineNum, chunkId: m[1] })
+  }
+  // 去除标记，避免渲染到 HTML 中 / Remove markers to avoid rendering
+  markdown = markdown.replace(markerRegex, '')
+
+  const blocks = splitIntoBlocks(markdown)
+  const markerMap = new Map<number, string>()
+  for (const mk of chunkMarkers) {
+    markerMap.set(mk.line, mk.chunkId)
+  }
+
+  // 找到每个 block 所属的 chunk / Find which chunk each block belongs to
+  let currentChunkId = ''
+  const sortedMarkers = chunkMarkers.sort((a, b) => a.line - b.line)
 
   let html = blocks.map(block => {
     if (!block.content) return ''
+    // 更新当前 chunk_id / Update current chunk_id
+    for (const mk of sortedMarkers) {
+      if (mk.line <= block.startLine) {
+        currentChunkId = mk.chunkId
+      }
+    }
     const rendered = md.render(block.content)
-    return `<div data-source-line="${block.startLine}" class="md-block">${rendered}</div>`
+    const chunkAttr = currentChunkId ? ` data-chunk-id="${currentChunkId}"` : ''
+    const chunkLabel = currentChunkId && props.showLineNumbers
+      ? `<span class="chunk-label" title="${currentChunkId}">${currentChunkId}</span>`
+      : ''
+    return `<div data-source-line="${block.startLine}"${chunkAttr} class="md-block">${chunkLabel}${rendered}</div>`
   }).join('\n')
 
   html = applyAnnotationHighlights(html, props.annotations)
@@ -223,6 +256,18 @@ function findLineNumber(): number {
   return 0
 }
 
+// 根据 selected_text 查找所属 chunk_id / Find chunk_id by selected_text
+function findChunkId(text: string): string | undefined {
+  if (!props.sections || !text) return undefined
+  // 在 business_understanding 中 / In business_understanding
+  if (props.sections.business_understanding?.includes(text)) return '__global__'
+  // 在 single_api 和 biz_flows 中查找 / Search in single_api and biz_flows
+  for (const sec of [...(props.sections.single_api || []), ...(props.sections.biz_flows || [])]) {
+    if (sec.content?.includes(text)) return sec.chunk_id
+  }
+  return undefined
+}
+
 // --- Context menu ---
 function onContextMenu(e: MouseEvent) {
   const selection = window.getSelection()
@@ -247,7 +292,8 @@ function onContextMenu(e: MouseEvent) {
 
 function handleAddAnnotation() {
   contextMenuVisible.value = false
-  emit('add-annotation', selectedText.value, selectedLineNumber.value)
+  const chunkId = findChunkId(selectedText.value)
+  emit('add-annotation', selectedText.value, selectedLineNumber.value, chunkId)
 }
 
 function onMarkdownClick(e: MouseEvent) {
@@ -399,6 +445,20 @@ defineExpose({ scrollToAnnotation })
   line-height: inherit;
   user-select: none;
   pointer-events: none;
+}
+
+/* chunk_id 标签 / chunk_id label — 显示在每块第一行上方 */
+.markdown-preview.show-line-numbers :deep(.chunk-label) {
+  display: block;
+  font-size: 11px;
+  color: #1677ff;
+  background: #e6f4ff;
+  padding: 1px 8px;
+  border-radius: 3px;
+  margin-bottom: 2px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  user-select: none;
+  cursor: pointer;
 }
 
 /* Markdown rendered content styles */

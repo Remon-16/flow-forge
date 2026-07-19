@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 def _text_revision(
-    state: GraphState, plan_md: str, feedback: str,
+    state: GraphState, feedback: str,
     analysis: dict, api_summary: list,
 ) -> str:
     """文本反馈修订 — Section 分析 → Chunk 意图 → 执行 / Text revision via chunk-level ops.
@@ -52,7 +52,6 @@ def _text_revision(
     """
     case_type = state.get("case_type", "both")
     memory_dir = state.get("memory_dir", "")
-    outline = state.get("plan_outline")
 
     # 加载 skill 扩展 / Load skill extensions
     _skills_dir = os.path.join(
@@ -62,7 +61,7 @@ def _text_revision(
     _exts = load_skill_extensions('plan_generator', _h._settings, _skills_dir)
 
     # 加载 chunk 注册表 / Load chunk registry
-    sections = _load_or_parse_sections(memory_dir, plan_md, outline)
+    sections = _load_or_parse_sections(memory_dir)
 
     from utils.token_counter import TokenCounter
     token_counter = TokenCounter(model=_h._settings.llm_model)
@@ -71,7 +70,7 @@ def _text_revision(
     section_impact = _section_impact_analysis(feedback, case_type, token_counter, skill_extensions=_exts)
     if not any(section_impact.values()):
         logger.info(_("review.no_section_affected"))
-        return plan_md
+        return _assemble_plan(sections)
 
     logger.info(
         _("review.section_impact_result",
@@ -102,7 +101,7 @@ def _text_revision(
 
     if not all_actions:
         logger.info(_("review.no_chunk_affected"))
-        return plan_md
+        return _assemble_plan(sections)
 
     # 意图分布日志 / Intent distribution log
     logger.info(_(
@@ -116,7 +115,7 @@ def _text_revision(
 
     # Step 3: 执行 chunk 操作 (与 r 模式共用) / Execute (shared with r mode)
     _execute_chunk_actions(sections, all_actions, state, analysis, api_summary,
-                           skill_extensions=_exts, plan_md=plan_md)
+                           skill_extensions=_exts)
 
     # 保存 + 拼接 / Save + assemble
     if memory_dir:

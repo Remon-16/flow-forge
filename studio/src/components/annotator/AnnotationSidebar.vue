@@ -50,6 +50,9 @@ function previewText(comment: string): string {
           <div class="annotation-item-header">
             <span class="annotation-index">#{{ idx + 1 }}</span>
             <span class="annotation-line">L{{ ann.line_number }}</span>
+            <span v-if="ann.chunk_id" class="annotation-chunk-id" :title="ann.chunk_id">
+              {{ ann.chunk_id }}
+            </span>
           </div>
           <div class="annotation-item-body">
             {{ previewText(ann.review_comment) }}
@@ -158,6 +161,20 @@ function previewText(comment: string): string {
 .annotation-line {
   font-size: 11px;
   color: #aaa;
+}
+
+.annotation-chunk-id {
+  font-size: 10px;
+  color: #1677ff;
+  background: #e6f4ff;
+  padding: 0 4px;
+  border-radius: 2px;
+  margin-left: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .annotation-item-body {

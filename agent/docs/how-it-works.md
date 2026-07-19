@@ -39,9 +39,9 @@ graph TD
 4. **保存接口定义**：将校验后的接口定义写入 YAML。用户可在审核期间直接编辑 YAML，审核通过后系统重新加载。
 5. **需求分析**：LLM 从需求中提取业务流程、用户角色、约束条件、异常场景。
 6. **轮廓生成**：基于需求分析和接口列表（仅名称/URL），生成轻量级 JSON 轮廓，将接口按业务领域分组、列出业务流程。数据量很小（< 1000 token），确保不被截断。
-7. **计划生成**：基于轮廓分块生成 Markdown 测试计划（四阶段法，见 [anti-hallucination.md](./anti-hallucination.md#骨架分批与计划分块)）。
-8. **人工审核**（强制中断点）：展示计划，用户选择批准、文字修改或按批注文件修改，支持反馈循环直至批准（见下方 [人工审核模式](#人工审核模式ynr)）。
-9. **计划解析**：将审核通过的 Markdown 计划解析为结构化数据，提取测试点列表。
+7. **计划生成**：基于轮廓分块生成 Markdown 测试计划（四阶段法），同时输出 `plan_sections.json` 作为结构化数据源（见 [anti-hallucination.md](./anti-hallucination.md#骨架分批与计划分块)）。`plan.md` 仅作展示，代码不再读取。
+8. **人工审核**（强制中断点）：展示计划，用户选择批准、文字修改或按批注文件修改。批注直接携带 `chunk_id`（由 Studio 批注器提供），无需行号匹配。支持反馈循环直至批准（见下方 [人工审核模式](#人工审核模式ynr)）。
+9. **计划解析**：从 `plan_sections.json` 读取已切割好的 section 数据，通过 token 感知的贪心切分算法解析为结构化 TestPlan（整体 → case_type 拆分 → 贪心分批）。不再解析 `plan.md`。
 10. **用例生成**（骨架 + 插件流水线）：分批生成骨架 → URL 校验 → 按配置依次执行插件（数据填充、断言生成等）。详见 [plugins-and-skills.md](./plugins-and-skills.md)。
 11. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出。
 
@@ -255,7 +255,7 @@ max_chunk = context_window - system_prompt_tokens - max(output_tokens, 4096) - 2
 | **analyze_requirement**（需求分析） | `_process_long_text()` 自动切分 | 按 key（`business_flows`, `roles`, `constraints`, `exceptions`）合并去重 | 仅当单文档超阈值时触发 |
 | **analyze_api**（API 分析 raw 模式） | `_process_long_text()` 自动切分 | 接口列表按 `(api_path, method)` 去重 | 单文档超阈值时触发 |
 | **generate_plan**（测试计划生成） | 四阶段逻辑切分（Phase A/B/C/D） | 按阶段顺序拼接 | 不基于 token，基于**接口分组和业务流批次**拆分；每批独立 LLM 调用 + 全局上下文注入 |
-| **parse_plan**（计划解析） | 自适应标题层级切分 + `_process_long_text()` | 按 `test_id` + `url` 去重 | 通过 `detect_section_level()` 自动识别 plan.md 的主分割标题层级，再交由 `_process_long_text()` 进行 token 感知的逐 chunk LLM 解析 |
+| **parse_plan**（计划解析） | plan_sections.json 结构切分 + 贪心算法 | 按 `test_id` + `url` 去重 | 从 `plan_sections.json` 读取已切好的 section，3 级策略：整体 → case_type 拆分（`single_api` / `biz_flows`）→ 贪心逐 section 累加，每批不超过 token 预算 |
 | **batch_controller**（用例生成） | `skeleton_batch_size` 控制每批测试点数 | 用例列表拼接 | 不基于 token，基于**测试点数量**分批次 |
 | **revise_plan**（计划修订） | 标题层级自适应章节切分 + 注释/反馈精确定位到区块 | 按区块 key 替换后重新拼接 | 详见下文"计划审核与修订" |
 
@@ -280,33 +280,41 @@ max_chunk = context_window - system_prompt_tokens - max(output_tokens, 4096) - 2
 - `_parse_plan_to_sections()`：将 plan.md 拆分为 `{global, sections: [{key, type, name, content}]}` 结构，通过名称匹配与 outline 关联
 - `_assemble_plan(sections)`：修订后按原顺序拼接回完整 plan.md
 
-**Plan Sections 结构**：
-```
-plan.md
-  │ detect_section_level() → 找到主分割级别（如 ##）
-  │ _parse_plan_to_sections()
-  ▼
+**Plan Sections 结构**（`plan_sections.json`，由 `agent/schemas/plan_sections.schema.json` 定义）：
+```json
 {
-  global: "<商业理解 + Mermaid 图文本>",
-  sections: [
-    { key: "api_Payment", type: "api_group", content: "### Payment\n...测试点..." },
-    { key: "biz_Login",  type: "biz_flow",  content: "### Login流程\n...步骤..." },
+  "business_understanding": "<业务理解 markdown 文本>",
+  "single_api": [
+    {
+      "chunk_id": "api_auth", "key": "api_auth", "type": "api",
+      "name": "认证授权模块", "section": "single_api",
+      "content": "### 认证授权\n...测试点..."
+    }
+  ],
+  "biz_flows": [
+    {
+      "chunk_id": "biz_login", "key": "biz_login", "type": "biz",
+      "name": "用户登录流程", "section": "biz_flows",
+      "content": "### 登录流程\n...步骤...",
+      "mermaid": "```mermaid\nsequenceDiagram\n...\n```"
+    }
   ]
 }
-  │ 修改 sections[n].content → _assemble_plan()
-  ▼
-修订后 plan.md
 ```
+  │ 修改 sections[n].content / sections[n].mermaid → _assemble_plan()
+  ▼
+修订后 plan.md（仅展示用，代码不再读取）
 
 **n 模式（文本反馈）——三阶段**：
 1. **章节影响分析**：将用户反馈发给 LLM，判断影响了哪些大类（全局/单接口/业务流）。返回 `{global: bool, single_api: bool, biz_flows: bool}`
 2. **区块级意图分析**：对每个受影响的大类，将区块名称和描述列表发给 LLM（不发送完整内容），LLM 判断每个区块是否需要 `fix`/`delete_chunk`/`add_chunk`
 3. **执行区块操作**：与 r 模式共享（见下文）
 
-**r 模式（批注）——四步骤**：
-1. **加载章节注册表**：用 `_parse_plan_to_sections()` 获取区块列表
-2. **注释定位**：通过 `selected_text` 子串匹配定位目标区块；匹配失败时回退到行号定位
-3. **意图分析**：将注释 + 所在区块内容分批发给 LLM，LLM 对每个注释输出操作（`noop`/`fix`/`delete_chunk`/`add_chunk`），输出经格式校验，超限后默认 `noop`
+**r 模式（批注）——三步骤**：
+1. **加载章节注册表**：从 `plan_sections.json` 加载 sections 结构
+2. **注释定位**：优先用 annotation 中的 `chunk_id` 直接匹配（Studio 批注器在用户选中文本时自动捕获所在 chunk 的 chunk_id）；兜底用 `selected_text` 子串匹配
+3. **意图分析**：将注释 + 所在区块内容分批发给 LLM，LLM 对每个注释输出操作（`noop`/`fix`/`delete_chunk`/`add_chunk`）
+4. **执行区块操作**：共享执行层
 4. **执行区块操作**：共享执行层
 
 **共享的区块操作执行层**：

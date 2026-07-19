@@ -324,13 +324,15 @@ class PlanGenerator(BaseAgent):
             entry = biz_sections[section_key]
             if isinstance(entry, dict):
                 content = entry.get("content", "")
-                mermaid = entry.get("mermaid", "")
-                if mermaid and mermaid.strip():
-                    parts.append(mermaid.strip() + "\n\n" + content)
+                # per-flow mermaids dict → 拼接为显示用字符串 / dict → join for display
+                mermaids_dict = entry.get("mermaids", {})
+                mermaid_parts = [m.strip() for m in mermaids_dict.values() if m and m.strip()]
+                combined_mermaid = "\n\n".join(mermaid_parts)
+                if combined_mermaid:
+                    parts.append(combined_mermaid + "\n\n" + content)
                 else:
                     parts.append(content)
             else:
-                # 兼容旧格式（字符串）/ Backward compat (string)
                 parts.append(entry)
 
         plan_md = "\n\n".join(parts)
@@ -628,22 +630,12 @@ class PlanGenerator(BaseAgent):
             section_md = self.call_llm(prompt, system_with_context)
 
             # ================================================================
-            # Step 3: 组装 batch entry — content 纯文本 + mermaid 独立存放
-            # Step 3: Build batch entry — plain text content + separate mermaid
+            # Step 3: 组装 batch entry — content 纯文本 + per-flow mermaid
+            # Step 3: Build batch entry — plain text content + per-flow mermaid
             # ================================================================
-            # 合并本批次所有 Mermaid（按 flow 顺序）
-            # Combine all Mermaids for this batch in flow order
-            combined_mermaid_parts = []
-            for flow in batch:
-                chunk_id = flow.get("chunk_id", "")
-                m = batch_mermaids.get(chunk_id, "")
-                if m and m.strip():
-                    combined_mermaid_parts.append(m.strip())
-            combined_mermaid = "\n\n".join(combined_mermaid_parts)
-
             biz_sections[section_key] = {
                 "content": section_md,
-                "mermaid": combined_mermaid,
+                "mermaids": batch_mermaids,  # per-flow: {chunk_id: mermaid}
             }
             # 保存 chunk 进度（每个 biz batch 后）/ Save after each biz batch
             self._save_chunk_progress(memory_dir, plan_parts)
@@ -680,8 +672,8 @@ class PlanGenerator(BaseAgent):
             content = api_sections.get(section_key, "")
             if content and content.strip():
                 single_api.append({
-                    "chunk_id": f"api_{chunk_id}" if chunk_id else section_key,
-                    "key": f"api_{chunk_id}" if chunk_id else section_key,
+                    "chunk_id": chunk_id if chunk_id else section_key,
+                    "key": chunk_id if chunk_id else section_key,
                     "type": "api",
                     "name": group.get("group_name", ""),
                     "section": "single_api",
@@ -699,26 +691,23 @@ class PlanGenerator(BaseAgent):
                 section_key = f"biz_batch_{j}"
 
             entry = biz_sections.get(section_key, {})
-            if isinstance(entry, str):
-                # 旧格式兼容 / Legacy format compat
-                content = entry
-                mermaid = ""
-            else:
-                content = entry.get("content", "")
-                mermaid = entry.get("mermaid", "")
+            content = entry.get("content", "") if isinstance(entry, dict) else entry
+            # per-flow mermaids: {chunk_id: mermaid_content}
+            per_flow_mermaids = entry.get("mermaids", {}) if isinstance(entry, dict) else {}
 
             if content and content.strip():
                 for flow in batch:
-                    chunk_id = flow.get("chunk_id", f"flow_{j}")
-                    biz_key = f"biz_{chunk_id}"
+                    flow_chunk_id = flow.get("chunk_id", f"flow_{j}")
+                    # 每个 flow 取自己的 mermaid / Each flow gets its own mermaid
+                    flow_mermaid = per_flow_mermaids.get(flow_chunk_id, "")
                     biz_flows.append({
-                        "chunk_id": biz_key,
-                        "key": biz_key,
+                        "chunk_id": flow_chunk_id,
+                        "key": flow_chunk_id,
                         "type": "biz",
                         "name": flow.get("name", ""),
                         "section": "biz_flows",
                         "content": content,
-                        "mermaid": mermaid,
+                        "mermaid": flow_mermaid,
                     })
 
         save_pipeline_artifact(memory_dir, "plan_sections.json", {

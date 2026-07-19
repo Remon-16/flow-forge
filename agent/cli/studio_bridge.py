@@ -293,14 +293,14 @@ def run_studio_protocol(
                 result = _resume("approved")
             else:
                 memory_dir = state_values.get("memory_dir", "")
-                plan_md = state_values.get("plan_md", "")
 
+                # 发送 memory_dir，Studio 自行加载 plan_sections.json
+                # Send memory_dir; Studio loads plan_sections.json directly
                 cmd = bridge.send_prompt(
                     kind="plan_review",
                     message=_("review.interrupt_title"),
                     data={
                         "memory_dir": memory_dir,
-                        "plan_preview": plan_md[:1000] if plan_md else "",
                     },
                 )
 
@@ -326,7 +326,6 @@ def run_studio_protocol(
                             message=_("review.interrupt_title"),
                             data={
                                 "memory_dir": memory_dir,
-                                "plan_preview": plan_md[:1000] if plan_md else "",
                                 "error": _("review.annotations_not_found_short"),
                             },
                         )

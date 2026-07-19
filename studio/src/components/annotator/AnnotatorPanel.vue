@@ -15,14 +15,16 @@ import HistoryAnnotationViewer from './HistoryAnnotationViewer.vue'
 import { readFile, listDirectoryAll, exists, writeFile } from '../../utils/desktop-bridge'
 import { useSettingsStore } from '../../stores/settings'
 import { joinPath } from '../../utils/path-utils'
+import type { PlanSections } from '../../types/agent'
+import { assemblePlanMd } from '../../types/agent'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
 
 const props = defineProps<{
-  /** 计划 markdown 内容 (可选，如未提供则从 memoryDir/plan.md 读取) */
-  planContent?: string
-  /** memory_dir 路径 (用于加载 plan.md + 保存/加载批注) */
+  /** 计划 sections 数据 (可选，如未提供则从 memoryDir/plan_sections.json 读取) */
+  sections?: PlanSections
+  /** memory_dir 路径 (用于加载 plan_sections.json + 保存/加载批注) */
   memoryDir: string
   /** 是否显示内嵌工具栏 */
   showToolbar?: boolean
@@ -33,8 +35,9 @@ const emit = defineEmits<{
   annotationActivity: []
 }>()
 
-// 批注和计划内容 / Annotations and plan content
-const planContent = ref(props.planContent || '')
+// 计划内容和 sections / Plan content and sections
+const planContent = ref('')
+const planSections = ref<PlanSections | null>(props.sections || null)
 const annotations = ref<AnnotationData[]>([])
 const historyGroups = ref<HistoryGroup[]>([])
 const autoSaveStatus = ref('')
@@ -62,19 +65,26 @@ const commentsPath = computed(() => {
   return joinPath(props.memoryDir, 'plan_comments.json')
 })
 
-// 加载计划内容 + 已有批注 + 修改历史 / Load plan content + annotations + history
+// 从 plan_sections.json 加载 / Load from plan_sections.json
 watch(() => props.memoryDir, async (dir) => {
   if (!dir) return
-  // Load plan.md if not provided via prop
-  if (!props.planContent) {
-    const planPath = joinPath(dir, 'plan.md')
-    if (await exists(planPath)) {
+  // 加载 plan_sections.json 并组装 markdown 展示
+  // Load plan_sections.json and assemble markdown for display
+  if (!props.sections) {
+    const sectionsPath = joinPath(dir, 'plan_sections.json')
+    if (await exists(sectionsPath)) {
       try {
-        planContent.value = await readFile(planPath)
+        const raw = await readFile(sectionsPath)
+        const loaded = JSON.parse(raw) as PlanSections
+        planSections.value = loaded
+        planContent.value = assemblePlanMd(loaded)
       } catch { planContent.value = '' }
     }
+  } else {
+    planSections.value = props.sections
+    planContent.value = assemblePlanMd(props.sections)
   }
-  // Load existing annotations
+  // 加载已有批注 / Load existing annotations
   const cp = joinPath(dir, 'plan_comments.json')
   if (await exists(cp)) {
     try {
@@ -132,9 +142,12 @@ watch(annotations, () => {
 }, { deep: true })
 
 // 批注操作 / Annotation actions
-function handleAddAnnotation(selectedText: string, lineNumber: number) {
+const dialogChunkId = ref('')
+
+function handleAddAnnotation(selectedText: string, lineNumber: number, chunkId?: string) {
   dialogSelectedText.value = selectedText
   dialogLineNumber.value = lineNumber
+  dialogChunkId.value = chunkId || ''
   dialogExistingComment.value = ''
   editingIndex.value = -1
   dialogVisible.value = true
@@ -156,12 +169,17 @@ function handleDeleteAnnotation(idx: number) {
 }
 
 function handleDialogSave(data: AnnotationData) {
+  // 设置 chunk_id / Set chunk_id
+  if (dialogChunkId.value) {
+    data.chunk_id = dialogChunkId.value
+  }
   if (editingIndex.value >= 0) {
     annotations.value[editingIndex.value] = data
   } else {
     annotations.value.push(data)
   }
   dialogVisible.value = false
+  dialogChunkId.value = ''
 }
 
 function handleDialogClose() {
@@ -224,6 +242,7 @@ function onPreviewWheel(e: WheelEvent) {
           :plan-content="planContent"
           :annotations="annotations"
           :show-line-numbers="settings.showLineNumbers"
+          :sections="planSections"
           @add-annotation="handleAddAnnotation"
           @edit-annotation="handleEditAnnotation"
           @delete-annotation="handleDeleteAnnotation"

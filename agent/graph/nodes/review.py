@@ -34,6 +34,8 @@ def human_confirm_node(state: GraphState) -> GraphState:
     """中断点 — 暂停执行等待人工审核计划。
 
     Interrupt point — pauses execution for human review of the plan.
+    plan.md 仅用于展示，不再读取；数据以 plan_sections.json 为准。
+    plan.md is for display only; plan_sections.json is authoritative.
     """
     from langgraph.types import interrupt
 
@@ -65,29 +67,15 @@ def human_confirm_node(state: GraphState) -> GraphState:
             _sl().log_node_end("human_confirm")
         return state
 
-    # 打印 plan.md 路径, 方便用户手动编辑 / Print plan.md path for manual editing
     memory_dir = state.get("memory_dir", "")
-    if memory_dir:
-        plan_path = Path(memory_dir) / "plan.md"
-        if plan_path.exists():
-            logger.info(_("review.manual_edit_hint", path=str(plan_path.resolve())))
 
     decision = interrupt(_("review.interrupt_title"))
 
     if decision == "approved":
         state["plan_confirmed"] = True
         state["plan_feedback"] = ""
-        # 从磁盘重新加载 plan.md (含用户手动编辑) / Reload plan.md from disk
-        if memory_dir:
-            plan_path = Path(memory_dir) / "plan.md"
-            if plan_path.exists():
-                try:
-                    disk_content = plan_path.read_text(encoding="utf-8")
-                    if disk_content.strip():
-                        state["plan_md"] = disk_content
-                        logger.info(_("review.reloaded_from_disk", path=str(plan_path.resolve())))
-                except Exception as e:
-                    logger.warning(_("review.reload_error", error=str(e)))
+        # plan_sections.json 是唯一数据源，审批通过时无需重新加载 plan.md
+        # plan_sections.json is the only data source; no need to reload plan.md on approve
     else:
         state["plan_confirmed"] = False
         state["plan_feedback"] = decision
@@ -137,8 +125,6 @@ def revise_plan_node(state: GraphState) -> GraphState:
     from .review_text import _text_revision
 
     feedback_type = state.get("plan_feedback_type", "text")
-    outline = state.get("plan_outline")
-    plan_md = state.get("plan_md", "")
     analysis = state.get("requirement_analysis", {})
     api_summary = state.get("api_summary", [])
 
@@ -161,11 +147,11 @@ def revise_plan_node(state: GraphState) -> GraphState:
             return state
         logger.info(_("review.revising_text_progress", model=_h._settings.llm_model))
 
-    # ---- 路由 / Route ----
+    # ---- 路由 / Route (不再传递 plan_md) ----
     if feedback_type == "annotations":
-        revised = _annotation_chunked_revision(state, plan_md, feedback, analysis, api_summary)
+        revised = _annotation_chunked_revision(state, feedback, analysis, api_summary)
     else:
-        revised = _text_revision(state, plan_md, feedback, analysis, api_summary)
+        revised = _text_revision(state, feedback, analysis, api_summary)
 
     # ---- 保存状态 / Save state ----
     state["plan_md"] = revised
@@ -205,164 +191,26 @@ _detect_section_level = detect_section_level
 _classify_section = classify_section
 
 
-def _load_or_parse_sections(
-    memory_dir: str, plan_md: str, outline: Optional[dict],
-) -> dict:
-    """加载 plan_sections.json, 如过期或不存在则解析 plan.md。
+def _load_or_parse_sections(memory_dir: str) -> dict:
+    """加载 plan_sections.json — 唯一数据源。
 
-    Load saved section structure; if stale or missing, parse plan.md instead.
+    Load plan_sections.json — the single source of truth.
+    plan.md 不再被读取，数据始终从 plan_sections.json 加载。
+    plan.md is no longer read; data always comes from plan_sections.json.
     """
     if memory_dir:
         cache_path = Path(memory_dir) / "plan_sections.json"
         if cache_path.exists():
-            plan_path = Path(memory_dir) / "plan.md"
-            # plan.md 比缓存新 → 缓存过期, 重新解析
-            # plan.md newer than cache → stale, re-parse from plan.md
-            if (not plan_path.exists()
-                    or cache_path.stat().st_mtime >= plan_path.stat().st_mtime):
-                try:
-                    return json.loads(cache_path.read_text(encoding="utf-8"))
-                except Exception:
-                    pass
-    return _parse_plan_to_sections(plan_md, outline)
-
-
-def _parse_plan_to_sections(plan_md: str, outline: Optional[dict]) -> dict:
-    """从 plan.md 文本解析为 sections 结构 / Parse plan.md into sections.
-
-    返回 schema 规定的三键结构：
-    Returns the three-key structure defined by the schema:
-      {"business_understanding": ..., "single_api": [...], "biz_flows": [...]}
-
-    自适应标题级别 — 不硬编码 ## 或 ###。
-    Heading-level adaptive — no hard-coded ## or ### levels.
-
-    对 biz_flows，从 content 中提取 Mermaid 放入独立的 mermaid 字段。
-    For biz_flows, extracts Mermaid from content into separate mermaid field.
-    """
-    section_level = _detect_section_level(plan_md)
-    subsplit_level = section_level + 1
-
-    raw_parts = re.split(rf"\n(?=#{{{section_level}}}\s)", plan_md)
-
-    global_preamble = ""
-    api_parts: List[str] = []
-    biz_parts: List[str] = []
-    global_parts: List[str] = []
-
-    for i, part in enumerate(raw_parts):
-        stripped = part.strip()
-        if not stripped:
-            continue
-
-        first_line = stripped.split("\n", 1)[0].strip()
-        heading_match = re.match(r"^#{1,6}\s+(.+)", first_line)
-        heading_text = heading_match.group(1) if heading_match else ""
-        part_level = len(heading_match.group(0).split()[0]) if heading_match else 0
-
-        if part_level != section_level and i == 0:
-            global_preamble = stripped
-            continue
-
-        sec_type = _classify_section(heading_text)
-
-        if sec_type == "global":
-            global_parts.append(stripped)
-        elif sec_type == "api":
-            subs = re.split(rf"\n(?=#{{{subsplit_level},}}\s)", stripped)
-            for sub in subs:
-                sub = sub.strip()
-                if sub:
-                    api_parts.append(sub)
-        elif sec_type == "biz":
-            subs = re.split(rf"\n(?=#{{{subsplit_level},}}\s)", stripped)
-            for sub in subs:
-                sub = sub.strip()
-                if sub:
-                    biz_parts.append(sub)
-        elif sec_type == "unknown":
-            if i <= 1:
-                global_parts.append(stripped)
-            elif outline and outline.get("api_groups"):
-                subs = re.split(rf"\n(?=#{{{subsplit_level},}}\s)", stripped)
-                for sub in subs:
-                    sub = sub.strip()
-                    if sub:
-                        api_parts.append(sub)
-            else:
-                subs = re.split(rf"\n(?=#{{{subsplit_level},}}\s)", stripped)
-                for sub in subs:
-                    sub = sub.strip()
-                    if sub:
-                        biz_parts.append(sub)
-
-    # 拼接 business_understanding / Assemble business_understanding
-    all_global = [global_preamble] + global_parts
-    business_understanding = "\n\n".join(p for p in all_global if p.strip())
-
-    # 构建 single_api 数组 / Build single_api array
-    api_groups = outline.get("api_groups", []) if outline else []
-    group_names = [g.get("group_name", "") for g in api_groups]
-    single_api: List[dict] = []
-    for i, part in enumerate(api_parts):
-        matched_name = ""
-        for name in group_names:
-            if name and name in part:
-                matched_name = name
-                break
-        if not matched_name:
-            matched_name = f"group_{i}"
-        chunk_id = f"api_{matched_name}"
-        single_api.append({
-            "chunk_id": chunk_id,
-            "key": chunk_id,
-            "type": "api",
-            "name": matched_name,
-            "section": "single_api",
-            "content": part,
-        })
-
-    # 构建 biz_flows 数组 / Build biz_flows array
-    # 从 content 中提取 Mermaid 放入独立字段 / Extract Mermaid from content
-    biz_flows_outline = outline.get("biz_flows", []) if outline else []
-    flow_names = [f.get("name", "") for f in biz_flows_outline]
-    biz_flows: List[dict] = []
-    for i, part in enumerate(biz_parts):
-        matched_name = ""
-        for name in flow_names:
-            if name and name in part:
-                matched_name = name
-                break
-        if not matched_name:
-            matched_name = f"flow_{i}"
-        chunk_id = f"biz_{matched_name}"
-
-        # 提取 Mermaid 代码块，从 content 中移除 / Extract Mermaid block, remove from content
-        mermaid = ""
-        content = part
-        mermaid_match = re.search(
-            r"```mermaid\s*\n(.*?)```", part, re.DOTALL
-        )
-        if mermaid_match:
-            mermaid = "```mermaid\n" + mermaid_match.group(1).rstrip() + "\n```"
-            content = part[:mermaid_match.start()] + part[mermaid_match.end():]
-            content = content.strip()
-
-        biz_flows.append({
-            "chunk_id": chunk_id,
-            "key": chunk_id,
-            "type": "biz",
-            "name": matched_name,
-            "section": "biz_flows",
-            "content": content,
-            "mermaid": mermaid,
-        })
-
-    return {
-        "business_understanding": business_understanding,
-        "single_api": single_api,
-        "biz_flows": biz_flows,
-    }
+            try:
+                return json.loads(cache_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+    # plan_sections.json 不存在时应报错
+    # Should error if plan_sections.json doesn't exist
+    raise FileNotFoundError(
+        f"plan_sections.json not found in {memory_dir}. "
+        "The plan generation step must complete before revision."
+    )
 
 
 def _save_plan_sections(memory_dir: str, sections: dict):

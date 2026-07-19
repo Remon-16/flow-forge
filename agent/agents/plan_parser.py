@@ -1,8 +1,13 @@
-"""PlanParser: parse confirmed plan.md into structured TestPlan."""
+"""PlanParser: parse plan_sections.json into structured TestPlan.
+
+从 plan_sections.json（非 plan.md）解析测试计划为结构化 TestPlan。
+支持 token 感知的贪心切分：整体 → case_type 拆分 → 贪心分批。
+Parses plan_sections.json (not plan.md) into structured TestPlan.
+Supports token-aware greedy chunking: whole → case_type split → greedy.
+"""
 
 import json
 import logging
-import re
 from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent
@@ -17,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class PlanParser(BaseAgent):
-    """Parse a confirmed Markdown test plan into structured TestPlan."""
+    """Parse plan_sections.json into structured TestPlan."""
 
     def __init__(self, settings: Settings, skill_extensions: List[str] = None):
         super().__init__(
@@ -33,32 +38,57 @@ class PlanParser(BaseAgent):
             skill_extensions=skill_extensions,
         )
 
-    def parse(
-        self, plan_md: str, interfaces: Optional[List[Dict[str, Any]]] = None
+    # ========================================================================
+    # 主入口 / Main entry point
+    # ========================================================================
+
+    def parse_from_sections(
+        self, sections: dict, interfaces: Optional[List[Dict[str, Any]]] = None,
     ) -> TestPlan:
-        """Parse plan markdown into a structured TestPlan.
+        """从 plan_sections.json 结构解析为 TestPlan。
 
-        Args:
-            plan_md: The plan markdown text.
-            interfaces: Optional pre-validated interface definitions.  Used as
-                fallback when the LLM / regex cannot extract api_definitions
-                from the markdown text.
+        Token 感知贪心切分：
+        Token-aware greedy chunking:
+          1. 整体尝试 → 若不超过窗口阈值，一次 LLM 调用
+          2. 超过 → 按 case_type 拆分 (single_api / biz_flows)
+          3. 仍超过 → 贪心算法逐 section 累加
         """
-        # Extract business summary (first ## section content)
-        business_summary = self._extract_section(
-            plan_md, r"##\s*(?:1\.)?\s*业务理解", r"##\s"
-        ) or self._extract_section(plan_md, r"##\s*(?:1\.)?\s*Business", r"##\s")
+        business_summary = sections.get("business_understanding", "")
+        single_api = sections.get("single_api", [])
+        biz_flows = sections.get("biz_flows", [])
 
-        # Extract Mermaid diagrams
-        mermaid_flows = self._extract_mermaid(plan_md)
+        from prompts.plan_parser import PLAN_PARSER_SYSTEM as system_msg
+        # 估算 system prompt tokens / Estimate system prompt tokens
+        system_tokens = self._token_counter.count(system_msg)
+        output_reserve = max(self._max_output_tokens, 4096)
+        chunk_overhead = 200
+        max_chunk_tokens = (
+            self._context_window - system_tokens - output_reserve - chunk_overhead
+        )
 
-        # Extract test points via LLM
-        plan = self._llm_parse(plan_md)
-        plan.business_summary = business_summary or plan.business_summary
-        plan.mermaid_flows = mermaid_flows
+        # 组装完整 prompt 文本 / Build full prompt text
+        full_text = self._assemble_parse_text(business_summary, single_api, biz_flows)
+        full_tokens = self._estimate_section_tokens(system_msg, full_text)
 
-        # Fallback: if LLM/regex failed to extract api_definitions,
-        # use the provided interfaces (already validated)
+        if full_tokens <= max_chunk_tokens:
+            # 整体一次解析 / Parse all at once
+            result = self._parse_single_batch(full_text, system_msg, interfaces)
+        else:
+            # 按 case_type 拆分 / Split by case_type
+            logger.info(
+                "Plan too large (%d > %d tokens), splitting by case_type",
+                full_tokens, max_chunk_tokens,
+            )
+            result = self._parse_with_greedy_chunking(
+                business_summary, single_api, biz_flows,
+                system_msg, max_chunk_tokens, interfaces,
+            )
+
+        # 构建 TestPlan / Build TestPlan
+        plan = self._build_testplan(result)
+        plan.business_summary = business_summary
+
+        # Fallback interfaces
         if not plan.api_definitions and interfaces:
             plan.api_definitions = [
                 InterfaceDef(
@@ -73,113 +103,178 @@ class PlanParser(BaseAgent):
 
         return plan
 
-    def _llm_parse(self, plan_md: str) -> TestPlan:
-        """Use LLM to extract structured test points from the plan.
+    # ========================================================================
+    # 贪心切分 / Greedy chunking
+    # ========================================================================
 
-        对超大计划使用自适应标题层级切分 + _process_long_text() 进行 token
-        感知的逐 chunk 解析，享受滑动窗口上下文传递和上下文压缩。
+    def _parse_with_greedy_chunking(
+        self,
+        business_summary: str,
+        single_api: List[dict],
+        biz_flows: List[dict],
+        system_msg: str,
+        max_chunk_tokens: int,
+        interfaces: Optional[List[Dict[str, Any]]],
+    ) -> dict:
+        """贪心切分解析 / Greedy chunking parse.
 
-        For large plans, splits by adaptively-detected heading level and uses
-        _process_long_text() for token-aware chunked parsing, with sliding-window
-        context and compression.
+        1. 先尝试 single_api 整体 / Try single_api as a whole
+        2. 再尝试 biz_flows 整体 / Try biz_flows as a whole
+        3. 任一块超过 → 贪心逐 section 累加 / Either over → greedy per-section
         """
-        from prompts.plan_parser import (
-            PLAN_PARSER_SYSTEM as system_msg,
-            PLAN_PARSER_USER,
-        )
-        from prompts.render import render_prompt
-        from utils.plan_sections import detect_section_level
-
-        # 单次调用能否塞下 / Does it fit in a single call?
-        test_prompt = render_prompt(PLAN_PARSER_USER, plan_md=plan_md)
-        input_tokens = self._estimate_input_tokens(system_msg, test_prompt)
-
-        if input_tokens < self._context_window * self._compression_threshold:
-            try:
-                result = self.call_llm_json(test_prompt, system_msg)
-                return self._build_testplan(result)
-            except Exception as e:
-                logger.warning("LLM plan parsing failed: %s, using regex fallback", e)
-                result = self._regex_parse(plan_md)
-                return self._build_testplan(result)
-
-        # 大计划 — 自适应标题层级切分 / Large plan — adaptive heading-level split
-        logger.info("Plan too large (%d tokens), splitting by adaptive heading level", input_tokens)
-        section_level = detect_section_level(plan_md)
-        logger.info("Detected section level: H%d", section_level)
-        sections = re.split(rf"\n(?=#{{{section_level}}}\s)", plan_md)
-
-        if len(sections) <= 1:
-            # 无法按标题拆分 → 回退到纯文本 token 切分
-            # Can't split by heading → fallback to plain-text token chunking
-            logger.info("Single section, using _process_long_text for token-aware chunking")
-            merged = self._process_long_text(
-                text=plan_md,
-                system_msg=system_msg,
-                chunk_processor=self._parse_chunk_processor(system_msg, PLAN_PARSER_USER),
-                result_merger=lambda results, _sm: self._merge_plan_results(results),
-            )
-            return self._build_testplan(merged)
-
-        # 多 section → 以 \n\n 拼接，让 _chunk_text 以 section 为边界切分
-        # Multi-section → join with \n\n so _chunk_text respects section boundaries
-        sectioned_text = "\n\n".join(sections)
-        logger.info("Split into %d sections, processing via _process_long_text", len(sections))
-
-        merged = self._process_long_text(
-            text=sectioned_text,
-            system_msg=system_msg,
-            chunk_processor=self._parse_chunk_processor(system_msg, PLAN_PARSER_USER),
-            result_merger=lambda results, _sm: self._merge_plan_results(results),
-        )
-        return self._build_testplan(merged)
-
-    def _parse_chunk_processor(self, system_msg: str, user_template: str):
-        """创建 chunk 处理器闭包 / Create chunk processor closure.
-
-        返回一个签名为 (chunk_text, accumulated) -> dict 的函数，供
-        _process_long_text() 逐 chunk 调用。
-        Returns a callable with signature (chunk_text, accumulated) -> dict
-        for _process_long_text() to invoke per chunk.
-        """
-        from prompts.render import render_prompt
-
-        def _proc(chunk_with_notice: str, _accumulated: str) -> dict:
-            prompt = render_prompt(user_template, plan_md=chunk_with_notice)
-            try:
-                return self.call_llm_json_object(prompt, system_msg, "api_definitions")
-            except Exception:
-                return self._regex_parse(chunk_with_notice)
-
-        return _proc
-
-    def _merge_plan_results(self, results: list) -> dict:
-        """Merge parsed plan results from multiple chunks."""
         merged: dict = {
             "api_definitions": [],
             "single_test_points": {},
             "biz_flow_scenarios": [],
         }
-        seen_api = set()
-        for r in results:
-            for ad in r.get("api_definitions", []):
-                key = (ad.get("test_id", ""), ad.get("url", ""))
-                if key not in seen_api:
-                    seen_api.add(key)
-                    merged["api_definitions"].append(ad)
-            for api_id, points in r.get("single_test_points", {}).items():
-                if api_id not in merged["single_test_points"]:
-                    merged["single_test_points"][api_id] = []
-                seen_tps = {tp.get("test_id") for tp in merged["single_test_points"][api_id]}
-                for tp in points:
-                    if tp.get("test_id") not in seen_tps:
-                        merged["single_test_points"][api_id].append(tp)
-            for scenario in r.get("biz_flow_scenarios", []):
-                merged["biz_flow_scenarios"].append(scenario)
+
+        # Single API 部分 / Single API section
+        single_text = self._assemble_parse_text("", single_api, [])
+        single_tokens = self._estimate_section_tokens(system_msg, single_text)
+        if single_tokens <= max_chunk_tokens:
+            if single_api:
+                r = self._parse_single_batch(single_text, system_msg, interfaces)
+                self._merge_into(merged, r)
+        else:
+            # 贪心切分 single_api / Greedy chunk single_api
+            logger.info("single_api too large (%d > %d), greedy chunking", single_tokens, max_chunk_tokens)
+            for batch_text in self._greedy_batch_sections(single_api, system_msg, max_chunk_tokens):
+                r = self._parse_single_batch(batch_text, system_msg, interfaces)
+                self._merge_into(merged, r)
+
+        # Biz flows 部分 / Biz flows section
+        biz_text = self._assemble_parse_text("", [], biz_flows)
+        biz_tokens = self._estimate_section_tokens(system_msg, biz_text)
+        if biz_tokens <= max_chunk_tokens:
+            if biz_flows:
+                r = self._parse_single_batch(biz_text, system_msg, interfaces)
+                self._merge_into(merged, r)
+        else:
+            logger.info("biz_flows too large (%d > %d), greedy chunking", biz_tokens, max_chunk_tokens)
+            for batch_text in self._greedy_batch_sections(biz_flows, system_msg, max_chunk_tokens):
+                r = self._parse_single_batch(batch_text, system_msg, interfaces)
+                self._merge_into(merged, r)
+
         return merged
 
+    def _greedy_batch_sections(
+        self, sections: List[dict], system_msg: str, max_chunk_tokens: int,
+    ):
+        """贪心算法将 sections 分批 / Greedy batch sections within token budget.
+
+        依次加入 section，直到累计 token 接近 max_chunk_tokens，
+        然后产出当前 batch 并开始新 batch。
+        Add sections one by one until approaching max_chunk_tokens,
+        then yield the current batch and start a new one.
+        """
+        batch: List[dict] = []
+        batch_tokens = 0
+
+        for sec in sections:
+            # 估算该 section 的 prompt token / Estimate this section's prompt tokens
+            sec_text = self._section_to_text(sec)
+            sec_tokens = self._estimate_section_tokens(system_msg, sec_text)
+
+            if batch and batch_tokens + sec_tokens > max_chunk_tokens:
+                # 当前 batch 已满，产出 / Current batch full, yield it
+                yield self._assemble_parse_text("",
+                    [s for s in batch if s.get("section") == "single_api"],
+                    [s for s in batch if s.get("section") == "biz_flows"],
+                )
+                batch = []
+                batch_tokens = 0
+
+            batch.append(sec)
+            batch_tokens += sec_tokens
+
+        # 产出最后一个 batch / Yield the last batch
+        if batch:
+            yield self._assemble_parse_text("",
+                [s for s in batch if s.get("section") == "single_api"],
+                [s for s in batch if s.get("section") == "biz_flows"],
+            )
+
+    # ========================================================================
+    # 辅助 / Helpers
+    # ========================================================================
+
+    def _assemble_parse_text(
+        self, business_summary: str, single_api: List[dict], biz_flows: List[dict],
+    ) -> str:
+        """将 sections 组装为 LLM prompt 文本 / Assemble sections into LLM prompt text."""
+        parts = []
+        if business_summary and business_summary.strip():
+            parts.append(business_summary.strip())
+        for sec in single_api:
+            content = sec.get("content", "")
+            if content and content.strip():
+                parts.append(content.strip())
+        for sec in biz_flows:
+            content = sec.get("content", "")
+            mermaid = sec.get("mermaid", "")
+            combined = []
+            if mermaid and mermaid.strip():
+                combined.append(mermaid.strip())
+            if content and content.strip():
+                combined.append(content.strip())
+            if combined:
+                parts.append("\n\n".join(combined))
+        return "\n\n".join(parts)
+
+    def _section_to_text(self, sec: dict) -> str:
+        """单个 section 转文本 / Single section to text."""
+        content = sec.get("content", "")
+        mermaid = sec.get("mermaid", "")
+        if mermaid and mermaid.strip():
+            return mermaid.strip() + "\n\n" + content
+        return content
+
+    def _estimate_section_tokens(self, system_msg: str, text: str) -> int:
+        """估算 section 文本的 input tokens / Estimate input tokens for section text."""
+        from prompts.plan_parser import PLAN_PARSER_USER
+        from prompts.render import render_prompt
+        prompt = render_prompt(PLAN_PARSER_USER, plan_md=text)
+        return self._estimate_input_tokens(system_msg, prompt)
+
+    def _parse_single_batch(
+        self, text: str, system_msg: str,
+        interfaces: Optional[List[Dict[str, Any]]],
+    ) -> dict:
+        """单批次 LLM 调用 / Single batch LLM call."""
+        from prompts.plan_parser import PLAN_PARSER_USER
+        from prompts.render import render_prompt
+        prompt = render_prompt(PLAN_PARSER_USER, plan_md=text)
+        try:
+            return self.call_llm_json(prompt, system_msg)
+        except Exception as e:
+            logger.warning("LLM plan parsing failed: %s", e)
+            return {"api_definitions": [], "single_test_points": {}, "biz_flow_scenarios": []}
+
+    @staticmethod
+    def _merge_into(target: dict, source: dict):
+        """将 source 结果合并到 target / Merge source result into target."""
+        seen_api = {(ad.get("test_id"), ad.get("url")) for ad in target.get("api_definitions", [])}
+        for ad in source.get("api_definitions", []):
+            key = (ad.get("test_id", ""), ad.get("url", ""))
+            if key not in seen_api:
+                seen_api.add(key)
+                target.setdefault("api_definitions", []).append(ad)
+        for api_id, points in source.get("single_test_points", {}).items():
+            if api_id not in target.setdefault("single_test_points", {}):
+                target["single_test_points"][api_id] = []
+            seen_tps = {tp.get("test_id") for tp in target["single_test_points"][api_id]}
+            for tp in points:
+                if tp.get("test_id") not in seen_tps:
+                    target["single_test_points"][api_id].append(tp)
+        for scenario in source.get("biz_flow_scenarios", []):
+            target.setdefault("biz_flow_scenarios", []).append(scenario)
+
+    # ========================================================================
+    # 结果构建（保留） / Result construction (kept)
+    # ========================================================================
+
     def _build_testplan(self, result: dict) -> TestPlan:
-        # call_llm_json_object 已确保 result 为 dict / call_llm_json_object ensures result is a dict
+        """将解析结果构建为 TestPlan / Build TestPlan from parsed result."""
         api_defs = []
         for ad in result.get("api_definitions", []):
             api_defs.append(InterfaceDef(
@@ -208,53 +303,11 @@ class PlanParser(BaseAgent):
             biz_flow_scenarios=result.get("biz_flow_scenarios", []),
         )
 
-    def _regex_parse(self, plan_md: str) -> Dict[str, Any]:
-        """Fallback regex-based parsing."""
-        result: Dict[str, Any] = {
-            "api_definitions": [],
-            "single_test_points": {},
-            "biz_flow_scenarios": [],
-        }
-
-        # Find API method+URL patterns
-        api_pattern = re.findall(
-            r'\|\s*(?:api_\w+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*(GET|POST|PUT|DELETE|PATCH)\s*\|\s*([^|]+)\s*\|',
-            plan_md, re.IGNORECASE
-        )
-        for m in api_pattern:
-            result["api_definitions"].append({
-                "test_id": "",
-                "api_name": m[0].strip(),
-                "app_name": m[1].strip(),
-                "method": m[2].strip().upper(),
-                "url": m[3].strip(),
-            })
-
-        return result
-
-    @staticmethod
-    def _extract_section(text: str, start_pattern: str, end_pattern: str) -> str:
-        """Extract content between two regex patterns."""
-        start_match = re.search(start_pattern, text)
-        if not start_match:
-            return ""
-        start_pos = start_match.end()
-        end_match = re.search(end_pattern, text[start_pos:])
-        if end_match:
-            return text[start_pos:start_pos + end_match.start()].strip()
-        return text[start_pos:].strip()
-
-    @staticmethod
-    def _extract_mermaid(text: str) -> Dict[str, str]:
-        """Extract Mermaid diagrams from markdown."""
-        diagrams: Dict[str, str] = {}
-        pattern = re.compile(r'```mermaid\s*([\s\S]*?)\s*```')
-        for i, match in enumerate(pattern.finditer(text)):
-            name = f"flow_{i + 1}"
-            content = match.group(1).strip()
-            # Try to extract a title from the diagram
-            title_match = re.search(r'title\s+(.+)', content)
-            if title_match:
-                name = title_match.group(1).strip()
-            diagrams[name] = content
-        return diagrams
+    # ========================================================================
+    # 已删除方法（旧 plan.md 解析路径）
+    # Removed methods (old plan.md parsing path):
+    #   parse(plan_md), _llm_parse(), _parse_chunk_processor(),
+    #   _regex_parse(), _extract_section(), _extract_mermaid()
+    # 这些方法从 plan.md 文本中提取数据，已被 plan_sections.json 输入替代。
+    # These extracted data from plan.md text; replaced by plan_sections.json input.
+    # ========================================================================

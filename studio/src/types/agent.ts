@@ -145,3 +145,58 @@ export type AgentCommand =
   | { command: 'revise_annotations'; prompt_id: string }
   | { command: 'revise_text'; prompt_id: string; text: string }
   | { command: 'terminate'; prompt_id: string }
+
+// ============================================================================
+// plan_sections.json types — 对应 agent/schemas/plan_sections.schema.json
+// plan_sections.json types — matching agent/schemas/plan_sections.schema.json
+// ============================================================================
+
+/** 单接口用例 section / Single API test case section */
+export interface ApiSection {
+  chunk_id: string
+  key: string
+  type: 'api'
+  name: string
+  section: 'single_api'
+  content: string       // markdown，不含 Mermaid
+}
+
+/** 业务链路用例 section / Business flow test case section */
+export interface BizSection {
+  chunk_id: string
+  key: string
+  type: 'biz'
+  name: string
+  section: 'biz_flows'
+  content: string       // markdown，不含 Mermaid
+  mermaid: string       // Mermaid 流程图
+}
+
+/** plan_sections.json 顶层结构 / Top-level structure */
+export interface PlanSections {
+  business_understanding: string
+  single_api: ApiSection[]
+  biz_flows: BizSection[]
+}
+
+/** 从 sections 组装 plan.md（含 chunk 边界标记） / Assemble plan.md from sections (with chunk boundary markers) */
+export function assemblePlanMd(sections: PlanSections): string {
+  const parts: string[] = []
+  if (sections.business_understanding?.trim()) {
+    parts.push('<!-- chunk:__global__ -->\n\n' + sections.business_understanding.trim())
+  }
+  for (const sec of sections.single_api) {
+    if (sec.content?.trim()) {
+      parts.push(`<!-- chunk:${sec.chunk_id} -->\n\n` + sec.content.trim())
+    }
+  }
+  for (const sec of sections.biz_flows) {
+    const combined: string[] = []
+    if (sec.mermaid?.trim()) combined.push(sec.mermaid.trim())
+    if (sec.content?.trim()) combined.push(sec.content.trim())
+    if (combined.length) {
+      parts.push(`<!-- chunk:${sec.chunk_id} -->\n\n` + combined.join('\n\n'))
+    }
+  }
+  return parts.join('\n\n')
+}

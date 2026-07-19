@@ -200,15 +200,29 @@ def summarize_reference_dir(reference_dir: str) -> str:
     ref_memory = ref_path / "memory" if (ref_path / "memory").is_dir() else ref_path
 
     # 已有测试计划 / Existing plan
-    plan_path = ref_memory / "plan.md"
-    if not plan_path.exists():
-        plan_path = ref_path / "plan.md"
-    if plan_path.exists():
+    # 优先读 plan_sections.json，若无则回退到 plan.md / Prefer plan_sections.json, fallback to plan.md
+    sections_path = ref_memory / "plan_sections.json"
+    if not sections_path.exists():
+        sections_path = ref_path / "plan_sections.json"
+    if sections_path.exists():
         try:
-            plan_text = plan_path.read_text(encoding="utf-8")
+            import json
+            from schemas.plan_sections import assemble_plan_md
+            sections = json.loads(sections_path.read_text(encoding="utf-8"))
+            plan_text = assemble_plan_md(sections)
             parts.append(f"{REF_SECTION_EXISTING_PLAN}{plan_text[:5000]}")
         except Exception:
             pass
+    else:
+        plan_path = ref_memory / "plan.md"
+        if not plan_path.exists():
+            plan_path = ref_path / "plan.md"
+        if plan_path.exists():
+            try:
+                plan_text = plan_path.read_text(encoding="utf-8")
+                parts.append(f"{REF_SECTION_EXISTING_PLAN}{plan_text[:5000]}")
+            except Exception:
+                pass
 
     # 已有接口 / Existing interfaces
     try:

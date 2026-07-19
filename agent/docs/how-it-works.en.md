@@ -39,9 +39,9 @@ graph TD
 4. **Save Interface Definitions**: Writes the validated interface definitions to YAML. Users can edit the YAML directly during review; the system reloads it after approval.
 5. **Requirements Analysis**: The LLM extracts business flows, user roles, constraints, and exception scenarios from the requirements.
 6. **Outline Generation**: Based on the requirements analysis and the interface list (names/URLs only), generates a lightweight JSON outline that groups interfaces by business domain and lists business flows. The outline is very small (< 1000 tokens), guaranteeing it is not truncated.
-7. **Plan Generation**: Generates a Markdown test plan from the outline in chunks (the four-phase approach; see [anti-hallucination.md](./anti-hallucination.en.md#skeleton-batching-and-plan-chunking)).
-8. **Human Review** (mandatory interrupt): Displays the plan; the user chooses to approve, provide text feedback, or revise from an annotation file, with a feedback loop until approval (see [Human Review Modes](#human-review-modes-ynr) below).
-9. **Plan Parsing**: Parses the approved Markdown plan into structured data and extracts the list of test points.
+7. **Plan Generation**: Generates a Markdown test plan from the outline in chunks (four-phase approach), simultaneously producing `plan_sections.json` as the structured data source (see [anti-hallucination.md](./anti-hallucination.en.md#skeleton-batching-and-plan-chunking)). `plan.md` is display-only; code no longer reads it.
+8. **Human Review** (mandatory interrupt): Displays the plan; the user chooses to approve, provide text feedback, or revise from an annotation file. Annotations carry `chunk_id` directly (provided by Studio annotator), eliminating line-number matching. Feedback loop until approval (see [Human Review Modes](#human-review-modes-ynr) below).
+9. **Plan Parsing**: Reads pre-split section data from `plan_sections.json` and parses it into a structured TestPlan using token-aware greedy chunking (whole → case_type split → greedy per-section). No longer parses `plan.md`.
 10. **Case Generation** (skeleton + plugin pipeline): Generates skeletons in batches → URL validation → runs plugins in the configured order (data filling, assertion generation, etc.). See [plugins-and-skills.md](./plugins-and-skills.en.md) for details.
 11. **Output**: YAML files (`single_cases/`, `biz_flows/`) + optional Excel export.
 
