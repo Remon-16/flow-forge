@@ -247,7 +247,10 @@
     "openSidebar": "Open annotation list",
     "editChunk": "Edit Chunk",
     "content": "Content",
-    "mermaid": "Mermaid Diagram"
+    "mermaid": "Mermaid Diagram",
+    "openEditor": "Open chunk editor",
+    "closeEditor": "Close chunk editor",
+    "doubleClickToEdit": "Double-click a section in the preview to edit its content"
   },
   "search": {
     "find": "Find",

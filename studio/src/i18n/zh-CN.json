@@ -247,7 +247,10 @@
     "openSidebar": "打开批注列表",
     "editChunk": "编辑块",
     "content": "内容",
-    "mermaid": "Mermaid 流程图"
+    "mermaid": "Mermaid 流程图",
+    "openEditor": "打开块编辑器",
+    "closeEditor": "关闭块编辑器",
+    "doubleClickToEdit": "双击左侧预览区的 section 块以编辑其内容"
   },
   "search": {
     "find": "查找",

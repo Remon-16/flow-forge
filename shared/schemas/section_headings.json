@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Section Headings",
+  "description": "plan.md / 预览区组装用的 section 章节标题。按 section 类型索引，含语言变体。由前端和后端共用，跨语言单一数据源。\nSection headings for plan.md / preview assembly. Indexed by section type, with language variants. Shared single-source-of-truth for frontend and backend.",
+  "headings": {
+    "business_understanding": {
+      "zh-CN": "## 1. 业务理解",
+      "en-US": "## 1. Business Understanding"
+    },
+    "single_api": {
+      "zh-CN": "## 2. 单接口测试场景",
+      "en-US": "## 2. Single API Test Points"
+    },
+    "biz_flows": {
+      "zh-CN": "## 3. 业务链路测试场景",
+      "en-US": "## 3. Business Flow Testing"
+    }
+  }
+}

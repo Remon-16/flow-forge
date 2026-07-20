@@ -150,13 +150,14 @@ class TestPlanChunking:
                 {"test_id": "api_2", "api_name": "API2", "method": "POST", "url": "/2", "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200, "assert_dict": {}, "remark": ""},
             ]
 
-            # Phase A + Mermaid(1 flow) + Phase B(2 groups) + Phase C(1 batch) = 5 calls
+            # Phase A + Phase B(2 groups) + Phase C(Mermaid + Biz, 1 flow) = 5 calls
+            # Phase C 内部先生成 Mermaid 再生成 Biz 内容 / Phase C generates Mermaid then Biz content
             outputs = [
-                "GLOBAL_CONTEXT",
-                "MERMAID_FLOW",           # Mermaid for biz flow
-                "FIRST_GROUP_SECTION",
-                "SECOND_GROUP_SECTION",
-                "BIZ_FLOW_SECTION",
+                "GLOBAL_CONTEXT",          # Call 1: Phase A
+                "FIRST_GROUP_SECTION",     # Call 2: Phase B group 1
+                "SECOND_GROUP_SECTION",    # Call 3: Phase B group 2
+                "MERMAID_FLOW",            # Call 4: Phase C Mermaid for My Flow
+                "BIZ_FLOW_SECTION",        # Call 5: Phase C biz content
             ]
             agent.call_llm = MagicMock(side_effect=outputs)
 
@@ -169,8 +170,8 @@ class TestPlanChunking:
             # 验证拼接顺序 / Verify assembly order
             assert plan_md.index("GLOBAL_CONTEXT") < plan_md.index("FIRST_GROUP_SECTION")
             assert plan_md.index("FIRST_GROUP_SECTION") < plan_md.index("SECOND_GROUP_SECTION")
-            # 验证 Mermaid 图已注入到 biz section 前 / Verify Mermaid injected before biz section
-            assert plan_md.index("MERMAID_FLOW") < plan_md.index("BIZ_FLOW_SECTION")
+            # 验证文本在前、Mermaid 在后 / Verify content first, Mermaid at end
+            assert plan_md.index("BIZ_FLOW_SECTION") < plan_md.index("MERMAID_FLOW")
 
     def should_raise_error_when_outline_missing(self):
         """outline 缺失时 generate_plan_node 报错 / Error when outline is None."""
@@ -226,8 +227,8 @@ class TestPlanChunking:
             )
 
             assert "BIZ_FLOW_SECTION" in plan_md
-            # 验证 Mermaid 图已注入到 biz section 前 / Verify Mermaid injected before biz section
-            assert plan_md.index("MERMAID_FLOW") < plan_md.index("BIZ_FLOW_SECTION")
+            # 验证文本在前、Mermaid 在后 / Verify content first, Mermaid at end
+            assert plan_md.index("BIZ_FLOW_SECTION") < plan_md.index("MERMAID_FLOW")
             # v2 格式增量保存 plan_sections.json（Phase A + Phase C batch + 最终）→ 3 次
             # v2 format saves plan_sections.json incrementally (Phase A + Phase C batch + final) → 3 times
             assert mock_save.call_count >= 2

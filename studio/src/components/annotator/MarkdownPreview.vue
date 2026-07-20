@@ -186,46 +186,42 @@ function renderFromSections(sections: PlanSections): string {
   }
 
   const allBlocks: ChunkBlock[] = []
-  const sectionTexts: string[] = []
 
-  // 按顺序收集各 section 的纯文本（无 marker）/ Collect plain text per section in order
+  // 按顺序收集各 section 的 (文本, chunkId) 对 / Collect (text, chunkId) pairs per section in order
+  // 使用配对方式替代计数器，避免空 section 导致索引错位
+  // Using paired approach instead of counters to avoid index misalignment from empty sections
+  interface SectionText {
+    text: string
+    chunkId: string
+  }
+  const sectionTexts: SectionText[] = []
+
   const buSection = sections.business_understanding
   const buText = buSection?.content?.trim() || ''
-  if (buText) sectionTexts.push(buText)
+  if (buText) {
+    sectionTexts.push({ text: buText, chunkId: buSection?.chunk_id || 'business_understanding' })
+  }
 
   for (const sec of sections.single_api) {
     const c = sec.content?.trim()
-    if (c) sectionTexts.push(c)
+    if (c) sectionTexts.push({ text: c, chunkId: sec.chunk_id })
   }
 
   for (const sec of sections.biz_flows) {
     const parts: string[] = []
-    if (sec.mermaid?.trim()) parts.push(sec.mermaid.trim())
+    // 文本在前，流程图在后 / content first, mermaid last
     if (sec.content?.trim()) parts.push(sec.content.trim())
-    if (parts.length) sectionTexts.push(parts.join('\n\n'))
+    if (sec.mermaid?.trim()) parts.push(sec.mermaid.trim())
+    if (parts.length) {
+      sectionTexts.push({ text: parts.join('\n\n'), chunkId: sec.chunk_id })
+    }
   }
 
   // 对每个 section 文本独立 splitIntoBlocks，标记 chunk_id
   // Split each section independently, tag with chunk_id
-  let buDone = false
-  let apiIdx = 0
-  let bizIdx = 0
   let cumulativeLine = 1
 
-  for (const text of sectionTexts) {
-    // 确定该文本属于哪个 chunk / Determine which chunk this text belongs to
-    let chunkId = ''
-    if (!buDone) {
-      chunkId = buSection?.chunk_id || 'business_understanding'
-      buDone = true
-    } else if (apiIdx < (sections.single_api?.length || 0)) {
-      chunkId = sections.single_api[apiIdx].chunk_id
-      apiIdx++
-    } else if (bizIdx < (sections.biz_flows?.length || 0)) {
-      chunkId = sections.biz_flows[bizIdx].chunk_id
-      bizIdx++
-    }
-
+  for (const { text, chunkId } of sectionTexts) {
     const secBlocks = splitIntoBlocks(text)
     for (const b of secBlocks) {
       allBlocks.push({
@@ -351,9 +347,9 @@ function findChunkId(): string | undefined {
   if (!selection || !selection.anchorNode) return undefined
   let node: Node | null = selection.anchorNode
   while (node && node !== previewRef.value) {
-    if (node instanceof HTMLElement) {
-      const chunkId = node.dataset.chunkId
-      if (chunkId) return chunkId
+    if (node instanceof Element) {      /* Element 同时兼容 HTMLElement 和 SVGElement / Element covers both HTMLElement and SVGElement */
+      const chunkId = (node as HTMLElement).dataset?.chunkId
+      if (chunkId !== undefined) return chunkId  /* 仅跳过未设置属性，允许空字符串 / only skip unset, allow empty string */
     }
     node = node.parentNode
   }
@@ -560,7 +556,8 @@ defineExpose({ scrollToAnnotation })
 .markdown-preview.show-line-numbers :deep(.md-block[data-first-of-chunk])::after {
   content: attr(data-chunk-id);
   position: absolute;
-  left: -10px;        /* 行号栏右侧、正文左侧 / right of line-number, left of content */
+  left: -130px;        /* 行号栏左侧，不遮挡正文 / left of line-number gutter, no text overlap */
+  text-align: right;   /* 右对齐，贴近行号栏 / right-align toward line numbers */
   top: 0;
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 10px;

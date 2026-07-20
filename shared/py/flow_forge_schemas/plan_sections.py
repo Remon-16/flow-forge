@@ -8,8 +8,17 @@ Corresponding JSON Schema: shared/schemas/plan_sections.json
 
 from __future__ import annotations
 
-from typing import List, Literal, NotRequired, TypedDict
+import json
+from pathlib import Path
+from typing import Dict, List, Literal, NotRequired, TypedDict
 
+# ============================================================================
+# Section 章节标题（跨语言 JSON 共享）/ Section headings (cross-language JSON shared)
+# ============================================================================
+
+_schema_dir = Path(__file__).resolve().parent.parent.parent / "schemas"
+with open(_schema_dir / "section_headings.json", encoding="utf-8") as _f:
+    SECTION_HEADINGS: Dict[str, Dict[str, str]] = json.load(_f)["headings"]
 
 # ============================================================================
 # TypedDict 定义 / TypedDict definitions
@@ -123,64 +132,41 @@ def delete_section_by_key(sections: PlanSections, key: str) -> bool:
     return False
 
 
-def _insert_mermaid_after_heading(content: str, mermaid: str) -> str:
-    """将 mermaid 插入到 content 的标题行之后。
-
-    Insert mermaid after heading lines in content.
-    避免流程图在视觉上出现在 section 标题上方。
-    Prevents the diagram from visually appearing above the section heading.
-    """
-    import re
-
-    lines = content.split("\n")
-    heading_end = 0
-    found_heading = False
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        if re.match(r"^#{1,3}\s", stripped):
-            found_heading = True
-            heading_end = i + 1
-            # 连续的标题行一起处理 / Handle consecutive heading lines
-            if i + 1 < len(lines) and re.match(r"^#{1,3}\s", lines[i + 1].strip()):
-                heading_end = i + 2
-            break
-        heading_end = i + 1
-
-    if not found_heading:
-        return mermaid + "\n\n" + content
-
-    heading_part = "\n".join(lines[:heading_end])
-    rest_part = "\n".join(lines[heading_end:]).strip()
-    result = heading_part + "\n\n" + mermaid
-    if rest_part:
-        result += "\n\n" + rest_part
-    return result
-
-
-def assemble_plan_md(sections: PlanSections) -> str:
+def assemble_plan_md(sections: PlanSections, language: str = "zh-CN") -> str:
     """从 PlanSections 组装 plan.md 字符串。
 
     Assemble a plan.md string from PlanSections.
-    biz_flows: mermaid 插入标题之后 + 去重 ## 3. 标题。
-    biz_flows: insert mermaid after heading + dedup ## 3. headings.
+    章节标题由 SECTION_HEADINGS 统一管理，LLM 不再生成。
+    Section headings are managed by SECTION_HEADINGS; LLM no longer generates them.
     """
-    import re
+    h = SECTION_HEADINGS  # 当前语言的标题 / headings for the current language
 
     parts: List[str] = []
 
+    # 业务理解 / Business understanding
     bu = sections.get("business_understanding", "")
     if isinstance(bu, dict):
         bu_text = bu.get("content", "")
     else:
         bu_text = bu  # 兼容旧格式 / backward compat with old str format
     if bu_text.strip():
-        parts.append(bu_text.strip())
+        heading = h.get("business_understanding", {}).get(language, "")
+        if heading:
+            parts.append(heading + "\n\n" + bu_text.strip())
+        else:
+            parts.append(bu_text.strip())
 
+    # 单接口测试 / Single API test points
     for sec in sections.get("single_api", []):
         content = sec.get("content", "")
         if content and content.strip():
-            parts.append(content.strip())
+            heading = h.get("single_api", {}).get(language, "")
+            if heading:
+                parts.append(heading + "\n\n" + content.strip())
+            else:
+                parts.append(content.strip())
 
+    # 业务链路测试 / Business flow testing
     is_first_biz = True
     for sec in sections.get("biz_flows", []):
         content = sec.get("content", "")
@@ -188,21 +174,22 @@ def assemble_plan_md(sections: PlanSections) -> str:
         if not content.strip() and not mermaid.strip():
             continue
 
-        # 标题去重：仅第一个 biz section 保留 "## 3. 业务流程测试"
-        # Heading dedup: only first biz section keeps the ## 3. heading
-        if not is_first_biz:
-            content = re.sub(r"^##\s+3\.\s+[^\n]*\n+", "", content.strip())
-        is_first_biz = False
-
         content = content.strip()
         mermaid = mermaid.strip()
 
-        if mermaid and content:
-            assembled = _insert_mermaid_after_heading(content, mermaid)
-            parts.append(assembled.strip())
-        elif mermaid:
-            parts.append(mermaid)
-        elif content:
-            parts.append(content)
+        assembled_parts: List[str] = []
+        if is_first_biz:
+            heading = h.get("biz_flows", {}).get(language, "")
+            if heading:
+                assembled_parts.append(heading)
+        is_first_biz = False
+
+        if content:
+            assembled_parts.append(content)
+        if mermaid:
+            assembled_parts.append(mermaid)
+
+        if assembled_parts:
+            parts.append("\n\n".join(assembled_parts))
 
     return "\n\n".join(parts)

@@ -90,9 +90,9 @@ const selectedChunkIsBiz = computed(() => {
 // 右侧编辑器拖拽调整宽度 / Right editor resizable width
 const rightEditorSplitter = useSplitter({
   direction: 'vertical',
-  defaultSize: 450,
+  defaultSize: 400,        /* 适中默认宽度 / moderate default width */
   minSize: 300,
-  maxSize: 900,
+  maxSize: 700,            /* 上限收紧，避免占据过大 / lower ceiling to avoid taking too much space */
   reverse: true,
 })
 
@@ -207,10 +207,8 @@ function handleDeleteAnnotation(idx: number) {
 }
 
 function handleDialogSave(data: AnnotationData) {
-  // 设置 chunk_id / Set chunk_id
-  if (dialogChunkId.value) {
-    data.chunk_id = dialogChunkId.value
-  }
+  // 始终设置 chunk_id，即使为空字符串 / Always set chunk_id, even if empty string
+  data.chunk_id = dialogChunkId.value || ''
   if (editingIndex.value >= 0) {
     annotations.value[editingIndex.value] = data
   } else {
@@ -254,6 +252,16 @@ function handleChunkClick(chunkId: string) {
   editingContent.value = chunk.content
   editingMermaid.value = chunk.mermaid || ''
   editorVisible.value = true
+}
+
+// 切换编辑器可见性 / Toggle editor visibility
+function toggleEditor() {
+  if (editorVisible.value) {
+    closeEditor()
+  } else {
+    editorVisible.value = true
+    // 不自动选中 chunk，用户需双击或点击选中 / Don't auto-select chunk; user double-clicks to select
+  }
 }
 
 // 关闭编辑器 / Close editor
@@ -360,28 +368,46 @@ function onPreviewWheel(e: WheelEvent) {
         <div v-if="autoSaveStatus" class="autosave-indicator">{{ autoSaveStatus }}</div>
       </div>
 
+      <!-- 右侧编辑器切换按钮 / Right editor toggle button -->
+      <div
+        class="editor-toggle"
+        @click="toggleEditor"
+        :title="editorVisible ? t('annotator.closeEditor') : t('annotator.openEditor')"
+      >
+        <CaretRightOutlined v-if="editorVisible" />
+        <CaretLeftOutlined v-else />
+      </div>
+
       <!-- 右侧内联 Chunk 编辑器 / Right inline chunk editor -->
-      <template v-if="editorVisible && selectedChunkId">
+      <template v-if="editorVisible">
         <ResizableDivider
           orientation="vertical"
           @mousedown="rightEditorSplitter.onDividerMousedown"
         />
         <div class="chunk-editor-panel" :style="{ width: rightEditorSplitter.size.value + 'px' }">
-          <div class="chunk-editor-header">
-            <span class="chunk-editor-title">{{ t('annotator.editChunk') }}: {{ selectedChunkId }}</span>
-            <a-button size="small" type="text" @click="closeEditor">✕</a-button>
-          </div>
-          <div class="chunk-editor-body">
-            <label>{{ t('annotator.content') }} (Markdown)</label>
-            <a-textarea v-model:value="editingContent" :rows="12" />
-            <template v-if="selectedChunkIsBiz">
-              <label style="margin-top: 16px;">{{ t('annotator.mermaid') }}</label>
-              <a-textarea v-model:value="editingMermaid" :rows="8" style="font-family: monospace;" />
-            </template>
-          </div>
-          <div class="chunk-editor-footer">
-            <a-button size="small" @click="closeEditor">{{ t('annotator.cancel') }}</a-button>
-            <a-button size="small" type="primary" @click="saveEditor">{{ t('annotator.save') }}</a-button>
+          <!-- 已选中 chunk：显示编辑器 / Chunk selected: show editor -->
+          <template v-if="selectedChunkId">
+            <div class="chunk-editor-header">
+              <span class="chunk-editor-title">{{ t('annotator.editChunk') }}: {{ selectedChunkId }}</span>
+              <a-button size="small" type="text" @click="closeEditor">✕</a-button>
+            </div>
+            <div class="chunk-editor-body">
+              <label>{{ t('annotator.content') }} (Markdown)</label>
+              <a-textarea v-model:value="editingContent" :rows="12" />
+              <template v-if="selectedChunkIsBiz">
+                <label style="margin-top: 16px;">{{ t('annotator.mermaid') }}</label>
+                <a-textarea v-model:value="editingMermaid" :rows="8" style="font-family: monospace;" />
+              </template>
+            </div>
+            <div class="chunk-editor-footer">
+              <a-button size="small" @click="closeEditor">{{ t('annotator.cancel') }}</a-button>
+              <a-button size="small" type="primary" @click="saveEditor">{{ t('annotator.save') }}</a-button>
+            </div>
+          </template>
+          <!-- 未选中 chunk：显示占位提示 / No chunk selected: show placeholder -->
+          <div v-else class="chunk-editor-placeholder">
+            <div class="placeholder-icon">📝</div>
+            <p>{{ t('annotator.doubleClickToEdit') }}</p>
           </div>
         </div>
       </template>
@@ -461,6 +487,28 @@ function onPreviewWheel(e: WheelEvent) {
   background: #e6f4ff;
   color: #1677ff;
 }
+
+/* 右侧编辑器切换按钮，对称于 sidebar-toggle / Right editor toggle, mirrors sidebar-toggle */
+.editor-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  cursor: pointer;
+  background: #f0f0f0;
+  border-left: 1px solid #d9d9d9;
+  border-right: 1px solid #d9d9d9;
+  color: #666;
+  font-size: 14px;
+  user-select: none;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.editor-toggle:hover {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
 .annotator-preview-wrapper {
   flex: 1;
   min-width: 0;             /* 允许 flex 收缩至 0 / allow flex shrink to 0 */
@@ -518,5 +566,26 @@ function onPreviewWheel(e: WheelEvent) {
   gap: 8px;
   justify-content: flex-end;
   flex-shrink: 0;
+}
+
+/* 编辑器占位提示（未选中 chunk 时显示）/ Editor placeholder (shown when no chunk selected) */
+.chunk-editor-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  gap: 12px;
+}
+.chunk-editor-placeholder .placeholder-icon {
+  font-size: 36px;
+  opacity: 0.4;
+}
+.chunk-editor-placeholder p {
+  font-size: 13px;
+  text-align: center;
+  margin: 0;
+  line-height: 1.6;
 }
 </style>

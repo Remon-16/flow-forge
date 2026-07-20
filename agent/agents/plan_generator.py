@@ -321,49 +321,53 @@ class PlanGenerator(BaseAgent):
 
         # ====================================================================
         # Phase D: 拼接 plan.md / Assemble plan.md
+        # 使用 shared assemble_plan_md 统一处理 heading 和 mermaid 顺序
+        # Use shared assemble_plan_md for unified heading & mermaid ordering
         # ====================================================================
-        from flow_forge_schemas.plan_sections import _insert_mermaid_after_heading
+        from flow_forge_schemas.plan_sections import assemble_plan_md
 
-        parts: List[str] = [global_context]
+        # 构建临时 sections 结构供 assemble_plan_md 使用
+        # Build temporary sections structure for assemble_plan_md
+        plan_lang = get_language_name()
+        temp_sections: dict = {
+            "business_understanding": {
+                "chunk_id": "business_understanding",
+                "content": global_context,
+            },
+            "single_api": [],
+            "biz_flows": [],
+        }
 
         for group in api_groups:
-            # 使用 chunk_id 作为 section_key（优先），兜底用 group_name
-            # Use chunk_id as section_key (preferred), fallback to group_name
             section_key = group.get("chunk_id", "") or f"api_{group.get('group_name', '')}"
             if section_key and section_key in api_sections:
-                parts.append(api_sections[section_key])
+                temp_sections["single_api"].append({
+                    "chunk_id": section_key,
+                    "content": api_sections[section_key],
+                })
 
-        # Biz sections: mermaid 插入标题之后 + 去重 ## 3. 标题
-        # Biz sections: insert mermaid after heading + dedup ## 3. headings
-        import re
-        is_first_biz = True
         for section_key in sorted(biz_sections.keys()):
             entry = biz_sections[section_key]
             if isinstance(entry, dict):
                 content = entry.get("content", "")
-                # per-flow mermaids dict → 拼接为显示用字符串 / dict → join for display
                 mermaids_dict = entry.get("mermaids", {})
                 mermaid_parts = [m.strip() for m in mermaids_dict.values() if m and m.strip()]
                 combined_mermaid = "\n\n".join(mermaid_parts)
-
-                # 标题去重 / heading dedup
-                if not is_first_biz:
-                    content = re.sub(r"^##\s+3\.\s+[^\n]*\n+", "", content.strip())
-                is_first_biz = False
-
-                if combined_mermaid and content.strip():
-                    assembled = _insert_mermaid_after_heading(content, combined_mermaid)
-                    parts.append(assembled.strip())
-                elif combined_mermaid:
-                    parts.append(combined_mermaid)
-                elif content:
-                    parts.append(content)
+                temp_sections["biz_flows"].append({
+                    "chunk_id": section_key,
+                    "content": content,
+                    "mermaid": combined_mermaid,
+                })
             else:
-                parts.append(entry)
+                temp_sections["biz_flows"].append({
+                    "chunk_id": section_key,
+                    "content": entry,
+                    "mermaid": "",
+                })
 
-        plan_md = "\n\n".join(parts)
+        plan_md = assemble_plan_md(temp_sections, language=plan_lang)
         logger.info(
-            _("plan_gen.assembled", chunks=len(parts), chars=len(plan_md))
+            _("plan_gen.assembled", chunks=len(temp_sections["single_api"]) + len(temp_sections["biz_flows"]) + 1, chars=len(plan_md))
         )
         return plan_md
 

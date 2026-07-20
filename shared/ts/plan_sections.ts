@@ -48,76 +48,52 @@ export interface PlanSections {
 /** 从 sections 组装 plan.md（含 chunk 边界标记，供 Studio 批注器使用）。
  *  Assemble plan.md from sections (with chunk boundary markers for Studio annotator).
  *  Python 侧对应的 assemble_plan_md() 不含 chunk 标记，仅用于流水线内部组装。
- *  The Python-side assemble_plan_md() omits chunk markers, used only for internal pipeline assembly. */
+ *  The Python-side assemble_plan_md() omits chunk markers, used only for internal pipeline assembly.
+ *  章节标题由 SECTION_HEADINGS 统一管理，LLM 不再生成。
+ *  Section headings are managed by SECTION_HEADINGS; LLM no longer generates them. */
 
-/** biz section 内容中插入 mermaid 到标题之后 / Insert mermaid after headings in biz content.
- *  将 mermaid 放在 ##/### 标题行之后而非 content 最前面，
- *  避免流程图在视觉上出现在标题上方。
- *  Places mermaid after heading lines, not before them,
- *  so the diagram renders below the section heading visually. */
-function insertMermaidAfterHeading(content: string, mermaid: string): string {
-  const lines = content.split('\n')
-  // 找到标题块结束位置（连续的 # 开头行）/ Find where heading block ends (consecutive # lines)
-  let headingEnd = 0
-  let foundHeading = false
-  for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trim()
-    if (/^#{1,3}\s/.test(trimmed)) {
-      foundHeading = true
-      headingEnd = i + 1
-      // 连续标题行一起处理 / Handle consecutive heading lines together
-      if (i + 1 < lines.length && /^#{1,3}\s/.test(lines[i + 1].trim())) {
-        headingEnd = i + 2
-      }
-      break
-    }
-    headingEnd = i + 1
-  }
-  if (!foundHeading) {
-    // 没有标题行，mermaid 放在最前面 / No heading found, put mermaid first
-    return mermaid + '\n\n' + content
-  }
-  const headingPart = lines.slice(0, headingEnd).join('\n')
-  const restPart = lines.slice(headingEnd).join('\n').trim()
-  return headingPart + '\n\n' + mermaid + (restPart ? '\n\n' + restPart : '')
-}
+import sectionHeadingsData from '../../schemas/section_headings.json'
 
-export function assemblePlanMd(sections: PlanSections): string {
+/** 跨语言 section 章节标题 / Cross-language section headings */
+export const SECTION_HEADINGS: Record<string, Record<string, string>> = sectionHeadingsData.headings
+
+export function assemblePlanMd(sections: PlanSections, language: string = 'zh-CN'): string {
+  const h = SECTION_HEADINGS
   const parts: string[] = []
+
+  // 业务理解 / Business understanding
   const buContent = sections.business_understanding?.content?.trim()
   const buChunkId = sections.business_understanding?.chunk_id || 'business_understanding'
   if (buContent) {
-    parts.push(`<!-- chunk:${buChunkId} -->\n\n` + buContent)
+    const heading = h.business_understanding?.[language] || ''
+    parts.push(`<!-- chunk:${buChunkId} -->\n\n` + (heading ? heading + '\n\n' : '') + buContent)
   }
+
+  // 单接口测试 / Single API test points
   for (const sec of sections.single_api) {
     if (sec.content?.trim()) {
-      parts.push(`<!-- chunk:${sec.chunk_id} -->\n\n` + sec.content.trim())
+      const heading = h.single_api?.[language] || ''
+      parts.push(`<!-- chunk:${sec.chunk_id} -->\n\n` + (heading ? heading + '\n\n' : '') + sec.content.trim())
     }
   }
-  // Biz flows: mermaid 插入标题之后 + 去重 ## 3. 标题 / Insert mermaid after heading + dedup ## 3. headings
+
+  // 业务链路测试 / Business flow testing: 文本在前，流程图在后 / content first, mermaid at end
   let isFirstBiz = true
   for (const sec of sections.biz_flows) {
-    let content = sec.content?.trim() || ''
+    const content = sec.content?.trim() || ''
     const mermaid = sec.mermaid?.trim() || ''
     if (!content && !mermaid) continue
 
-    // 标题去重：仅第一个 biz section 保留 "## 3. 业务流程测试"
-    // Heading dedup: only first biz section keeps "## 3. Business Process Testing"
-    if (!isFirstBiz) {
-      content = content.replace(/^##\s+3\.\s+[^\n]*\n+/m, '')
+    const assembled: string[] = []
+    if (isFirstBiz) {
+      const heading = h.biz_flows?.[language] || ''
+      if (heading) assembled.push(heading)
     }
     isFirstBiz = false
+    if (content) assembled.push(content)
+    if (mermaid) assembled.push(mermaid)
 
-    // Mermaid 插入到标题行之后，而非 content 最前面
-    // Insert mermaid after heading lines, not before content
-    let assembled: string
-    if (mermaid) {
-      assembled = insertMermaidAfterHeading(content, mermaid)
-    } else {
-      assembled = content
-    }
-
-    parts.push(`<!-- chunk:${sec.chunk_id} -->\n\n` + assembled.trim())
+    parts.push(`<!-- chunk:${sec.chunk_id} -->\n\n` + assembled.join('\n\n'))
   }
   return parts.join('\n\n')
 }
