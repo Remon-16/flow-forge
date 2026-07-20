@@ -6,9 +6,9 @@
 // Reads arg definitions from shared/schemas/cli/*.json and provides
 // type-safe accessors, keeping TypeScript and Python arg lists in sync.
 
-import agentCli from '../../schemas/cli/agent.json'
-import executorCli from '../../schemas/cli/executor.json'
-import converterCli from '../../schemas/cli/converter.json'
+import agentCli from '../schemas/cli/agent.json'
+import executorCli from '../schemas/cli/executor.json'
+import converterCli from '../schemas/cli/converter.json'
 
 // ============================================================================
 // 类型定义 / Type definitions
@@ -52,7 +52,7 @@ export interface CliSchema {
 // Schema registry (single source of truth for all 3 entries)
 // ============================================================================
 
-const SCHEMAS: Record<string, CliSchema> = {
+export const CLI_SCHEMAS: Record<string, CliSchema> = {
   agent: agentCli as CliSchema,
   executor: executorCli as CliSchema,
   converter: converterCli as CliSchema,
@@ -67,7 +67,7 @@ const SCHEMAS: Record<string, CliSchema> = {
  * Get CLI schema for an entry.
  */
 export function getCliSchema(entry: 'agent' | 'executor' | 'converter'): CliSchema {
-  return SCHEMAS[entry]
+  return CLI_SCHEMAS[entry]
 }
 
 /**
@@ -78,7 +78,7 @@ export function getCliSchema(entry: 'agent' | 'executor' | 'converter'): CliSche
  * Used by frontend to filter env.yaml config → ConfigPanel shows only CLI-mapped fields.
  */
 export function getEditableDestSet(entry: string, section: string): Set<string> {
-  const schema = SCHEMAS[entry]
+  const schema = CLI_SCHEMAS[entry]
   if (!schema) return new Set()
   const result = new Set<string>()
   for (const a of schema.args ?? []) {
@@ -94,7 +94,7 @@ export function getEditableDestSet(entry: string, section: string): Set<string> 
  * Get all studio-editable args for an entry.
  */
 export function getEditableArgs(entry: string): CliArgDef[] {
-  const schema = SCHEMAS[entry]
+  const schema = CLI_SCHEMAS[entry]
   if (!schema) return []
   if (schema.subcommands) {
     // Converter：展平所有子命令的参数 / Flatten args from all subcommands
@@ -117,7 +117,7 @@ export function getEditableArgs(entry: string): CliArgDef[] {
  * These args should NOT be passed by the studio frontend.
  */
 export function getInternalDestSet(entry: string): Set<string> {
-  const schema = SCHEMAS[entry]
+  const schema = CLI_SCHEMAS[entry]
   if (!schema) return new Set()
   const result = new Set<string>()
   for (const a of schema.args ?? []) {
@@ -136,7 +136,7 @@ export function getInternalDestSet(entry: string): Set<string> {
  * Used by handleSubmit to convert configOverrides to CLI args.
  */
 export function getFlagMap(entry: string, section: string): Map<string, string> {
-  const schema = SCHEMAS[entry]
+  const schema = CLI_SCHEMAS[entry]
   if (!schema) return new Map()
   const result = new Map<string, string>()
   for (const a of schema.args ?? []) {
@@ -151,7 +151,7 @@ export function getFlagMap(entry: string, section: string): Map<string, string> 
  * 将 key（下划线命名）转换为 CLI flag（kebab-case）。
  * Convert key (snake_case) to CLI flag (kebab-case).
  */
-export function keyToFlag(key: string, schema: CliSchema): string {
+export function keyToFlag(key: string, _schema: CliSchema): string {
   return `--${key.replace(/_/g, '-')}`
 }
 

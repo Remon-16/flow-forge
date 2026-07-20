@@ -1,61 +1,18 @@
 // CLI 参数 schema 类型定义与查询函数（studio 端）。
 // CLI argument schema type definitions and query functions (studio side).
 //
-// 从 shared/schemas/cli/*.json 读取参数定义，与 Python 端 shared/py/flow_forge_schemas/cli.py
-// 保持同步。新增参数时只需修改 JSON schema。
-// Reads from shared/schemas/cli/*.json; kept in sync with Python cli.py.
+// 从 @flow-forge-schemas 共享包导入 schema 数据和类型定义，
+// 与 Python 端 shared/py/flow_forge_schemas/cli.py 保持同步。
+// 新增参数时只需修改 shared/schemas/cli/*.json。
+// Schema data and types imported from @flow-forge-schemas shared package,
+// kept in sync with Python side cli.py.
 // Only JSON schemas need to be edited when adding/removing args.
 
-import agentCli from '../../../shared/schemas/cli/agent.json'
-import executorCli from '../../../shared/schemas/cli/executor.json'
-import converterCli from '../../../shared/schemas/cli/converter.json'
+import type { CliSchema } from '@flow-forge-schemas'
+import { CLI_SCHEMAS } from '@flow-forge-schemas'
 
-// ============================================================================
-// 类型定义 / Type definitions
-// ============================================================================
-
-/** 单个 CLI 参数定义 / Single CLI argument definition */
-export interface CliArgDef {
-  flag: string
-  short: string | null
-  dest: string
-  type: string
-  choices?: string[]
-  nargs?: string
-  default?: unknown
-  required?: boolean
-  help_zh: string
-  help_en: string
-  section?: string | null
-  studio: { editable: boolean; field_type?: string }
-}
-
-/** 子命令定义 / Subcommand definition */
-export interface SubcommandDef {
-  description_zh: string
-  description_en: string
-  args: CliArgDef[]
-}
-
-/** CLI Schema 顶层结构 / CLI Schema top-level structure */
-export interface CliSchema {
-  entry: string
-  description_zh: string
-  description_en: string
-  flag_style: string
-  args?: CliArgDef[]
-  subcommands?: Record<string, SubcommandDef>
-}
-
-// ============================================================================
-// Schema 注册表 / Schema registry
-// ============================================================================
-
-const SCHEMAS: Record<string, CliSchema> = {
-  agent: agentCli as CliSchema,
-  executor: executorCli as CliSchema,
-  converter: converterCli as CliSchema,
-}
+// 本地别名，与原有函数签名兼容 / Local alias for backward-compatible function signatures
+const SCHEMAS = CLI_SCHEMAS
 
 // ============================================================================
 // 查询函数 / Query functions

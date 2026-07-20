@@ -52,7 +52,7 @@ export interface PlanSections {
  *  章节标题由 SECTION_HEADINGS 统一管理，LLM 不再生成。
  *  Section headings are managed by SECTION_HEADINGS; LLM no longer generates them. */
 
-import sectionHeadingsData from '../../schemas/section_headings.json'
+import sectionHeadingsData from '../schemas/section_headings.json'
 
 /** 跨语言 section 章节标题 / Cross-language section headings */
 export const SECTION_HEADINGS: Record<string, Record<string, string>> = sectionHeadingsData.headings
