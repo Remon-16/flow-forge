@@ -21,7 +21,7 @@ import { joinPath } from '../../utils/path-utils'
 import type { PlanSections } from '@flow-forge-schemas'
 import { assemblePlanMd } from '@flow-forge-schemas'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const settings = useSettingsStore()
 
 const props = defineProps<{
@@ -197,6 +197,7 @@ function handleEditAnnotation(idx: number) {
   if (!ann) return
   dialogSelectedText.value = ann.selected_text
   dialogLineNumber.value = ann.line_number
+  dialogChunkId.value = ann.chunk_id || ''
   dialogExistingComment.value = ann.review_comment
   editingIndex.value = idx
   dialogVisible.value = true
@@ -237,13 +238,22 @@ function handleChunkClick(chunkId: string) {
   if (!planSections.value) return
   // 查找 chunk 数据 / Look up chunk data
   let chunk: { content: string; mermaid?: string } | null = null
-  const apiSec = planSections.value.single_api?.find(s => s.chunk_id === chunkId)
-  if (apiSec) {
-    chunk = { content: apiSec.content || '', mermaid: undefined }
-  } else {
-    const bizSec = planSections.value.biz_flows?.find(s => s.chunk_id === chunkId)
-    if (bizSec) {
-      chunk = { content: bizSec.content || '', mermaid: bizSec.mermaid || '' }
+
+  // 检查 business_understanding（GlobalSection）/ Check business_understanding (GlobalSection)
+  const bu = planSections.value.business_understanding
+  if (bu && (bu.chunk_id === chunkId || chunkId === 'business_understanding')) {
+    chunk = { content: bu.content || '', mermaid: undefined }
+  }
+
+  if (!chunk) {
+    const apiSec = planSections.value.single_api?.find(s => s.chunk_id === chunkId)
+    if (apiSec) {
+      chunk = { content: apiSec.content || '', mermaid: undefined }
+    } else {
+      const bizSec = planSections.value.biz_flows?.find(s => s.chunk_id === chunkId)
+      if (bizSec) {
+        chunk = { content: bizSec.content || '', mermaid: bizSec.mermaid || '' }
+      }
     }
   }
   if (!chunk) return
@@ -276,14 +286,21 @@ function closeEditor() {
 async function saveEditor() {
   if (!planSections.value || !selectedChunkId.value || !props.memoryDir) return
   // 更新 planSections / Update planSections
-  const apiSec = planSections.value.single_api?.find(s => s.chunk_id === selectedChunkId.value)
-  if (apiSec) {
-    apiSec.content = editingContent.value
+
+  // 检查 business_understanding（GlobalSection）/ Check business_understanding (GlobalSection)
+  const bu = planSections.value.business_understanding
+  if (bu && (bu.chunk_id === selectedChunkId.value || selectedChunkId.value === 'business_understanding')) {
+    bu.content = editingContent.value
   } else {
-    const bizSec = planSections.value.biz_flows?.find(s => s.chunk_id === selectedChunkId.value)
-    if (bizSec) {
-      bizSec.content = editingContent.value
-      bizSec.mermaid = editingMermaid.value
+    const apiSec = planSections.value.single_api?.find(s => s.chunk_id === selectedChunkId.value)
+    if (apiSec) {
+      apiSec.content = editingContent.value
+    } else {
+      const bizSec = planSections.value.biz_flows?.find(s => s.chunk_id === selectedChunkId.value)
+      if (bizSec) {
+        bizSec.content = editingContent.value
+        bizSec.mermaid = editingMermaid.value
+      }
     }
   }
   // 重新组装 planContent 刷新预览 / Reassemble planContent to refresh preview
@@ -352,6 +369,7 @@ function onPreviewWheel(e: WheelEvent) {
       <div class="sidebar-toggle" @click="sidebarVisible = !sidebarVisible" :title="sidebarVisible ? t('annotator.closeSidebar') : t('annotator.openSidebar')">
         <CaretLeftOutlined v-if="sidebarVisible" />
         <CaretRightOutlined v-else />
+        <span v-if="!sidebarVisible" class="toggle-label">{{ t('annotator.sidebarTitle') }}</span>
       </div>
       <div class="annotator-preview-wrapper" :style="{ zoom: settings.zoom }">
         <MarkdownPreview
@@ -360,6 +378,7 @@ function onPreviewWheel(e: WheelEvent) {
           :annotations="annotations"
           :show-line-numbers="settings.showLineNumbers"
           :sections="planSections"
+          :language="locale"
           @add-annotation="handleAddAnnotation"
           @edit-annotation="handleEditAnnotation"
           @delete-annotation="handleDeleteAnnotation"
@@ -376,6 +395,7 @@ function onPreviewWheel(e: WheelEvent) {
       >
         <CaretRightOutlined v-if="editorVisible" />
         <CaretLeftOutlined v-else />
+        <span v-if="!editorVisible" class="toggle-label">{{ t('annotator.editorPanelTitle') }}</span>
       </div>
 
       <!-- 右侧内联 Chunk 编辑器 / Right inline chunk editor -->
@@ -385,12 +405,15 @@ function onPreviewWheel(e: WheelEvent) {
           @mousedown="rightEditorSplitter.onDividerMousedown"
         />
         <div class="chunk-editor-panel" :style="{ width: rightEditorSplitter.size.value + 'px' }">
+          <!-- 面板标题（始终显示）/ Panel header (always visible) -->
+          <div class="chunk-editor-header">
+            <span class="chunk-editor-title">
+              {{ selectedChunkId ? t('annotator.editChunk') + ': ' + selectedChunkId : t('annotator.editorPanelTitle') }}
+            </span>
+            <a-button size="small" type="text" @click="closeEditor">✕</a-button>
+          </div>
           <!-- 已选中 chunk：显示编辑器 / Chunk selected: show editor -->
           <template v-if="selectedChunkId">
-            <div class="chunk-editor-header">
-              <span class="chunk-editor-title">{{ t('annotator.editChunk') }}: {{ selectedChunkId }}</span>
-              <a-button size="small" type="text" @click="closeEditor">✕</a-button>
-            </div>
             <div class="chunk-editor-body">
               <label>{{ t('annotator.content') }} (Markdown)</label>
               <a-textarea v-model:value="editingContent" :rows="12" />
@@ -418,6 +441,7 @@ function onPreviewWheel(e: WheelEvent) {
       :visible="dialogVisible"
       :selected-text="dialogSelectedText"
       :line-number="dialogLineNumber"
+      :chunk-id="dialogChunkId"
       :existing-comment="dialogExistingComment"
       @save="handleDialogSave"
       @close="handleDialogClose"
@@ -470,9 +494,12 @@ function onPreviewWheel(e: WheelEvent) {
 }
 .sidebar-toggle {
   display: flex;
+  flex-direction: column;   /* 竖向排列：图标在上，标签在下 / vertical layout: icon on top, label below */
   align-items: center;
   justify-content: center;
-  width: 22px;              /* 加宽，更容易点击 / wider for easier click */
+  gap: 4px;
+  min-width: 22px;          /* 最小宽度，允许标签文字撑开 / minimum width, allows label to expand */
+  padding: 4px 2px;
   cursor: pointer;
   background: #f0f0f0;      /* 略微区别于预览区 / slightly different from preview */
   border-left: 1px solid #d9d9d9;
@@ -487,13 +514,26 @@ function onPreviewWheel(e: WheelEvent) {
   background: #e6f4ff;
   color: #1677ff;
 }
+/* 竖向文字标签 / Vertical text label */
+.sidebar-toggle .toggle-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: #888;
+  line-height: 1.2;
+}
 
 /* 右侧编辑器切换按钮，对称于 sidebar-toggle / Right editor toggle, mirrors sidebar-toggle */
 .editor-toggle {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  gap: 4px;
+  min-width: 22px;
+  padding: 4px 2px;
   cursor: pointer;
   background: #f0f0f0;
   border-left: 1px solid #d9d9d9;
@@ -508,11 +548,20 @@ function onPreviewWheel(e: WheelEvent) {
   background: #e6f4ff;
   color: #1677ff;
 }
+.editor-toggle .toggle-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: #888;
+  line-height: 1.2;
+}
 
 .annotator-preview-wrapper {
   flex: 1;
   min-width: 0;             /* 允许 flex 收缩至 0 / allow flex shrink to 0 */
-  overflow: hidden auto;    /* x: hidden 防止水平溢出, y: auto / x: hidden prevent horizontal overflow */
+  overflow: auto;           /* 允许横向滚动，小分辨率下避免内容被遮挡 / allow horizontal scroll to avoid content clipping on small screens */
   background: #fff;
   position: relative;
 }

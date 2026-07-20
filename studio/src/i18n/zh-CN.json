@@ -250,7 +250,10 @@
     "mermaid": "Mermaid 流程图",
     "openEditor": "打开块编辑器",
     "closeEditor": "关闭块编辑器",
-    "doubleClickToEdit": "双击左侧预览区的 section 块以编辑其内容"
+    "sidebarTitle": "批注列表",
+    "editorPanelTitle": "块编辑器",
+    "doubleClickToEdit": "双击左侧预览区的 section 块以编辑其内容",
+    "chunkId": "块 ID"
   },
   "search": {
     "find": "查找",

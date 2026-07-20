@@ -29,6 +29,11 @@ function previewText(comment: string): string {
 
 <template>
   <div class="annotation-sidebar">
+    <!-- 侧边栏面板标题 / Sidebar panel title -->
+    <div class="sidebar-panel-header">
+      {{ t('annotator.sidebarTitle') }}
+    </div>
+
     <!-- Current Annotations -->
     <div class="sidebar-section">
       <div class="sidebar-section-header">
@@ -102,6 +107,17 @@ function previewText(comment: string): string {
   background: #fafafa;
   display: flex;
   flex-direction: column;
+}
+
+/* 面板标题 / Panel header */
+.sidebar-panel-header {
+  padding: 10px 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #222;
+  border-bottom: 1px solid #e8e8e8;
+  background: #f5f5f5;
+  flex-shrink: 0;
 }
 
 .sidebar-section {

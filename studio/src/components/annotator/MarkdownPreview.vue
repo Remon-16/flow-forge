@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import MarkdownIt from 'markdown-it'
 import mermaid from 'mermaid'
 import type { PlanSections } from '@flow-forge-schemas'
+import { SECTION_HEADINGS } from '@flow-forge-schemas'
 
 export interface AnnotationData {
   line_number: number
@@ -18,6 +19,8 @@ const props = defineProps<{
   showLineNumbers?: boolean
   /** plan_sections.json 数据，用于 chunk_id 关联 / plan_sections.json data for chunk_id association */
   sections?: PlanSections | null
+  /** 语言代码，用于章节标题 / Language code for section headings */
+  language?: string
 }>()
 
 const emit = defineEmits<{
@@ -35,6 +38,7 @@ const contextMenuX = ref(0)
 const contextMenuY = ref(0)
 const selectedText = ref('')
 const selectedLineNumber = ref(0)
+const selectedChunkId = ref<string | undefined>(undefined)  // 在 onContextMenu 中提前捕获，避免 selection 失效 / captured early in onContextMenu to avoid stale selection
 
 // Annotation popover state
 const annotationPopoverVisible = ref(false)
@@ -195,25 +199,47 @@ function renderFromSections(sections: PlanSections): string {
     chunkId: string
   }
   const sectionTexts: SectionText[] = []
+  const lang = props.language || 'zh-CN'
+  const h = SECTION_HEADINGS
 
+  // 业务理解 / Business understanding
   const buSection = sections.business_understanding
   const buText = buSection?.content?.trim() || ''
   if (buText) {
-    sectionTexts.push({ text: buText, chunkId: buSection?.chunk_id || 'business_understanding' })
+    const heading = h.business_understanding?.[lang] || ''
+    const fullText = heading ? heading + '\n\n' + buText : buText
+    sectionTexts.push({ text: fullText, chunkId: buSection?.chunk_id || 'business_understanding' })
   }
 
+  // 单接口测试（仅首个 section 前加标题）/ Single API (heading only before first section)
+  let isFirstApi = true
   for (const sec of sections.single_api) {
     const c = sec.content?.trim()
-    if (c) sectionTexts.push({ text: c, chunkId: sec.chunk_id })
+    if (c) {
+      let fullText = c
+      if (isFirstApi) {
+        const heading = h.single_api?.[lang] || ''
+        if (heading) fullText = heading + '\n\n' + c
+        isFirstApi = false
+      }
+      // 添加 fallback：优先 chunk_id，其次 key / Fallback: chunk_id first, then key
+      sectionTexts.push({ text: fullText, chunkId: sec.chunk_id || sec.key || '' })
+    }
   }
 
+  // 业务链路测试（仅首个 section 前加标题，文本在前流程图在后）/ Biz flows (heading only before first, content before mermaid)
+  let isFirstBiz = true
   for (const sec of sections.biz_flows) {
     const parts: string[] = []
-    // 文本在前，流程图在后 / content first, mermaid last
+    if (isFirstBiz) {
+      const heading = h.biz_flows?.[lang] || ''
+      if (heading) parts.push(heading)
+      isFirstBiz = false
+    }
     if (sec.content?.trim()) parts.push(sec.content.trim())
     if (sec.mermaid?.trim()) parts.push(sec.mermaid.trim())
     if (parts.length) {
-      sectionTexts.push({ text: parts.join('\n\n'), chunkId: sec.chunk_id })
+      sectionTexts.push({ text: parts.join('\n\n'), chunkId: sec.chunk_id || sec.key || '' })
     }
   }
 
@@ -241,7 +267,7 @@ function renderFromSections(sections: PlanSections): string {
     const rendered = md.render(block.content)
     const isFirst = block.chunkId !== prevChunkId
     prevChunkId = block.chunkId
-    const chunkAttr = ` data-chunk-id="${block.chunkId}"`
+    const chunkAttr = block.chunkId ? ` data-chunk-id="${block.chunkId}"` : ''
     const firstAttr = isFirst ? ' data-first-of-chunk="true"' : ''
     return `<div data-source-line="${block.startLine}"${chunkAttr}${firstAttr} class="md-block">${rendered}</div>`
   }).join('\n')
@@ -349,7 +375,7 @@ function findChunkId(): string | undefined {
   while (node && node !== previewRef.value) {
     if (node instanceof Element) {      /* Element 同时兼容 HTMLElement 和 SVGElement / Element covers both HTMLElement and SVGElement */
       const chunkId = (node as HTMLElement).dataset?.chunkId
-      if (chunkId !== undefined) return chunkId  /* 仅跳过未设置属性，允许空字符串 / only skip unset, allow empty string */
+      if (chunkId) return chunkId  /* 跳过空字符串和 未设置属性 / skip empty string and unset */
     }
     node = node.parentNode
   }
@@ -373,6 +399,8 @@ function onContextMenu(e: MouseEvent) {
   e.preventDefault()
   selectedText.value = text
   selectedLineNumber.value = findLineNumber()
+  // 在 selection 有效时立即捕获 chunk_id / Capture chunk_id immediately while selection is valid
+  selectedChunkId.value = findChunkId()
   contextMenuX.value = e.clientX
   contextMenuY.value = e.clientY
   contextMenuVisible.value = true
@@ -380,9 +408,10 @@ function onContextMenu(e: MouseEvent) {
 
 function handleAddAnnotation() {
   contextMenuVisible.value = false
-  // DOM 遍历获取 chunk_id（无需文本参数）/ DOM traversal to get chunk_id (no text parameter needed)
-  const chunkId = findChunkId()
-  emit('add-annotation', selectedText.value, selectedLineNumber.value, chunkId)
+  // 使用 onContextMenu 中存储的 chunk_id，避免重新读取已失效的 selection
+  // Use stored chunk_id from onContextMenu to avoid re-reading a stale selection
+  emit('add-annotation', selectedText.value, selectedLineNumber.value, selectedChunkId.value)
+  selectedChunkId.value = undefined  // 重置 / reset
 }
 
 function onMarkdownClick(e: MouseEvent) {
