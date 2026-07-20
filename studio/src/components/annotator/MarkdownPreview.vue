@@ -403,13 +403,22 @@ function onMarkdownClick(e: MouseEvent) {
       }
     }
   }
-  // 点击非批注区域：查找所属 block 并发射 chunk-click / Click on non-annotation area: find parent block and emit chunk-click
+  annotationPopoverVisible.value = false
+  contextMenuVisible.value = false
+}
+
+/** 双击 md-block 打开右侧 chunk 编辑器。
+ *  Double-click md-block to open right chunk editor.
+ *  与单击不同，双击是更明确的 "编辑" 意图，避免浏览时误触发。
+ *  Unlike single-click, double-click is a clearer "edit" intent, preventing accidental triggers. */
+function onMarkdownDblClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  // 双击批注标记时不触发 chunk 编辑 / Don't trigger chunk edit on annotation double-click
+  if (target.closest('mark.annotated')) return
   const block = target.closest('.md-block') as HTMLElement | null
   if (block?.dataset?.chunkId) {
     emit('chunk-click', block.dataset.chunkId)
   }
-  annotationPopoverVisible.value = false
-  contextMenuVisible.value = false
 }
 
 function openAnnotationPopover(idx: number, markEl: HTMLElement) {
@@ -466,6 +475,7 @@ defineExpose({ scrollToAnnotation })
       v-html="renderedHtml"
       @contextmenu="onContextMenu"
       @click="onMarkdownClick"
+      @dblclick="onMarkdownDblClick"
     />
 
     <!-- Annotation click popover -->

@@ -463,7 +463,8 @@ function onPreviewWheel(e: WheelEvent) {
 }
 .annotator-preview-wrapper {
   flex: 1;
-  overflow-y: auto;
+  min-width: 0;             /* 允许 flex 收缩至 0 / allow flex shrink to 0 */
+  overflow: hidden auto;    /* x: hidden 防止水平溢出, y: auto / x: hidden prevent horizontal overflow */
   background: #fff;
   position: relative;
 }
