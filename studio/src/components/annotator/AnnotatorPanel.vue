@@ -6,12 +6,15 @@
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
+import { CaretLeftOutlined, CaretRightOutlined } from '@ant-design/icons-vue'
 import MarkdownPreview from './MarkdownPreview.vue'
 import AnnotationSidebar from './AnnotationSidebar.vue'
 import AnnotationDialog from './AnnotationDialog.vue'
 import type { AnnotationData } from './MarkdownPreview.vue'
 import type { HistoryGroup } from './AnnotationSidebar.vue'
 import HistoryAnnotationViewer from './HistoryAnnotationViewer.vue'
+import ResizableDivider from '../layout/ResizableDivider.vue'
+import { useSplitter } from '../../composables/useSplitter'
 import { readFile, listDirectoryAll, exists, writeFile } from '../../utils/desktop-bridge'
 import { useSettingsStore } from '../../stores/settings'
 import { joinPath } from '../../utils/path-utils'
@@ -28,12 +31,26 @@ const props = defineProps<{
   memoryDir: string
   /** 是否显示内嵌工具栏 */
   showToolbar?: boolean
+  /** 左侧边栏默认可见性 / Default visibility for left sidebar */
+  defaultSidebarVisible?: boolean
 }>()
 
 const emit = defineEmits<{
   updateAnnotations: [annotations: AnnotationData[]]
   annotationActivity: []
 }>()
+
+// 左侧边栏可见性 / Left sidebar visibility
+const sidebarVisible = ref(props.defaultSidebarVisible !== false)
+
+// 左侧边栏拖拽调整宽度 / Left sidebar resizable width
+const leftSplitter = useSplitter({
+  direction: 'vertical',
+  defaultSize: 280,
+  minSize: 180,
+  maxSize: 500,
+  reverse: false,
+})
 
 // 计划内容和 sections / Plan content and sections
 const planContent = ref('')
@@ -57,6 +74,27 @@ const historyViewerAnnotations = ref<AnnotationData[]>([])
 
 // MarkdownPreview ref for scrolling
 const previewRef = ref<InstanceType<typeof MarkdownPreview> | null>(null)
+
+// 内联 chunk 编辑器状态 / Inline chunk editor state
+const selectedChunkId = ref('')
+const editorVisible = ref(false)
+const editingContent = ref('')
+const editingMermaid = ref('')
+
+// 判断选中的 chunk 是否为 biz 类型 / Check if selected chunk is biz type
+const selectedChunkIsBiz = computed(() => {
+  if (!planSections.value || !selectedChunkId.value) return false
+  return planSections.value.biz_flows?.some(s => s.chunk_id === selectedChunkId.value) || false
+})
+
+// 右侧编辑器拖拽调整宽度 / Right editor resizable width
+const rightEditorSplitter = useSplitter({
+  direction: 'vertical',
+  defaultSize: 450,
+  minSize: 300,
+  maxSize: 900,
+  reverse: true,
+})
 
 const zoomPercent = computed(() => Math.round(settings.zoom * 100) + '%')
 
@@ -196,6 +234,63 @@ function handleViewHistory(group: HistoryGroup) {
   historyViewerVisible.value = true
 }
 
+// 内联编辑器：点击 chunk block 打开编辑器 / Inline editor: open on chunk block click
+function handleChunkClick(chunkId: string) {
+  if (!planSections.value) return
+  // 查找 chunk 数据 / Look up chunk data
+  let chunk: { content: string; mermaid?: string } | null = null
+  const apiSec = planSections.value.single_api?.find(s => s.chunk_id === chunkId)
+  if (apiSec) {
+    chunk = { content: apiSec.content || '', mermaid: undefined }
+  } else {
+    const bizSec = planSections.value.biz_flows?.find(s => s.chunk_id === chunkId)
+    if (bizSec) {
+      chunk = { content: bizSec.content || '', mermaid: bizSec.mermaid || '' }
+    }
+  }
+  if (!chunk) return
+
+  selectedChunkId.value = chunkId
+  editingContent.value = chunk.content
+  editingMermaid.value = chunk.mermaid || ''
+  editorVisible.value = true
+}
+
+// 关闭编辑器 / Close editor
+function closeEditor() {
+  editorVisible.value = false
+  selectedChunkId.value = ''
+  editingContent.value = ''
+  editingMermaid.value = ''
+}
+
+// 保存编辑器内容 / Save editor content
+async function saveEditor() {
+  if (!planSections.value || !selectedChunkId.value || !props.memoryDir) return
+  // 更新 planSections / Update planSections
+  const apiSec = planSections.value.single_api?.find(s => s.chunk_id === selectedChunkId.value)
+  if (apiSec) {
+    apiSec.content = editingContent.value
+  } else {
+    const bizSec = planSections.value.biz_flows?.find(s => s.chunk_id === selectedChunkId.value)
+    if (bizSec) {
+      bizSec.content = editingContent.value
+      bizSec.mermaid = editingMermaid.value
+    }
+  }
+  // 重新组装 planContent 刷新预览 / Reassemble planContent to refresh preview
+  planContent.value = assemblePlanMd(planSections.value)
+  // 持久化到磁盘 / Persist to disk
+  const sectionsPath = joinPath(props.memoryDir, 'plan_sections.json')
+  try {
+    await writeFile(sectionsPath, JSON.stringify(planSections.value, null, 2))
+    message.success(t('annotator.autoSaved'))
+  } catch (e: any) {
+    message.error(e?.message || 'Failed to save plan sections')
+  }
+  closeEditor()
+}
+
 // 控制器 / Controls
 function zoomIn() { settings.zoomIn() }
 function zoomOut() { settings.zoomOut() }
@@ -228,14 +323,28 @@ function onPreviewWheel(e: WheelEvent) {
 
     <!-- 主内容 / Main content -->
     <div class="annotator-main" @wheel="onPreviewWheel">
-      <AnnotationSidebar
-        :annotations="annotations"
-        :history-groups="historyGroups"
-        @edit="handleEditAnnotation"
-        @delete="handleDeleteAnnotation"
-        @scroll-to="handleScrollTo"
-        @view-history="handleViewHistory"
-      />
+      <!-- 左侧边栏（可折叠 + 可拖拽宽度）/ Left sidebar (collapsible + resizable) -->
+      <template v-if="sidebarVisible">
+        <div class="sidebar-wrapper" :style="{ width: leftSplitter.size.value + 'px' }">
+          <AnnotationSidebar
+            :annotations="annotations"
+            :history-groups="historyGroups"
+            @edit="handleEditAnnotation"
+            @delete="handleDeleteAnnotation"
+            @scroll-to="handleScrollTo"
+            @view-history="handleViewHistory"
+          />
+        </div>
+        <ResizableDivider
+          orientation="vertical"
+          @mousedown="leftSplitter.onDividerMousedown"
+        />
+      </template>
+      <!-- 边栏折叠按钮 / Sidebar toggle button -->
+      <div class="sidebar-toggle" @click="sidebarVisible = !sidebarVisible" :title="sidebarVisible ? t('annotator.closeSidebar') : t('annotator.openSidebar')">
+        <CaretLeftOutlined v-if="sidebarVisible" />
+        <CaretRightOutlined v-else />
+      </div>
       <div class="annotator-preview-wrapper" :style="{ zoom: settings.zoom }">
         <MarkdownPreview
           ref="previewRef"
@@ -246,9 +355,36 @@ function onPreviewWheel(e: WheelEvent) {
           @add-annotation="handleAddAnnotation"
           @edit-annotation="handleEditAnnotation"
           @delete-annotation="handleDeleteAnnotation"
+          @chunk-click="handleChunkClick"
         />
         <div v-if="autoSaveStatus" class="autosave-indicator">{{ autoSaveStatus }}</div>
       </div>
+
+      <!-- 右侧内联 Chunk 编辑器 / Right inline chunk editor -->
+      <template v-if="editorVisible && selectedChunkId">
+        <ResizableDivider
+          orientation="vertical"
+          @mousedown="rightEditorSplitter.onDividerMousedown"
+        />
+        <div class="chunk-editor-panel" :style="{ width: rightEditorSplitter.size.value + 'px' }">
+          <div class="chunk-editor-header">
+            <span class="chunk-editor-title">{{ t('annotator.editChunk') }}: {{ selectedChunkId }}</span>
+            <a-button size="small" type="text" @click="closeEditor">✕</a-button>
+          </div>
+          <div class="chunk-editor-body">
+            <label>{{ t('annotator.content') }} (Markdown)</label>
+            <a-textarea v-model:value="editingContent" :rows="12" />
+            <template v-if="selectedChunkIsBiz">
+              <label style="margin-top: 16px;">{{ t('annotator.mermaid') }}</label>
+              <a-textarea v-model:value="editingMermaid" :rows="8" style="font-family: monospace;" />
+            </template>
+          </div>
+          <div class="chunk-editor-footer">
+            <a-button size="small" @click="closeEditor">{{ t('annotator.cancel') }}</a-button>
+            <a-button size="small" type="primary" @click="saveEditor">{{ t('annotator.save') }}</a-button>
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- Annotation Dialog -->
@@ -301,6 +437,29 @@ function onPreviewWheel(e: WheelEvent) {
   overflow: hidden;
   min-height: 0;
 }
+.sidebar-wrapper {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  cursor: pointer;
+  background: #f5f5f5;
+  border-left: 1px solid #e8e8e8;
+  border-right: 1px solid #e8e8e8;
+  color: #999;
+  font-size: 10px;
+  user-select: none;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-toggle:hover {
+  background: #e6f4ff;
+  color: #1677ff;
+}
 .annotator-preview-wrapper {
   flex: 1;
   overflow-y: auto;
@@ -317,5 +476,45 @@ function onPreviewWheel(e: WheelEvent) {
   padding: 2px 8px;
   border-radius: 4px;
   border: 1px solid #b7eb8f;
+}
+
+/* 内联 Chunk 编辑器 / Inline chunk editor */
+.chunk-editor-panel {
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #e8e8e8;
+  background: #fafafa;
+}
+.chunk-editor-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e8e8e8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.chunk-editor-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+.chunk-editor-body label {
+  display: block;
+  font-weight: 600;
+  font-size: 12px;
+  color: #333;
+  margin-bottom: 4px;
+}
+.chunk-editor-footer {
+  padding: 8px 12px;
+  border-top: 1px solid #e8e8e8;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 </style>

@@ -44,7 +44,8 @@ const reviewMemoryDir = computed(() => {
 })
 
 // 批注器显示/隐藏 / Annotator visibility toggle
-const annotatorVisible = ref(true)
+// 右侧批注器默认关闭，用户通过 QuestionPrompt 按钮手动打开 / Right annotator default closed, user opens via QuestionPrompt button
+const annotatorVisible = ref(false)
 
 // ===================================================================
 // 可拖拽分隔条 / Resizable splitters
@@ -171,6 +172,7 @@ onMounted(async () => {
                 <AnnotatorPanel
                   :memory-dir="reviewMemoryDir"
                   :show-toolbar="true"
+                  :default-sidebar-visible="false"
                 />
               </div>
             </template>

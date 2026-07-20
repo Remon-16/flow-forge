@@ -242,7 +242,12 @@
     "fileName": "File Name",
     "annotationCount": "{count} annotation(s)",
     "selectTextFirst": "Please select text before adding an annotation",
-    "lineNumbers": "Line numbers"
+    "lineNumbers": "Line numbers",
+    "closeSidebar": "Close annotation list",
+    "openSidebar": "Open annotation list",
+    "editChunk": "Edit Chunk",
+    "content": "Content",
+    "mermaid": "Mermaid Diagram"
   },
   "search": {
     "find": "Find",

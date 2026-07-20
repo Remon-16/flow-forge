@@ -40,6 +40,39 @@ export interface PlanSections {
  *  Assemble plan.md from sections (with chunk boundary markers for Studio annotator).
  *  Python 侧对应的 assemble_plan_md() 不含 chunk 标记，仅用于流水线内部组装。
  *  The Python-side assemble_plan_md() omits chunk markers, used only for internal pipeline assembly. */
+
+/** biz section 内容中插入 mermaid 到标题之后 / Insert mermaid after headings in biz content.
+ *  将 mermaid 放在 ##/### 标题行之后而非 content 最前面，
+ *  避免流程图在视觉上出现在标题上方。
+ *  Places mermaid after heading lines, not before them,
+ *  so the diagram renders below the section heading visually. */
+function insertMermaidAfterHeading(content: string, mermaid: string): string {
+  const lines = content.split('\n')
+  // 找到标题块结束位置（连续的 # 开头行）/ Find where heading block ends (consecutive # lines)
+  let headingEnd = 0
+  let foundHeading = false
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim()
+    if (/^#{1,3}\s/.test(trimmed)) {
+      foundHeading = true
+      headingEnd = i + 1
+      // 连续标题行一起处理 / Handle consecutive heading lines together
+      if (i + 1 < lines.length && /^#{1,3}\s/.test(lines[i + 1].trim())) {
+        headingEnd = i + 2
+      }
+      break
+    }
+    headingEnd = i + 1
+  }
+  if (!foundHeading) {
+    // 没有标题行，mermaid 放在最前面 / No heading found, put mermaid first
+    return mermaid + '\n\n' + content
+  }
+  const headingPart = lines.slice(0, headingEnd).join('\n')
+  const restPart = lines.slice(headingEnd).join('\n').trim()
+  return headingPart + '\n\n' + mermaid + (restPart ? '\n\n' + restPart : '')
+}
+
 export function assemblePlanMd(sections: PlanSections): string {
   const parts: string[] = []
   if (sections.business_understanding?.trim()) {
@@ -50,13 +83,30 @@ export function assemblePlanMd(sections: PlanSections): string {
       parts.push(`<!-- chunk:${sec.chunk_id} -->\n\n` + sec.content.trim())
     }
   }
+  // Biz flows: mermaid 插入标题之后 + 去重 ## 3. 标题 / Insert mermaid after heading + dedup ## 3. headings
+  let isFirstBiz = true
   for (const sec of sections.biz_flows) {
-    const combined: string[] = []
-    if (sec.mermaid?.trim()) combined.push(sec.mermaid.trim())
-    if (sec.content?.trim()) combined.push(sec.content.trim())
-    if (combined.length) {
-      parts.push(`<!-- chunk:${sec.chunk_id} -->\n\n` + combined.join('\n\n'))
+    let content = sec.content?.trim() || ''
+    const mermaid = sec.mermaid?.trim() || ''
+    if (!content && !mermaid) continue
+
+    // 标题去重：仅第一个 biz section 保留 "## 3. 业务流程测试"
+    // Heading dedup: only first biz section keeps "## 3. Business Process Testing"
+    if (!isFirstBiz) {
+      content = content.replace(/^##\s+3\.\s+[^\n]*\n+/m, '')
     }
+    isFirstBiz = false
+
+    // Mermaid 插入到标题行之后，而非 content 最前面
+    // Insert mermaid after heading lines, not before content
+    let assembled: string
+    if (mermaid) {
+      assembled = insertMermaidAfterHeading(content, mermaid)
+    } else {
+      assembled = content
+    }
+
+    parts.push(`<!-- chunk:${sec.chunk_id} -->\n\n` + assembled.trim())
   }
   return parts.join('\n\n')
 }

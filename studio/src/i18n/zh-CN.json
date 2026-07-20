@@ -242,7 +242,12 @@
     "fileName": "文件名",
     "annotationCount": "{count} 条批注",
     "selectTextFirst": "请先选中文本再添加批注",
-    "lineNumbers": "行号"
+    "lineNumbers": "行号",
+    "closeSidebar": "关闭批注列表",
+    "openSidebar": "打开批注列表",
+    "editChunk": "编辑块",
+    "content": "内容",
+    "mermaid": "Mermaid 流程图"
   },
   "search": {
     "find": "查找",

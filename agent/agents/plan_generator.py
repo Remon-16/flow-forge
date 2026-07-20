@@ -322,15 +322,21 @@ class PlanGenerator(BaseAgent):
         # ====================================================================
         # Phase D: 拼接 plan.md / Assemble plan.md
         # ====================================================================
+        from flow_forge_schemas.plan_sections import _insert_mermaid_after_heading
+
         parts: List[str] = [global_context]
 
         for group in api_groups:
-            section_key = f"api_{group.get('group_name', '')}"
-            if section_key in api_sections:
+            # 使用 chunk_id 作为 section_key（优先），兜底用 group_name
+            # Use chunk_id as section_key (preferred), fallback to group_name
+            section_key = group.get("chunk_id", "") or f"api_{group.get('group_name', '')}"
+            if section_key and section_key in api_sections:
                 parts.append(api_sections[section_key])
 
-        # Biz sections: 每项含 content 和 mermaid，组装时 prepend mermaid
-        # Biz sections: each has content and mermaid; prepend mermaid when assembling
+        # Biz sections: mermaid 插入标题之后 + 去重 ## 3. 标题
+        # Biz sections: insert mermaid after heading + dedup ## 3. headings
+        import re
+        is_first_biz = True
         for section_key in sorted(biz_sections.keys()):
             entry = biz_sections[section_key]
             if isinstance(entry, dict):
@@ -339,9 +345,18 @@ class PlanGenerator(BaseAgent):
                 mermaids_dict = entry.get("mermaids", {})
                 mermaid_parts = [m.strip() for m in mermaids_dict.values() if m and m.strip()]
                 combined_mermaid = "\n\n".join(mermaid_parts)
-                if combined_mermaid:
-                    parts.append(combined_mermaid + "\n\n" + content)
-                else:
+
+                # 标题去重 / heading dedup
+                if not is_first_biz:
+                    content = re.sub(r"^##\s+3\.\s+[^\n]*\n+", "", content.strip())
+                is_first_biz = False
+
+                if combined_mermaid and content.strip():
+                    assembled = _insert_mermaid_after_heading(content, combined_mermaid)
+                    parts.append(assembled.strip())
+                elif combined_mermaid:
+                    parts.append(combined_mermaid)
+                elif content:
                     parts.append(content)
             else:
                 parts.append(entry)

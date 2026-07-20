@@ -130,7 +130,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
       <!-- Annotator -->
       <AnnotatorPanel
         v-else
-        :plan-content="planContent"
         :memory-dir="directoryPath"
         :show-toolbar="false"
       />

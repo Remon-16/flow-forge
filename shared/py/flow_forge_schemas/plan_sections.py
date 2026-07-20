@@ -107,13 +107,49 @@ def delete_section_by_key(sections: PlanSections, key: str) -> bool:
     return False
 
 
+def _insert_mermaid_after_heading(content: str, mermaid: str) -> str:
+    """将 mermaid 插入到 content 的标题行之后。
+
+    Insert mermaid after heading lines in content.
+    避免流程图在视觉上出现在 section 标题上方。
+    Prevents the diagram from visually appearing above the section heading.
+    """
+    import re
+
+    lines = content.split("\n")
+    heading_end = 0
+    found_heading = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if re.match(r"^#{1,3}\s", stripped):
+            found_heading = True
+            heading_end = i + 1
+            # 连续的标题行一起处理 / Handle consecutive heading lines
+            if i + 1 < len(lines) and re.match(r"^#{1,3}\s", lines[i + 1].strip()):
+                heading_end = i + 2
+            break
+        heading_end = i + 1
+
+    if not found_heading:
+        return mermaid + "\n\n" + content
+
+    heading_part = "\n".join(lines[:heading_end])
+    rest_part = "\n".join(lines[heading_end:]).strip()
+    result = heading_part + "\n\n" + mermaid
+    if rest_part:
+        result += "\n\n" + rest_part
+    return result
+
+
 def assemble_plan_md(sections: PlanSections) -> str:
     """从 PlanSections 组装 plan.md 字符串。
 
     Assemble a plan.md string from PlanSections.
-    对 biz_flows 的每个 section，在 content 前 prepend mermaid。
-    For each biz_flows section, prepend mermaid before content.
+    biz_flows: mermaid 插入标题之后 + 去重 ## 3. 标题。
+    biz_flows: insert mermaid after heading + dedup ## 3. headings.
     """
+    import re
+
     parts: List[str] = []
 
     bu = sections.get("business_understanding", "")
@@ -125,15 +161,28 @@ def assemble_plan_md(sections: PlanSections) -> str:
         if content and content.strip():
             parts.append(content.strip())
 
+    is_first_biz = True
     for sec in sections.get("biz_flows", []):
         content = sec.get("content", "")
         mermaid = sec.get("mermaid", "")
-        combined_parts = []
-        if mermaid and mermaid.strip():
-            combined_parts.append(mermaid.strip())
-        if content and content.strip():
-            combined_parts.append(content.strip())
-        if combined_parts:
-            parts.append("\n\n".join(combined_parts))
+        if not content.strip() and not mermaid.strip():
+            continue
+
+        # 标题去重：仅第一个 biz section 保留 "## 3. 业务流程测试"
+        # Heading dedup: only first biz section keeps the ## 3. heading
+        if not is_first_biz:
+            content = re.sub(r"^##\s+3\.\s+[^\n]*\n+", "", content.strip())
+        is_first_biz = False
+
+        content = content.strip()
+        mermaid = mermaid.strip()
+
+        if mermaid and content:
+            assembled = _insert_mermaid_after_heading(content, mermaid)
+            parts.append(assembled.strip())
+        elif mermaid:
+            parts.append(mermaid)
+        elif content:
+            parts.append(content)
 
     return "\n\n".join(parts)

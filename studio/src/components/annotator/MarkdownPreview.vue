@@ -24,6 +24,8 @@ const emit = defineEmits<{
   'add-annotation': [selectedText: string, lineNumber: number, chunkId?: string]
   'edit-annotation': [index: number]
   'delete-annotation': [index: number]
+  /** 用户点击某个 chunk block 时发射 / Emitted when user clicks a chunk block */
+  'chunk-click': [chunkId: string]
 }>()
 
 const { t } = useI18n()
@@ -44,7 +46,9 @@ const activeAnnotation = computed(() => {
   return props.annotations[activeAnnotationIdx.value]
 })
 
-const md = new MarkdownIt({ html: true, breaks: true })
+// html: false 防止内容中的 HTML 标签（如 <script>）被浏览器解释导致截断
+// html: false prevents HTML tags in content (e.g. <script>) from being interpreted by the browser
+const md = new MarkdownIt({ html: false, breaks: true })
 
 // --- Mermaid initialization ---
 mermaid.initialize({ startOnLoad: false, theme: 'default' })
@@ -170,9 +174,87 @@ function applyAnnotationHighlights(html: string, annotations: AnnotationData[]):
   return doc.body.innerHTML
 }
 
-const renderedHtml = computed(() => {
-  // 先提取 chunk 边界标记 / Extract chunk boundary markers first
-  let markdown = props.planContent
+/** 从 PlanSections 数据直接构建 block 列表并渲染。
+ *  Build block list directly from PlanSections data and render.
+ *  不再依赖 markdown 中的 <!-- chunk:XXX --> 标记和行号匹配，
+ *  从根本上消除行号偏移导致的 chunk_id 错配问题。
+ *  No longer depends on <!-- chunk:XXX --> markers and line-number matching,
+ *  eliminating chunk_id misattribution caused by line offset. */
+function renderFromSections(sections: PlanSections): string {
+  interface ChunkBlock extends MarkdownBlock {
+    chunkId: string
+  }
+
+  const allBlocks: ChunkBlock[] = []
+  const sectionTexts: string[] = []
+
+  // 按顺序收集各 section 的纯文本（无 marker）/ Collect plain text per section in order
+  const bu = sections.business_understanding?.trim()
+  if (bu) sectionTexts.push(bu)
+
+  for (const sec of sections.single_api) {
+    const c = sec.content?.trim()
+    if (c) sectionTexts.push(c)
+  }
+
+  for (const sec of sections.biz_flows) {
+    const parts: string[] = []
+    if (sec.mermaid?.trim()) parts.push(sec.mermaid.trim())
+    if (sec.content?.trim()) parts.push(sec.content.trim())
+    if (parts.length) sectionTexts.push(parts.join('\n\n'))
+  }
+
+  // 对每个 section 文本独立 splitIntoBlocks，标记 chunk_id
+  // Split each section independently, tag with chunk_id
+  let buDone = false
+  let apiIdx = 0
+  let bizIdx = 0
+  let cumulativeLine = 1
+
+  for (const text of sectionTexts) {
+    // 确定该文本属于哪个 chunk / Determine which chunk this text belongs to
+    let chunkId = ''
+    if (!buDone) {
+      chunkId = '__global__'
+      buDone = true
+    } else if (apiIdx < (sections.single_api?.length || 0)) {
+      chunkId = sections.single_api[apiIdx].chunk_id
+      apiIdx++
+    } else if (bizIdx < (sections.biz_flows?.length || 0)) {
+      chunkId = sections.biz_flows[bizIdx].chunk_id
+      bizIdx++
+    }
+
+    const secBlocks = splitIntoBlocks(text)
+    for (const b of secBlocks) {
+      allBlocks.push({
+        ...b,
+        startLine: cumulativeLine + b.startLine - 1,
+        chunkId,
+      })
+    }
+    // 更新累积行号（包含 section 间分隔的 \n\n）/ Update cumulative line count (includes \n\n separator)
+    cumulativeLine += text.split('\n').length + 2
+  }
+
+  // 渲染 blocks / Render blocks
+  let prevChunkId = ''
+  let html = allBlocks.map(block => {
+    if (!block.content) return ''
+    const rendered = md.render(block.content)
+    const isFirst = block.chunkId !== prevChunkId
+    prevChunkId = block.chunkId
+    const chunkAttr = ` data-chunk-id="${block.chunkId}"`
+    const firstAttr = isFirst ? ' data-first-of-chunk="true"' : ''
+    return `<div data-source-line="${block.startLine}"${chunkAttr}${firstAttr} class="md-block">${rendered}</div>`
+  }).join('\n')
+
+  return applyAnnotationHighlights(html, props.annotations)
+}
+
+/** 旧的 marker 解析方式，作为 sections 不可用时的兜底。
+ *  Old marker-based parsing as fallback when sections is unavailable. */
+function renderFromMarkers(markdown: string): string {
   const chunkMarkers: { line: number; chunkId: string }[] = []
   const markerRegex = /<!--\s*chunk:(\S+)\s*-->/g
   let m: RegExpExecArray | null
@@ -180,22 +262,15 @@ const renderedHtml = computed(() => {
     const lineNum = markdown.substring(0, m.index).split('\n').length
     chunkMarkers.push({ line: lineNum, chunkId: m[1] })
   }
-  // 去除标记，避免渲染到 HTML 中 / Remove markers to avoid rendering
   markdown = markdown.replace(markerRegex, '')
 
   const blocks = splitIntoBlocks(markdown)
-  const markerMap = new Map<number, string>()
-  for (const mk of chunkMarkers) {
-    markerMap.set(mk.line, mk.chunkId)
-  }
-
-  // 找到每个 block 所属的 chunk / Find which chunk each block belongs to
   let currentChunkId = ''
   const sortedMarkers = chunkMarkers.sort((a, b) => a.line - b.line)
+  let prevChunkId = ''
 
   let html = blocks.map(block => {
     if (!block.content) return ''
-    // 更新当前 chunk_id / Update current chunk_id
     for (const mk of sortedMarkers) {
       if (mk.line <= block.startLine) {
         currentChunkId = mk.chunkId
@@ -203,14 +278,21 @@ const renderedHtml = computed(() => {
     }
     const rendered = md.render(block.content)
     const chunkAttr = currentChunkId ? ` data-chunk-id="${currentChunkId}"` : ''
-    const chunkLabel = currentChunkId && props.showLineNumbers
-      ? `<span class="chunk-label" title="${currentChunkId}">${currentChunkId}</span>`
-      : ''
-    return `<div data-source-line="${block.startLine}"${chunkAttr} class="md-block">${chunkLabel}${rendered}</div>`
+    const isFirst = currentChunkId !== prevChunkId
+    prevChunkId = currentChunkId
+    const firstAttr = isFirst ? ' data-first-of-chunk="true"' : ''
+    return `<div data-source-line="${block.startLine}"${chunkAttr}${firstAttr} class="md-block">${rendered}</div>`
   }).join('\n')
 
-  html = applyAnnotationHighlights(html, props.annotations)
-  return html
+  return applyAnnotationHighlights(html, props.annotations)
+}
+
+const renderedHtml = computed(() => {
+  if (props.sections) {
+    return renderFromSections(props.sections)
+  }
+  // 兜底：使用旧的 marker 方式 / Fallback: old marker-based approach
+  return renderFromMarkers(props.planContent)
 })
 
 // Mermaid rendering
@@ -310,6 +392,11 @@ function onMarkdownClick(e: MouseEvent) {
         return
       }
     }
+  }
+  // 点击非批注区域：查找所属 block 并发射 chunk-click / Click on non-annotation area: find parent block and emit chunk-click
+  const block = target.closest('.md-block') as HTMLElement | null
+  if (block?.dataset?.chunkId) {
+    emit('chunk-click', block.dataset.chunkId)
   }
   annotationPopoverVisible.value = false
   contextMenuVisible.value = false
@@ -448,18 +535,26 @@ defineExpose({ scrollToAnnotation })
   pointer-events: none;
 }
 
-/* chunk_id 标签 / chunk_id label — 显示在每块第一行上方 */
-.markdown-preview.show-line-numbers :deep(.chunk-label) {
-  display: block;
-  font-size: 11px;
+/* chunk_id 标签 — 贴纸风格，显示在行号右侧、正文左侧，仅每个 chunk 首块显示
+   chunk_id label — sticker-style between line numbers and content, only on first block of each chunk */
+.markdown-preview.show-line-numbers :deep(.md-block[data-first-of-chunk])::after {
+  content: attr(data-chunk-id);
+  position: absolute;
+  left: -10px;        /* 行号栏右侧、正文左侧 / right of line-number, left of content */
+  top: 0;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 10px;
   color: #1677ff;
   background: #e6f4ff;
-  padding: 1px 8px;
-  border-radius: 3px;
-  margin-bottom: 2px;
-  font-family: 'Consolas', 'Monaco', monospace;
+  padding: 0 6px;
+  border-radius: 2px;
+  line-height: 18px;
   user-select: none;
-  cursor: pointer;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Markdown rendered content styles */
