@@ -7,8 +7,8 @@
   "required": ["business_understanding", "single_api", "biz_flows"],
   "properties": {
     "business_understanding": {
-      "type": "string",
-      "description": "业务理解 markdown 文本 / Business understanding markdown text"
+      "$ref": "#/$defs/globalSection",
+      "description": "业务理解全局章节 / Business understanding global section"
     },
     "single_api": {
       "type": "array",
@@ -22,6 +22,36 @@
     }
   },
   "$defs": {
+    "globalSection": {
+      "type": "object",
+      "description": "业务理解全局章节 / Business understanding global section",
+      "required": ["chunk_id", "key", "type", "name", "content"],
+      "properties": {
+        "chunk_id": {
+          "type": "string",
+          "const": "business_understanding",
+          "description": "唯一标识 / Unique identifier"
+        },
+        "key": {
+          "type": "string",
+          "const": "business_understanding",
+          "description": "与 chunk_id 相同，用于查找 / Same as chunk_id, used for lookup"
+        },
+        "type": {
+          "type": "string",
+          "const": "global",
+          "description": "块类型 / Chunk type"
+        },
+        "name": {
+          "type": "string",
+          "description": "人类可读名称 / Human-readable name"
+        },
+        "content": {
+          "type": "string",
+          "description": "业务理解 markdown 文本 / Business understanding markdown text"
+        }
+      }
+    },
     "apiSection": {
       "type": "object",
       "description": "单接口用例 section / Single API test case section",

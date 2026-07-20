@@ -4,6 +4,15 @@
 // 对应 JSON Schema: shared/schemas/plan_sections.json
 // Corresponding JSON Schema: shared/schemas/plan_sections.json
 
+/** 业务理解全局章节 / Business understanding global section */
+export interface GlobalSection {
+  chunk_id: string         // "business_understanding"
+  key: string              // "business_understanding"
+  type: 'global'
+  name: string             // 人类可读名称 / Human-readable name
+  content: string          // 业务理解 markdown 文本 / Business understanding markdown text
+}
+
 /** 单接口用例 section / Single API test case section */
 export interface ApiSection {
   chunk_id: string
@@ -31,7 +40,7 @@ export interface BizSection {
 
 /** plan_sections.json 顶层结构 / Top-level structure */
 export interface PlanSections {
-  business_understanding: string
+  business_understanding: GlobalSection
   single_api: ApiSection[]
   biz_flows: BizSection[]
 }
@@ -75,8 +84,10 @@ function insertMermaidAfterHeading(content: string, mermaid: string): string {
 
 export function assemblePlanMd(sections: PlanSections): string {
   const parts: string[] = []
-  if (sections.business_understanding?.trim()) {
-    parts.push('<!-- chunk:__global__ -->\n\n' + sections.business_understanding.trim())
+  const buContent = sections.business_understanding?.content?.trim()
+  const buChunkId = sections.business_understanding?.chunk_id || 'business_understanding'
+  if (buContent) {
+    parts.push(`<!-- chunk:${buChunkId} -->\n\n` + buContent)
   }
   for (const sec of sections.single_api) {
     if (sec.content?.trim()) {

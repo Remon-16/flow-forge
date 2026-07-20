@@ -16,6 +16,15 @@ from typing import List, Literal, NotRequired, TypedDict
 # ============================================================================
 
 
+class GlobalSection(TypedDict):
+    """业务理解全局章节 / Business understanding global section."""
+    chunk_id: str                       # "business_understanding"
+    key: str                            # "business_understanding"
+    type: Literal["global"]
+    name: str                           # 人类可读名称 / Human-readable name
+    content: str                        # 业务理解 markdown 文本 / Business understanding markdown text
+
+
 class ApiSection(TypedDict):
     """单接口用例 section / Single API test case section."""
     chunk_id: str
@@ -43,7 +52,7 @@ class BizSection(TypedDict):
 
 class PlanSections(TypedDict):
     """plan_sections.json 的顶层结构 / Top-level structure of plan_sections.json."""
-    business_understanding: str
+    business_understanding: GlobalSection  # 业务理解全局章节 / Business understanding global section
     single_api: List[ApiSection]
     biz_flows: List[BizSection]
 
@@ -78,11 +87,14 @@ def make_biz_section(chunk_id: str, name: str, content: str, mermaid: str) -> Bi
     )
 
 
-def find_section_by_key(sections: PlanSections, key: str) -> ApiSection | BizSection | None:
-    """在 single_api 和 biz_flows 数组中按 key 查找 section。
+def find_section_by_key(sections: PlanSections, key: str) -> ApiSection | BizSection | GlobalSection | None:
+    """在所有 section 中按 key 查找，包括 business_understanding。
 
-    Find a section by key across single_api and biz_flows arrays.
+    Find a section by key across all sections including business_understanding.
     """
+    bu = sections.get("business_understanding")
+    if isinstance(bu, dict) and bu.get("key") == key:
+        return bu
     for sec in sections.get("single_api", []):
         if sec.get("key") == key:
             return sec
@@ -93,11 +105,15 @@ def find_section_by_key(sections: PlanSections, key: str) -> ApiSection | BizSec
 
 
 def delete_section_by_key(sections: PlanSections, key: str) -> bool:
-    """从 single_api 或 biz_flows 中删除指定 key 的 section。
+    """从 sections 中删除指定 key 的 section，包括 business_understanding。
 
-    Delete the section with the given key from single_api or biz_flows.
+    Delete the section with the given key from any section, including business_understanding.
     Returns True if deleted, False if not found.
     """
+    bu = sections.get("business_understanding")
+    if isinstance(bu, dict) and bu.get("key") == key:
+        sections["business_understanding"] = {}  # 清空但不删除字段 / clear but keep field
+        return True
     for arr_name in ("single_api", "biz_flows"):
         arr = sections.get(arr_name, [])
         for i, sec in enumerate(arr):
@@ -153,8 +169,12 @@ def assemble_plan_md(sections: PlanSections) -> str:
     parts: List[str] = []
 
     bu = sections.get("business_understanding", "")
-    if bu.strip():
-        parts.append(bu.strip())
+    if isinstance(bu, dict):
+        bu_text = bu.get("content", "")
+    else:
+        bu_text = bu  # 兼容旧格式 / backward compat with old str format
+    if bu_text.strip():
+        parts.append(bu_text.strip())
 
     for sec in sections.get("single_api", []):
         content = sec.get("content", "")

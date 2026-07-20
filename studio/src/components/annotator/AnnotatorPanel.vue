@@ -413,6 +413,7 @@ function onPreviewWheel(e: WheelEvent) {
   flex-direction: column;
   overflow: hidden;
   height: 100%;
+  flex: 1;           /* 撑满父级 flex 容器 / fill parent flex container */
 }
 .annotator-mini-toolbar {
   display: flex;
@@ -445,13 +446,13 @@ function onPreviewWheel(e: WheelEvent) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
+  width: 22px;              /* 加宽，更容易点击 / wider for easier click */
   cursor: pointer;
-  background: #f5f5f5;
-  border-left: 1px solid #e8e8e8;
-  border-right: 1px solid #e8e8e8;
-  color: #999;
-  font-size: 10px;
+  background: #f0f0f0;      /* 略微区别于预览区 / slightly different from preview */
+  border-left: 1px solid #d9d9d9;
+  border-right: 1px solid #d9d9d9;
+  color: #666;              /* 更高对比度 / higher contrast */
+  font-size: 14px;          /* 图标更大 / larger icon */
   user-select: none;
   flex-shrink: 0;
   transition: background 0.15s, color 0.15s;

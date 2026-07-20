@@ -108,7 +108,11 @@ def _annotation_chunked_revision(
 
 
 def _iter_all_sections(sections: dict):
-    """遍历所有 section（single_api + biz_flows）/ Iterate all sections from both arrays."""
+    """遍历所有 section（business_understanding + single_api + biz_flows）。
+    Iterate all sections including business_understanding, single_api, and biz_flows."""
+    bu = sections.get("business_understanding")
+    if isinstance(bu, dict):
+        yield bu
     for sec in sections.get("single_api", []):
         yield sec
     for sec in sections.get("biz_flows", []):
@@ -120,34 +124,22 @@ def _map_annotations_to_sections(
 ) -> Dict[str, List[dict]]:
     """将每条批注映射到其所属 chunk / Map each annotation to its chunk.
 
-    优先用 chunk_id 直接匹配；失败时用 selected_text 子串匹配兜底。
-    Priority: chunk_id direct match → selected_text substring fallback.
+    优先用 chunk_id 直接匹配（find_section_by_key 现在支持所有 section 类型）。
+    Priority: chunk_id direct match via find_section_by_key (now supports all section types).
     Returns {section_key: [annotations]}.
     """
     mapping: Dict[str, List[dict]] = {}
     for ann in annotations:
-        # 1) chunk_id 直接匹配 / chunk_id direct match (from Studio annotator)
+        # chunk_id 直接匹配 / chunk_id direct match (from Studio annotator DOM traversal)
         chunk_id = ann.get("chunk_id", "")
         if chunk_id:
             found = find_section_by_key(sections, chunk_id)
             if found:
                 mapping.setdefault(found["key"], []).append(ann)
                 continue
-
-        # 2) selected_text 子串匹配 / substring match
+        # 无 chunk_id 则静默跳过（前端 findChunkId 返回 undefined 的情况）
+        # No chunk_id: silently skip (when frontend findChunkId returns undefined)
         selected = ann.get("selected_text", "")
-        if selected:
-            if selected in sections.get("business_understanding", ""):
-                mapping.setdefault("__global__", []).append(ann)
-                continue
-            placed = False
-            for sec in _iter_all_sections(sections):
-                if selected in sec.get("content", ""):
-                    mapping.setdefault(sec["key"], []).append(ann)
-                    placed = True
-                    break
-            if placed:
-                continue
         logger.debug("Annotation not mapped to any section: %s", (selected or "")[:80])
     return mapping
 
@@ -178,16 +170,6 @@ def _run_intent_analysis(
                 "section": sec,
                 "annotations": section_annotations[key],
             })
-    if "__global__" in section_annotations:
-        pending.insert(0, {
-            "section": {
-                "key": "__global__",
-                "type": "global",
-                "name": "Global",
-                "content": sections.get("business_understanding", ""),
-            },
-            "annotations": section_annotations["__global__"],
-        })
 
     if not pending:
         return []
@@ -445,19 +427,17 @@ def _execute_chunk_actions(
 
         if "fix" in action_types:
             # 重生成现有 chunk / Regenerate existing chunk
-            if chunk_id == "__global__":
-                _fix_global_chunk(sections, fix_text, analysis, api_summary,
-                                  agent, user_guidance)
-                logger.info(_("review.fixed_global"))
-                continue
-
             chunk = find_section_by_key(sections, chunk_id)
             if not chunk:
                 logger.warning(_("review.chunk_not_found", key=chunk_id))
                 continue
 
             chunk_type = chunk.get("type", "")
-            if chunk_type == "api":
+            if chunk_type == "global":
+                _fix_global_chunk(sections, chunk, fix_text, analysis, api_summary,
+                                  agent, user_guidance)
+                logger.info(_("review.fixed_global"))
+            elif chunk_type == "api":
                 _fix_api_chunk(chunk, fix_text, analysis,
                                api_summary, iface_by_id, agent, user_guidance)
                 logger.info(_("review.fixed_chunk", key=chunk_id))
@@ -476,11 +456,15 @@ def _execute_chunk_actions(
 
 
 def _fix_global_chunk(
-    sections: dict, fix_text: str,
+    sections: dict, chunk: dict, fix_text: str,
     analysis: dict, api_summary: list,
     agent: PlanGenerator, user_guidance: str,
 ):
-    """重新生成 global (Business Understanding) chunk / Regenerate global chunk."""
+    """重新生成 global (Business Understanding) chunk / Regenerate global chunk.
+
+    与 _fix_api_chunk / _fix_biz_chunk 统一模式：接收 chunk dict，更新其 content。
+    Unified pattern with _fix_api_chunk / _fix_biz_chunk: receives chunk dict, updates its content.
+    """
     augmented = _augment_guidance(user_guidance, fix_text)
     analysis_json = json.dumps(analysis, ensure_ascii=False, indent=2)
     api_summary_json = json.dumps(api_summary or [], ensure_ascii=False, indent=2)
@@ -498,7 +482,9 @@ def _fix_global_chunk(
         language=get_language_name(),
     )
     agent.reset_steps()
-    sections["business_understanding"] = agent.call_llm(prompt, system_msg)
+    chunk["content"] = agent.call_llm(prompt, system_msg)
+    # 同步更新顶层 sections dict / Sync to top-level sections dict
+    sections["business_understanding"] = chunk
 
 
 def _fix_api_chunk(
@@ -550,7 +536,9 @@ def _regenerate_mermaid_for_flow(
     """
     api_ids = chunk.get("involved_apis", [])
     flow_ifaces = [iface_by_id[aid] for aid in api_ids if aid in iface_by_id]
-    global_context = sections.get("business_understanding", "")
+    bu = sections.get("business_understanding", "")
+    # 兼容新旧格式 / Compatible with old (str) and new (dict) format
+    global_context = bu.get("content", "") if isinstance(bu, dict) else bu
     flow_name = chunk.get("name", "")
     flow_description = chunk.get("description", "")
 
@@ -735,7 +723,11 @@ def _augment_guidance(user_guidance: str, fix_text: str) -> str:
 
 
 def sections_get_global_for_fix(analysis: dict, api_summary: list) -> str:
-    """获取 global context 用于 fix prompt（简化版）/ Get global context for fix prompts."""
+    """获取 global context 用于 fix prompt（简化版）/ Get global context for fix prompts.
+
+    从 section 对象的 content 字段读取（兼容新旧格式）。
+    Reads from section object's content field (compatible with old and new formats).
+    """
     parts = []
     biz_summary = ""
     if isinstance(analysis, dict):

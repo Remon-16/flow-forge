@@ -84,7 +84,7 @@ def _text_revision(
     all_actions: List[dict] = []
 
     if section_impact.get("global"):
-        actions = _chunk_intent_for_global(feedback, token_counter, skill_extensions=_exts)
+        actions = _chunk_intent_for_global(feedback, token_counter, sections=sections, skill_extensions=_exts)
         all_actions.extend(actions)
 
     # section 数据直接按顶层 key 访问 / Section data accessed directly by top-level key
@@ -194,6 +194,7 @@ def _section_impact_analysis(
 
 def _chunk_intent_for_global(
     feedback: str, token_counter,
+    sections: dict = None,
     skill_extensions: List[str] | None = None,
 ) -> List[dict]:
     """分析 global section 是否需要修改 / Check if global section needs changes.
@@ -201,11 +202,18 @@ def _chunk_intent_for_global(
     使用简化判定 (noop vs fix) — global 只有一个"chunk"。
     Simple decision (noop vs fix) — global is effectively a single chunk.
     """
+    # 从 section 对象读取 chunk_id / Read chunk_id from section object
+    chunk_id = "business_understanding"
+    if sections:
+        bu = sections.get("business_understanding")
+        if isinstance(bu, dict):
+            chunk_id = bu.get("chunk_id", chunk_id)
+
     system_msg = render_prompt(PLAN_TEXT_CHUNK_INTENT_SYSTEM)
     prompt = render_prompt(
         PLAN_TEXT_CHUNK_INTENT_USER,
         feedback=feedback,
-        chunks_list="- __global__: Business Understanding (global context section)",
+        chunks_list=f"- {chunk_id}: Business Understanding (global context section)",
     )
 
     agent = BaseAgent(
@@ -236,7 +244,7 @@ def _chunk_intent_for_global(
         )
         actions = []
     for a in actions:
-        a["section_key"] = "__global__"
+        a["section_key"] = chunk_id
         a.setdefault("annotation", {"review_comment": feedback})
     return actions
 

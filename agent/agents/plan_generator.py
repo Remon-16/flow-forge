@@ -447,8 +447,13 @@ class PlanGenerator(BaseAgent):
 
         # Phase A: global context
         bu = sections.get("business_understanding", "")
-        if progress.get("phase_a_done") and bu:
-            plan_parts["global_context"] = bu
+        # 兼容新旧格式 / Compatible with old (str) and new (dict) format
+        if isinstance(bu, dict):
+            bu_text = bu.get("content", "")
+        else:
+            bu_text = bu
+        if progress.get("phase_a_done") and bu_text:
+            plan_parts["global_context"] = bu_text
 
         # Phase B: 将 single_api 数组映射回 api_sections dict / Map single_api array back to api_sections
         api_groups = outline.get("api_groups", [])
@@ -821,7 +826,8 @@ class PlanGenerator(BaseAgent):
         single_api: List[dict] = []
         for group in api_groups:
             chunk_id = group.get("chunk_id", "")
-            section_key = f"api_{group.get('group_name', '')}"
+            # 使用 chunk_id 作为查找键 / Use chunk_id as lookup key
+            section_key = chunk_id or f"api_{group.get('group_name', '')}"
             content = api_sections.get(section_key, "")
             if content and content.strip():
                 single_api.append({
@@ -868,7 +874,13 @@ class PlanGenerator(BaseAgent):
                     })
 
         save_pipeline_artifact(memory_dir, "plan_sections.json", {
-            "business_understanding": global_context,
+            "business_understanding": {
+                "chunk_id": "business_understanding",
+                "key": "business_understanding",
+                "type": "global",
+                "name": "Business Understanding",
+                "content": global_context,
+            },
             "single_api": single_api,
             "biz_flows": biz_flows,
         })

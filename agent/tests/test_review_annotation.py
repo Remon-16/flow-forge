@@ -28,56 +28,62 @@ from graph.nodes.review_annotation import (
 class TestMapAnnotations:
     """Tests for _map_annotations_to_sections()."""
 
-    def should_map_to_global_when_selected_text_in_global(self):
+    def should_map_to_global_by_chunk_id(self):
+        """chunk_id='business_understanding' 直接匹配 global section。
+        chunk_id='business_understanding' directly matches global section."""
         sections = {
-            "business_understanding": "## 1. Business Understanding\n\nThis is global content with special-text.",
+            "business_understanding": {
+                "chunk_id": "business_understanding",
+                "key": "business_understanding",
+                "type": "global",
+                "name": "Business Understanding",
+                "content": "## 1. Business Understanding\n\nThis is global content.",
+            },
             "single_api": [
                 {"key": "api_Test", "type": "api", "name": "Test", "section": "single_api", "content": "API section content"},
             ],
             "biz_flows": [],
         }
         annotations = [
-            {"line_number": 1, "selected_text": "special-text", "review_comment": "Fix global"},
+            {"chunk_id": "business_understanding", "selected_text": "global content", "review_comment": "Fix global"},
         ]
         mapping = _map_annotations_to_sections(sections, annotations)
-        assert "__global__" in mapping
-        assert mapping["__global__"][0]["review_comment"] == "Fix global"
+        assert "business_understanding" in mapping
+        assert mapping["business_understanding"][0]["review_comment"] == "Fix global"
 
-    def should_map_to_both_global_and_sections(self):
+    def should_map_to_both_global_and_sections_by_chunk_id(self):
         sections = {
-            "business_understanding": "## 1. Overview\n\nGlobal text with keyword-A.",
+            "business_understanding": {
+                "chunk_id": "business_understanding",
+                "key": "business_understanding",
+                "type": "global",
+                "name": "Business Understanding",
+                "content": "## 1. Overview\n\nGlobal text.",
+            },
             "single_api": [
-                {"key": "api_Test", "type": "api", "name": "Test", "section": "single_api", "content": "API content with keyword-B."},
+                {"key": "api_Test", "type": "api", "name": "Test", "section": "single_api", "content": "API content."},
             ],
             "biz_flows": [],
         }
         annotations = [
-            {"line_number": 1, "selected_text": "keyword-A", "review_comment": "Fix global"},
-            {"line_number": 2, "selected_text": "keyword-B", "review_comment": "Fix api"},
+            {"chunk_id": "business_understanding", "selected_text": "Global text", "review_comment": "Fix global"},
+            {"chunk_id": "api_Test", "selected_text": "API content", "review_comment": "Fix api"},
         ]
         mapping = _map_annotations_to_sections(sections, annotations)
-        assert mapping["__global__"][0]["review_comment"] == "Fix global"
+        assert mapping["business_understanding"][0]["review_comment"] == "Fix global"
         assert mapping["api_Test"][0]["review_comment"] == "Fix api"
 
-    def should_match_global_before_sections(self):
+    def should_map_by_chunk_id_without_selected_text(self):
+        """chunk_id 匹配不需要 selected_text（DOM 遍历模式）。
+        chunk_id matching works without selected_text (DOM traversal mode)."""
         sections = {
-            "business_understanding": "## 1. Overview\n\ncommon-text appears here first.",
-            "single_api": [
-                {"key": "api_Test", "type": "api", "name": "Test", "section": "single_api", "content": "API content with common-text too."},
-            ],
-            "biz_flows": [],
-        }
-        annotations = [
-            {"line_number": 1, "selected_text": "common-text", "review_comment": "Change global"},
-        ]
-        mapping = _map_annotations_to_sections(sections, annotations)
-        assert "__global__" in mapping
-        assert "api_Test" not in mapping
-
-    def should_map_by_chunk_id_when_selected_text_missing(self):
-        """chunk_id 直接匹配优先于 selected_text / chunk_id direct match takes priority."""
-        sections = {
-            "business_understanding": "## 1. Overview",
+            "business_understanding": {
+                "chunk_id": "business_understanding",
+                "key": "business_understanding",
+                "type": "global",
+                "name": "Business Understanding",
+                "content": "## 1. Overview",
+            },
             "single_api": [
                 {"key": "api_all", "type": "api", "name": "All",
                  "section": "single_api",

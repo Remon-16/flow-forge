@@ -53,7 +53,12 @@ class PlanParser(BaseAgent):
           2. 超过 → 按 case_type 拆分 (single_api / biz_flows)
           3. 仍超过 → 贪心算法逐 section 累加
         """
-        business_summary = sections.get("business_understanding", "")
+        bu = sections.get("business_understanding", "")
+        # 兼容新旧格式 / Compatible with old (str) and new (dict) format
+        if isinstance(bu, dict):
+            business_summary = bu.get("content", "")
+        else:
+            business_summary = bu
         single_api = sections.get("single_api", [])
         biz_flows = sections.get("biz_flows", [])
 

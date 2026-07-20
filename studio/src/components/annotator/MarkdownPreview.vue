@@ -189,8 +189,9 @@ function renderFromSections(sections: PlanSections): string {
   const sectionTexts: string[] = []
 
   // 按顺序收集各 section 的纯文本（无 marker）/ Collect plain text per section in order
-  const bu = sections.business_understanding?.trim()
-  if (bu) sectionTexts.push(bu)
+  const buSection = sections.business_understanding
+  const buText = buSection?.content?.trim() || ''
+  if (buText) sectionTexts.push(buText)
 
   for (const sec of sections.single_api) {
     const c = sec.content?.trim()
@@ -215,7 +216,7 @@ function renderFromSections(sections: PlanSections): string {
     // 确定该文本属于哪个 chunk / Determine which chunk this text belongs to
     let chunkId = ''
     if (!buDone) {
-      chunkId = '__global__'
+      chunkId = buSection?.chunk_id || 'business_understanding'
       buDone = true
     } else if (apiIdx < (sections.single_api?.length || 0)) {
       chunkId = sections.single_api[apiIdx].chunk_id
@@ -339,14 +340,22 @@ function findLineNumber(): number {
   return 0
 }
 
-// 根据 selected_text 查找所属 chunk_id / Find chunk_id by selected_text
-function findChunkId(text: string): string | undefined {
-  if (!props.sections || !text) return undefined
-  // 在 business_understanding 中 / In business_understanding
-  if (props.sections.business_understanding?.includes(text)) return '__global__'
-  // 在 single_api 和 biz_flows 中查找 / Search in single_api and biz_flows
-  for (const sec of [...(props.sections.single_api || []), ...(props.sections.biz_flows || [])]) {
-    if (sec.content?.includes(text)) return sec.chunk_id
+/** 从 DOM 树中查找选中文本所属的 chunk_id。
+ *  Find chunk_id from DOM tree by traversing from selection anchor.
+ *  不再使用文本子串匹配，直接从渲染后的 block 元素获取 data-chunk-id。
+ *  No longer uses substring matching; gets data-chunk-id directly from rendered blocks.
+ *  与 findLineNumber() 使用相同的 DOM 遍历模式。
+ *  Uses the same DOM traversal pattern as findLineNumber(). */
+function findChunkId(): string | undefined {
+  const selection = window.getSelection()
+  if (!selection || !selection.anchorNode) return undefined
+  let node: Node | null = selection.anchorNode
+  while (node && node !== previewRef.value) {
+    if (node instanceof HTMLElement) {
+      const chunkId = node.dataset.chunkId
+      if (chunkId) return chunkId
+    }
+    node = node.parentNode
   }
   return undefined
 }
@@ -375,7 +384,8 @@ function onContextMenu(e: MouseEvent) {
 
 function handleAddAnnotation() {
   contextMenuVisible.value = false
-  const chunkId = findChunkId(selectedText.value)
+  // DOM 遍历获取 chunk_id（无需文本参数）/ DOM traversal to get chunk_id (no text parameter needed)
+  const chunkId = findChunkId()
   emit('add-annotation', selectedText.value, selectedLineNumber.value, chunkId)
 }
 
