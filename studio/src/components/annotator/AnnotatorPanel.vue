@@ -372,18 +372,21 @@ function onPreviewWheel(e: WheelEvent) {
         <span v-if="!sidebarVisible" class="toggle-label">{{ t('annotator.sidebarTitle') }}</span>
       </div>
       <div class="annotator-preview-wrapper" :style="{ zoom: settings.zoom }">
-        <MarkdownPreview
-          ref="previewRef"
-          :plan-content="planContent"
-          :annotations="annotations"
-          :show-line-numbers="settings.showLineNumbers"
-          :sections="planSections"
-          :language="locale"
-          @add-annotation="handleAddAnnotation"
-          @edit-annotation="handleEditAnnotation"
-          @delete-annotation="handleDeleteAnnotation"
-          @chunk-click="handleChunkClick"
-        />
+        <!-- 内层滚动容器：纵向滚动 / Inner scroll container: vertical scroll -->
+        <div class="annotator-preview-inner">
+          <MarkdownPreview
+            ref="previewRef"
+            :plan-content="planContent"
+            :annotations="annotations"
+            :show-line-numbers="settings.showLineNumbers"
+            :sections="planSections"
+            :language="locale"
+            @add-annotation="handleAddAnnotation"
+            @edit-annotation="handleEditAnnotation"
+            @delete-annotation="handleDeleteAnnotation"
+            @chunk-click="handleChunkClick"
+          />
+        </div>
         <div v-if="autoSaveStatus" class="autosave-indicator">{{ autoSaveStatus }}</div>
       </div>
 
@@ -561,9 +564,18 @@ function onPreviewWheel(e: WheelEvent) {
 .annotator-preview-wrapper {
   flex: 1;
   min-width: 0;             /* 允许 flex 收缩至 0 / allow flex shrink to 0 */
-  overflow: auto;           /* 允许横向滚动，小分辨率下避免内容被遮挡 / allow horizontal scroll to avoid content clipping on small screens */
+  /* 外层负责水平滚动：滚动条始终在窗口底部可见 / outer handles horizontal scroll: scrollbar always at window bottom */
+  overflow-x: auto;
+  overflow-y: hidden;
   background: #fff;
   position: relative;
+}
+/* 内层负责垂直滚动 / inner handles vertical scroll */
+.annotator-preview-inner {
+  overflow-y: auto;
+  overflow-x: hidden;       /* 横向交给外层 / horizontal delegated to outer */
+  height: 100%;
+  min-width: fit-content;   /* 确保内容宽度撑开以触发外层横向滚动 / ensure content width expands to trigger outer horizontal scroll */
 }
 .autosave-indicator {
   position: absolute;

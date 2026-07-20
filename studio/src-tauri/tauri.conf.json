@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "flow-forge-studio",
-  "version": "0.1.0",
+  "version": "0.3.2",
   "identifier": "com.flow-forge.studio",
   "build": {
     "frontendDist": "../dist",

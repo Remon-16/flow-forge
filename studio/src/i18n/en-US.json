@@ -253,7 +253,7 @@
     "sidebarTitle": "Annotations",
     "editorPanelTitle": "Chunk Editor",
     "doubleClickToEdit": "Double-click a section in the preview to edit its content",
-    "chunkId": "Chunk ID"
+    "chunkId": "Owning Chunk"
   },
   "search": {
     "find": "Find",

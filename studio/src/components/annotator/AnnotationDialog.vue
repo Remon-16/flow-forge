@@ -64,13 +64,17 @@ function handleCancel() {
       </div>
     </div>
 
+    <!-- 所属区块（有值时显示，排在行号前更重要）/ Owning chunk (shown when present, before line number as it's more important) -->
+    <div v-if="chunkId" style="margin-bottom: 12px;">
+      <div style="color: #888; font-size: 12px; margin-bottom: 4px;">{{ t('annotator.chunkId') }}</div>
+      <div style="font-size: 13px;">
+        <span class="dialog-chunk-id">{{ chunkId }}</span>
+      </div>
+    </div>
+
     <div style="margin-bottom: 12px;">
       <div style="color: #888; font-size: 12px; margin-bottom: 4px;">{{ t('annotator.lineNumber') }}</div>
-      <div style="font-size: 13px; display: flex; align-items: center; gap: 8px;">
-        <span>{{ lineNumber }}</span>
-        <!-- chunk_id 标签（仅当有值时显示）/ chunk_id badge (only shown when value exists) -->
-        <span v-if="chunkId" class="dialog-chunk-id">{{ chunkId }}</span>
-      </div>
+      <div style="font-size: 13px;">{{ lineNumber }}</div>
     </div>
 
     <div>

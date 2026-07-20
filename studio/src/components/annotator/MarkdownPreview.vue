@@ -553,6 +553,11 @@ defineExpose({ scrollToAnnotation })
   user-select: text;
   cursor: text;
 }
+/* 开启行号时确保最小宽度，使绝对定位的 ::before/::after 溢出时触发外层水平滚动条
+   Ensure minimum width when line numbers on, so absolute ::before/::after overflow triggers outer horizontal scrollbar */
+.markdown-preview.show-line-numbers {
+  min-width: 1500px;         /* 行号 + chunk_id 标签 左侧空间 + 正文 */
+}
 
 .md-block {
   /* display: contents would break data-source-line traversal for some children */
