@@ -230,13 +230,17 @@ fn _spawn_python_process(
     args: &[String],
     stdout_event: &str,
     stderr_event: &str,
+    allow_non_windows: bool,  // 由前端 ENABLE_NON_WINDOWS_SPAWN feature flag 控制 / controlled by frontend feature flag
 ) -> Result<(), String> {
     // 启动子进程 / Spawn the subprocess
 
-    // 非 Windows 平台守卫：禁止创建子进程，防止在无 Job Object 保护的环境下产生孤儿进程。
-    // Non-Windows guard: refuse to spawn to prevent orphaned processes without Job Object protection.
-    if cfg!(not(target_os = "windows")) {
-        return Err("Flow Forge Studio only supports Windows. Please use CLI tools instead.".into());
+    // 非 Windows 平台守卫：由前端 feature flag 控制，默认禁止，方便后续测试。
+    // Non-Windows guard: controlled by frontend ENABLE_NON_WINDOWS_SPAWN flag; disabled by default for future testing.
+    if cfg!(not(target_os = "windows")) && !allow_non_windows {
+        return Err(
+            "Flow Forge Studio only supports Windows. Non-Windows spawn is disabled. \
+             Set ENABLE_NON_WINDOWS_SPAWN=true to test.".into()
+        );
     }
 
     // 构建命令：先添加前置参数（如 conda run -n env python），再添加主参数
@@ -258,8 +262,8 @@ fn _spawn_python_process(
     // Notify Python side to use JSON stderr format (detected by flow_forge_logging)
     cmd.env("FLOW_FORGE_STUDIO", "1");
 
-    // Unix: 设置进程组，使子进程及其后代在同一组中，便于 kill_process_tree 用 kill -9 -pgid 整体终止
-    // Unix: set process group so child + descendants are in one group for tree kill
+    // Unix: 设置进程组，使子进程及其后代在同一组中，便于 kill -9 -PGID 整体终止
+    // Unix: set process group so child + descendants are in one group for tree kill via kill -9 -PGID
     process_utils::apply_process_group(&mut cmd);
 
     let mut child = cmd
@@ -271,18 +275,34 @@ fn _spawn_python_process(
         .map_err(|e| format!("Failed to spawn process: {} (dir={}, exe={})", e, working_dir, python_exe))?;
 
     let child_pid = child.id();
+    // 进程组 ID = 子进程 PID（process_group(0) 设置子进程为自己的进程组 leader）
+    // PGID = child PID (process_group(0) makes child its own process group leader)
+    let child_pgid = child_pid;
     // 诊断：记录子进程 spawn 信息，便于排查输出管道问题
     // Diagnostic: log spawn info to aid output pipeline troubleshooting
-    log::info!("[spawn] task={} pid={} exe={} dir={}", task_id, child_pid, python_exe, working_dir);
+    log::info!("[spawn] task={} pid={} pgid={} exe={} dir={}", task_id, child_pid, child_pgid, python_exe, working_dir);
 
-    // Windows: 为每个子进程创建独立的 Job Object，确保任务终止或应用退出时
+    // Windows: 为每个子进程创建独立的 Job Object（强制，创建失败则拒绝 spawn）。
+    // Windows: create a per-task Job Object (mandatory — spawn fails if creation fails).
     // OS 通过 KILL_ON_JOB_CLOSE 强制终止该 Job 内所有进程（含孤儿孙进程）。
-    // Windows: create a per-task Job Object so the OS forcibly terminates all
-    // processes in this Job (including orphaned grandchildren) via KILL_ON_JOB_CLOSE
-    // when the JobHandle is dropped.
+    // OS forcibly terminates all processes in this Job (incl. orphaned grandchildren) via KILL_ON_JOB_CLOSE.
     let job_handle = JobHandle::new();
+    #[cfg(target_os = "windows")]
+    if job_handle.is_none() {
+        // Job Object 创建失败 → kill 已 spawn 的子进程并拒绝，防止产生无保护孤儿进程
+        // Job Object creation failed → kill spawned child and refuse to prevent unprotected orphans
+        let _ = child.kill();
+        let _ = child.try_wait();
+        return Err("Failed to create Job Object for orphan protection".to_string());
+    }
     if let Some(ref jh) = job_handle {
         jh.assign(child_pid);
+    }
+
+    // Unix: fork 守护进程，监控父进程存活状态 / Fork guardian process to monitor parent liveness
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        process_utils::spawn_orphan_guardian(child_pgid)?;
     }
 
     let stdin = child.stdin.take()
@@ -403,6 +423,7 @@ fn spawn_agent(
     python_exe: String,
     pre_args: Vec<String>,
     args: Vec<String>,
+    allow_non_windows: bool,
 ) -> Result<(), String> {
     // 构建完整的命令行参数 / Build full command-line args
     // argv: [python_exe, ...pre_args, main.py, --studio, ...user_args]
@@ -415,6 +436,7 @@ fn spawn_agent(
     _spawn_python_process(
         &app, &state, &task_id, &working_dir, &python_exe,
         &pre_args, &full_args, "agent-stdout", "agent-stderr",
+        allow_non_windows,
     )
 }
 
@@ -431,6 +453,7 @@ fn spawn_executor(
     python_exe: String,
     pre_args: Vec<String>,
     args: Vec<String>,
+    allow_non_windows: bool,
 ) -> Result<(), String> {
     // 执行器直接使用传入的 args，前端负责构建完整的 CLI 参数
     // Executor uses args as-is; the frontend constructs the full CLI
@@ -438,6 +461,7 @@ fn spawn_executor(
     _spawn_python_process(
         &app, &state, &task_id, &working_dir, &python_exe,
         &pre_args, &args, "executor-stdout", "executor-stderr",
+        allow_non_windows,
     )
 }
 
@@ -454,6 +478,7 @@ fn spawn_converter(
     python_exe: String,
     pre_args: Vec<String>,
     args: Vec<String>,
+    allow_non_windows: bool,
 ) -> Result<(), String> {
     // 转换器直接使用传入的 args，前端负责构建完整的 CLI 参数
     // Converter uses args as-is; the frontend constructs the full CLI
@@ -461,6 +486,7 @@ fn spawn_converter(
     _spawn_python_process(
         &app, &state, &task_id, &working_dir, &python_exe,
         &pre_args, &args, "converter-stdout", "converter-stderr",
+        allow_non_windows,
     )
 }
 
@@ -552,6 +578,7 @@ fn spawn_counter(
     python_exe: String,
     pre_args: Vec<String>,
     args: Vec<String>,
+    allow_non_windows: bool,
 ) -> Result<(), String> {
     // 计数器直接使用传入的 args（含 counter_main.py + --output-dir）
     // Counter uses args as-is (counter_main.py + --output-dir)
@@ -559,6 +586,7 @@ fn spawn_counter(
     _spawn_python_process(
         &app, &state, &task_id, &working_dir, &python_exe,
         &pre_args, &args, "counter-stdout", "counter-stderr",
+        allow_non_windows,
     )
 }
 

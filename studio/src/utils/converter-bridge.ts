@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { isDesktop } from './desktop-bridge'
 import { parseStderrLine } from './log-parser'
+import { ENABLE_NON_WINDOWS_SPAWN } from './feature-flags'
 
 // ============================================================================
 // Subprocess operations / 子进程操作
@@ -22,7 +23,10 @@ export async function spawnConverter(
   args: string[],
 ): Promise<void> {
   if (!isDesktop) throw new Error('Converter requires desktop mode')
-  await invoke('spawn_converter', { taskId: sessionId, workingDir, pythonExe, preArgs, args })
+  await invoke('spawn_converter', {
+    taskId: sessionId, workingDir, pythonExe, preArgs, args,
+    allowNonWindows: ENABLE_NON_WINDOWS_SPAWN,
+  })
 }
 
 /**

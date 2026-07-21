@@ -6,6 +6,7 @@ import { listen } from '@tauri-apps/api/event'
 import { isDesktop } from './desktop-bridge'
 import type { AgentEvent } from '../types/agent'
 import { parseStderrLine } from './log-parser'
+import { ENABLE_NON_WINDOWS_SPAWN } from './feature-flags'
 
 // ============================================================================
 // Subprocess operations / 子进程操作
@@ -23,7 +24,10 @@ export async function spawnAgent(
   args: string[],
 ): Promise<void> {
   if (!isDesktop) throw new Error('Agent execution requires desktop mode')
-  await invoke('spawn_agent', { taskId, workingDir, pythonExe, preArgs, args })
+  await invoke('spawn_agent', {
+    taskId, workingDir, pythonExe, preArgs, args,
+    allowNonWindows: ENABLE_NON_WINDOWS_SPAWN,
+  })
 }
 
 /**

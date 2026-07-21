@@ -1,10 +1,15 @@
 // 进程注册表 — 通用 Python 子进程生命周期管理模块。
 // Process Registry: generic Python subprocess lifecycle management.
 //
-// 管理 agent / executor / converter 全部子进程的注册、通信和清理。
+// 管理 agent / executor / converter / counter 全部子进程的注册、通信和清理。
 // 本模块不包含任何 kill 实现代码 — 所有终止逻辑委托给 process_utils 工具模块。
 // Manages registration, communication, and cleanup for all subprocess types.
 // Contains ZERO kill implementation — all termination delegated to process_utils.
+//
+// Kill 策略（每平台唯一）/ Kill strategy (one per platform):
+//   Windows → ProcessHandle drop → JobHandle::drop() → CloseHandle → OS KILL_ON_JOB_CLOSE
+//   Linux   → kill -9 -PGID（主动kill） + 守护进程（父进程崩溃保护）
+//   macOS   → kill -9 -PGID（主动kill） + 守护进程（父进程崩溃保护）
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -12,7 +17,6 @@ use std::process::Child;
 use std::sync::Mutex;
 
 use crate::job_manager::JobHandle;
-use crate::process_utils::terminate_python_process;
 
 // ============================================================================
 // Types / 类型定义
@@ -33,7 +37,7 @@ pub struct ProcessHandle {
 
 /// 全局进程注册表 — 将 task_id 映射到子进程句柄。
 /// Global process registry — maps task_id to child process handle.
-/// agent / executor / converter 共享同一个注册表实例。
+/// agent / executor / converter / counter 共享同一个注册表实例。
 pub struct ProcessManager {
     pub processes: Mutex<HashMap<String, ProcessHandle>>,
 }
@@ -47,13 +51,16 @@ impl ProcessManager {
 
     /// 注册（或替换）一个子进程。
     /// Insert (or replace) a subprocess.
+    ///
+    /// 如有同 task_id 的旧进程，旧 ProcessHandle 被立即 drop：
+    ///   Windows → JobHandle drop → OS KILL_ON_JOB_CLOSE
+    ///   Non-Windows → 调用方应在调用 insert 前自行 kill 旧进程
+    /// If an old process with the same task_id exists, it is immediately dropped.
     pub fn insert(&self, task_id: String, handle: ProcessHandle) -> Result<(), String> {
         let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
-        // 如果已有同名任务，先通过统一终止入口 kill 旧进程（含优雅 stdin 通知）
-        // If task_id already exists, kill old one via unified terminate entry (incl. graceful stdin notify)
-        if let Some(mut old_handle) = processes.remove(&task_id) {
-            terminate_python_process(&mut old_handle.child, &mut old_handle.stdin);
-        }
+        // HashMap::insert 返回旧值（如有），旧 ProcessHandle 立即 drop。
+        // HashMap::insert returns old value (if any); old ProcessHandle dropped.
+        // Windows 上旧进程被 JobHandle drop → KILL_ON_JOB_CLOSE 自动终止。
         processes.insert(task_id, handle);
         Ok(())
     }
@@ -67,13 +74,19 @@ impl ProcessManager {
             .ok_or_else(|| format!("Task not found: {}", task_id))?;
         writeln!(handle.stdin, "{}", command)
             .map_err(|e| format!("Failed to write command to stdin: {}", e))?;
-        handle.stdin.flush()
+        handle.stdin
+            .flush()
             .map_err(|e| format!("Failed to flush stdin: {}", e))?;
         Ok(())
     }
 
-    /// 终止指定子进程（委托给 process_utils）。
-    /// Kill the specified subprocess (delegates to process_utils).
+    /// 终止指定子进程。
+    /// Kill the specified subprocess.
+    ///
+    /// Windows: ProcessHandle 被移除并立即 drop → JobHandle::drop() → CloseHandle →
+    ///          OS KILL_ON_JOB_CLOSE 内核强制终止 Job 内所有进程。
+    /// Non-Windows: 先通过 kill_process_tree 杀进程组（kill -9 -PGID），
+    ///              再 drop ProcessHandle（Child::drop() 关闭句柄）。
     pub fn kill(&self, task_id: &str) -> Result<(), String> {
         let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
         if let Some(mut handle) = processes.remove(task_id) {
@@ -81,9 +94,15 @@ impl ProcessManager {
             // Release mutex lock immediately after removing handle
             drop(processes);
 
-            // 委托工具模块执行终止（优雅通知 + 强制 kill 进程树）
-            // Delegate to utility module (graceful notify + force-kill tree)
-            terminate_python_process(&mut handle.child, &mut handle.stdin);
+            // 非 Windows：显式 kill 进程组（Unix Child::drop() 会阻塞等待进程自然退出）
+            // Non-Windows: explicitly kill process group before drop
+            // (Unix Child::drop() blocks waiting for natural exit if not killed first)
+            if cfg!(not(target_os = "windows")) {
+                crate::process_utils::kill_process_tree(&mut handle.child);
+            }
+            // handle 出作用域 drop：
+            //   Windows → JobHandle::drop() → CloseHandle → OS KILL_ON_JOB_CLOSE
+            //   Non-Windows → Child::drop() 关闭句柄（进程已被 kill_process_tree 终止）
             Ok(())
         } else {
             Err(format!("Task not found: {}", task_id))
@@ -134,12 +153,22 @@ impl ProcessManager {
         Ok(running)
     }
 
-    /// 终止所有子进程（委托给 process_utils）。
-    /// Kill all subprocesses (delegates to process_utils).
+    /// 终止所有子进程。
+    /// Kill all subprocesses.
+    ///
+    /// Windows: 清空 HashMap，所有 ProcessHandle drop → 所有 JobHandle drop → OS 终止所有进程。
+    /// Non-Windows: 先对每个进程执行 kill_process_tree，再清空。
     pub fn kill_all(&self) -> Result<(), String> {
         let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
-        for (_id, mut handle) in processes.drain() {
-            terminate_python_process(&mut handle.child, &mut handle.stdin);
+        // 非 Windows：先显式 kill 每个进程再 drop
+        // Non-Windows: must explicitly kill each before drop
+        if cfg!(not(target_os = "windows")) {
+            for (_id, mut handle) in processes.drain() {
+                crate::process_utils::kill_process_tree(&mut handle.child);
+            }
+        } else {
+            // Windows：直接清空，所有 JobHandle drop → OS KILL_ON_JOB_CLOSE
+            processes.clear();
         }
         Ok(())
     }
