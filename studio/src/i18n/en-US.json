@@ -171,6 +171,8 @@
     "executorDesc": "Run test cases and generate HTML test reports. Supports environment switching, multi-threaded execution, and single-API/business-flow mode selection.",
     "converterTitle": "Case Converter",
     "converterDesc": "Convert between Excel and YAML formats. Supports batch conversion, with optional export to pytest code.",
+    "counterTitle": "Process Diagnostics",
+    "counterDesc": "Subprocess management test tool for verifying process termination and Job Object protection",
     "sectionGenerate": "① Generate",
     "sectionEdit": "② Edit",
     "sectionExecute": "③ Execute & Convert",
@@ -515,5 +517,28 @@
     "closeContent": "{count} agent task(s) are currently running. Closing the window will interrupt them. What would you like to do?",
     "minimizeToTray": "Minimize to Tray",
     "terminateAndQuit": "Terminate & Quit"
+  },
+  "counter": {
+    "title": "Process Diagnostics",
+    "backHome": "Back to Home",
+    "desktopOnly": "Diagnostic tool is only available in desktop mode",
+    "sidebarTitle": "Diagnostic Sessions",
+    "newSession": "New Session",
+    "noSessions": "No sessions. Click \"+ New Session\" to start",
+    "outputDir": "Output Directory",
+    "outputDirDesc": "output_count.txt will be written to this directory to observe whether counting stops when the process is terminated",
+    "outputDirPlaceholder": "Browse or enter an output directory path",
+    "outputDirRequired": "Please specify an output directory",
+    "submit": "Submit Task",
+    "running": "Process Running",
+    "completed": "Counting Complete",
+    "totalCounts": "{count} total counts",
+    "logTitle": "Run Log",
+    "terminate": "Terminate",
+    "terminateConfirm": "Are you sure you want to terminate the current counting process?",
+    "deleteSession": "Delete Session",
+    "deleteSessionConfirm": "Are you sure you want to delete this diagnostic session?",
+    "unknownError": "Unknown Error",
+    "stopped": "Process Stopped"
   }
 }

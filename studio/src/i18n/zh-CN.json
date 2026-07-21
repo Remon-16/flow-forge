@@ -171,6 +171,8 @@
     "executorDesc": "运行测试用例，生成 HTML 测试报告。支持环境切换、多线程执行、单接口/业务链路模式选择。",
     "converterTitle": "用例转换器",
     "converterDesc": "在 Excel 和 YAML 格式之间互相转换。支持批量转换，可导出为 pytest 代码。",
+    "counterTitle": "进程诊断",
+    "counterDesc": "子进程管理测试工具，验证进程终止和 Job Object 保护机制",
     "sectionGenerate": "① 用例生成",
     "sectionEdit": "② 用例编辑",
     "sectionExecute": "③ 执行与转换",
@@ -515,5 +517,28 @@
     "closeContent": "有 {count} 个智能体任务正在执行中。关闭窗口会导致任务中断，确定要关闭吗？",
     "minimizeToTray": "最小化到托盘",
     "terminateAndQuit": "终止任务并退出"
+  },
+  "counter": {
+    "title": "进程诊断",
+    "backHome": "返回首页",
+    "desktopOnly": "诊断工具仅在桌面模式下可用",
+    "sidebarTitle": "诊断会话",
+    "newSession": "新建会话",
+    "noSessions": "暂无会话，点击\"+ 新建会话\"开始",
+    "outputDir": "输出目录",
+    "outputDirDesc": "output_count.txt 将写入此目录，用于观察计数是否随进程终止而停止",
+    "outputDirPlaceholder": "点击浏览选择或输入输出目录路径",
+    "outputDirRequired": "请填写输出目录",
+    "submit": "提交任务",
+    "running": "进程运行中",
+    "completed": "计数完成",
+    "totalCounts": "共 {count} 次计数",
+    "logTitle": "运行日志",
+    "terminate": "终止",
+    "terminateConfirm": "确定要终止当前计数进程吗？",
+    "deleteSession": "删除会话",
+    "deleteSessionConfirm": "确定要删除此诊断会话吗？",
+    "unknownError": "未知错误",
+    "stopped": "进程已停止"
   }
 }

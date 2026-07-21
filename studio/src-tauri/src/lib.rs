@@ -268,7 +268,7 @@ fn _spawn_python_process(
         .stdin(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to spawn process: {}", e))?;
+        .map_err(|e| format!("Failed to spawn process: {} (dir={}, exe={})", e, working_dir, python_exe))?;
 
     let child_pid = child.id();
     // 诊断：记录子进程 spawn 信息，便于排查输出管道问题
@@ -540,6 +540,50 @@ fn check_converter_running(
 }
 
 // ============================================================================
+// Counter subprocess commands / 计数器子进程命令（诊断用 / diagnostic）
+// ============================================================================
+
+#[tauri::command]
+fn spawn_counter(
+    app: AppHandle,
+    state: State<'_, ProcessManager>,
+    task_id: String,
+    working_dir: String,
+    python_exe: String,
+    pre_args: Vec<String>,
+    args: Vec<String>,
+) -> Result<(), String> {
+    // 计数器直接使用传入的 args（含 counter_main.py + --output-dir）
+    // Counter uses args as-is (counter_main.py + --output-dir)
+    // argv: [python_exe, ...pre_args, counter_main.py, --output-dir, ...]
+    _spawn_python_process(
+        &app, &state, &task_id, &working_dir, &python_exe,
+        &pre_args, &args, "counter-stdout", "counter-stderr",
+    )
+}
+
+#[tauri::command]
+fn kill_counter(
+    state: State<'_, ProcessManager>,
+    task_id: String,
+) -> Result<(), String> {
+    state.kill(&task_id)
+}
+
+#[tauri::command]
+fn check_counter_running(
+    state: State<'_, ProcessManager>,
+    task_id: String,
+) -> Result<bool, String> {
+    let code = state.cleanup(&task_id)?;
+    match code {
+        Some(c) if c < 0 => Ok(false),  // 未找到 / Not found
+        Some(_) => Ok(false),            // 已退出 / Exited
+        None => Ok(true),                // 仍运行 / Still running
+    }
+}
+
+// ============================================================================
 // App entry point / 应用入口
 // ============================================================================
 
@@ -659,6 +703,9 @@ pub fn run() {
             spawn_converter,
             kill_converter,
             check_converter_running,
+            spawn_counter,
+            kill_counter,
+            check_counter_running,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

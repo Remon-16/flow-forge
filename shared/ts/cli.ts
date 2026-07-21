@@ -9,6 +9,7 @@
 import agentCli from '../schemas/cli/agent.json'
 import executorCli from '../schemas/cli/executor.json'
 import converterCli from '../schemas/cli/converter.json'
+import counterCli from '../schemas/cli/counter.json'
 
 // ============================================================================
 // 类型定义 / Type definitions
@@ -56,6 +57,7 @@ export const CLI_SCHEMAS: Record<string, CliSchema> = {
   agent: agentCli as CliSchema,
   executor: executorCli as CliSchema,
   converter: converterCli as CliSchema,
+  counter: counterCli as CliSchema,
 }
 
 // ============================================================================
@@ -66,7 +68,7 @@ export const CLI_SCHEMAS: Record<string, CliSchema> = {
  * 获取某个入口的 CLI schema。
  * Get CLI schema for an entry.
  */
-export function getCliSchema(entry: 'agent' | 'executor' | 'converter'): CliSchema {
+export function getCliSchema(entry: 'agent' | 'executor' | 'converter' | 'counter'): CliSchema {
   return CLI_SCHEMAS[entry]
 }
 

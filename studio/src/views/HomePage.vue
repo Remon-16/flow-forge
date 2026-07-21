@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { SettingOutlined } from '@ant-design/icons-vue'
 import { useSettingsStore } from '../stores/settings'
 import AgentSettings from '../components/agent/AgentSettings.vue'
+import { ENABLE_DIAGNOSTICS } from '../utils/feature-flags'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -37,6 +38,10 @@ function goExecutor() {
 
 function goConverter() {
   router.push('/converter')
+}
+
+function goCounter() {
+  router.push('/counter')
 }
 
 function handleLanguageChange(lang: string) {
@@ -152,6 +157,17 @@ function handleLanguageChange(lang: string) {
           </div>
           <h3>{{ t('home.converterTitle') }}</h3>
           <p>{{ t('home.converterDesc') }}</p>
+        </a-card>
+
+        <!-- 诊断工具卡片 — ENABLE_DIAGNOSTICS=false 时隐藏，布局恢复 2-2-2 / Diagnostic card — hidden when ENABLE_DIAGNOSTICS=false, layout reverts to 2-2-2 -->
+        <a-card v-if="ENABLE_DIAGNOSTICS" hoverable class="home-card diagnostic-card" :body-style="{ padding: 0 }" @click="goCounter">
+          <div class="card-icon counter-icon">
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+          </div>
+          <h3>{{ t('home.counterTitle') }}</h3>
+          <p>{{ t('home.counterDesc') }}</p>
         </a-card>
       </div>
     </div>
@@ -306,6 +322,11 @@ function handleLanguageChange(lang: string) {
 
 .converter-icon {
   color: #52c41a;
+}
+
+/* 诊断工具卡片图标（粉色区分）/ Diagnostic card icon (pink to distinguish) */
+.counter-icon {
+  color: #eb2f96;
 }
 
 /* ---- 右上角操作按钮 / Top-right action buttons ---- */

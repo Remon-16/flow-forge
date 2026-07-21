@@ -7,6 +7,7 @@ import { useYamlStore } from './stores/yaml-store'
 import { useAgentStore } from './stores/agent'
 import { useExecutorStore } from './stores/executor'
 import { useConverterStore } from './stores/converter'
+import { useCounterStore } from './stores/counter'
 import { isDesktop } from './utils/desktop-bridge'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppSidebar from './components/layout/AppSidebar.vue'
@@ -21,12 +22,14 @@ const yamlStore = useYamlStore()
 const agent = useAgentStore()
 const executorStore = useExecutorStore()
 const converterStore = useConverterStore()
+const counterStore = useCounterStore()
 
 const isHome = computed(() => route.name === 'home')
 const isAnnotator = computed(() => route.name === 'plan-annotator')
 const isAgent = computed(() => route.name === 'agent')
 const isExecutor = computed(() => route.name === 'executor')
 const isConverter = computed(() => route.name === 'converter')
+const isCounter = computed(() => route.name === 'counter')
 const isYamlMode = computed(() => route.name === 'yaml-editor')
 
 // 关闭确认弹窗状态 / Close confirmation dialog state
@@ -106,7 +109,8 @@ onMounted(async () => {
       )
       const execRunning = executorStore.sessions.filter(s => s.status === 'running')
       const convRunning = converterStore.sessions.filter(s => s.status === 'running')
-      const totalRunning = agentRunning.length + execRunning.length + convRunning.length
+      const counterRunning = counterStore.sessions.filter(s => s.status === 'running')
+      const totalRunning = agentRunning.length + execRunning.length + convRunning.length + counterRunning.length
       if (totalRunning > 0) {
         // 有运行中任务：弹框确认 / Running tasks: show confirmation dialog
         closeDialogRunningCount.value = totalRunning
@@ -130,9 +134,10 @@ onMounted(async () => {
       )
       const execRunning = executorStore.sessions.filter(s => s.status === 'running')
       const convRunning = converterStore.sessions.filter(s => s.status === 'running')
-      const totalRunning = agentRunning.length + execRunning.length + convRunning.length
-      if (totalRunning > 0) {
-        closeDialogRunningCount.value = totalRunning
+      const counterRunning2 = counterStore.sessions.filter(s => s.status === 'running')
+      const totalRunning2 = agentRunning.length + execRunning.length + convRunning.length + counterRunning2.length
+      if (totalRunning2 > 0) {
+        closeDialogRunningCount.value = totalRunning2
         closeDialogVisible.value = true
       } else {
         handleForceQuit()
@@ -170,6 +175,11 @@ onUnmounted(() => {
 
   <!-- Converter page: no chrome, standalone -->
   <div v-else-if="isConverter" class="app-layout converter-layout">
+    <router-view />
+  </div>
+
+  <!-- Counter diagnostic page: no chrome, standalone -->
+  <div v-else-if="isCounter" class="app-layout counter-layout">
     <router-view />
   </div>
 

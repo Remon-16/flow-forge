@@ -1,0 +1,20 @@
+{
+  "entry": "counter",
+  "description_zh": "Flow Forge — 诊断计数器（子进程管理测试）",
+  "description_en": "Flow Forge — Diagnostic Counter (subprocess management test)",
+  "flag_style": "kebab-case",
+  "args": [
+    {
+      "flag": "--output-dir",
+      "short": null,
+      "dest": "output_dir",
+      "type": "str",
+      "default": null,
+      "required": true,
+      "help_zh": "输出目录路径，output_count.txt 将写入此目录",
+      "help_en": "Output directory path where output_count.txt will be written",
+      "section": null,
+      "studio": { "editable": true, "field_type": "text" }
+    }
+  ]
+}
