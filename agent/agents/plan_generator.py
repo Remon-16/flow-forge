@@ -473,7 +473,7 @@ class PlanGenerator(BaseAgent):
 
             api_sections: Dict[str, str] = {}
             for group in api_groups:
-                section_key = f"api_{group.get('group_name', '')}"
+                section_key = group.get("chunk_id", f"api_{group.get('group_name', '')}")
                 if section_key in completed_api_ids:
                     chunk_id = group.get("chunk_id", "")
                     sec = sections_by_key.get(chunk_id) or sections_by_key.get(section_key)
@@ -495,7 +495,7 @@ class PlanGenerator(BaseAgent):
             mermaid_chunks: Dict[str, str] = {}
             for j, batch in enumerate(grouped):
                 if len(batch) == 1:
-                    section_key = f"biz_{batch[0].get('name', '')}"
+                    section_key = f"biz_{batch[0].get('name', f'flow_{j}')}"
                 else:
                     section_key = f"biz_batch_{j}"
                 if section_key not in completed_biz_keys:
@@ -637,7 +637,7 @@ class PlanGenerator(BaseAgent):
 
         for i, group in enumerate(api_groups):
             group_name = group.get("group_name", f"group_{i}")
-            section_key = f"api_{group_name}"
+            section_key = group.get("chunk_id", f"api_{group_name}")
             if section_key in api_sections:
                 continue
 
@@ -736,7 +736,6 @@ class PlanGenerator(BaseAgent):
                     plan_parts=plan_parts,
                 )
                 batch_mermaids[chunk_id] = mermaid_content
-                logger.info(_("plan_gen.mermaid_generated", flow=flow_name))
 
             # 收集本批次所有相关接口（去重）/ Collect relevant interfaces (deduped)
             seen_ids = set()
@@ -851,7 +850,7 @@ class PlanGenerator(BaseAgent):
                 continue
             # 确定 section key / Determine section key
             if len(batch) == 1:
-                section_key = f"biz_{batch[0].get('name', '')}"
+                section_key = f"biz_{batch[0].get('name', f'flow_{j}')}"
             else:
                 section_key = f"biz_batch_{j}"
 
@@ -937,7 +936,11 @@ def _name_to_chunk_id(name: str, prefix: str = "") -> str:
     safe = re.sub(r'_+', '_', safe)
     if prefix and not safe.startswith(prefix):
         safe = prefix + safe
-    return safe or (prefix + "chunk")
+    # 纯中文名可能产生仅有前缀的无效 chunk_id（如 "api_"），回退到默认值
+    # Pure Chinese names may produce prefix-only chunk_id (e.g. "api_"); fall back to default
+    if not safe or safe == prefix:
+        safe = prefix + "chunk"
+    return safe
 
 
 def _normalize_chunk_ids(outline: Dict[str, Any]) -> Dict[str, Any]:
