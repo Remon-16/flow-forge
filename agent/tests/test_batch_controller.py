@@ -898,10 +898,10 @@ class TestSkeletonPhaseResumeProgress:
             assert save_count[0] >= 3
 
     def should_resume_single_from_completed_count(self):
-        """预置 checkpoint 有已完成 skeleton → resume 基于 test_id 过滤。
-        Pre-set checkpoint with completed skeletons → resume filters by test_id.
-        改用 ProgressTracker ID 集合过滤替代旧的批次索引跳过。
-        Uses ProgressTracker ID-based filtering instead of batch-index skip."""
+        """预置 checkpoint 有已完成 skeleton → resume 按位置跳过。
+        Pre-set checkpoint with completed skeletons → resume skips by position.
+        使用位置索引而非 ID 匹配，因为 LLM 生成的 test_id 与 plan 测试点 ID 不同。
+        Uses position-based skip because LLM-generated test_ids differ from plan test point IDs."""
         settings = _make_settings(skeleton_batch_size=10)
         controller = BatchController(settings)
 
@@ -909,8 +909,8 @@ class TestSkeletonPhaseResumeProgress:
             memory_dir = str(Path(tmpdir) / "memory")
             ckpt_mgr = CheckpointManager(memory_dir)
 
-            # 预置 checkpoint：已完成 10 个，test_id 与 plan 匹配
-            # Pre-set checkpoint: 10 completed with test_ids matching the plan
+            # 预置 checkpoint：已完成 10 个（test_id 任意，位置索引不依赖 ID）
+            # Pre-set checkpoint: 10 completed (arbitrary test_ids — position-based skip)
             controller._phase_progress = {
                 "skeletons_generated": {
                     "status": "in_progress",
@@ -919,7 +919,7 @@ class TestSkeletonPhaseResumeProgress:
                 },
             }
             ckpt_mgr.save_data("skeletons_generated", {
-                "single_cases": [{"test_id": f"api_a_{i}", "url": "/api/test"} for i in range(10)],
+                "single_cases": [{"test_id": f"existing_{i}", "url": "/api/test"} for i in range(10)],
                 "biz_cases": [],
                 "failures": [],
             })
@@ -936,7 +936,6 @@ class TestSkeletonPhaseResumeProgress:
             plan = _mock_plan_with_single_points({"api_a": 25})
             single_gen = MagicMock()
             single_gen._skeleton_batch_size = 10
-            # iter_batches 不再被 ProgressTracker 使用 / iter_batches no longer used by ProgressTracker
             gen_calls = []
 
             def gen_side_effect(batch_grouped, *args, **kwargs):
@@ -955,8 +954,8 @@ class TestSkeletonPhaseResumeProgress:
                 existing_single_cases=existing_single,
             )
 
-            # ProgressTracker 过滤前 10 个 ID，剩余 15 个分 2 批 (10+5)
-            # ProgressTracker filters first 10 IDs, 15 remaining → 2 batches (10+5)
+            # 位置跳过前 10 个测试点，剩余 15 个分 2 批 (10+5)
+            # Position-based skip: first 10 test points skipped, 15 remaining → 2 batches
             assert single_gen.generate_batch.call_count == 2
             # 结果 = 已有 10 + 新生成 15 = 25 / Result = 10 existing + 15 new = 25
             assert len(single_cases) == 25

@@ -5,6 +5,7 @@ Plugin-based test case generation orchestrator.
 """
 
 import logging
+import math
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -198,25 +199,31 @@ class BatchController:
                 # 从 checkpoint 数据恢复已生成的骨架 / Restore existing skeletons from checkpoint data
                 single_skels = list(existing_single_cases) if existing_single_cases else []
 
-                # 构建 ProgressTracker — completed 从实际数据计算（根治 Bug 1 计数漂移）
-                # Build ProgressTracker — completed derived from actual data (fixes Bug 1 count drift)
-                existing_ids = {s.get('test_id', '') for s in single_skels}
-                tracker = ProgressTracker.from_existing(
-                    total=total, batch_size=batch_size,
-                    completed_ids=existing_ids)
-
-                # 构建全量 (test_id, (api_id, PlanStep)) 列表供 tracker 分批
-                # Build full (test_id, (api_id, PlanStep)) list for tracker batching
-                all_items = []
+                # 构建全量 (api_id, PlanStep) 列表（保持顺序）
+                # Build full (api_id, PlanStep) list (preserving order)
+                all_items: list = []
                 if hasattr(plan, "single_test_points") and plan.single_test_points:
                     for api_id, points in plan.single_test_points.items():
                         for p in points:
-                            all_items.append((p.test_id, (api_id, p)))
+                            all_items.append((api_id, p))
 
-                for batch_ids, batch_items, batch_idx, total_batches \
-                        in tracker.iter_batches(all_items):
+                # 按位置跳过已完成的——第 N 个 skeleton 对应第 N 个 test point
+                # Skip by position — Nth skeleton corresponds to Nth test point
+                # （不使用 ProgressTracker ID 匹配，因为 LLM 生成的 test_id 与 plan 测试点 ID 不同）
+                # (Not using ProgressTracker ID matching because LLM-generated
+                #  test_ids differ from plan test point IDs)
+                completed_before = len(single_skels)
+                remaining = all_items[completed_before:]
+
+                bs = max(batch_size, 1)
+                total_batches = math.ceil(len(remaining) / bs) if remaining else 0
+
+                for i in range(0, len(remaining), bs):
+                    batch_items = remaining[i:i + bs]
+                    batch_idx = i // bs + 1
+
                     # 重组为 API-grouped dict 供 generate_batch 使用
-                    # Re-group flat items into API-grouped dict for generate_batch
+                    # Re-group into API-grouped dict for generate_batch
                     batch_grouped: dict = {}
                     for api_id, p in batch_items:
                         batch_grouped.setdefault(api_id, []).append(p)
@@ -226,10 +233,15 @@ class BatchController:
                         batch_idx, total_batches,
                     )
                     single_skels.extend(skeletons)
-                    tracker.mark_completed(batch_ids)
+                    completed = len(single_skels)  # 始终从实际数据计算 / always from actual data
 
                     # 更新进度并保存 checkpoint / Update progress and save checkpoint
-                    sub.update(tracker.to_dict())
+                    sub.update({
+                        "status": "in_progress" if completed < total else "completed",
+                        "completed_count": completed,
+                        "batch_size": batch_size,
+                        "total_items": total,
+                    })
                     self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE,
                                           single_skels, existing_biz_cases or [],
                                           all_failures, output_dir, phases=phases,
@@ -237,12 +249,12 @@ class BatchController:
                     logger.info(
                         _("batch_controller.skeleton_batch_progress",
                           batch=batch_idx, total_batches=total_batches,
-                          sub_type="single", completed=tracker.completed,
+                          sub_type="single", completed=completed,
                           total_items=total))
 
                 # 标记 single 子步骤完成 / Mark single sub-step completed
                 sub["status"] = "completed"
-                sub["completed_count"] = tracker.completed
+                sub["completed_count"] = len(single_skels)
                 self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE,
                                       single_skels, existing_biz_cases or [],
                                       all_failures, output_dir, phases=phases,
@@ -269,30 +281,36 @@ class BatchController:
             if sub.get("status") != "completed" and total > 0:
                 biz_skels = list(existing_biz_cases) if existing_biz_cases else []
 
-                # 构建 ProgressTracker — completed 从实际数据计算
-                # Build ProgressTracker — completed derived from actual data
-                existing_ids = {s.get('sheet_name', '') for s in biz_skels}
-                tracker = ProgressTracker.from_existing(
-                    total=total, batch_size=batch_size,
-                    completed_ids=existing_ids)
-
-                # 构建全量 (sheet_name, scenario) 列表供 tracker 分批
-                # Build full (sheet_name, scenario) list for tracker batching
+                # 构建全量 scenario 列表（保持顺序）
+                # Build full scenario list (preserving order)
                 all_items = [
-                    (s.get('name', f'biz_{i}'), s)
-                    for i, s in enumerate(plan.biz_flow_scenarios)
+                    s for s in plan.biz_flow_scenarios
                 ] if hasattr(plan, "biz_flow_scenarios") and plan.biz_flow_scenarios else []
 
-                for batch_ids, batch_items, batch_idx, total_batches \
-                        in tracker.iter_batches(all_items):
+                # 按位置跳过已完成的 / Skip by position
+                completed_before = len(biz_skels)
+                remaining = all_items[completed_before:]
+
+                bs = max(batch_size, 1)
+                total_batches = math.ceil(len(remaining) / bs) if remaining else 0
+
+                for i in range(0, len(remaining), bs):
+                    batch_items = remaining[i:i + bs]
+                    batch_idx = i // bs + 1
+
                     skeletons = biz_skel_gen.generate_batch(
                         batch_items, plan, iface_dicts, api_summary, user_guidance,
                         batch_idx, total_batches,
                     )
                     biz_skels.extend(skeletons)
-                    tracker.mark_completed(batch_ids)
+                    completed = len(biz_skels)  # 始终从实际数据计算 / always from actual data
 
-                    sub.update(tracker.to_dict())
+                    sub.update({
+                        "status": "in_progress" if completed < total else "completed",
+                        "completed_count": completed,
+                        "batch_size": batch_size,
+                        "total_items": total,
+                    })
                     self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE,
                                           single_skels, biz_skels,
                                           all_failures, output_dir, phases=phases,
@@ -300,11 +318,11 @@ class BatchController:
                     logger.info(
                         _("batch_controller.skeleton_batch_progress",
                           batch=batch_idx, total_batches=total_batches,
-                          sub_type="biz", completed=tracker.completed,
+                          sub_type="biz", completed=completed,
                           total_items=total))
 
                 sub["status"] = "completed"
-                sub["completed_count"] = tracker.completed
+                sub["completed_count"] = len(biz_skels)
                 self._save_checkpoint(ckpt_mgr, _SKELETON_PHASE,
                                       single_skels, biz_skels,
                                       all_failures, output_dir, phases=phases,
@@ -850,12 +868,12 @@ class BatchController:
             if old_skel_bs is not None and old_skel_bs != self._skeleton_batch_size:
                 logger.warning(
                     _("batch_controller.setting_restored",
-                      key="skeleton_batch_size",
+                      setting_key="skeleton_batch_size",
                       current=self._skeleton_batch_size, restored=old_skel_bs))
             if old_plugin_bs is not None and old_plugin_bs != self._batch_size:
                 logger.warning(
                     _("batch_controller.setting_restored",
-                      key="plugin_batch_size",
+                      setting_key="plugin_batch_size",
                       current=self._batch_size, restored=old_plugin_bs))
             self._batch_size = ckpt_settings.get("batch_size", self._batch_size)
             self._skeleton_batch_size = ckpt_settings.get(
