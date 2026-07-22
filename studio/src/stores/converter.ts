@@ -9,6 +9,7 @@ import { spawnConverter, killConverter, checkConverterRunning, listenToConverter
 import { resolvePythonCommand } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
 import { useAgentStore } from './agent'
+import { fixStaleRunningStatus, STALE_STATUS_ERROR_MSG } from '../utils/process-liveness'
 
 const SESSIONS_FILE = 'converter_sessions.json'
 
@@ -290,6 +291,21 @@ export const useConverterStore = defineStore('converter', () => {
 
   async function initialize(): Promise<void> {
     await loadSessions()
+    // 修复启动时卡在 running 状态的旧会话 / Fix stale running sessions on startup
+    if (await fixStaleRunningStatus(
+      sessions.value,
+      checkConverterRunning,
+      ['running'],
+      STALE_STATUS_ERROR_MSG,
+    )) {
+      // 为被修复的项添加日志 / Add log for fixed items
+      for (const s of sessions.value) {
+        if (s.error === STALE_STATUS_ERROR_MSG) {
+          appendLog(s.id, 'error', '会话状态已修正：进程已丢失（Studio 关闭或崩溃）/ Session status corrected: process lost (Studio was closed or crashed)')
+        }
+      }
+      await saveSessions()
+    }
   }
 
   return {

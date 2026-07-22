@@ -14,6 +14,7 @@ import type {
 import { spawnAgent, sendToAgent, killAgent, checkAgentRunning, listenToAgentEvents } from '../utils/agent-bridge'
 import { resolvePythonCommand } from '../utils/resolve-python'
 import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
+import { fixStaleRunningStatus, STALE_STATUS_ERROR_MSG } from '../utils/process-liveness'
 
 const CONFIG_FILE = 'agent_config.json'
 const REGISTRY_FILE = 'agent_tasks.json'
@@ -411,6 +412,21 @@ export const useAgentStore = defineStore('agent', () => {
   async function initialize(): Promise<void> {
     await loadConfig()
     await loadTaskRegistry()
+    // 修复启动时卡在 running/question 状态的旧任务 / Fix stale running/question tasks on startup
+    if (await fixStaleRunningStatus(
+      tasks.value,
+      checkAgentRunning,
+      ['running', 'question'],
+      STALE_STATUS_ERROR_MSG,
+    )) {
+      // 为被修复的项添加日志 / Add log for fixed items
+      for (const task of tasks.value) {
+        if (task.error === STALE_STATUS_ERROR_MSG) {
+          appendLog(task.id, 'error', '任务状态已修正：进程已丢失（Studio 关闭或崩溃）/ Task status corrected: process lost (Studio was closed or crashed)')
+        }
+      }
+      await saveTaskRegistry()
+    }
     // 后台验证目录，不阻塞 UI / Validate dirs in background
     validateOutputDirs()
   }
