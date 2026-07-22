@@ -242,6 +242,7 @@
   "batch_controller.plugin_failed_after_retries": "Plugin '{name}' failed after {retries} retries — keeping original",
   "batch_controller.plugin_retry": "Plugin '{name}' retry {attempt}/{max}",
   "batch_controller.resume_partial": "Resuming {sub_type}: {completed}/{total} already processed, {remaining} remaining",
+  "batch_controller.setting_restored": "Setting '{key}' restored from checkpoint: current={current}, restored={restored}. Delete checkpoint and re-run to use new value.",
   "batch_controller.batch_progress": "Batch {batch}/{total_batches} ({sub_type}): {completed}/{total_items} processed",
   "batch_controller.skeleton_batch_progress": "Skeleton batch {batch}/{total_batches} ({sub_type}): {completed}/{total_items} generated",
   "batch_controller.skeleton_resume_single": "Resuming single skeleton gen: {completed}/{total} already generated",

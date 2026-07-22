@@ -242,6 +242,7 @@
   "batch_controller.plugin_failed_after_retries": "插件 '{name}' 失败 {retries} 次 — 保留原始数据",
   "batch_controller.plugin_retry": "插件 '{name}' 重试 {attempt}/{max}",
   "batch_controller.resume_partial": "恢复 {sub_type}: 已完成 {completed}/{total}，剩余 {remaining} 个用例",
+  "batch_controller.setting_restored": "设置 '{key}' 已从 checkpoint 恢复: 当前值={current}, 恢复值={restored}。如需使用新值，请删除 checkpoint 后重新运行。 / Setting '{key}' restored from checkpoint: current={current}, restored={restored}. Delete checkpoint and re-run to use new value.",
   "batch_controller.batch_progress": "批次 {batch}/{total_batches} ({sub_type}): 已处理 {completed}/{total_items}",
   "batch_controller.skeleton_batch_progress": "骨架批次 {batch}/{total_batches} ({sub_type}): 已生成 {completed}/{total_items}",
   "batch_controller.skeleton_resume_single": "恢复单接口骨架生成: 已生成 {completed}/{total}",

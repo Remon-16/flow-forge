@@ -898,8 +898,10 @@ class TestSkeletonPhaseResumeProgress:
             assert save_count[0] >= 3
 
     def should_resume_single_from_completed_count(self):
-        """预置 checkpoint completed_count=10 → resume 跳过前 10 个。
-        Pre-set checkpoint completed_count=10 → first 10 skipped on resume."""
+        """预置 checkpoint 有已完成 skeleton → resume 基于 test_id 过滤。
+        Pre-set checkpoint with completed skeletons → resume filters by test_id.
+        改用 ProgressTracker ID 集合过滤替代旧的批次索引跳过。
+        Uses ProgressTracker ID-based filtering instead of batch-index skip."""
         settings = _make_settings(skeleton_batch_size=10)
         controller = BatchController(settings)
 
@@ -907,7 +909,8 @@ class TestSkeletonPhaseResumeProgress:
             memory_dir = str(Path(tmpdir) / "memory")
             ckpt_mgr = CheckpointManager(memory_dir)
 
-            # 预置 checkpoint：已完成 10 个 / Pre-set checkpoint: 10 completed
+            # 预置 checkpoint：已完成 10 个，test_id 与 plan 匹配
+            # Pre-set checkpoint: 10 completed with test_ids matching the plan
             controller._phase_progress = {
                 "skeletons_generated": {
                     "status": "in_progress",
@@ -916,7 +919,7 @@ class TestSkeletonPhaseResumeProgress:
                 },
             }
             ckpt_mgr.save_data("skeletons_generated", {
-                "single_cases": [{"test_id": f"existing_{i}", "url": "/api/test"} for i in range(10)],
+                "single_cases": [{"test_id": f"api_a_{i}", "url": "/api/test"} for i in range(10)],
                 "biz_cases": [],
                 "failures": [],
             })
@@ -933,13 +936,7 @@ class TestSkeletonPhaseResumeProgress:
             plan = _mock_plan_with_single_points({"api_a": 25})
             single_gen = MagicMock()
             single_gen._skeleton_batch_size = 10
-            single_gen.iter_batches = MagicMock(return_value=iter([
-                ({"api_a": plan.single_test_points["api_a"][:10]}, 10, 1, 3),
-                ({"api_a": plan.single_test_points["api_a"][10:20]}, 10, 2, 3),
-                ({"api_a": plan.single_test_points["api_a"][20:]}, 5, 3, 3),
-            ]))
-            # 批次 1 应被跳过（batch_start=0 < completed=10），只调用批次 2、3
-            # Batch 1 should be skipped; only batches 2 and 3 called
+            # iter_batches 不再被 ProgressTracker 使用 / iter_batches no longer used by ProgressTracker
             gen_calls = []
 
             def gen_side_effect(batch_grouped, *args, **kwargs):
@@ -951,7 +948,6 @@ class TestSkeletonPhaseResumeProgress:
 
             biz_gen = MagicMock()
             biz_gen._skeleton_batch_size = 10
-            biz_gen.iter_batches = MagicMock(return_value=iter([]))
 
             single_cases, biz_cases, failures = controller._run_skeleton_phase(
                 plan, [], "", None, single_gen, biz_gen, "", "single",
@@ -959,7 +955,8 @@ class TestSkeletonPhaseResumeProgress:
                 existing_single_cases=existing_single,
             )
 
-            # 批次 1 被跳过，只调用了批次 2、3 / Batch 1 skipped, only 2 and 3 called
+            # ProgressTracker 过滤前 10 个 ID，剩余 15 个分 2 批 (10+5)
+            # ProgressTracker filters first 10 IDs, 15 remaining → 2 batches (10+5)
             assert single_gen.generate_batch.call_count == 2
             # 结果 = 已有 10 + 新生成 15 = 25 / Result = 10 existing + 15 new = 25
             assert len(single_cases) == 25

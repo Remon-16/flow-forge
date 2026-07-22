@@ -30,6 +30,7 @@ from prompts.plan_generation import (
 from prompts.plan_outline import PLAN_OUTLINE_SYSTEM, PLAN_OUTLINE_USER
 from prompts.render import render_prompt
 from i18n import get_language_name, _
+from utils.progress import ProgressTracker
 
 logger = logging.getLogger(__name__)
 
@@ -378,10 +379,15 @@ class PlanGenerator(BaseAgent):
 
     def _save_chunk_progress(self, memory_dir: str, plan_parts: Dict[str, Any],
                              api_groups: List[dict] = None,
-                             biz_batches: List[List[dict]] = None) -> None:
+                             biz_batches: List[List[dict]] = None,
+                             api_tracker: ProgressTracker = None,
+                             biz_tracker: ProgressTracker = None) -> None:
         """保存 chunk 进度（轻量格式）并增量保存 plan_sections.json。
 
         Save lightweight chunk progress + incremental plan_sections.json.
+        使用 ProgressTracker 统一进度表示。
+        Uses ProgressTracker for unified progress representation.
+
         进度文件仅记录阶段完成状态和已完成的 chunk ID 列表，不重复存储内容；
         内容由 plan_sections.json（增量保存）提供。
         Progress file only records phase status and completed chunk IDs, no content;
@@ -404,12 +410,25 @@ class PlanGenerator(BaseAgent):
             except (json.JSONDecodeError, TypeError):
                 biz_sections_data = {}
 
-        progress = {
-            "version": 2,
-            "phase_a_done": bool(plan_parts.get("global_context", "")),
-            "api_group_completed_ids": list(api_sections_data.keys()) if isinstance(api_sections_data, dict) else [],
-            "biz_batch_completed_keys": list(biz_sections_data.keys()) if isinstance(biz_sections_data, dict) else [],
-        }
+        # 使用 ProgressTracker 构建进度 / Build progress using ProgressTracker
+        progress: Dict[str, Any] = {"version": 2}
+
+        if api_tracker is not None:
+            api_light = api_tracker.to_lightweight_dict()
+            # 兼容旧 key 名 / Backward-compatible key name
+            progress["api_group_completed_ids"] = api_light["completed_ids"]
+        else:
+            progress["api_group_completed_ids"] = (
+                list(api_sections_data.keys()) if isinstance(api_sections_data, dict) else [])
+        progress["phase_a_done"] = bool(plan_parts.get("global_context", ""))
+
+        # biz 进度单独字段 / biz progress in separate field
+        if biz_tracker is not None:
+            biz_light = biz_tracker.to_lightweight_dict()
+            progress["biz_batch_completed_keys"] = biz_light["completed_ids"]
+        else:
+            progress["biz_batch_completed_keys"] = (
+                list(biz_sections_data.keys()) if isinstance(biz_sections_data, dict) else [])
 
         progress_path = Path(memory_dir) / "plan_chunks_progress.json"
         progress_path.parent.mkdir(parents=True, exist_ok=True)
@@ -625,8 +644,8 @@ class PlanGenerator(BaseAgent):
     ) -> Dict[str, str]:
         """Phase B: 按 API group 逐个生成测试点 / Generate API test sections per group.
 
-        已完成的 group (resume) 自动跳过。
-        Each completed group is saved to plan_chunks_progress.json for resume.
+        使用 ProgressTracker 统一进度管理，已完成的 group (resume) 自动跳过。
+        Uses ProgressTracker for unified progress; completed groups auto-skipped.
         """
         api_sections = plan_parts.get("api_sections", {})
         if isinstance(api_sections, str):
@@ -635,43 +654,56 @@ class PlanGenerator(BaseAgent):
         if "api_sections" not in plan_parts:
             plan_parts["api_sections"] = api_sections
 
-        for i, group in enumerate(api_groups):
-            group_name = group.get("group_name", f"group_{i}")
-            section_key = group.get("chunk_id", f"api_{group_name}")
-            if section_key in api_sections:
-                continue
+        # 构建 ProgressTracker — 从已完成的 section key 集合恢复
+        # Build ProgressTracker — restore from completed section key set
+        completed_ids = set(api_sections.keys()) if isinstance(api_sections, dict) else set()
+        tracker = ProgressTracker.from_existing(
+            total=len(api_groups), batch_size=1,
+            completed_ids=completed_ids)
 
-            # 收集该 group 的接口定义 / Collect interface defs for this group
-            group_api_ids = group.get("api_ids", [])
-            group_ifaces = [iface_by_id[aid] for aid in group_api_ids if aid in iface_by_id]
+        all_items = [(g.get("chunk_id", f"api_{g.get('group_name', '')}"), g)
+                     for g in api_groups]
 
-            prompt = render_prompt(
-                PLAN_CHUNK_API_SECTION_USER,
-                interface_defs=json.dumps(group_ifaces, ensure_ascii=False, indent=2),
-                user_guidance=user_guidance or "(none)",
-                language=get_language_name(),
-            )
+        for batch_ids, batch_items, batch_idx, total_batches \
+                in tracker.iter_batches(all_items):
+            for group in batch_items:
+                group_name = group.get("group_name", f"group_{batch_idx}")
+                section_key = group.get("chunk_id", f"api_{group_name}")
 
-            # 注入全局上下文 / Inject global context into system prompt
-            system_with_context = render_prompt(
-                PLAN_CHUNK_API_SECTION_SYSTEM,
-                global_context=global_context,
-                group_name=group_name,
-                test_focus=group.get("test_focus", ""),
-                group_api_ids=json.dumps(group_api_ids),
-                language=get_language_name(),
-            )
+                # 收集该 group 的接口定义 / Collect interface defs for this group
+                group_api_ids = group.get("api_ids", [])
+                group_ifaces = [iface_by_id[aid] for aid in group_api_ids if aid in iface_by_id]
 
-            logger.info(
-                _("plan_gen.phase_b_chunk",
-                  current=i + 1, total=len(api_groups),
-                  name=group_name, count=len(group_ifaces))
-            )
-            self.reset_steps()
-            section_md = self.call_llm(prompt, system_with_context)
-            api_sections[section_key] = section_md
-            # 保存 chunk 进度（每个 API group 后）/ Save after each API group
-            self._save_chunk_progress(memory_dir, plan_parts, api_groups=api_groups)
+                prompt = render_prompt(
+                    PLAN_CHUNK_API_SECTION_USER,
+                    interface_defs=json.dumps(group_ifaces, ensure_ascii=False, indent=2),
+                    user_guidance=user_guidance or "(none)",
+                    language=get_language_name(),
+                )
+
+                # 注入全局上下文 / Inject global context into system prompt
+                system_with_context = render_prompt(
+                    PLAN_CHUNK_API_SECTION_SYSTEM,
+                    global_context=global_context,
+                    group_name=group_name,
+                    test_focus=group.get("test_focus", ""),
+                    group_api_ids=json.dumps(group_api_ids),
+                    language=get_language_name(),
+                )
+
+                logger.info(
+                    _("plan_gen.phase_b_chunk",
+                      current=tracker.completed + 1, total=len(api_groups),
+                      name=group_name, count=len(group_ifaces))
+                )
+                self.reset_steps()
+                section_md = self.call_llm(prompt, system_with_context)
+                api_sections[section_key] = section_md
+                tracker.mark_completed(batch_ids)
+
+            # 保存 chunk 进度（用 tracker 的轻量格式）/ Save with tracker lightweight format
+            self._save_chunk_progress(
+                memory_dir, plan_parts, api_groups=api_groups, api_tracker=tracker)
 
         plan_parts["api_sections"] = api_sections
         return api_sections
@@ -690,13 +722,8 @@ class PlanGenerator(BaseAgent):
         """Phase C: 按批次生成业务链路测试（Mermaid + 用例内容）。
 
         Generate biz flow test sections in batches (Mermaid + test content).
-        每个 batch 内：逐流生成 Mermaid → 生成 biz 用例内容。
-        Within each batch: per-flow Mermaid → biz test content.
-        每项存储为 {"content": ..., "mermaid": ...}，content 不含 Mermaid。
-        Each entry stored as {"content": ..., "mermaid": ...}; content has no Mermaid.
-
-        已完成的批次 (resume) 自动跳过。
-        Completed batches are skipped on resume.
+        使用 ProgressTracker 统一进度管理，已完成的批次 (resume) 自动跳过。
+        Uses ProgressTracker for unified progress; completed batches auto-skipped.
         """
         biz_sections: Dict[str, Dict[str, str]] = plan_parts.get("biz_sections", {})
         if isinstance(biz_sections, str):
@@ -705,101 +732,116 @@ class PlanGenerator(BaseAgent):
         if "biz_sections" not in plan_parts:
             plan_parts["biz_sections"] = biz_sections
 
-        for j, batch in enumerate(biz_batches):
+        # 辅助：生成 batch key / Helper: generate batch key
+        def _biz_batch_key(batch: List[dict], j: int) -> str:
             if not batch:
-                continue
-
-            # 构造本批次的 key（首 flow 名 + 数量）/ Build batch key (first flow name + count)
+                return f"biz_batch_{j}"
             first_name = batch[0].get("name", f"flow_{j}")
             if len(batch) == 1:
-                section_key = f"biz_{first_name}"
-                flow_names = first_name
-            else:
-                section_key = f"biz_batch_{j}"
-                flow_names = ", ".join(f.get("name", "?") for f in batch)
+                return f"biz_{first_name}"
+            return f"biz_batch_{j}"
 
-            if section_key in biz_sections:
-                continue
+        # 构建 ProgressTracker — 从已完成的 section key 集合恢复
+        # Build ProgressTracker — restore from completed section key set
+        completed_ids = set(biz_sections.keys()) if isinstance(biz_sections, dict) else set()
+        tracker = ProgressTracker.from_existing(
+            total=len(biz_batches), batch_size=1,
+            completed_ids=completed_ids)
 
-            # ================================================================
-            # Step 1: 逐流生成 Mermaid 图 / Per-flow Mermaid generation
-            # ================================================================
-            batch_mermaids: Dict[str, str] = {}
-            for flow in batch:
-                flow_name = flow.get("name", "")
-                chunk_id = flow.get("chunk_id", "")
-                mermaid_content = self._generate_mermaid_for_flow(
-                    flow=flow,
-                    iface_by_id=iface_by_id,
-                    outline_json=outline_json,
+        all_items = [(_biz_batch_key(batch, j), batch)
+                     for j, batch in enumerate(biz_batches) if batch]
+
+        for batch_ids, batch_items, batch_idx, total_batches \
+                in tracker.iter_batches(all_items):
+            for batch in batch_items:
+                j = biz_batches.index(batch)
+                section_key = _biz_batch_key(batch, j)
+                first_name = batch[0].get("name", f"flow_{j}") if batch else f"flow_{j}"
+                flow_names = first_name if len(batch) == 1 else \
+                    ", ".join(f.get("name", "?") for f in batch)
+
+                # ================================================================
+                # Step 1: 逐流生成 Mermaid 图 / Per-flow Mermaid generation
+                # ================================================================
+                batch_mermaids: Dict[str, str] = {}
+                for flow in batch:
+                    chunk_id = flow.get("chunk_id", "")
+                    mermaid_content = self._generate_mermaid_for_flow(
+                        flow=flow,
+                        iface_by_id=iface_by_id,
+                        outline_json=outline_json,
+                        global_context=global_context,
+                        plan_parts=plan_parts,
+                    )
+                    batch_mermaids[chunk_id] = mermaid_content
+
+                # 收集本批次所有相关接口（去重）/ Collect relevant interfaces (deduped)
+                seen_ids = set()
+                batch_ifaces = []
+                for flow in batch:
+                    for aid in flow.get("involved_apis", []):
+                        if aid not in seen_ids and aid in iface_by_id:
+                            seen_ids.add(aid)
+                            batch_ifaces.append(iface_by_id[aid])
+
+                # 构造 flows_list 用于 prompt / Build flows_list for prompt
+                flows_desc = []
+                for flow in batch:
+                    flows_desc.append(
+                        f"- Name: {flow.get('name', '?')}\n"
+                        f"  Description: {flow.get('description', '')}\n"
+                        f"  APIs: {', '.join(flow.get('involved_apis', []))}"
+                    )
+                flows_list = "\n\n".join(flows_desc)
+
+                # ================================================================
+                # Step 2: 生成 biz 用例内容（纯文本，不含 Mermaid）
+                # Step 2: Generate biz test content (plain text, no Mermaid)
+                # ================================================================
+                prompt = render_prompt(
+                    PLAN_CHUNK_BIZ_SECTION_USER,
+                    interface_defs=json.dumps(batch_ifaces, ensure_ascii=False, indent=2),
+                    user_guidance=user_guidance or "(none)",
+                    language=get_language_name(),
+                )
+
+                system_with_context = render_prompt(
+                    PLAN_CHUNK_BIZ_SECTION_SYSTEM,
                     global_context=global_context,
-                    plan_parts=plan_parts,
-                )
-                batch_mermaids[chunk_id] = mermaid_content
-
-            # 收集本批次所有相关接口（去重）/ Collect relevant interfaces (deduped)
-            seen_ids = set()
-            batch_ifaces = []
-            for flow in batch:
-                for aid in flow.get("involved_apis", []):
-                    if aid not in seen_ids and aid in iface_by_id:
-                        seen_ids.add(aid)
-                        batch_ifaces.append(iface_by_id[aid])
-
-            # 构造 flows_list 用于 prompt / Build flows_list for prompt
-            flows_desc = []
-            for flow in batch:
-                flows_desc.append(
-                    f"- Name: {flow.get('name', '?')}\n"
-                    f"  Description: {flow.get('description', '')}\n"
-                    f"  APIs: {', '.join(flow.get('involved_apis', []))}"
-                )
-            flows_list = "\n\n".join(flows_desc)
-
-            # ================================================================
-            # Step 2: 生成 biz 用例内容（纯文本，不含 Mermaid）
-            # Step 2: Generate biz test content (plain text, no Mermaid)
-            # ================================================================
-            prompt = render_prompt(
-                PLAN_CHUNK_BIZ_SECTION_USER,
-                interface_defs=json.dumps(batch_ifaces, ensure_ascii=False, indent=2),
-                user_guidance=user_guidance or "(none)",
-                language=get_language_name(),
-            )
-
-            system_with_context = render_prompt(
-                PLAN_CHUNK_BIZ_SECTION_SYSTEM,
-                global_context=global_context,
-                flows_list=flows_list,
-                language=get_language_name(),
-            )
-
-            # 日志：单 flow vs 批量 / Log: single vs batch
-            if len(batch) == 1:
-                logger.info(
-                    _("plan_gen.phase_c_chunk",
-                      current=j + 1, total=len(biz_batches), name=flow_names)
-                )
-            else:
-                logger.info(
-                    _("plan_gen.phase_c_batch",
-                      current=j + 1, total=len(biz_batches),
-                      names=flow_names, count=len(batch))
+                    flows_list=flows_list,
+                    language=get_language_name(),
                 )
 
-            self.reset_steps()
-            section_md = self.call_llm(prompt, system_with_context)
+                # 日志：单 flow vs 批量 / Log: single vs batch
+                if len(batch) == 1:
+                    logger.info(
+                        _("plan_gen.phase_c_chunk",
+                          current=tracker.completed + 1, total=len(biz_batches), name=flow_names)
+                    )
+                else:
+                    logger.info(
+                        _("plan_gen.phase_c_batch",
+                          current=tracker.completed + 1, total=len(biz_batches),
+                          names=flow_names, count=len(batch))
+                    )
 
-            # ================================================================
-            # Step 3: 组装 batch entry — content 纯文本 + per-flow mermaid
-            # Step 3: Build batch entry — plain text content + per-flow mermaid
-            # ================================================================
-            biz_sections[section_key] = {
-                "content": section_md,
-                "mermaids": batch_mermaids,  # per-flow: {chunk_id: mermaid}
-            }
-            # 保存 chunk 进度（每个 biz batch 后）/ Save after each biz batch
-            self._save_chunk_progress(memory_dir, plan_parts, api_groups=api_groups, biz_batches=biz_batches)
+                self.reset_steps()
+                section_md = self.call_llm(prompt, system_with_context)
+
+                # ================================================================
+                # Step 3: 组装 batch entry — content 纯文本 + per-flow mermaid
+                # Step 3: Build batch entry — plain text content + per-flow mermaid
+                # ================================================================
+                biz_sections[section_key] = {
+                    "content": section_md,
+                    "mermaids": batch_mermaids,
+                }
+                tracker.mark_completed(batch_ids)
+
+            # 保存 chunk 进度（用 tracker 的轻量格式）/ Save with tracker lightweight format
+            self._save_chunk_progress(
+                memory_dir, plan_parts, api_groups=api_groups,
+                biz_batches=biz_batches, biz_tracker=tracker)
 
         plan_parts["biz_sections"] = biz_sections
         return biz_sections
