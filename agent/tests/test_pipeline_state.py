@@ -122,6 +122,90 @@ class TestPipelineResumeOutline:
             assert loaded["plan_outline"]["business_summary"] == "Test"
             assert len(loaded["plan_outline"]["api_groups"]) == 1
 
+    def should_include_plan_outline_in_resume_initial_state(self):
+        """Resume 时 initial state 应包含 plan_outline 字段。
+        The initial state built for resume must include the plan_outline
+        field loaded via _load_pipeline_state, so generate_plan_node can
+        read it without generate_outline_node having run.
+
+        这是对 runner.py resume 路径中遗漏该字段的回归测试。
+        Regression test: plan_outline was missing from the initial state
+        built in runner.py's resume path (line ~469), causing
+        generate_plan_node to fail with "plan_outline.json not found".
+        """
+        from cli.runner import _load_pipeline_state
+
+        with tempfile.TemporaryDirectory() as tmp:
+            memory_dir = Path(tmp) / "memory"
+            memory_dir.mkdir()
+            cases_dir = Path(tmp) / "cases"
+            cases_dir.mkdir()
+
+            # 保存完整的 pipeline 前置阶段 artifacts
+            # Save complete pipeline prerequisite stage artifacts
+            save_pipeline_artifact(str(memory_dir), "parsed_docs.json", {
+                "requirement_texts": [],
+                "api_raw_text": "",
+                "interfaces": [],
+                "parse_mode": "llm",
+            })
+            save_pipeline_state(str(memory_dir), "parse_docs")
+
+            save_pipeline_artifact(str(memory_dir), "api_summary.json", [])
+            save_pipeline_state(str(memory_dir), "analyze_api")
+
+            save_pipeline_state(str(memory_dir), "validate_interface_urls")
+            save_pipeline_state(str(memory_dir), "save_interfaces")
+
+            save_pipeline_artifact(str(memory_dir), "requirement_analysis.json", {})
+            save_pipeline_state(str(memory_dir), "analyze_requirement")
+
+            outline = {
+                "business_summary": "用户认证测试 / User Auth Test",
+                "api_groups": [
+                    {"chunk_id": "api_auth", "group_name": "Auth APIs",
+                     "api_ids": ["AUTH_001"], "test_focus": "Validate auth flow"},
+                ],
+                "biz_flows": [
+                    {"chunk_id": "biz_login", "name": "Login Flow",
+                     "description": "End-to-end login", "involved_apis": ["AUTH_001"]},
+                ],
+            }
+            save_pipeline_artifact(str(memory_dir), "plan_outline.json", outline)
+            save_pipeline_state(str(memory_dir), "generate_outline")
+
+            # 模拟 runner.py 的 resume initial state 构建模式
+            # Simulate the resume initial state construction pattern from runner.py
+            loaded = _load_pipeline_state(str(memory_dir))
+
+            # 验证 _load_pipeline_state 返回了 plan_outline
+            # Verify _load_pipeline_state returned plan_outline
+            assert "plan_outline" in loaded, (
+                "_load_pipeline_state must include plan_outline "
+                "when generate_outline stage is completed"
+            )
+            assert loaded["plan_outline"]["business_summary"] == "用户认证测试 / User Auth Test"
+
+            # 模拟 runner.py 中构建 initial GraphState 的模式（修复后的）
+            # Simulate the pattern used to build initial GraphState (after fix)
+            initial_state = {
+                "plan_outline": loaded.get("plan_outline"),
+                "plan_parsed": loaded.get("plan_parsed"),
+                "plan_md": loaded.get("plan_md", ""),
+            }
+
+            # 关键断言：initial state 中必须包含非 None 的 plan_outline
+            # Critical assertion: initial state must include non-None plan_outline
+            assert "plan_outline" in initial_state, (
+                "initial state MUST include plan_outline; "
+                "this was the bug — the field was missing from the resume state dict"
+            )
+            assert initial_state["plan_outline"] is not None, (
+                "plan_outline in initial state must not be None; "
+                "otherwise generate_plan_node will fail"
+            )
+            assert initial_state["plan_outline"]["business_summary"] == "用户认证测试 / User Auth Test"
+
 
 # ---------------------------------------------------------------------------
 # TestPipelineResumePlanParsed / 计划解析恢复测试

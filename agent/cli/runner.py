@@ -467,6 +467,9 @@ def main() -> int:
             "plan_annotations": loaded.get("plan_annotations", []),
             "requirement_analysis": loaded.get("requirement_analysis", {}),
             "plan_parsed": loaded.get("plan_parsed"),
+            # Resume 时从 plan_outline.json 恢复测试计划轮廓
+            # Restore test plan outline from plan_outline.json on resume
+            "plan_outline": loaded.get("plan_outline"),
             "user_guidance": _user_guidance,
             "parse_mode": _parse_mode,
             "parser_path": _parser_path,
