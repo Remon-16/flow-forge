@@ -183,7 +183,7 @@
   "review.intent_llm_error": "  Phase 1 批次 {batch} LLM 调用失败 (重试 {attempt}): {error}",
   "review.intent_validation_retry": "  Phase 1 批次 {batch} 校验失败 (重试 {attempt}): {errors}",
   "review.intent_validation_exhausted": "  Phase 1 批次 {batch} 校验重试耗尽, 标记为 noop: {errors}",
-  "review.intent_distribution": "  Phase 1 意图分布: 共 {total} 条 (update {update} / delete {delete} / add {add} / noop {noop})",
+  "review.intent_distribution": "  Phase 1 意图分布: 共 {total} 条 (fix {fix} / delete_chunk {delete_chunk} / add {add} / noop {noop})",
   "review.no_effective_change": "  [提示] 本次批注未产生任何修改 (意图可能被判为 noop 或定位失败)",
   "review.interrupt_title": "请审核测试计划",
 

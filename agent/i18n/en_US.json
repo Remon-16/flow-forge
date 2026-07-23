@@ -183,7 +183,7 @@
   "review.intent_llm_error": "  Phase 1 batch {batch} LLM error (retry {attempt}): {error}",
   "review.intent_validation_retry": "  Phase 1 batch {batch} validation failed (retry {attempt}): {errors}",
   "review.intent_validation_exhausted": "  Phase 1 batch {batch} validation retries exhausted, marked noop: {errors}",
-  "review.intent_distribution": "  Phase 1 intent distribution: {total} total (update {update} / delete {delete} / add {add} / noop {noop})",
+  "review.intent_distribution": "  Phase 1 intent distribution: {total} total (fix {fix} / delete_chunk {delete_chunk} / add {add} / noop {noop})",
   "review.no_effective_change": "  [note] Annotations produced no change (intents may be noop, or targets not located)",
   "review.interrupt_title": "Please review the test plan",
 

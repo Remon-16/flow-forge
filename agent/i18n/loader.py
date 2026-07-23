@@ -46,18 +46,21 @@ def get_lang() -> str:
     return _current_lang
 
 
-def _(key: str, **kwargs) -> str:
+def _(msg_key: str, **kwargs) -> str:
     """翻译键名对应的文本。
 
     Translate key to current language. Falls back to zh_CN, then key itself.
     Usage: _("pipeline.start") → "流水线启动" or "Pipeline started"
+
+    参数名用 msg_key 而非 key，避免与 kwargs 中的 key= 冲突。
+    Parameter named msg_key (not key) to avoid conflict with key= kwargs.
     """
     global _current_lang
     if not _current_lang:
         lang = os.getenv("AGENT_LANG", "zh_CN")
         set_lang(lang)
 
-    text = _translations.get(key) or _fallback.get(key) or key
+    text = _translations.get(msg_key) or _fallback.get(msg_key) or msg_key
     if kwargs:
         text = text.format(**kwargs)
     return text
