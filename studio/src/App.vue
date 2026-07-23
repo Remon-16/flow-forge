@@ -116,6 +116,17 @@ onMounted(async () => {
   } catch {
     // 非桌面模式或 IPC 不可用，忽略 / Non-desktop mode or IPC unavailable, ignore
   }
+
+  // 预初始化所有 stores（并行，减少总等待时间）
+  // Pre-initialize all stores in parallel to minimize total wait time
+  // 用户进入任何页面时数据已在内存中，零延迟渲染
+  // Data is ready in memory when user navigates to any page — zero-delay render
+  await Promise.all([
+    agent.initialize().catch(() => {}),
+    executorStore.initialize().catch(() => {}),
+    converterStore.initialize().catch(() => {}),
+    counterStore.initialize().catch(() => {}),
+  ])
   platformReady.value = true
 
   // 仅在桌面模式下拦截窗口关闭 / Only intercept in desktop mode

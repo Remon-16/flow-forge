@@ -514,6 +514,8 @@ export const useExecutorStore = defineStore('executor', () => {
   // ---- Init / 初始化 ----
 
   async function initialize(): Promise<void> {
+    // 幂等保护：已初始化则跳过 / Idempotent guard: skip if already initialized
+    if (settingsLoaded.value) return
     await loadSettings()
     await loadSessions()
     // 修复启动时卡在 running 状态的旧会话 / Fix stale running sessions on startup

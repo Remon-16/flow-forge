@@ -410,6 +410,8 @@ export const useAgentStore = defineStore('agent', () => {
   // ---- Init / 初始化 ----
 
   async function initialize(): Promise<void> {
+    // 幂等保护：已初始化则跳过 / Idempotent guard: skip if already initialized
+    if (configLoaded.value) return
     await loadConfig()
     await loadTaskRegistry()
     // 修复启动时卡在 running/question 状态的旧任务 / Fix stale running/question tasks on startup

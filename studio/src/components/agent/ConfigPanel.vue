@@ -161,6 +161,27 @@ function moveArrayItem(sectionKey: string, fieldPath: string, index: number, del
   emitChange(sectionKey, fieldPath, newArr)
 }
 
+/** 向嵌套对象添加新 key（内联 section 专用）/ Add a new key to a nested object (for inline sections)
+ *  默认值为空数组 []，适用于 skills.agents 等场景。
+ *  Default value is empty array [], suitable for skills.agents etc. */
+function addNestedKey(sectionKey: string, fieldPath: string) {
+  const obj = getValueAtPath(`${sectionKey}.${fieldPath}`) as Record<string, unknown>
+  const newObj = { ...(obj || {}) }
+  // 生成唯一新 key / Generate unique new key
+  const key = `new_agent_${Object.keys(newObj).length + 1}`
+  newObj[key] = []
+  emitChange(sectionKey, fieldPath, newObj)
+}
+
+/** 从嵌套对象删除指定 key（内联 section 专用）/ Delete a key from a nested object (for inline sections) */
+function deleteNestedKey(sectionKey: string, fieldPath: string, key: string) {
+  const obj = getValueAtPath(`${sectionKey}.${fieldPath}`) as Record<string, unknown>
+  if (!obj || !(key in obj)) return
+  const newObj = { ...obj }
+  delete newObj[key]
+  emitChange(sectionKey, fieldPath, newObj)
+}
+
 /** 向数组末尾添加一项 / Add an item to the end of an array */
 function addArrayItem(sectionKey: string, fieldPath: string, defaultItem: unknown) {
   const arr = getValueAtPath(`${sectionKey}.${fieldPath}`)
@@ -249,6 +270,52 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
               size="small"
               @change="(v: boolean) => emitChange(sec.key, key, v)"
             />
+          </div>
+
+          <!-- 内联 section 的嵌套对象（如 skills.agents）：每 key 为卡片，支持增删 / Inline section nested object (e.g. skills.agents): keys as cards with add/delete -->
+          <div v-else-if="isInlineSection(sec.key) && isNestedObject(val)" class="config-group">
+            <span class="config-group-label">{{ labelFor(key) }}</span>
+            <div v-for="(subVal, subKey) in val" :key="String(subKey)" class="array-item-card">
+              <div class="array-item-card-header">
+                <span>{{ labelFor(subKey) }}</span>
+                <div class="array-item-card-actions">
+                  <a-button type="text" size="small" danger
+                    @click="deleteNestedKey(sec.key, String(key), String(subKey))">✕</a-button>
+                </div>
+              </div>
+              <!-- 数组值（skills 列表）/ Array value (skills list) -->
+              <template v-if="Array.isArray(subVal)">
+                <div v-for="(item, idx) in subVal" :key="idx" class="array-item-row">
+                  <a-input :value="String(item)" size="small" style="flex: 1"
+                    @change="(e: Event) => updateArrayItem(sec.key, String(key) + '.' + String(subKey), idx, (e.target as HTMLInputElement).value)" />
+                  <a-button type="text" size="small" :disabled="idx === 0"
+                    @click="moveArrayItem(sec.key, String(key) + '.' + String(subKey), idx, -1)">
+                    <ArrowUpOutlined />
+                  </a-button>
+                  <a-button type="text" size="small" :disabled="idx === subVal.length - 1"
+                    @click="moveArrayItem(sec.key, String(key) + '.' + String(subKey), idx, 1)">
+                    <ArrowDownOutlined />
+                  </a-button>
+                  <a-button type="text" size="small" danger
+                    @click="deleteArrayItem(sec.key, String(key) + '.' + String(subKey), idx)">✕</a-button>
+                </div>
+                <a-button size="small" type="dashed"
+                  @click="addArrayItem(sec.key, String(key) + '.' + String(subKey), '')">
+                  + {{ t('jsonEditor.addItem') }}
+                </a-button>
+              </template>
+              <!-- 标量值 / Scalar value -->
+              <template v-else-if="isScalar(subVal)">
+                <a-input :value="String(subVal)" size="small" style="width: 100%"
+                  @change="(e: Event) => emitChange(sec.key, String(key) + '.' + String(subKey), (e.target as HTMLInputElement).value)" />
+              </template>
+              <!-- 其他类型只读显示 / Other types read-only -->
+              <span v-else class="config-readonly">{{ formatReadonly(subVal) }}</span>
+            </div>
+            <a-button size="small" type="dashed" style="margin-top: 6px;"
+              @click="addNestedKey(sec.key, String(key))">
+              + {{ t('jsonEditor.addItem') }}
+            </a-button>
           </div>
 
           <!-- 嵌套对象：展开子属性 / Nested object: expand sub-properties -->

@@ -343,6 +343,8 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
           <a-input v-model:value="requirementPaths" style="width: calc(100% - 80px)" :placeholder="t('agent.form_requirementHint')" />
           <a-button @click="browseFile('requirement')">{{ t('agent.settings_browse') }}</a-button>
         </a-input-group>
+        <!-- 多文件提示（始终可见，不因输入值而消失）/ Multi-file hint (always visible, not hidden by input value) -->
+        <div class="input-hint">{{ t('agent.form_requirementHint') }}</div>
       </div>
 
       <div class="form-row">
@@ -351,6 +353,8 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
           <a-input v-model:value="apiPaths" style="width: calc(100% - 80px)" :placeholder="t('agent.form_apiHint')" />
           <a-button @click="browseFile('api')">{{ t('agent.settings_browse') }}</a-button>
         </a-input-group>
+        <!-- 多文件提示（始终可见，不因输入值而消失）/ Multi-file hint (always visible, not hidden by input value) -->
+        <div class="input-hint">{{ t('agent.form_apiHint') }}</div>
       </div>
 
       <div class="form-row inline">
@@ -437,7 +441,6 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
       <ConfigPanel
         :config-data="fullConfig"
         :inline-array-sections="['validation', 'plugins', 'skills']"
-        :object-array-fields="['skills.agents']"
         @change="handleConfigChange"
       />
     </div>
@@ -512,5 +515,11 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
 .yaml-hint {
   color: #faad14;
   font-size: 12px;
+}
+/* 输入框下方常驻提示（多文件、格式说明等）/ Persistent hint below inputs (multi-file, format info, etc.) */
+.input-hint {
+  color: #999;
+  font-size: 11px;
+  margin-top: 4px;
 }
 </style>

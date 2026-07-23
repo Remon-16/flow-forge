@@ -22,6 +22,7 @@ export const useConverterStore = defineStore('converter', () => {
 
   const sessions = ref<ConverterSession[]>([])
   const activeSessionId = ref<string | null>(null)
+  const sessionsLoaded = ref(false)
 
   const _listeners = new Map<string, () => void>()
 
@@ -290,7 +291,10 @@ export const useConverterStore = defineStore('converter', () => {
   // ---- Init / 初始化 ----
 
   async function initialize(): Promise<void> {
+    // 幂等保护：已初始化则跳过 / Idempotent guard: skip if already initialized
+    if (sessionsLoaded.value) return
     await loadSessions()
+    sessionsLoaded.value = true
     // 修复启动时卡在 running 状态的旧会话 / Fix stale running sessions on startup
     if (await fixStaleRunningStatus(
       sessions.value,
@@ -312,6 +316,7 @@ export const useConverterStore = defineStore('converter', () => {
     // State
     sessions,
     activeSessionId,
+    sessionsLoaded,
     // Getters
     activeSession,
     sortedSessions,

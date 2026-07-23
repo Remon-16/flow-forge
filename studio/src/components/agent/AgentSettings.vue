@@ -15,6 +15,8 @@ const agent = useAgentStore()
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ 'update:visible': [value: boolean] }>()
 
+const saving = ref(false)
+
 const local = ref({
   pythonExePath: '',
   venvPath: '',
@@ -100,6 +102,7 @@ async function browseVenvDir() {
  * Shows error on failure instead of silently failing.
  */
 async function handleSave() {
+  saving.value = true
   try {
     agent.config = { ...local.value }
     await agent.saveConfig()
@@ -107,6 +110,8 @@ async function handleSave() {
   } catch (e: unknown) {
     const err = e as Error
     message.error(t('agent.settings_savedFailed', { reason: err?.message || String(e) }))
+  } finally {
+    saving.value = false
   }
 }
 
@@ -212,7 +217,7 @@ function handleCancel() {
 
       <div class="settings-actions">
         <a-button @click="handleCancel">{{ t('dialog.cancel') }}</a-button>
-        <a-button type="primary" @click="handleSave">{{ t('agent.form_save') }}</a-button>
+        <a-button type="primary" :loading="saving" @click="handleSave">{{ t('agent.form_save') }}</a-button>
       </div>
     </div>
   </a-modal>
