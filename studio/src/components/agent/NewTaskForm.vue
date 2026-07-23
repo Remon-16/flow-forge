@@ -440,7 +440,7 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
       <h4>{{ t('agent.form_otherConfig') }}</h4>
       <ConfigPanel
         :config-data="fullConfig"
-        :inline-array-sections="['validation', 'plugins', 'skills']"
+        :inline-array-sections="['plugins', 'skills']"
         @change="handleConfigChange"
       />
     </div>

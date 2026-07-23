@@ -514,6 +514,38 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                   + {{ t('jsonEditor.addItem') }}
                 </a-button>
               </div>
+              <!-- 非内联 section 对象数组（无排序）：展开为卡片编辑 / Non-inline section object array (no sorting): expand as card editors -->
+              <div v-else-if="!isInlineSection(sec.key) && Array.isArray(subVal) && (subVal.length === 0 || (typeof subVal[0] !== 'string' && typeof subVal[0] !== 'number'))" class="config-array indent-field">
+                <label>{{ labelFor(subKey) }}</label>
+                <div v-for="(item, idx) in subVal" :key="idx" class="array-item-card">
+                  <div class="array-item-card-header">
+                    <span>#{{ idx + 1 }}</span>
+                    <div class="array-item-card-actions">
+                      <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key) + '.' + String(subKey), idx)">✕</a-button>
+                    </div>
+                  </div>
+                  <template v-for="(fieldVal, fieldKey) in item" :key="String(fieldKey)">
+                    <div v-if="typeof fieldVal === 'string' || typeof fieldVal === 'number'" class="config-field" style="margin-left: 8px;">
+                      <label>{{ labelFor(fieldKey) }}</label>
+                      <a-input-number
+                        v-if="typeof fieldVal === 'number'"
+                        :value="fieldVal" size="small" style="width: 100%"
+                        @change="(v: any) => updateArrayItemField(sec.key, String(key) + '.' + String(subKey), idx, String(fieldKey), v)" />
+                      <a-input
+                        v-else :value="fieldVal" size="small"
+                        @change="(e: Event) => updateArrayItemField(sec.key, String(key) + '.' + String(subKey), idx, String(fieldKey), (e.target as HTMLInputElement).value)" />
+                    </div>
+                    <div v-else-if="typeof fieldVal === 'boolean'" class="config-field" style="margin-left: 8px;">
+                      <label>{{ labelFor(fieldKey) }}</label>
+                      <a-switch :checked="fieldVal" size="small"
+                        @change="(v: boolean) => updateArrayItemField(sec.key, String(key) + '.' + String(subKey), idx, String(fieldKey), v)" />
+                    </div>
+                  </template>
+                </div>
+                <a-button size="small" type="dashed" @click="addArrayItem(sec.key, String(key) + '.' + String(subKey), {})">
+                  + {{ t('jsonEditor.addItem') }}
+                </a-button>
+              </div>
               <!-- 非内联 section：只读文本 + 编辑 / Non-inline: readonly text + edit -->
               <div v-else class="config-field indent-field">
                 <label>{{ labelFor(subKey) }}</label>
