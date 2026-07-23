@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Modal } from 'ant-design-vue'
@@ -44,8 +44,17 @@ const reviewMemoryDir = computed(() => {
 })
 
 // 批注器显示/隐藏 / Annotator visibility toggle
-// 右侧批注器默认关闭，用户通过 QuestionPrompt 按钮手动打开 / Right annotator default closed, user opens via QuestionPrompt button
+// 进入计划审核时自动打开，退出时自动关闭 / Auto-open on plan review, auto-close when exiting
 const annotatorVisible = ref(false)
+
+// 自动跟随 isPlanReview 切换批注器可见性 / Auto-toggle annotator visibility with plan review state
+watch(isPlanReview, (val) => {
+  annotatorVisible.value = val
+})
+
+// 当前批注数量，传递给 QuestionPrompt 用于自动切换审核模式
+// Current annotation count, passed to QuestionPrompt for auto mode switching
+const annotationCount = ref(0)
 
 // ===================================================================
 // 可拖拽分隔条 / Resizable splitters
@@ -54,8 +63,8 @@ const annotatorVisible = ref(false)
 // 下方审核面板高度 (horizontal splitter)
 const bottomSplitter = useSplitter({
   direction: 'horizontal',
-  defaultSize: 220,
-  minSize: 100,
+  defaultSize: 280,
+  minSize: 120,
   maxSize: 600,
   reverse: true,
 })
@@ -65,7 +74,8 @@ const rightSplitter = useSplitter({
   direction: 'vertical',
   defaultSize: 500,
   minSize: 300,
-  maxSize: 900,
+  // maxSize 移除，审核计划时不限制右侧批注器最大宽度
+  // maxSize removed — no max width constraint during plan review
   reverse: true,
 })
 
@@ -153,7 +163,9 @@ onMounted(async () => {
                   class="bottom-panel"
                   :style="{ height: bottomSplitter.size.value + 'px' }"
                 >
-                  <QuestionPrompt :annotator-visible="annotatorVisible"
+                  <QuestionPrompt
+                    :annotator-visible="annotatorVisible"
+                    :annotation-count="annotationCount"
                     @toggle-annotator="annotatorVisible = !annotatorVisible" />
                 </div>
               </template>
@@ -173,6 +185,7 @@ onMounted(async () => {
                   :memory-dir="reviewMemoryDir"
                   :show-toolbar="true"
                   :default-sidebar-visible="false"
+                  @annotation-change="(n: number) => annotationCount = n"
                 />
               </div>
             </template>
@@ -304,7 +317,14 @@ onMounted(async () => {
   min-width: 0;
 }
 .content-center.has-bottom {
-  /* RunningView 在上，QuestionPrompt 在下 */
+  /* RunningView 在上，QuestionPrompt 在下 / RunningView on top, QuestionPrompt below */
+}
+/* 审核布局中 RunningView 自适应剩余空间，避免把 bottom-panel 挤出可视区 */
+/* RunningView fills remaining space in review layout, preventing bottom-panel from being clipped */
+.content-center.has-bottom :deep(.running-view) {
+  height: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 /* 下方审核面板 / Bottom review panel */

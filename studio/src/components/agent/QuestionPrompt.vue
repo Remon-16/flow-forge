@@ -11,6 +11,8 @@ const agent = useAgentStore()
 const props = defineProps<{
   /** 右侧批注器是否可见 / Whether the right annotator is visible */
   annotatorVisible?: boolean
+  /** 当前批注数量 / Current annotation count */
+  annotationCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -33,6 +35,16 @@ watch(() => prompt.value?.id, (newId, oldId) => {
   if (newId && newId !== oldId) {
     reviewMode.value = null
     reviewText.value = ''
+  }
+})
+
+// 监听批注数量变化，自动切换到批注模式
+// Watch annotation count — auto-switch to annotations mode when annotations exist
+// 批注全部删除时不切换（无法判断用户意图是想通过还是继续批注）
+// Don't switch when all annotations deleted (ambiguous user intent)
+watch(() => props.annotationCount, (count) => {
+  if (count && count > 0) {
+    reviewMode.value = 'annotations'
   }
 })
 

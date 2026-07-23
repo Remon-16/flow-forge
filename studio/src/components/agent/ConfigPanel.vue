@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import {
   ArrowUpOutlined,
   ArrowDownOutlined,
+  EditOutlined,
 } from '@ant-design/icons-vue'
 import JsonEditor from '../json-editor/JsonEditor.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
@@ -182,6 +183,37 @@ function deleteNestedKey(sectionKey: string, fieldPath: string, key: string) {
   emitChange(sectionKey, fieldPath, newObj)
 }
 
+/** 重命名嵌套对象中的 key（内联 section 专用）/ Rename a key in nested object (for inline sections) */
+function renameNestedKey(sectionKey: string, fieldPath: string, oldKey: string, newKey: string) {
+  const trimmed = newKey.trim()
+  if (!trimmed || oldKey === trimmed) return
+  const obj = getValueAtPath(`${sectionKey}.${fieldPath}`) as Record<string, unknown>
+  if (!obj || !(oldKey in obj)) return
+  // 保持 key 顺序，仅替换目标 key / Preserve key order, only replace target key
+  const newObj: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    newObj[k === oldKey ? trimmed : k] = v
+  }
+  emitChange(sectionKey, fieldPath, newObj)
+}
+
+// 正在编辑的嵌套 key 信息（sectionKey, fieldPath, oldKey）/ Currently editing nested key info
+const editingNestedKey = ref<{ sectionKey: string; fieldPath: string; oldKey: string } | null>(null)
+const editingNestedKeyValue = ref('')
+
+function startEditingNestedKey(sectionKey: string, fieldPath: string, oldKey: string) {
+  editingNestedKey.value = { sectionKey, fieldPath, oldKey }
+  editingNestedKeyValue.value = oldKey
+}
+
+function finishEditingNestedKey() {
+  if (!editingNestedKey.value) return
+  const { sectionKey, fieldPath, oldKey } = editingNestedKey.value
+  renameNestedKey(sectionKey, fieldPath, oldKey, editingNestedKeyValue.value)
+  editingNestedKey.value = null
+  editingNestedKeyValue.value = ''
+}
+
 /** 向数组末尾添加一项 / Add an item to the end of an array */
 function addArrayItem(sectionKey: string, fieldPath: string, defaultItem: unknown) {
   const arr = getValueAtPath(`${sectionKey}.${fieldPath}`)
@@ -277,7 +309,24 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
             <span class="config-group-label">{{ labelFor(key) }}</span>
             <div v-for="(subVal, subKey) in val" :key="String(subKey)" class="array-item-card">
               <div class="array-item-card-header">
-                <span>{{ labelFor(subKey) }}</span>
+                <!-- 编辑态：inline input 重命名 key / Editing: inline input to rename key -->
+                <a-input
+                  v-if="editingNestedKey?.sectionKey === sec.key && editingNestedKey?.fieldPath === String(key) && editingNestedKey?.oldKey === String(subKey)"
+                  v-model:value="editingNestedKeyValue"
+                  size="small"
+                  style="flex: 1;"
+                  @keydown.enter="finishEditingNestedKey()"
+                  @blur="finishEditingNestedKey()"
+                />
+                <!-- 默认态：可点击重命名的 key 标签 / Default: clickable key label for rename -->
+                <span
+                  v-else
+                  class="editable-key-name"
+                  @click="startEditingNestedKey(sec.key, String(key), String(subKey))"
+                >
+                  {{ labelFor(subKey) }}
+                  <EditOutlined class="edit-icon" />
+                </span>
                 <div class="array-item-card-actions">
                   <a-button type="text" size="small" danger
                     @click="deleteNestedKey(sec.key, String(key), String(subKey))">✕</a-button>
@@ -643,5 +692,28 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
   display: flex;
   align-items: center;
   gap: 2px;
+}
+/* 可编辑 key 名称（点击重命名）/ Editable key name (click to rename) */
+.editable-key-name {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+.editable-key-name:hover {
+  background: #f0f0f0;
+}
+.editable-key-name .edit-icon {
+  font-size: 11px;
+  color: #bbb;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.editable-key-name:hover .edit-icon {
+  opacity: 1;
+  color: #888;
 }
 </style>

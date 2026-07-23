@@ -15,7 +15,7 @@ import type { HistoryGroup } from './AnnotationSidebar.vue'
 import HistoryAnnotationViewer from './HistoryAnnotationViewer.vue'
 import ResizableDivider from '../layout/ResizableDivider.vue'
 import { useSplitter } from '../../composables/useSplitter'
-import { readFile, listDirectoryAll, exists, writeFile } from '../../utils/desktop-bridge'
+import { readFile, listDirectoryAll, fileExists, writeFile } from '../../utils/desktop-bridge'
 import { useSettingsStore } from '../../stores/settings'
 import { joinPath } from '../../utils/path-utils'
 import type { PlanSections } from '@flow-forge-schemas'
@@ -38,6 +38,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   updateAnnotations: [annotations: AnnotationData[]]
   annotationActivity: []
+  /** 批注数量变化，通知父组件用于审核模式联动 / Annotation count changed, notify parent for review mode sync */
+  'annotation-change': [count: number]
 }>()
 
 // 左侧边栏可见性 / Left sidebar visibility
@@ -110,7 +112,7 @@ watch(() => props.memoryDir, async (dir) => {
   // Load plan_sections.json and assemble markdown for display
   if (!props.sections) {
     const sectionsPath = joinPath(dir, 'plan_sections.json')
-    if (await exists(sectionsPath)) {
+    if (await fileExists(sectionsPath)) {
       try {
         const raw = await readFile(sectionsPath)
         const loaded = JSON.parse(raw) as PlanSections
@@ -124,7 +126,7 @@ watch(() => props.memoryDir, async (dir) => {
   }
   // 加载已有批注 / Load existing annotations
   const cp = joinPath(dir, 'plan_comments.json')
-  if (await exists(cp)) {
+  if (await fileExists(cp)) {
     try {
       const raw = await readFile(cp)
       annotations.value = JSON.parse(raw)
@@ -138,7 +140,7 @@ watch(() => props.memoryDir, async (dir) => {
 
 async function loadHistory(dir: string) {
   const histDir = joinPath(dir, 'history-comments')
-  if (!(await exists(histDir))) {
+  if (!(await fileExists(histDir))) {
     historyGroups.value = []
     return
   }
@@ -176,6 +178,7 @@ watch(annotations, () => {
       message.error(e?.message || 'Auto-save failed')
     }
     emit('updateAnnotations', annotations.value)
+    emit('annotation-change', annotations.value.length)
   }, 500)
 }, { deep: true })
 
