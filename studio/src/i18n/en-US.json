@@ -399,7 +399,19 @@
     "config_consecutiveBatchFailureLimit": "Consecutive Batch Failure Limit",
     "config_both": "Both",
     "config_single": "Single",
-    "config_biz": "Biz"
+    "config_biz": "Biz",
+    "llm_provider": "Provider",
+    "llm_apiKey": "API Key",
+    "llm_model": "Model",
+    "llm_temperature": "Temperature",
+    "llm_maxOutputTokens": "Max Output Tokens",
+    "llm_contextWindow": "Context Window",
+    "llm_contextCompressionThreshold": "Context Compression Threshold",
+    "llm_baseUrl": "Base URL",
+    "llm_maxConcurrency": "Max Concurrency",
+    "llm_rateLimitDelay": "Rate Limit Delay",
+    "llm_retryBaseDelay": "Retry Base Delay",
+    "llm_requestTimeout": "Request Timeout"
   },
   "executor": {
     "title": "Case Executor",

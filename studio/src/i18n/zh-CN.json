@@ -399,7 +399,19 @@
     "config_consecutiveBatchFailureLimit": "连续批量失败上限 Consecutive Batch Failure Limit",
     "config_both": "全部 Both",
     "config_single": "单接口 Single",
-    "config_biz": "业务链路 Biz"
+    "config_biz": "业务链路 Biz",
+    "llm_provider": "供应商 Provider",
+    "llm_apiKey": "API 密钥 API Key",
+    "llm_model": "模型 Model",
+    "llm_temperature": "生成温度 Temperature",
+    "llm_maxOutputTokens": "最大输出 Token Max Output Tokens",
+    "llm_contextWindow": "上下文窗口 Context Window",
+    "llm_contextCompressionThreshold": "上下文压缩阈值 Context Compression Threshold",
+    "llm_baseUrl": "Base URL",
+    "llm_maxConcurrency": "最大并发 Max Concurrency",
+    "llm_rateLimitDelay": "请求间隔 Rate Limit Delay",
+    "llm_retryBaseDelay": "重试延迟 Retry Base Delay",
+    "llm_requestTimeout": "请求超时 Request Timeout"
   },
   "executor": {
     "title": "用例执行器",

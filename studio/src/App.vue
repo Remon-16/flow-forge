@@ -24,6 +24,12 @@ const executorStore = useExecutorStore()
 const converterStore = useConverterStore()
 const counterStore = useCounterStore()
 
+// 平台初始化状态 / Platform initialization state
+// app.mount 后立即渲染 splash，后台完成平台初始化后切换为正常 UI
+// Splash renders immediately after app.mount; switches to normal UI after background platform init completes
+const platformReady = ref(false)
+const platformError = ref('')
+
 const isHome = computed(() => route.name === 'home')
 const isAnnotator = computed(() => route.name === 'plan-annotator')
 const isAgent = computed(() => route.name === 'agent')
@@ -95,6 +101,23 @@ async function handleForceQuit() {
 onMounted(async () => {
   window.addEventListener('beforeunload', onBeforeUnload)
 
+  // 后台初始化平台缓存，非阻塞 UI 渲染
+  // Initialize platform cache in background, non-blocking UI render
+  // 非 Windows 平台守卫在此处理（不影响 UI 显示）
+  // Non-Windows guard handled here (does not block UI display)
+  const { initPlatformCache } = await import('./utils/resolve-python')
+  const { getOsPlatform } = await import('./utils/desktop-bridge')
+  try {
+    await initPlatformCache()
+    const platform = await getOsPlatform()
+    if (platform !== 'windows') {
+      platformError.value = 'Flow Forge Studio 仅支持 Windows 平台。\n\n请使用命令行工具代替：\n  cd agent && python main.py ...\n  cd python && python main.py ...'
+    }
+  } catch {
+    // 非桌面模式或 IPC 不可用，忽略 / Non-desktop mode or IPC unavailable, ignore
+  }
+  platformReady.value = true
+
   // 仅在桌面模式下拦截窗口关闭 / Only intercept in desktop mode
   if (!isDesktop) return
 
@@ -153,8 +176,18 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <!-- 启动加载状态：平台初始化完成前显示 splash，让用户立即看到界面 -->
+  <!-- Startup loading state: show splash before platform init completes so user sees UI immediately -->
+  <div v-if="!platformReady" class="splash-screen">
+    <div class="splash-content">
+      <h1>Flow Forge Studio</h1>
+      <a-spin />
+      <p v-if="platformError" class="splash-error">{{ platformError }}</p>
+    </div>
+  </div>
+
   <!-- Home page: no chrome -->
-  <div v-if="isHome" class="app-layout home-layout">
+  <div v-else-if="isHome" class="app-layout home-layout">
     <router-view />
   </div>
 
@@ -235,3 +268,32 @@ onUnmounted(() => {
     </template>
   </a-modal>
 </template>
+
+<style scoped>
+/* 启动加载 Splash 屏幕 / Startup splash screen
+   在平台初始化完成前显示，避免用户看到空白页面。
+   Displayed before platform init completes to avoid blank page. */
+.splash-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  background: #f5f5f5;
+}
+.splash-content {
+  text-align: center;
+}
+.splash-content h1 {
+  font-size: 24px;
+  margin-bottom: 16px;
+  color: #333;
+  font-weight: 600;
+}
+.splash-error {
+  color: #ff4d4f;
+  margin-top: 12px;
+  white-space: pre-line;
+  font-size: 13px;
+}
+</style>

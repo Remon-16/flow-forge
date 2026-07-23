@@ -9,6 +9,7 @@ import yaml from 'js-yaml'
 import YAML from 'yaml'
 import ConfigPanel from './ConfigPanel.vue'
 import JsonEditor from '../json-editor/JsonEditor.vue'
+import { snakeToCamel } from '../../utils/string-utils'
 
 const { t } = useI18n()
 const agent = useAgentStore()
@@ -65,6 +66,22 @@ function autoValidateExtraParamsYaml() {
   } catch (e: any) {
     extraParamsYamlError.value = e?.message || String(e)
   }
+}
+
+/**
+ * 根据 LLM 配置键查找 i18n 翻译标签，未找到则回退到原始键名。
+ * Look up i18n translation label by LLM config key; fall back to raw key if not found.
+ * YAML 键为 snake_case，i18n 键为 agent.llm_ + camelCase。
+ * YAML keys are snake_case; i18n keys are agent.llm_ + camelCase.
+ * 与 ConfigPanel.labelFor() 模式一致，但使用 agent.llm_ 前缀。
+ * Follows the same pattern as ConfigPanel.labelFor() but with agent.llm_ prefix.
+ */
+function labelForLlm(key: string): string {
+  const camelKey = snakeToCamel(key)
+  const i18nKey = 'agent.llm_' + camelKey
+  const translated = t(i18nKey)
+  // t() 在未找到翻译时返回键名本身 / t() returns the key itself when translation is missing
+  return translated !== i18nKey ? translated : key
 }
 
 /** 应用 YAML 原文编辑 → 解析并更新 extraParams / Apply YAML raw edit → parse and update extraParams */
@@ -364,7 +381,7 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
 
       <div v-if="configLoaded" class="llm-fields">
         <div v-for="(val, key) in llmConfig" :key="key" class="form-row">
-          <label>{{ key }}</label>
+          <label>{{ labelForLlm(String(key)) }}</label>
           <template v-if="typeof val === 'boolean'">
             <a-switch v-model:checked="llmConfig[key]" size="small" />
           </template>
@@ -377,7 +394,7 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
         </div>
         <!-- extra_params YAML 原文编辑（始终可编辑，自动弱校验）/ extra_params YAML raw editing (always editable, auto subtle validation) -->
         <div class="form-row">
-          <label>extra_params
+          <label>{{ labelForLlm('extra_params') }}
             <span style="color: #999; font-weight: 400; font-size: 11px;">
               ({{ t('agent.form_extraParamsHint') }})
             </span>
@@ -420,6 +437,7 @@ if (agent.config.agentRootDir && !configLoaded.value && !configError.value) {
       <ConfigPanel
         :config-data="fullConfig"
         :inline-array-sections="['validation', 'plugins', 'skills']"
+        :object-array-fields="['skills.agents']"
         @change="handleConfigChange"
       />
     </div>

@@ -52,6 +52,14 @@ fn create_dir(path: String) -> Result<(), String> {
     std::fs::create_dir_all(&path).map_err(|e| e.to_string())
 }
 
+/// 检查文件或目录是否存在（使用 std::path::Path::exists，无 FS scope 限制）。
+/// Check if a file or directory exists (uses std::path::Path::exists, no FS scope restrictions).
+/// 比读取整个文件内容轻量得多 / Much lighter than reading the entire file content.
+#[tauri::command]
+fn path_exists(path: String) -> Result<bool, String> {
+    Ok(std::path::Path::new(&path).exists())
+}
+
 #[tauri::command]
 fn read_dir_recursive(dir_path: String) -> Result<Vec<FileEntry>, String> {
     fn walk(dir: &Path) -> Result<Vec<FileEntry>, String> {
@@ -718,6 +726,7 @@ pub fn run() {
             copy_file_or_dir,
             move_file_or_dir,
             open_in_explorer,
+            path_exists,
             get_os_platform,
             has_running_agents,
             force_quit_app,

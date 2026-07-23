@@ -3,6 +3,10 @@
 // Dynamic config section editor. Renders all keys from actual configData, replacing predefined field lists.
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import {
+  ArrowUpOutlined,
+  ArrowDownOutlined,
+} from '@ant-design/icons-vue'
 import JsonEditor from '../json-editor/JsonEditor.vue'
 import { normalizeJsonValue } from '../../utils/json-helper'
 import { snakeToCamel } from '../../utils/string-utils'
@@ -13,6 +17,10 @@ const props = defineProps<{
   configData: Record<string, any>
   /** 使用内联编辑（非 JsonEditor）的 section key 列表 / Section keys using inline editing (no JsonEditor) */
   inlineArraySections?: string[]
+  /** 内联 section 中应作为对象数组的字段路径（如 skills.agents）/ Fields within inline sections that are object arrays (e.g. skills.agents)
+   *   当数组为空时，通过此列表确定应使用对象数组模板还是字符串数组模板。
+   *   When an array is empty, this list determines whether to use the object array or string array template. */
+  objectArrayFields?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -94,6 +102,11 @@ function isInlineSection(sectionKey: string): boolean {
   return props.inlineArraySections?.includes(sectionKey) ?? false
 }
 
+/** 判断内联 section 中的某个字段是否为对象数组（显式声明）/ Check if a field in an inline section is explicitly an object array */
+function isObjectArrayField(sectionKey: string, fieldKey: string): boolean {
+  return props.objectArrayFields?.includes(`${sectionKey}.${fieldKey}`) ?? false
+}
+
 /** 通过路径从 configData 获取值 / Get value from configData by dot-separated path */
 function getValueAtPath(path: string): unknown {
   const parts = path.split('.')
@@ -131,6 +144,20 @@ function deleteArrayItem(sectionKey: string, fieldPath: string, index: number) {
   if (!Array.isArray(arr)) return
   const newArr = [...arr]
   newArr.splice(index, 1)
+  emitChange(sectionKey, fieldPath, newArr)
+}
+
+/** 移动数组中的某一项（上移/下移）/ Move an array item up or down */
+function moveArrayItem(sectionKey: string, fieldPath: string, index: number, delta: number) {
+  const arr = getValueAtPath(`${sectionKey}.${fieldPath}`)
+  if (!Array.isArray(arr)) return
+  const targetIdx = index + delta
+  if (targetIdx < 0 || targetIdx >= arr.length) return
+  const newArr = [...arr]
+  // 交换两项 / Swap two items
+  const tmp = newArr[index]
+  newArr[index] = newArr[targetIdx]
+  newArr[targetIdx] = tmp
   emitChange(sectionKey, fieldPath, newArr)
 }
 
@@ -312,11 +339,19 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                 />
               </div>
               <!-- 内联 section 字符串数组 / Inline section string array -->
-              <div v-else-if="isInlineSection(sec.key) && Array.isArray(subVal) && (subVal.length === 0 || typeof subVal[0] === 'string' || typeof subVal[0] === 'number')" class="config-array indent-field">
+              <div v-else-if="isInlineSection(sec.key) && Array.isArray(subVal) && !isObjectArrayField(sec.key, String(key) + '.' + String(subKey)) && (subVal.length === 0 || typeof subVal[0] === 'string' || typeof subVal[0] === 'number')" class="config-array indent-field">
                 <label>{{ labelFor(subKey) }}</label>
                 <div v-for="(item, idx) in subVal" :key="idx" class="array-item-row">
                   <a-input :value="String(item)" size="small" style="flex: 1"
                     @change="(e: Event) => updateArrayItem(sec.key, String(key) + '.' + String(subKey), idx, (e.target as HTMLInputElement).value)" />
+                  <a-button type="text" size="small" :disabled="idx === 0"
+                    @click="moveArrayItem(sec.key, String(key) + '.' + String(subKey), idx, -1)">
+                    <ArrowUpOutlined />
+                  </a-button>
+                  <a-button type="text" size="small" :disabled="idx === subVal.length - 1"
+                    @click="moveArrayItem(sec.key, String(key) + '.' + String(subKey), idx, 1)">
+                    <ArrowDownOutlined />
+                  </a-button>
                   <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key) + '.' + String(subKey), idx)">✕</a-button>
                 </div>
                 <a-button size="small" type="dashed" @click="addArrayItem(sec.key, String(key) + '.' + String(subKey), '')">
@@ -324,12 +359,22 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
                 </a-button>
               </div>
               <!-- 内联 section 对象数组 / Inline section object array -->
-              <div v-else-if="isInlineSection(sec.key) && Array.isArray(subVal)" class="config-array indent-field">
+              <div v-else-if="isInlineSection(sec.key) && Array.isArray(subVal) && (isObjectArrayField(sec.key, String(key) + '.' + String(subKey)) || (subVal.length > 0 && typeof subVal[0] !== 'string' && typeof subVal[0] !== 'number'))" class="config-array indent-field">
                 <label>{{ labelFor(subKey) }}</label>
                 <div v-for="(item, idx) in subVal" :key="idx" class="array-item-card">
                   <div class="array-item-card-header">
                     <span>#{{ idx + 1 }}</span>
-                    <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key) + '.' + String(subKey), idx)">✕</a-button>
+                    <div class="array-item-card-actions">
+                      <a-button type="text" size="small" :disabled="idx === 0"
+                        @click="moveArrayItem(sec.key, String(key) + '.' + String(subKey), idx, -1)">
+                        <ArrowUpOutlined />
+                      </a-button>
+                      <a-button type="text" size="small" :disabled="idx === subVal.length - 1"
+                        @click="moveArrayItem(sec.key, String(key) + '.' + String(subKey), idx, 1)">
+                        <ArrowDownOutlined />
+                      </a-button>
+                      <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key) + '.' + String(subKey), idx)">✕</a-button>
+                    </div>
                   </div>
                   <template v-for="(fieldVal, fieldKey) in item" :key="String(fieldKey)">
                     <div v-if="typeof fieldVal === 'string' || typeof fieldVal === 'number'" class="config-field" style="margin-left: 8px;">
@@ -367,11 +412,19 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
           </div>
 
           <!-- 内联 section 的字符串数组编辑 / Inline section string array editing -->
-          <div v-else-if="isInlineSection(sec.key) && Array.isArray(val) && (val.length === 0 || typeof val[0] === 'string' || typeof val[0] === 'number')" class="config-array">
+          <div v-else-if="isInlineSection(sec.key) && Array.isArray(val) && !isObjectArrayField(sec.key, String(key)) && (val.length === 0 || typeof val[0] === 'string' || typeof val[0] === 'number')" class="config-array">
             <label>{{ labelFor(key) }}</label>
             <div v-for="(item, idx) in val" :key="idx" class="array-item-row">
               <a-input :value="String(item)" size="small" style="flex: 1"
                 @change="(e: Event) => updateArrayItem(sec.key, String(key), idx, (e.target as HTMLInputElement).value)" />
+              <a-button type="text" size="small" :disabled="idx === 0"
+                @click="moveArrayItem(sec.key, String(key), idx, -1)">
+                <ArrowUpOutlined />
+              </a-button>
+              <a-button type="text" size="small" :disabled="idx === val.length - 1"
+                @click="moveArrayItem(sec.key, String(key), idx, 1)">
+                <ArrowDownOutlined />
+              </a-button>
               <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key), idx)">✕</a-button>
             </div>
             <a-button size="small" type="dashed" @click="addArrayItem(sec.key, String(key), '')">
@@ -379,12 +432,22 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
             </a-button>
           </div>
           <!-- 内联 section 的对象数组编辑 / Inline section object array editing -->
-          <div v-else-if="isInlineSection(sec.key) && Array.isArray(val)" class="config-array">
+          <div v-else-if="isInlineSection(sec.key) && Array.isArray(val) && (isObjectArrayField(sec.key, String(key)) || (val.length > 0 && typeof val[0] !== 'string' && typeof val[0] !== 'number'))" class="config-array">
             <label>{{ labelFor(key) }}</label>
             <div v-for="(item, idx) in val" :key="idx" class="array-item-card">
               <div class="array-item-card-header">
                 <span>#{{ idx + 1 }}</span>
-                <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key), idx)">✕</a-button>
+                <div class="array-item-card-actions">
+                  <a-button type="text" size="small" :disabled="idx === 0"
+                    @click="moveArrayItem(sec.key, String(key), idx, -1)">
+                    <ArrowUpOutlined />
+                  </a-button>
+                  <a-button type="text" size="small" :disabled="idx === val.length - 1"
+                    @click="moveArrayItem(sec.key, String(key), idx, 1)">
+                    <ArrowDownOutlined />
+                  </a-button>
+                  <a-button type="text" size="small" danger @click="deleteArrayItem(sec.key, String(key), idx)">✕</a-button>
+                </div>
               </div>
               <template v-for="(fieldVal, fieldKey) in item" :key="String(fieldKey)">
                 <div v-if="typeof fieldVal === 'string' || typeof fieldVal === 'number'" class="config-field" style="margin-left: 8px;">
@@ -507,5 +570,11 @@ function onFieldJsonConfirm(value: Record<string, unknown>) {
   margin-bottom: 4px;
   font-size: 11px;
   color: #999;
+}
+/* 对象数组卡片操作按钮组 / Object array card action button group */
+.array-item-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 </style>
