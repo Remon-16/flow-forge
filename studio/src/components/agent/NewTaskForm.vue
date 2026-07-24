@@ -258,6 +258,12 @@ async function handleSubmit() {
     return
   }
 
+  // 将 form 自动模式复选框同步到 configOverrides，统一由 handleSubmit 循环处理为 --auto
+  // Sync form auto checkbox to configOverrides so it's handled uniformly in the loop below
+  if (autoMode.value && !('pipeline.auto' in configOverrides.value)) {
+    configOverrides.value['pipeline.auto'] = true
+  }
+
   const taskId = await agent.createTask({
     outputDir: outputDir.value,
     requirementPaths: requirementPaths.value,
@@ -280,7 +286,7 @@ async function handleSubmit() {
 
     if (section === 'pipeline') {
       const key = parts[1]
-      // auto 和 case_type 是布尔标志，仅当为 true 时才添加 / auto and case_type are boolean flags, only add when true
+      // auto 和 case_type 由 handleSubmit 按需追加 CLI arg，agent.ts 不再硬编码 / auto and case_type added as-needed; agent.ts no longer hardcodes them
       if (key === 'auto') { if (val) cliArgs.push('--auto'); continue }
       if (key === 'case_type') { cliArgs.push('--case-type', String(val)); continue }
       // 从 shared schema 获取 CLI flag（不在 schema 中的 key 被静默跳过）
@@ -292,23 +298,58 @@ async function handleSubmit() {
     } else if (section === 'validation') {
       // 支持嵌套路径 validation.url_doc_match_validation.enable 等 / Support nested paths
       const fieldPath = parts.slice(1).join('_')
-      // url_doc_match_validation.enable → --url-doc-match-enabled / --no-url-doc-match-enabled
       if (fieldPath === 'url_doc_match_validation_enable') {
         cliArgs.push(val ? '--url-doc-match-enabled' : '--no-url-doc-match-enabled')
       } else if (fieldPath === 'url_doc_match_validation_max_retries') {
         cliArgs.push('--url-doc-match-max-retries', String(val))
+      } else if (fieldPath === 'url_doc_match_validation_rules') {
+        // rules 数组 → --url-doc-match-strategy（提取 url_check 的策略）
+        // rules array → --url-doc-match-strategy (extract url_check strategy)
+        if (Array.isArray(val)) {
+          const urlCheck = val.find((r: any) => r?.check === 'url_check')
+          if (urlCheck?.strategy) cliArgs.push('--url-doc-match-strategy', urlCheck.strategy)
+        }
+      } else if (fieldPath === 'case_gen_validation_enable') {
+        // 注意：case_gen_validation.enable 当前在 Python 端未生效，但传递 CLI 以备将来使用
+        // Note: case_gen_validation.enable is not yet effective on Python side, pass CLI for future use
+        cliArgs.push(val ? '--case-gen-validation-enabled' : '--no-case-gen-validation-enabled')
+      } else if (fieldPath === 'case_gen_validation_max_retries') {
+        cliArgs.push('--case-gen-validation-max-retries', String(val))
+      } else if (fieldPath === 'case_gen_validation_rules') {
+        // rules 数组 → --case-gen-validation-rule（每个规则一条）
+        // rules array → --case-gen-validation-rule (one per rule)
+        if (Array.isArray(val)) {
+          for (const rule of val) {
+            if (rule && typeof rule === 'object') {
+              const ruleParts = [rule.check, rule.strategy]
+              if (rule.failure_action) ruleParts.push(rule.failure_action)
+              cliArgs.push('--case-gen-validation-rule', ruleParts.join(':'))
+            }
+          }
+        }
       }
-      // 注意：不存在 --validation/--no-validation 参数 / Note: no --validation/--no-validation flag
     } else if (section === 'plugins') {
       if (parts[1] === 'enabled') {
         cliArgs.push(val ? '--plugins' : '--no-plugins')
+      } else if (parts[1] === 'modules' && Array.isArray(val)) {
+        // modules 数组 → --plugin-module（每个模块一条）
+        // modules array → --plugin-module (one per module)
+        for (const mod of val) {
+          if (typeof mod === 'string') cliArgs.push('--plugin-module', mod)
+        }
       }
-      // modules 无 CLI 映射 / modules has no CLI mapping
     } else if (section === 'skills') {
       if (parts[1] === 'enabled') {
         cliArgs.push(val ? '--skills' : '--no-skills')
+      } else if (parts[1] === 'agents' && typeof val === 'object' && !Array.isArray(val)) {
+        // agents 对象 → --skill-agent（每个 agent 一条）
+        // agents object → --skill-agent (one per agent)
+        for (const [agentName, skills] of Object.entries(val as Record<string, any>)) {
+          if (Array.isArray(skills) && skills.length > 0) {
+            cliArgs.push('--skill-agent', `${agentName}:${(skills as string[]).join(',')}`)
+          }
+        }
       }
-      // agents 无 CLI 映射 / agents has no CLI mapping
     } else if (section === 'logging' && parts[1] === 'log_to_output' && val) {
       cliArgs.push('--log-to-output')
     }

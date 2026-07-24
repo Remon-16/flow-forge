@@ -177,9 +177,8 @@ export const useAgentStore = defineStore('agent', () => {
       '--output', task.outputDir,
       ...(reqPaths.length ? ['--requirement', ...reqPaths] : []),
       ...(apiPathList.length ? ['--api', ...apiPathList] : []),
-      ...(task.autoMode ? ['--auto'] : []),
-      ...(task.userGuidance ? ['--prompt', task.userGuidance] : []),
-      '--case-type', task.caseType,
+      // 清理换行符，避免 conda newline assertion / Sanitize newlines to avoid conda assertion
+      ...(task.userGuidance ? ['--prompt', task.userGuidance.replace(/[\r\n]+/g, ' ').trim()] : []),
       ...cliArgs,
     ]
 
@@ -193,6 +192,9 @@ export const useAgentStore = defineStore('agent', () => {
     // Spawn subprocess / 启动子进程
     try {
       const cmd = resolvePythonCommand(config.value)
+      // 打印即将执行的完整命令，便于定位问题 / Log the full command for debugging
+      const fullCmd = [cmd.exe, ...cmd.preArgs, ...args].join(' ')
+      appendLog(taskId, 'info', `[CMD] ${fullCmd}`)
       await spawnAgent(
         taskId,
         config.value.agentRootDir,
@@ -238,6 +240,9 @@ export const useAgentStore = defineStore('agent', () => {
 
     try {
       const cmd = resolvePythonCommand(config.value)
+      // 打印即将执行的完整命令，便于定位问题 / Log the full command for debugging
+      const fullCmd = [cmd.exe, ...cmd.preArgs, ...args].join(' ')
+      appendLog(taskId, 'info', `[CMD] ${fullCmd}`)
       await spawnAgent(
         taskId,
         config.value.agentRootDir,

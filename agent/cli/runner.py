@@ -66,6 +66,10 @@ _CLI_ARG_TO_CONFIG_KEY: dict = {
     "url_doc_match_strategy": "url_doc_match_strategy",
     "consecutive_batch_failure_limit": "consecutive_batch_failure_limit",
     "url_doc_match_enabled": "url_doc_match_enabled",
+    "case_gen_validation_max_retries": "case_gen_validation_max_retries",
+    "case_gen_validation_rule": "case_gen_validation_rule",
+    "plugin_module": "plugin_module",
+    "skill_agent": "skill_agent",
     "lang": "lang",
 }
 
@@ -394,6 +398,7 @@ def main() -> int:
         settings.url_doc_match_max_retries = _first(args.url_doc_match_max_retries, saved_config.get("url_doc_match_max_retries"), settings.url_doc_match_max_retries)
         settings.url_doc_match_strategy = _first(args.url_doc_match_strategy, saved_config.get("url_doc_match_strategy"), settings.url_doc_match_strategy)
         settings.consecutive_batch_failure_limit = _first(args.consecutive_batch_failure_limit, saved_config.get("consecutive_batch_failure_limit"), settings.consecutive_batch_failure_limit)
+        settings.plugin_batch_size = _first(args.plugin_batch_size, saved_config.get("plugin_batch_size"), settings.plugin_batch_size)
         # plan_biz_flow_batch_size 无 CLI 参数，仅从 saved_config 恢复 / No CLI arg, restore from saved config only
         settings.plan_biz_flow_batch_size = saved_config.get("plan_biz_flow_batch_size", settings.plan_biz_flow_batch_size)
 
@@ -415,6 +420,32 @@ def main() -> int:
         if args.lang is not None:
             settings.agent_lang = args.lang
             os.environ["AGENT_LANG"] = args.lang
+
+        # --plugin-module：覆盖 plugins.modules / Override plugins.modules
+        if args.plugin_module is not None:
+            settings.plugin_modules = list(args.plugin_module)
+
+        # --case-gen-validation-max-retries / Override case_gen max retries
+        settings.case_format_max_retries = _first(args.case_gen_validation_max_retries, settings.case_format_max_retries)
+
+        # --case-gen-validation-rule：覆盖 case_gen_validation rules / Override case_gen validation rules
+        if args.case_gen_validation_rule is not None:
+            parsed_rules = []
+            for rule_str in args.case_gen_validation_rule:
+                parts = rule_str.split(":")
+                rule = {"check": parts[0], "strategy": parts[1] if len(parts) > 1 else "warn"}
+                if len(parts) > 2:
+                    rule["failure_action"] = parts[2]
+                parsed_rules.append(rule)
+            settings.case_gen_validation = parsed_rules
+
+        # --skill-agent：覆盖 skills.agents / Override skill agents
+        if args.skill_agent is not None:
+            agents: dict[str, list[str]] = {}
+            for agent_str in args.skill_agent:
+                agent_name, _ignored, skills_str = agent_str.partition(":")
+                agents[agent_name] = [s.strip() for s in skills_str.split(",") if s.strip()]
+            settings.skill_agents = agents
 
         graph = build_workflow(settings, session_logger=session_logger)
         config = {"configurable": {"thread_id": f"resume_{datetime.now().strftime('%Y%m%d%H%M%S')}"}}
@@ -441,6 +472,7 @@ def main() -> int:
             "url_doc_match_max_retries": settings.url_doc_match_max_retries,
             "url_doc_match_strategy": settings.url_doc_match_strategy,
             "consecutive_batch_failure_limit": settings.consecutive_batch_failure_limit,
+            "case_gen_validation_max_retries": settings.case_format_max_retries,
         }
         save_run_config(str(_memory_dir), _merged_config)
 
@@ -534,6 +566,7 @@ def main() -> int:
     settings.url_doc_match_max_retries = _first(args.url_doc_match_max_retries, settings.url_doc_match_max_retries)
     settings.url_doc_match_strategy = _first(args.url_doc_match_strategy, settings.url_doc_match_strategy)
     settings.consecutive_batch_failure_limit = _first(args.consecutive_batch_failure_limit, settings.consecutive_batch_failure_limit)
+    settings.plugin_batch_size = _first(args.plugin_batch_size, settings.plugin_batch_size)
 
     # 布尔标志解析（--no-* 优先于 --*）/ Boolean flag resolution (--no-* wins over --*)
     if args.no_url_doc_match_enabled:
@@ -555,6 +588,32 @@ def main() -> int:
     if args.lang is not None:
         settings.agent_lang = args.lang
         os.environ["AGENT_LANG"] = args.lang
+
+    # --plugin-module：覆盖 plugins.modules / Override plugins.modules
+    if args.plugin_module is not None:
+        settings.plugin_modules = list(args.plugin_module)
+
+    # --case-gen-validation-max-retries / Override case_gen max retries
+    settings.case_format_max_retries = _first(args.case_gen_validation_max_retries, settings.case_format_max_retries)
+
+    # --case-gen-validation-rule：覆盖 case_gen_validation rules / Override case_gen validation rules
+    if args.case_gen_validation_rule is not None:
+        parsed_rules = []
+        for rule_str in args.case_gen_validation_rule:
+            parts = rule_str.split(":")
+            rule = {"check": parts[0], "strategy": parts[1] if len(parts) > 1 else "warn"}
+            if len(parts) > 2:
+                rule["failure_action"] = parts[2]
+            parsed_rules.append(rule)
+        settings.case_gen_validation = parsed_rules
+
+    # --skill-agent：覆盖 skills.agents / Override skill agents
+    if args.skill_agent is not None:
+        agents: dict[str, list[str]] = {}
+        for agent_str in args.skill_agent:
+            agent_name, _ignored, skills_str = agent_str.partition(":")
+            agents[agent_name] = [s.strip() for s in skills_str.split(",") if s.strip()]
+        settings.skill_agents = agents
 
     graph = build_workflow(settings, session_logger=session_logger)
     thread_id = f"flow_{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -615,6 +674,7 @@ def main() -> int:
         "url_doc_match_max_retries": _first(args.url_doc_match_max_retries, settings.url_doc_match_max_retries),
         "url_doc_match_strategy": _first(args.url_doc_match_strategy, settings.url_doc_match_strategy),
         "consecutive_batch_failure_limit": _first(args.consecutive_batch_failure_limit, settings.consecutive_batch_failure_limit),
+        "case_gen_validation_max_retries": _first(args.case_gen_validation_max_retries, settings.case_format_max_retries),
     }
     from graph.nodes.helpers import ensure_memory_dir
     ensure_memory_dir(str(memory_dir))

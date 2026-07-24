@@ -372,6 +372,53 @@
       "help_en": "Studio subprocess mode (JSON protocol)",
       "section": null,
       "studio": { "editable": false }
+    },
+    {
+      "flag": "--plugin-module",
+      "short": null,
+      "dest": "plugin_module",
+      "type": "str",
+      "action": "append",
+      "default": null,
+      "help_zh": "插件模块路径（可重复，覆盖 env.yaml 中的 plugins.modules）",
+      "help_en": "Plugin module path (repeatable, overrides plugins.modules in env.yaml)",
+      "section": "plugins",
+      "studio": { "editable": false }
+    },
+    {
+      "flag": "--case-gen-validation-rule",
+      "short": null,
+      "dest": "case_gen_validation_rule",
+      "type": "str",
+      "action": "append",
+      "default": null,
+      "help_zh": "用例生成校验规则（可重复，格式: check:strategy[:failure_action]，例 --case-gen-validation-rule url_check:skip:keep）",
+      "help_en": "Case gen validation rule (repeatable, format: check:strategy[:failure_action], e.g. --case-gen-validation-rule url_check:skip:keep)",
+      "section": "validation",
+      "studio": { "editable": false }
+    },
+    {
+      "flag": "--case-gen-validation-max-retries",
+      "short": null,
+      "dest": "case_gen_validation_max_retries",
+      "type": "int",
+      "default": null,
+      "help_zh": "用例生成校验最大重试次数（默认取自 env.yaml）",
+      "help_en": "Case gen validation max retries (default from env.yaml)",
+      "section": "validation",
+      "studio": { "editable": true, "field_type": "number" }
+    },
+    {
+      "flag": "--skill-agent",
+      "short": null,
+      "dest": "skill_agent",
+      "type": "str",
+      "action": "append",
+      "default": null,
+      "help_zh": "Skill 代理映射（可重复，格式: agent_name:skill1,skill2，例 --skill-agent data_filler:foli_mall_data_filling）",
+      "help_en": "Skill agent mapping (repeatable, format: agent_name:skill1,skill2, e.g. --skill-agent data_filler:foli_mall_data_filling)",
+      "section": "skills",
+      "studio": { "editable": false }
     }
   ]
 }
