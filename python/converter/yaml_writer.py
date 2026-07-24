@@ -54,7 +54,8 @@ def write_interfaces(
         d = dict(iface)
         d["case_type"] = "interfaces"
         test_id = str(d.get("test_id", "unknown"))
-        file_path = dir_path / f"{safe_filename(test_id)}.yaml"
+        file_path, new_id = _resolve_path_conflict(dir_path, test_id)
+        d["test_id"] = new_id
         with open(file_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(d, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
         count += 1
