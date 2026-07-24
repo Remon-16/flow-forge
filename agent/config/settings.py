@@ -136,6 +136,14 @@ class Settings:
         {"check": "processor_count", "strategy": "warn"},
     ])
 
+    # 计划解析校验 / Parse plan validation
+    # 独立的配置块，与 case_gen_validation 平级 / Independent config block, peer of case_gen_validation
+    parse_plan_validation_enabled: bool = True
+    parse_plan_validation_max_retries: int = 3
+    parse_plan_validation_rules: List[Dict[str, str]] = field(default_factory=lambda: [
+        {"check": "flow_match", "strategy": "warn"},
+    ])
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "llm_api_key": "***",
@@ -173,6 +181,9 @@ class Settings:
             "case_type": self.case_type,
             "url_doc_match_enabled": self.url_doc_match_enabled,
             "case_gen_validation": self.case_gen_validation,
+            "parse_plan_validation_enabled": self.parse_plan_validation_enabled,
+            "parse_plan_validation_max_retries": self.parse_plan_validation_max_retries,
+            "parse_plan_validation_rules": self.parse_plan_validation_rules,
         }
 
 
@@ -309,6 +320,72 @@ def _extract_case_gen_rules_raw(validation: Dict):
     return {}
 
 
+def _read_parse_plan_validation_enabled(validation: Dict) -> bool:
+    """读取计划解析校验开关 / Read parse plan validation enable flag.
+
+    优先级 / Priority:
+      1. parse_plan_validation.enable
+      2. 默认 True / Default True
+    """
+    block = validation.get("parse_plan_validation", {})
+    if isinstance(block, dict):
+        return bool(block.get("enable", True))
+    return True
+
+
+def _read_parse_plan_validation_max_retries(validation: Dict) -> int:
+    """读取计划解析校验最大重试次数 / Read parse plan validation max retries.
+
+    优先级 / Priority:
+      1. parse_plan_validation.max_retries
+      2. 默认 3 / Default 3
+    """
+    block = validation.get("parse_plan_validation", {})
+    if isinstance(block, dict):
+        return int(block.get("max_retries", 3))
+    return 3
+
+
+def _parse_parse_plan_validation_rules(validation: Dict) -> List[Dict[str, str]]:
+    """读取计划解析校验规则 / Read parse plan validation rules.
+
+    优先级 / Priority:
+      1. parse_plan_validation.rules（列表格式 / list format）
+      2. 默认 [{"check": "flow_match", "strategy": "warn"}] / Default
+    """
+    block = validation.get("parse_plan_validation", {})
+    if isinstance(block, dict):
+        rules = block.get("rules", [])
+        if isinstance(rules, list):
+            return rules
+    return [{"check": "flow_match", "strategy": "warn"}]
+
+
+def get_flow_match_failure_action(
+    validation_rules: List[Dict], default: str = "discard",
+) -> str:
+    """从校验规则列表中查找 flow_match 的 failure_action 子规则。
+    Find the failure_action sub-rule from flow_match in the validation rules list.
+
+    仅当 flow_match 的 strategy 为 "warn" 时生效（fail 直接抛异常，skip 无失败场景）。
+    Only meaningful when flow_match strategy is "warn".
+
+    Args:
+        validation_rules: 校验规则列表 / List of validation rule dicts.
+        default: 未找到时的默认动作 / Default action if not found.
+
+    Returns:
+        失败处理动作 / Failure action: "discard" | "keep".
+    """
+    for rule in validation_rules:
+        if rule.get("check") == "flow_match":
+            action = rule.get("failure_action", default)
+            if action not in ("discard", "keep"):
+                return default
+            return action
+    return default
+
+
 def load_settings(yaml_path: str = "env.yaml") -> Settings:
     """从 YAML 配置文件加载设置。Load settings from YAML config file.
 
@@ -353,6 +430,10 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         # Validation rules (new path case_gen_validation.rules, fallback old paths)
         case_gen_validation=_parse_validation_rules(_extract_case_gen_rules_raw(validation)),
         case_format_max_retries=_read_case_gen_max_retries(validation),
+        # 计划解析校验（新路径 parse_plan_validation）/ Parse plan validation (new path)
+        parse_plan_validation_enabled=_read_parse_plan_validation_enabled(validation),
+        parse_plan_validation_max_retries=_read_parse_plan_validation_max_retries(validation),
+        parse_plan_validation_rules=_parse_parse_plan_validation_rules(validation),
         # URL 文档匹配（新路径 url_doc_match_validation，回退旧路径 url_doc_match_rules）
         # URL doc-match (new path url_doc_match_validation, fallback old path url_doc_match_rules)
         url_doc_match_enabled=_read_url_doc_match_enabled(validation),

@@ -327,6 +327,20 @@ async function handleSubmit() {
             }
           }
         }
+      } else if (fieldPath === 'parse_plan_validation_max_retries') {
+        cliArgs.push('--parse-plan-validation-max-retries', String(val))
+      } else if (fieldPath === 'parse_plan_validation_rules') {
+        // rules 数组 → --parse-plan-validation-rule（每个规则一条）
+        // rules array → --parse-plan-validation-rule (one per rule)
+        if (Array.isArray(val)) {
+          for (const rule of val) {
+            if (rule && typeof rule === 'object') {
+              const ruleParts = [rule.check, rule.strategy]
+              if (rule.failure_action) ruleParts.push(rule.failure_action)
+              cliArgs.push('--parse-plan-validation-rule', ruleParts.join(':'))
+            }
+          }
+        }
       }
     } else if (section === 'plugins') {
       if (parts[1] === 'enabled') {

@@ -409,6 +409,29 @@
       "studio": { "editable": true, "field_type": "number" }
     },
     {
+      "flag": "--parse-plan-validation-rule",
+      "short": null,
+      "dest": "parse_plan_validation_rule",
+      "type": "str",
+      "action": "append",
+      "default": null,
+      "help_zh": "计划解析校验规则（可重复，格式: check:strategy[:failure_action]，例 --parse-plan-validation-rule flow_match:warn:keep）",
+      "help_en": "Parse plan validation rule (repeatable, format: check:strategy[:failure_action], e.g. --parse-plan-validation-rule flow_match:warn:keep)",
+      "section": "validation",
+      "studio": { "editable": false }
+    },
+    {
+      "flag": "--parse-plan-validation-max-retries",
+      "short": null,
+      "dest": "parse_plan_validation_max_retries",
+      "type": "int",
+      "default": null,
+      "help_zh": "计划解析校验最大重试次数（默认取自 env.yaml）",
+      "help_en": "Parse plan validation max retries (default from env.yaml)",
+      "section": "validation",
+      "studio": { "editable": true, "field_type": "number" }
+    },
+    {
       "flag": "--skill-agent",
       "short": null,
       "dest": "skill_agent",

@@ -189,6 +189,10 @@
 
   "parse_plan.parsing": "PlanParser calling LLM ({model})...",
   "parse_plan.parsed": "Parsing complete ({api_count} interface definitions, {tp_count} test points)",
+  "plan_parser.flow_match_skipped": "Mermaid flow match check skipped (strategy=skip), {total} scenarios unchecked",
+  "plan_parser.flow_match_retry": "Mermaid flow match retry {attempt}/{max_retries}: {count} unmatched ({names})",
+  "plan_parser.flow_match_failed": "Mermaid flow match FAILED (strategy=fail): {count} unmatched: {names}",
+  "plan_parser.flow_match_orphaned": "Mermaid flow match incomplete ({count} unmatched), action={action}: {names}",
 
   "batch.generating": "Generating test cases (skeleton + plugin pipeline)...",
   "batch.batch_size": "  → batch_size={size}",

@@ -11,12 +11,13 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent
-from config.settings import Settings
+from config.settings import Settings, get_strategy, get_flow_match_failure_action
 from models.schema import (
     InterfaceDef,
     PlanStep,
     TestPlan,
 )
+from i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,8 @@ class PlanParser(BaseAgent):
             compression_threshold=settings.llm_context_compression_threshold,
             skill_extensions=skill_extensions,
         )
+        # 存储设置，供关联校验等场景使用 / Store settings for association check etc.
+        self._settings = settings
 
     # ========================================================================
     # 主入口 / Main entry point
@@ -61,14 +64,25 @@ class PlanParser(BaseAgent):
             business_summary = bu
         single_api = sections.get("single_api", [])
         biz_flows = sections.get("biz_flows", [])
+        # 保存原始 biz_flows 供关联校验重试使用
+        # Store original biz_flows for flow association retries
+        self._original_biz_sections = biz_flows
 
         from prompts.plan_parser import PLAN_PARSER_SYSTEM as system_msg
         # 估算 system prompt tokens / Estimate system prompt tokens
         system_tokens = self._token_counter.count(system_msg)
-        output_reserve = max(self._max_output_tokens, 4096)
+        # 输出窗口约束 / Output window constraint
+        # 公式从 (context_window - system_tokens - 200) * 阈值
+        # 改为   (max_output_tokens - system_tokens - 200) * 阈值
+        # 基于 input ≈ output 假设，输入窗口不会小于输出窗口。
+        # 原输入窗口约束几乎不触发（128K >> 测试计划），但输出截断实际已发生。
+        # Formula changed from (context_window - system_tokens - 200) * threshold
+        # to (max_output_tokens - system_tokens - 200) * threshold.
+        # Based on input ≈ output assumption; input window won't exceed output window.
         chunk_overhead = 200
-        max_chunk_tokens = (
-            self._context_window - system_tokens - output_reserve - chunk_overhead
+        threshold = 0.9
+        max_chunk_tokens = int(
+            (self._max_output_tokens - system_tokens - chunk_overhead) * threshold
         )
 
         # 组装完整 prompt 文本 / Build full prompt text
@@ -116,6 +130,13 @@ class PlanParser(BaseAgent):
                 )
                 for iface in interfaces
             ]
+
+        # Mermaid 关联校验 / Mermaid flow association check
+        # 在解析完成后检查 biz_flow_scenarios 与 mermaid_flows 的关联性。
+        # After parsing completes, check association between biz_flow_scenarios
+        # and mermaid_flows.
+        if plan.biz_flow_scenarios and plan.mermaid_flows:
+            plan = self._validate_flow_association(plan)
 
         return plan
 
@@ -209,6 +230,135 @@ class PlanParser(BaseAgent):
                 [s for s in batch if s.get("section") == "single_api"],
                 [s for s in batch if s.get("section") == "biz_flows"],
             )
+
+    # ========================================================================
+    # 流程图关联校验 / Mermaid flow association check
+    # ========================================================================
+
+    def _validate_flow_association(self, plan: TestPlan) -> TestPlan:
+        """校验 biz_flow_scenarios 与 mermaid_flows 的关联性。
+
+        Validate association between biz_flow_scenarios and mermaid_flows.
+
+        按 parse_plan_validation 配置的策略（fail/warn/skip）处理失配场景。
+        Handle unmatched scenarios per configured strategy (fail/warn/skip).
+        """
+        from utils.flow_matcher import match_mermaids_to_scenarios
+        from prompts.plan_parser import PLAN_PARSER_SYSTEM as system_msg
+
+        # 读取校验配置 / Read validation config
+        rules = getattr(self._settings, "parse_plan_validation_rules", [])
+        strategy = get_strategy(rules, "flow_match", default="warn")
+        max_retries = getattr(
+            self._settings, "parse_plan_validation_max_retries", 3,
+        )
+        enabled = getattr(
+            self._settings, "parse_plan_validation_enabled", True,
+        )
+
+        # 开关关闭 → 等同 skip / Disabled → equivalent to skip
+        if not enabled:
+            strategy = "skip"
+
+        if strategy == "skip":
+            logger.info(
+                _("plan_parser.flow_match_skipped",
+                  total=len(plan.biz_flow_scenarios)),
+            )
+            return plan
+
+        # 获取原始 biz_sections（用于重试）/ Get original biz_sections for retry
+        original_biz = getattr(self, "_original_biz_sections", [])
+
+        all_scenarios = list(plan.biz_flow_scenarios)
+        mermaid_flows = plan.mermaid_flows
+        final_exhausted = False
+
+        for attempt in range(max_retries + 1):
+            matched, orphaned = match_mermaids_to_scenarios(
+                all_scenarios, mermaid_flows,
+            )
+            if not orphaned:
+                # 全部匹配成功 / All matched successfully
+                plan.biz_flow_scenarios = matched
+                return plan
+
+            if attempt < max_retries:
+                names_str = ", ".join(orphaned)
+                logger.warning(
+                    _("plan_parser.flow_match_retry",
+                      attempt=attempt + 1, max_retries=max_retries,
+                      count=len(orphaned), names=names_str),
+                )
+                # 只重新解析失配的场景 / Re-parse only orphaned scenarios
+                orphaned_sections = [
+                    s for s in original_biz
+                    if s.get("name", "") in orphaned
+                ]
+                if orphaned_sections:
+                    retry_text = self._assemble_parse_text(
+                        "", [], orphaned_sections,
+                    )
+                    try:
+                        new_result = self._parse_single_batch(
+                            retry_text, system_msg, None,
+                        )
+                        # 保留已匹配的场景，追加重新解析的结果
+                        # Keep matched scenarios, append re-parsed results
+                        new_scenarios = new_result.get(
+                            "biz_flow_scenarios", [],
+                        )
+                        all_scenarios = matched + new_scenarios
+                    except Exception as e:
+                        logger.warning(
+                            "Flow match retry %d failed: %s",
+                            attempt + 1, e,
+                        )
+                else:
+                    # 无原始 section 可重试，标记耗尽 / No section to retry, mark exhausted
+                    final_exhausted = True
+                    break
+            else:
+                final_exhausted = True
+                break
+
+        # 重试耗尽后的处理 / Handle retries exhausted
+        if final_exhausted or attempt >= max_retries:
+            orphaned_list = ", ".join(orphaned)
+            if strategy == "fail":
+                logger.error(
+                    _("plan_parser.flow_match_failed",
+                      count=len(orphaned), names=orphaned_list),
+                )
+                raise ValueError(
+                    f"Flow association failed after {max_retries} "
+                    f"retries: orphaned scenarios: {orphaned_list}"
+                )
+            else:
+                # warn 策略：按 failure_action 处理
+                # Warn strategy: handle by failure_action
+                failure_action = get_flow_match_failure_action(
+                    rules, default="discard",
+                )
+                if failure_action == "keep":
+                    logger.warning(
+                        _("plan_parser.flow_match_orphaned",
+                          count=len(orphaned), names=orphaned_list,
+                          action="keep"),
+                    )
+                    # 保留所有场景，包括失配的 / Keep all scenarios
+                    plan.biz_flow_scenarios = all_scenarios
+                else:
+                    # discard（默认）：丢弃失配场景
+                    # discard (default): drop orphaned scenarios
+                    logger.warning(
+                        _("plan_parser.flow_match_orphaned",
+                          count=len(orphaned), names=orphaned_list,
+                          action="discard"),
+                    )
+                    plan.biz_flow_scenarios = matched
+
+        return plan
 
     # ========================================================================
     # 辅助 / Helpers

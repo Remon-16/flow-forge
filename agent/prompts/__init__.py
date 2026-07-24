@@ -100,7 +100,9 @@ from .doc_parser import (
 
 # Compression & system prompts
 from .compression import COMPRESSION_SYSTEM, DEFAULT_CHUNK_NOTICE
-from .json_fix import JSON_FIX_PROMPT
+# JSON_FIX_PROMPT 已注释 — 与 base.py 同步，不再使用 fix prompt 重试策略。
+# JSON_FIX_PROMPT commented out — synced with base.py; fix prompt retry is deprecated.
+# from .json_fix import JSON_FIX_PROMPT
 
 __all__ = [
     "render_prompt",
@@ -167,5 +169,5 @@ __all__ = [
     # Compression & system
     "COMPRESSION_SYSTEM",
     "DEFAULT_CHUNK_NOTICE",
-    "JSON_FIX_PROMPT",
+    # "JSON_FIX_PROMPT",  # 已注释 — 与 base.py 同步 / Commented out — synced with base.py
 ]

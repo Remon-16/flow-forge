@@ -68,6 +68,8 @@ _CLI_ARG_TO_CONFIG_KEY: dict = {
     "url_doc_match_enabled": "url_doc_match_enabled",
     "case_gen_validation_max_retries": "case_gen_validation_max_retries",
     "case_gen_validation_rule": "case_gen_validation_rule",
+    "parse_plan_validation_rule": "parse_plan_validation_rule",
+    "parse_plan_validation_max_retries": "parse_plan_validation_max_retries",
     "plugin_module": "plugin_module",
     "skill_agent": "skill_agent",
     "lang": "lang",
@@ -439,6 +441,25 @@ def main() -> int:
                 parsed_rules.append(rule)
             settings.case_gen_validation = parsed_rules
 
+        # --parse-plan-validation-max-retries / Override parse plan max retries
+        settings.parse_plan_validation_max_retries = _first(
+            args.parse_plan_validation_max_retries,
+            settings.parse_plan_validation_max_retries,
+        )
+
+        # --parse-plan-validation-rule：覆盖 parse_plan_validation rules
+        # Override parse plan validation rules
+        if args.parse_plan_validation_rule is not None:
+            parsed_rules = []
+            for rule_str in args.parse_plan_validation_rule:
+                parts = rule_str.split(":")
+                rule = {"check": parts[0],
+                        "strategy": parts[1] if len(parts) > 1 else "warn"}
+                if len(parts) > 2:
+                    rule["failure_action"] = parts[2]
+                parsed_rules.append(rule)
+            settings.parse_plan_validation_rules = parsed_rules
+
         # --skill-agent：覆盖 skills.agents / Override skill agents
         if args.skill_agent is not None:
             agents: dict[str, list[str]] = {}
@@ -473,6 +494,7 @@ def main() -> int:
             "url_doc_match_strategy": settings.url_doc_match_strategy,
             "consecutive_batch_failure_limit": settings.consecutive_batch_failure_limit,
             "case_gen_validation_max_retries": settings.case_format_max_retries,
+            "parse_plan_validation_max_retries": settings.parse_plan_validation_max_retries,
         }
         save_run_config(str(_memory_dir), _merged_config)
 
@@ -607,6 +629,25 @@ def main() -> int:
             parsed_rules.append(rule)
         settings.case_gen_validation = parsed_rules
 
+    # --parse-plan-validation-max-retries / Override parse plan max retries
+    settings.parse_plan_validation_max_retries = _first(
+        args.parse_plan_validation_max_retries,
+        settings.parse_plan_validation_max_retries,
+    )
+
+    # --parse-plan-validation-rule：覆盖 parse_plan_validation rules
+    # Override parse plan validation rules
+    if args.parse_plan_validation_rule is not None:
+        parsed_rules = []
+        for rule_str in args.parse_plan_validation_rule:
+            parts = rule_str.split(":")
+            rule = {"check": parts[0],
+                    "strategy": parts[1] if len(parts) > 1 else "warn"}
+            if len(parts) > 2:
+                rule["failure_action"] = parts[2]
+            parsed_rules.append(rule)
+        settings.parse_plan_validation_rules = parsed_rules
+
     # --skill-agent：覆盖 skills.agents / Override skill agents
     if args.skill_agent is not None:
         agents: dict[str, list[str]] = {}
@@ -675,6 +716,10 @@ def main() -> int:
         "url_doc_match_strategy": _first(args.url_doc_match_strategy, settings.url_doc_match_strategy),
         "consecutive_batch_failure_limit": _first(args.consecutive_batch_failure_limit, settings.consecutive_batch_failure_limit),
         "case_gen_validation_max_retries": _first(args.case_gen_validation_max_retries, settings.case_format_max_retries),
+        "parse_plan_validation_max_retries": _first(
+            args.parse_plan_validation_max_retries,
+            settings.parse_plan_validation_max_retries,
+        ),
     }
     from graph.nodes.helpers import ensure_memory_dir
     ensure_memory_dir(str(memory_dir))
