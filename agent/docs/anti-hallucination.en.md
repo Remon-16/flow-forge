@@ -68,23 +68,25 @@ URLs that cannot be corrected are flagged (e.g. `<URL not exist>` / `[URL_MAY_IN
 
 `flow_match` is a validation check in the plan parsing stage (step 9), configured in `validation.parse_plan_validation.rules`.
 
-**Purpose**: After plan parsing completes, the system matches LLM-generated Mermaid flow diagrams against the business scenarios extracted during the requirements analysis stage. If there are "orphaned flows" — Mermaid diagrams that describe flows not matching any requirement scenario — it indicates the LLM may have hallucinated (inventing business flows not present in the requirements).
+**Purpose**: After plan parsing completes, the system validates whether LLM-generated business scenarios are correctly associated with the Mermaid flow diagrams extracted during the requirements analysis stage. If there are "orphaned scenarios" — scenarios that cannot be matched to any flow diagram — it indicates the LLM may have hallucinated (inventing business flows not present in the requirements).
 
-**Processing flow**:
-1. Calls `match_mermaids_to_scenarios()` to match each Mermaid diagram against requirement scenarios
-2. If mismatches exist, handles per `strategy`:
+**Processing flow (two-step)**:
+
+1. **Step 1 — Code-based exact name matching**: Calls `match_mermaids_to_scenarios()` to match each scenario name against diagram names by exact string comparison. In most cases the LLM preserves names, making this step efficient.
+2. **Step 2 — LLM semantic matching fallback**: If mismatches remain after step 1, sends the orphaned scenarios + all Mermaid diagrams to an LLM for semantic association (supports many-to-one: one Mermaid diagram can match multiple scenarios, e.g. normal path + error path sharing the same diagram). The code validates the LLM's results (checking ID existence and scenario coverage); successfully matched scenarios are excluded from subsequent retries. Retries up to `max_retries` times.
+3. If mismatches persist after retries are exhausted, handles per `strategy`:
    - `fail`: Raises an exception, aborting the pipeline
    - `skip`: Bypasses the check, retaining all flows
-   - `warn`: Triggers LLM correction retries (up to `max_retries` times); after retries are exhausted, applies `failure_action`
+   - `warn`: Applies `failure_action` (see below)
 
 **failure_action** (only effective when `strategy: warn`):
 
 | failure_action | Behavior |
 |----------------|------|
-| `discard` (default) | Drops orphaned flows that cannot be matched, removing them from the plan |
-| `keep` | Retains orphaned flows with a warning marker for human review |
+| `discard` (default) | Drops orphaned scenarios that cannot be matched, removing them from the plan |
+| `keep` | Retains orphaned scenarios with a warning marker for human review |
 
-> **Recommended configuration**: Consistent with URL correction, `warn + keep` is recommended. The LLM occasionally generates Mermaid diagrams for flows that genuinely exist in the requirements but cannot be matched by the algorithm; `keep` ensures valid test scenarios are not lost.
+> **Recommended configuration**: Consistent with URL correction, `warn + keep` is recommended. The LLM occasionally generates legitimate scenarios that cannot be matched by the algorithm (e.g. multiple scenario variants for the same business flow); `keep` ensures valid test scenarios are not lost.
 
 ---
 

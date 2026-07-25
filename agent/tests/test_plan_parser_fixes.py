@@ -223,11 +223,16 @@ class TestFlowMatcher:
 
 class TestFlowAssociationValidation:
     """_validate_flow_association 的 fail/warn/skip 策略。
-    Fail/warn/skip strategies for flow association validation."""
+    Fail/warn/skip strategies for flow association validation.
+
+    两步走：代码精确匹配 → LLM 语义兜底。
+    Two-step: code exact match → LLM semantic fallback.
+    """
 
     def should_keep_all_when_all_matched(self):
-        """全部匹配时不修改 plan / Plan unchanged when all matched."""
+        """全部代码匹配时不触发 LLM 匹配 / Plan unchanged when all code-matched."""
         agent = _make_agent()
+        agent._llm_match_flows = MagicMock()
         plan = TestPlan(
             business_summary="Test",
             biz_flow_scenarios=[
@@ -237,32 +242,34 @@ class TestFlowAssociationValidation:
         )
         agent._validate_flow_association(plan)
         assert len(plan.biz_flow_scenarios) == 1
+        # LLM 匹配不应被调用 / LLM matching should not be called
+        agent._llm_match_flows.assert_not_called()
 
     def should_not_check_when_empty(self):
         """无 scenarios 或无 mermaids 时跳过 / Skip when no scenarios or mermaids."""
         agent = _make_agent()
+        agent._llm_match_flows = MagicMock()
         plan = TestPlan(
             business_summary="Test",
             biz_flow_scenarios=[],
             mermaid_flows={"Flow A": "mermaid"},
         )
-        # 不应崩溃 / Should not crash
         agent._validate_flow_association(plan)
         assert plan.biz_flow_scenarios == []
+        agent._llm_match_flows.assert_not_called()
 
     def should_drop_orphaned_on_warn_discard(self):
-        """warn + discard：丢弃失配场景 / Discard orphaned on warn+discard."""
+        """warn + discard：代码匹配发现孤儿 → LLM 无法匹配 → 丢弃。
+        Code match finds orphans → LLM can't match → discard."""
         settings = _make_settings(
             ppv_rules=[{"check": "flow_match", "strategy": "warn",
                          "failure_action": "discard"}],
         )
         agent = _make_agent(settings=settings)
-        agent._original_biz_sections = []
-        # Mock: 重试也无法匹配 / Mock: retries can't match
-        agent._parse_single_batch = MagicMock(return_value={
-            "api_definitions": [],
-            "single_test_points": {},
-            "biz_flow_scenarios": [],
+        # LLM 语义匹配全部返回 None（无法匹配）
+        # LLM semantic matching returns all None (cannot match)
+        agent._llm_match_flows = MagicMock(return_value={
+            "Flow B": None,
         })
         plan = TestPlan(
             business_summary="Test",
@@ -276,19 +283,18 @@ class TestFlowAssociationValidation:
         # Flow B 被丢弃 / Flow B discarded
         assert len(plan.biz_flow_scenarios) == 1
         assert plan.biz_flow_scenarios[0]["name"] == "Flow A"
+        agent._llm_match_flows.assert_called_once()
 
     def should_keep_orphaned_on_warn_keep(self):
-        """warn + keep：保留所有场景 / Keep all on warn+keep."""
+        """warn + keep：代码匹配发现孤儿 → LLM 无法匹配 → 保留全部。
+        Code match finds orphans → LLM can't match → keep all."""
         settings = _make_settings(
             ppv_rules=[{"check": "flow_match", "strategy": "warn",
                          "failure_action": "keep"}],
         )
         agent = _make_agent(settings=settings)
-        agent._original_biz_sections = []
-        agent._parse_single_batch = MagicMock(return_value={
-            "api_definitions": [],
-            "single_test_points": {},
-            "biz_flow_scenarios": [],
+        agent._llm_match_flows = MagicMock(return_value={
+            "Flow B": None,
         })
         plan = TestPlan(
             business_summary="Test",
@@ -303,16 +309,14 @@ class TestFlowAssociationValidation:
         assert len(plan.biz_flow_scenarios) == 2
 
     def should_raise_on_fail_strategy(self):
-        """fail 策略：重试耗尽后抛异常 / Raises on fail after retries."""
+        """fail 策略：代码匹配发现孤儿 → LLM 无法匹配 → 抛异常。
+        Code match finds orphans → LLM can't match → raises."""
         settings = _make_settings(
             ppv_rules=[{"check": "flow_match", "strategy": "fail"}],
         )
         agent = _make_agent(settings=settings)
-        agent._original_biz_sections = []
-        agent._parse_single_batch = MagicMock(return_value={
-            "api_definitions": [],
-            "single_test_points": {},
-            "biz_flow_scenarios": [],
+        agent._llm_match_flows = MagicMock(return_value={
+            "Flow B": None,
         })
         plan = TestPlan(
             business_summary="Test",
@@ -331,6 +335,7 @@ class TestFlowAssociationValidation:
             ppv_rules=[{"check": "flow_match", "strategy": "skip"}],
         )
         agent = _make_agent(settings=settings)
+        agent._llm_match_flows = MagicMock()
         plan = TestPlan(
             business_summary="Test",
             biz_flow_scenarios=[
@@ -339,8 +344,224 @@ class TestFlowAssociationValidation:
             mermaid_flows={},
         )
         agent._validate_flow_association(plan)
-        # 跳过校验，场景不变 / Skipped, scenarios unchanged
         assert len(plan.biz_flow_scenarios) == 1
+        agent._llm_match_flows.assert_not_called()
+
+    def should_use_llm_match_on_code_mismatch(self):
+        """代码匹配失败时触发 LLM 语义匹配并成功关联。
+        Code match fails → LLM matching succeeds → scenarios associated."""
+        settings = _make_settings(
+            ppv_rules=[{"check": "flow_match", "strategy": "warn",
+                         "failure_action": "discard"}],
+        )
+        agent = _make_agent(settings=settings)
+        # LLM 语义匹配成功将 "Flow X" 关联到 "Flow B"
+        # LLM matching succeeds: "Flow X" → "Flow B"
+        agent._llm_match_flows = MagicMock(return_value={
+            "Flow X": "Flow B",
+        })
+        plan = TestPlan(
+            business_summary="Test",
+            biz_flow_scenarios=[
+                {"name": "Flow A", "description": "A"},
+                {"name": "Flow X", "description": "X variant"},
+            ],
+            mermaid_flows={
+                "Flow A": "```mermaid\ngraph A\n```",
+                "Flow B": "```mermaid\ngraph B\n```",
+            },
+        )
+        agent._validate_flow_association(plan)
+        # "Flow X" 被 LLM 关联到 "Flow B"，全部保留
+        # "Flow X" matched to "Flow B" by LLM, all kept
+        assert len(plan.biz_flow_scenarios) == 2
+
+
+# ============================================================================
+# 新增测试：_llm_match_flows 单元测试
+# New tests: _llm_match_flows unit tests
+# ============================================================================
+
+
+class TestLlmMatchFlows:
+    """_llm_match_flows 方法单元测试 / Unit tests for _llm_match_flows."""
+
+    def test_all_matched_first_call(self):
+        """LLM 首次调用即全部匹配 / All matched on first LLM call."""
+        agent = _make_agent()
+        agent._token_counter.count = MagicMock(return_value=50)
+        agent._estimate_input_tokens = MagicMock(return_value=200)
+        agent._max_output_tokens = 12000
+        agent.call_llm_json_object = MagicMock(return_value={
+            "matches": {
+                "Flow X": "Flow B",
+                "Flow Y": "Flow C",
+            },
+        })
+        mermaid_flows = {
+            "Flow B": "mermaid B",
+            "Flow C": "mermaid C",
+        }
+        orphaned = [
+            {"name": "Flow X", "description": "X desc"},
+            {"name": "Flow Y", "description": "Y desc"},
+        ]
+        result = agent._llm_match_flows(orphaned, mermaid_flows, max_retries=3)
+        assert result == {"Flow X": "Flow B", "Flow Y": "Flow C"}
+        # 应该只调用一次 LLM / Should only call LLM once
+        assert agent.call_llm_json_object.call_count == 1
+
+    def test_partial_match_with_retry(self):
+        """部分匹配 → 仅重试未匹配的 / Partial match → retry only unmatched."""
+        agent = _make_agent()
+        agent._token_counter.count = MagicMock(return_value=50)
+        agent._estimate_input_tokens = MagicMock(return_value=200)
+        agent._max_output_tokens = 12000
+        # 第一次：Flow X 匹配成功，Flow Y 为 null
+        # First: Flow X matched, Flow Y null
+        # 第二次：Flow Y 匹配成功
+        # Second: Flow Y matched
+        agent.call_llm_json_object = MagicMock(side_effect=[
+            {"matches": {"Flow X": "Flow B", "Flow Y": None}},
+            {"matches": {"Flow Y": "Flow C"}},
+        ])
+        mermaid_flows = {
+            "Flow B": "mermaid B",
+            "Flow C": "mermaid C",
+        }
+        orphaned = [
+            {"name": "Flow X", "description": "X desc"},
+            {"name": "Flow Y", "description": "Y desc"},
+        ]
+        result = agent._llm_match_flows(orphaned, mermaid_flows, max_retries=3)
+        assert result == {"Flow X": "Flow B", "Flow Y": "Flow C"}
+        # 两次调用：第一次全部，第二次仅 Flow Y
+        # Two calls: first for all, second only for Flow Y
+        assert agent.call_llm_json_object.call_count == 2
+        # 验证第二次调用的 prompt 仅包含 Flow Y
+        # Verify second call prompt only contains Flow Y
+        second_call_prompt = agent.call_llm_json_object.call_args_list[1][0][0]
+        assert "Flow Y" in second_call_prompt
+        assert "Flow X" not in second_call_prompt
+
+    def test_many_to_one_matching(self):
+        """多个场景匹配到同一个 Mermaid 图 / Many scenarios match one diagram."""
+        agent = _make_agent()
+        agent._token_counter.count = MagicMock(return_value=50)
+        agent._estimate_input_tokens = MagicMock(return_value=200)
+        agent._max_output_tokens = 12000
+        agent.call_llm_json_object = MagicMock(return_value={
+            "matches": {
+                "用户注册-正常路径": "用户注册流程",
+                "用户注册-异常路径": "用户注册流程",
+            },
+        })
+        mermaid_flows = {"用户注册流程": "mermaid reg"}
+        orphaned = [
+            {"name": "用户注册-正常路径", "description": "正常注册"},
+            {"name": "用户注册-异常路径", "description": "异常注册"},
+        ]
+        result = agent._llm_match_flows(orphaned, mermaid_flows, max_retries=3)
+        assert result == {
+            "用户注册-正常路径": "用户注册流程",
+            "用户注册-异常路径": "用户注册流程",
+        }
+
+    def test_invalid_mermaid_id_triggers_retry(self):
+        """LLM 返回不存在的 ID → 触发重试 / Invalid mermaid ID → triggers retry."""
+        agent = _make_agent()
+        agent._token_counter.count = MagicMock(return_value=50)
+        agent._estimate_input_tokens = MagicMock(return_value=200)
+        agent._max_output_tokens = 12000
+        # 第一次返回不存在的 ID，第二次返回正确的 ID
+        # First returns nonexistent ID, second returns correct ID
+        agent.call_llm_json_object = MagicMock(side_effect=[
+            {"matches": {"Flow X": "NonExistentFlow"}},
+            {"matches": {"Flow X": "Flow B"}},
+        ])
+        mermaid_flows = {"Flow B": "mermaid B"}
+        orphaned = [{"name": "Flow X", "description": "X desc"}]
+        result = agent._llm_match_flows(orphaned, mermaid_flows, max_retries=3)
+        assert result == {"Flow X": "Flow B"}
+        assert agent.call_llm_json_object.call_count == 2
+
+    def test_all_retries_exhausted(self):
+        """重试耗尽后返回 None / Return None after all retries exhausted."""
+        agent = _make_agent()
+        agent._token_counter.count = MagicMock(return_value=50)
+        agent._estimate_input_tokens = MagicMock(return_value=200)
+        agent._max_output_tokens = 12000
+        # 所有重试都返回 null / All retries return null
+        agent.call_llm_json_object = MagicMock(return_value={
+            "matches": {"Flow X": None},
+        })
+        mermaid_flows = {"Flow B": "mermaid B"}
+        orphaned = [{"name": "Flow X", "description": "X desc"}]
+        result = agent._llm_match_flows(orphaned, mermaid_flows, max_retries=3)
+        assert result == {"Flow X": None}
+        # 应该调用 max_retries 次 / Should call max_retries times
+        assert agent.call_llm_json_object.call_count == 3
+
+    def test_llm_call_exception_triggers_retry(self):
+        """LLM 调用异常 → 触发重试 / LLM call exception → triggers retry."""
+        agent = _make_agent()
+        agent._token_counter.count = MagicMock(return_value=50)
+        agent._estimate_input_tokens = MagicMock(return_value=200)
+        agent._max_output_tokens = 12000
+        # 第一次抛异常，第二次成功 / First throws, second succeeds
+        agent.call_llm_json_object = MagicMock(side_effect=[
+            RuntimeError("API timeout"),
+            {"matches": {"Flow X": "Flow B"}},
+        ])
+        mermaid_flows = {"Flow B": "mermaid B"}
+        orphaned = [{"name": "Flow X", "description": "X desc"}]
+        result = agent._llm_match_flows(orphaned, mermaid_flows, max_retries=3)
+        assert result == {"Flow X": "Flow B"}
+        assert agent.call_llm_json_object.call_count == 2
+
+    def test_missing_scenario_in_result_triggers_retry(self):
+        """LLM 漏掉某个场景 → 触发重试 / Missing scenario → triggers retry."""
+        agent = _make_agent()
+        agent._token_counter.count = MagicMock(return_value=50)
+        agent._estimate_input_tokens = MagicMock(return_value=200)
+        agent._max_output_tokens = 12000
+        # 第一次漏掉了 Flow Y / First misses Flow Y
+        # 第二次补上 / Second includes it
+        agent.call_llm_json_object = MagicMock(side_effect=[
+            {"matches": {"Flow X": "Flow B"}},  # Flow Y missing
+            {"matches": {"Flow Y": "Flow C"}},
+        ])
+        mermaid_flows = {"Flow B": "mermaid B", "Flow C": "mermaid C"}
+        orphaned = [
+            {"name": "Flow X", "description": "X desc"},
+            {"name": "Flow Y", "description": "Y desc"},
+        ]
+        result = agent._llm_match_flows(orphaned, mermaid_flows, max_retries=3)
+        assert result == {"Flow X": "Flow B", "Flow Y": "Flow C"}
+
+    def test_greedy_batching(self):
+        """Token 超出预算时自动分批 / Auto-batch when tokens exceed budget."""
+        agent = _make_agent()
+        agent._max_output_tokens = 2000
+        # 控制 token 估算使得每个场景约 500 tokens，预算约 1500，只能放 2 个
+        # Control estimations: ~500 tokens/scenario, budget ~1500, fits 2
+        agent._token_counter.count = MagicMock(return_value=500)
+        agent._estimate_input_tokens = MagicMock(return_value=500)  # base
+        agent.call_llm_json_object = MagicMock(return_value={
+            "matches": {"Flow A": "MA", "Flow B": "MB"},
+        })
+        mermaid_flows = {"MA": "m", "MB": "m", "MC": "m"}
+        orphaned = [
+            {"name": f"Flow {c}", "description": f"Desc {c}"}
+            for c in "ABCD"
+        ]
+        result = agent._llm_match_flows(orphaned, mermaid_flows, max_retries=2)
+        # 应该分多个批次调用 / Should call LLM in multiple batches
+        assert agent.call_llm_json_object.call_count >= 2
+        # 所有场景都返回了结果 / All scenarios have results
+        assert len(result) == 4
+        for c in "ABCD":
+            assert f"Flow {c}" in result
 
 
 # ============================================================================

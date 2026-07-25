@@ -64,9 +64,6 @@ class PlanParser(BaseAgent):
             business_summary = bu
         single_api = sections.get("single_api", [])
         biz_flows = sections.get("biz_flows", [])
-        # 保存原始 biz_flows 供关联校验重试使用
-        # Store original biz_flows for flow association retries
-        self._original_biz_sections = biz_flows
 
         from prompts.plan_parser import PLAN_PARSER_SYSTEM as system_msg
         # 估算 system prompt tokens / Estimate system prompt tokens
@@ -235,16 +232,201 @@ class PlanParser(BaseAgent):
     # 流程图关联校验 / Mermaid flow association check
     # ========================================================================
 
+    def _llm_match_flows(
+        self,
+        orphaned_scenarios: List[dict],
+        mermaid_flows: Dict[str, str],
+        max_retries: int,
+    ) -> Dict[str, Optional[str]]:
+        """使用 LLM 语义匹配孤儿场景与 Mermaid 流程图。
+
+        Use LLM to semantically match orphaned scenarios with Mermaid diagrams.
+
+        内部按 token 预算对孤儿场景做贪心分批，每批独立拥有 max_retries
+        次重试机会。LLM 返回后由代码校验结果有效性，已成功匹配的场景不参与
+        后续重试（部分重试）。
+
+        Internally greedy-batches orphaned scenarios by token budget.
+        Each batch gets its own independent max_retries quota. After each
+        LLM call, the code validates results — successfully matched scenarios
+        are excluded from subsequent retries (partial retry).
+
+        Returns:
+            {scenario_name: mermaid_name | None, ...}
+            None 表示该场景未匹配到任何 Mermaid 图。
+        """
+        from prompts.plan_parser import FLOW_MATCH_SYSTEM, FLOW_MATCH_USER
+
+        if not orphaned_scenarios:
+            return {}
+
+        # 准备 Mermaid 图列表 / Prepare mermaid diagram list
+        mermaid_list = [
+            {"name": name, "diagram": text}
+            for name, text in mermaid_flows.items()
+        ]
+        mermaids_json = json.dumps(mermaid_list, ensure_ascii=False)
+
+        # 估算 token 预算 / Estimate token budget
+        system_tokens = self._token_counter.count(FLOW_MATCH_SYSTEM)
+        chunk_overhead = 200
+        threshold = 0.9
+        max_chunk_tokens = int(
+            (self._max_output_tokens - system_tokens - chunk_overhead) * threshold
+        )
+
+        # 估算基础 prompt（Mermaid 图 + 用户模板，不含场景）
+        # Estimate base prompt tokens (mermaid diagrams + user template, no scenarios)
+        base_prompt = FLOW_MATCH_USER.format(
+            scenarios_json="[]", mermaids_json=mermaids_json,
+        )
+        base_tokens = self._estimate_input_tokens(FLOW_MATCH_SYSTEM, base_prompt)
+
+        # 贪心分批孤儿场景 / Greedy batch orphaned scenarios
+        batches: List[List[dict]] = []
+        current_batch: List[dict] = []
+        current_tokens = 0
+
+        for scenario in orphaned_scenarios:
+            scenario_json = json.dumps(
+                {
+                    "name": scenario.get("name", ""),
+                    "description": scenario.get("description", "")[:300],
+                },
+                ensure_ascii=False,
+            )
+            scenario_tokens = self._token_counter.count(scenario_json)
+
+            if current_batch and base_tokens + current_tokens + scenario_tokens > max_chunk_tokens:
+                batches.append(current_batch)
+                current_batch = []
+                current_tokens = 0
+
+            current_batch.append(scenario)
+            current_tokens += scenario_tokens
+
+        if current_batch:
+            batches.append(current_batch)
+
+        # 逐批处理，每批独立重试 / Process each batch with independent retries
+        all_matches: Dict[str, Optional[str]] = {}
+        total_batches = len(batches)
+        mermaid_names = set(mermaid_flows.keys())
+
+        for batch_idx, batch in enumerate(batches):
+            logger.info(
+                _("plan_parser.flow_match_llm_matching",
+                  batch=batch_idx + 1, total_batches=total_batches,
+                  scenario_count=len(batch), mermaid_count=len(mermaid_flows)),
+            )
+
+            pending = list(batch)  # 当前批次仍需匹配的场景
+            batch_matches: Dict[str, Optional[str]] = {}
+
+            for attempt in range(max_retries):
+                if not pending:
+                    break
+
+                try:
+                    result = self._call_llm_match_batch(
+                        pending, mermaids_json,
+                        FLOW_MATCH_SYSTEM, FLOW_MATCH_USER,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        _("plan_parser.flow_match_llm_failed",
+                          batch=batch_idx + 1, error=str(e)),
+                    )
+                    continue  # 重试 / retry
+
+                # 校验 LLM 返回结果 / Validate LLM result
+                valid_matches: Dict[str, str] = {}
+                still_pending: List[dict] = []
+                invalid_items: List[str] = []
+
+                for scenario in pending:
+                    name = scenario.get("name", "")
+                    matched_mermaid = result.get(name) if result else None
+
+                    if matched_mermaid and matched_mermaid in mermaid_names:
+                        # 有效的匹配 / Valid match
+                        valid_matches[name] = matched_mermaid
+                    elif matched_mermaid and matched_mermaid not in mermaid_names:
+                        # ID 不存在 / ID does not exist
+                        invalid_items.append(f"{name}→{matched_mermaid}")
+                        still_pending.append(scenario)
+                    else:
+                        # null 或缺失 / null or missing
+                        still_pending.append(scenario)
+
+                batch_matches.update(valid_matches)
+
+                if still_pending:
+                    logger.warning(
+                        _("plan_parser.flow_match_llm_partial_retry",
+                          batch=batch_idx + 1,
+                          matched=len(valid_matches),
+                          pending=len(still_pending),
+                          attempt=attempt + 1,
+                          max_retries=max_retries,
+                          invalid=", ".join(invalid_items) if invalid_items else "none"),
+                    )
+                    pending = still_pending
+                else:
+                    pending = []  # 全部匹配，清空 pending / All matched, clear pending
+                    break
+
+            # 重试耗尽后，剩余场景标为未匹配 / Mark remaining as unmatched
+            for scenario in pending:
+                batch_matches[scenario.get("name", "")] = None
+
+            all_matches.update(batch_matches)
+
+        return all_matches
+
+    def _call_llm_match_batch(
+        self,
+        scenarios: List[dict],
+        mermaids_json: str,
+        system_msg: str,
+        user_template: str,
+    ) -> Optional[Dict[str, Optional[str]]]:
+        """单批次 LLM 语义匹配调用。
+
+        Single-batch LLM semantic matching call.
+
+        将场景序列化为 JSON 并填充用户 prompt 模板，调用 LLM 返回匹配映射。
+        Serialize scenarios to JSON, fill user prompt template, call LLM.
+        """
+        scenarios_json = json.dumps(
+            [
+                {"name": s.get("name", ""), "description": s.get("description", "")[:300]}
+                for s in scenarios
+            ],
+            ensure_ascii=False,
+        )
+        user_prompt = user_template.format(
+            scenarios_json=scenarios_json, mermaids_json=mermaids_json,
+        )
+        result = self.call_llm_json_object(user_prompt, system_msg, "matches")
+        if result and isinstance(result, dict):
+            matches = result.get("matches", {})
+            if isinstance(matches, dict):
+                return matches
+        return None
+
     def _validate_flow_association(self, plan: TestPlan) -> TestPlan:
         """校验 biz_flow_scenarios 与 mermaid_flows 的关联性。
 
         Validate association between biz_flow_scenarios and mermaid_flows.
 
+        两步走：代码精确匹配 → LLM 语义兜底。
+        Two-step: code exact match → LLM semantic fallback.
+
         按 parse_plan_validation 配置的策略（fail/warn/skip）处理失配场景。
         Handle unmatched scenarios per configured strategy (fail/warn/skip).
         """
         from utils.flow_matcher import match_mermaids_to_scenarios
-        from prompts.plan_parser import PLAN_PARSER_SYSTEM as system_msg
 
         # 读取校验配置 / Read validation config
         rules = getattr(self._settings, "parse_plan_validation_rules", [])
@@ -267,96 +449,98 @@ class PlanParser(BaseAgent):
             )
             return plan
 
-        # 获取原始 biz_sections（用于重试）/ Get original biz_sections for retry
-        original_biz = getattr(self, "_original_biz_sections", [])
-
         all_scenarios = list(plan.biz_flow_scenarios)
         mermaid_flows = plan.mermaid_flows
-        final_exhausted = False
 
-        for attempt in range(max_retries + 1):
-            matched, orphaned = match_mermaids_to_scenarios(
-                all_scenarios, mermaid_flows,
+        # ====================================================================
+        # 第一步：代码精确名称匹配 / Step 1: Code-based exact name matching
+        # ====================================================================
+        matched, orphaned_names = match_mermaids_to_scenarios(
+            all_scenarios, mermaid_flows,
+        )
+        if not orphaned_names:
+            # 全部匹配成功 / All matched successfully
+            plan.biz_flow_scenarios = matched
+            return plan
+
+        logger.info(
+            _("plan_parser.flow_match_code_matched",
+              matched=len(matched), orphaned=len(orphaned_names)),
+        )
+
+        # 提取孤儿场景对象 / Extract orphaned scenario objects
+        orphaned_scenarios = [
+            s for s in all_scenarios
+            if s.get("name", "") in orphaned_names
+        ]
+
+        # ====================================================================
+        # 第二步：LLM 语义匹配兜底 / Step 2: LLM semantic matching fallback
+        # ====================================================================
+        llm_matches = self._llm_match_flows(
+            orphaned_scenarios, mermaid_flows, max_retries,
+        )
+
+        # 合并结果：将 LLM 匹配成功的场景补入已匹配列表
+        # Merge results: add LLM-matched scenarios to matched list
+        llm_matched_count = 0
+        still_orphaned_names = []
+        for scenario in orphaned_scenarios:
+            name = scenario.get("name", "")
+            mermaid_name = llm_matches.get(name)
+            if mermaid_name and mermaid_name in mermaid_flows:
+                matched.append(scenario)
+                llm_matched_count += 1
+            else:
+                still_orphaned_names.append(name)
+
+        logger.info(
+            _("plan_parser.flow_match_llm_result",
+              matched=llm_matched_count,
+              unmatched=len(still_orphaned_names)),
+        )
+
+        # 全部匹配 / All matched
+        if not still_orphaned_names:
+            plan.biz_flow_scenarios = matched
+            return plan
+
+        # ====================================================================
+        # 重试耗尽后的策略处理 / Strategy handling after retries exhausted
+        # ====================================================================
+        orphaned_list = ", ".join(still_orphaned_names)
+        if strategy == "fail":
+            logger.error(
+                _("plan_parser.flow_match_failed",
+                  count=len(still_orphaned_names), names=orphaned_list),
             )
-            if not orphaned:
-                # 全部匹配成功 / All matched successfully
-                plan.biz_flow_scenarios = matched
-                return plan
-
-            if attempt < max_retries:
-                names_str = ", ".join(orphaned)
+            raise ValueError(
+                f"Flow association failed after {max_retries} "
+                f"retries: orphaned scenarios: {orphaned_list}"
+            )
+        else:
+            # warn 策略：按 failure_action 处理
+            # Warn strategy: handle by failure_action
+            failure_action = get_flow_match_failure_action(
+                rules, default="discard",
+            )
+            if failure_action == "keep":
                 logger.warning(
-                    _("plan_parser.flow_match_retry",
-                      attempt=attempt + 1, max_retries=max_retries,
-                      count=len(orphaned), names=names_str),
+                    _("plan_parser.flow_match_orphaned",
+                      count=len(still_orphaned_names), names=orphaned_list,
+                      action="keep"),
                 )
-                # 只重新解析失配的场景 / Re-parse only orphaned scenarios
-                orphaned_sections = [
-                    s for s in original_biz
-                    if s.get("name", "") in orphaned
-                ]
-                if orphaned_sections:
-                    retry_text = self._assemble_parse_text(
-                        "", [], orphaned_sections,
-                    )
-                    try:
-                        new_result = self._parse_single_batch(
-                            retry_text, system_msg, None,
-                        )
-                        # 保留已匹配的场景，追加重新解析的结果
-                        # Keep matched scenarios, append re-parsed results
-                        new_scenarios = new_result.get(
-                            "biz_flow_scenarios", [],
-                        )
-                        all_scenarios = matched + new_scenarios
-                    except Exception as e:
-                        logger.warning(
-                            "Flow match retry %d failed: %s",
-                            attempt + 1, e,
-                        )
-                else:
-                    # 无原始 section 可重试，标记耗尽 / No section to retry, mark exhausted
-                    final_exhausted = True
-                    break
+                # 保留所有场景，包括失配的 / Keep all scenarios
+                plan.biz_flow_scenarios = all_scenarios
             else:
-                final_exhausted = True
-                break
-
-        # 重试耗尽后的处理 / Handle retries exhausted
-        if final_exhausted or attempt >= max_retries:
-            orphaned_list = ", ".join(orphaned)
-            if strategy == "fail":
-                logger.error(
-                    _("plan_parser.flow_match_failed",
-                      count=len(orphaned), names=orphaned_list),
+                # discard（默认）：丢弃失配场景
+                # discard (default): drop orphaned scenarios
+                logger.warning(
+                    _("plan_parser.flow_match_orphaned",
+                      count=len(still_orphaned_names), names=orphaned_list,
+                      action="discard"),
                 )
-                raise ValueError(
-                    f"Flow association failed after {max_retries} "
-                    f"retries: orphaned scenarios: {orphaned_list}"
-                )
-            else:
-                # warn 策略：按 failure_action 处理
-                # Warn strategy: handle by failure_action
-                failure_action = get_flow_match_failure_action(
-                    rules, default="discard",
-                )
-                if failure_action == "keep":
-                    logger.warning(
-                        _("plan_parser.flow_match_orphaned",
-                          count=len(orphaned), names=orphaned_list,
-                          action="keep"),
-                    )
-                    # 保留所有场景，包括失配的 / Keep all scenarios
-                    plan.biz_flow_scenarios = all_scenarios
-                else:
-                    # discard（默认）：丢弃失配场景
-                    # discard (default): drop orphaned scenarios
-                    logger.warning(
-                        _("plan_parser.flow_match_orphaned",
-                          count=len(orphaned), names=orphaned_list,
-                          action="discard"),
-                    )
-                    plan.biz_flow_scenarios = matched
+                plan.biz_flow_scenarios = matched
 
         return plan
 

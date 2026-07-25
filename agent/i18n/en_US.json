@@ -190,7 +190,11 @@
   "parse_plan.parsing": "PlanParser calling LLM ({model})...",
   "parse_plan.parsed": "Parsing complete ({api_count} interface definitions, {tp_count} test points)",
   "plan_parser.flow_match_skipped": "Mermaid flow match check skipped (strategy=skip), {total} scenarios unchecked",
-  "plan_parser.flow_match_retry": "Mermaid flow match retry {attempt}/{max_retries}: {count} unmatched ({names})",
+  "plan_parser.flow_match_code_matched": "Code exact match: {matched} matched, {orphaned} need LLM semantic matching",
+  "plan_parser.flow_match_llm_matching": "Calling LLM semantic matching (batch {batch}/{total_batches}, {scenario_count} scenarios × {mermaid_count} diagrams)…",
+  "plan_parser.flow_match_llm_partial_retry": "Batch {batch} LLM match partially valid: {matched} matched, {pending} to retry ({attempt}/{max_retries}), invalid: {invalid}",
+  "plan_parser.flow_match_llm_result": "LLM semantic matching complete: {matched} matched, {unmatched} unmatched",
+  "plan_parser.flow_match_llm_failed": "Batch {batch} LLM semantic matching all retries failed: {error}",
   "plan_parser.flow_match_failed": "Mermaid flow match FAILED (strategy=fail): {count} unmatched: {names}",
   "plan_parser.flow_match_orphaned": "Mermaid flow match incomplete ({count} unmatched), action={action}: {names}",
 

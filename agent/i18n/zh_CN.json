@@ -190,7 +190,11 @@
   "parse_plan.parsing": "PlanParser 正在调用 LLM ({model})...",
   "parse_plan.parsed": "解析完成 ({api_count} 个接口定义, {tp_count} 个测试点)",
   "plan_parser.flow_match_skipped": "Mermaid 关联检查已跳过（策略=skip），共 {total} 个场景",
-  "plan_parser.flow_match_retry": "Mermaid 关联重试 {attempt}/{max_retries}：{count} 个场景失配 ({names})",
+  "plan_parser.flow_match_code_matched": "代码精确匹配：{matched} 已关联，{orphaned} 待 LLM 语义匹配",
+  "plan_parser.flow_match_llm_matching": "正在调用 LLM 语义匹配（批次 {batch}/{total_batches}，{scenario_count} 场景 × {mermaid_count} 流程图）…",
+  "plan_parser.flow_match_llm_partial_retry": "批次 {batch} LLM 匹配部分有效：{matched} 已关联，{pending} 待重试（{attempt}/{max_retries}），无效项：{invalid}",
+  "plan_parser.flow_match_llm_result": "LLM 语义关联完成：{matched} 已关联，{unmatched} 未匹配",
+  "plan_parser.flow_match_llm_failed": "批次 {batch} LLM 语义关联全部重试失败：{error}",
   "plan_parser.flow_match_failed": "Mermaid 关联校验失败（策略=fail）：{count} 个场景失配：{names}",
   "plan_parser.flow_match_orphaned": "Mermaid 关联失败（{count} 个场景失配），处理方式={action}：{names}",
 
