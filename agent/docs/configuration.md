@@ -111,9 +111,20 @@ validation:
         strategy: warn
       - check: assertion_count
         strategy: warn
+
+  # ··· 计划解析校验 / Parse plan validation ···
+  parse_plan_validation:
+    enable: true
+    max_retries: 3
+    rules:
+      - check: flow_match               # 流程关联校验
+        strategy: warn
+        failure_action: discard         # 仅 flow_match：discard（丢弃）| keep（保留）
 ```
 
 **策略值**：`fail`（终止并重试）| `warn`（警告继续）| `skip`（跳过）。
+
+**parse_plan_validation 说明**：`flow_match` 校验在计划解析阶段执行，将 LLM 输出的 Mermaid 流程图与需求文档中定义的业务场景进行关联匹配。失配的流程按 `strategy` 处理——`fail` 抛出异常、`skip` 跳过校验。当 `strategy: warn` 时，`failure_action` 决定重试耗尽后的行为：`discard`（丢弃孤立的流程，默认）| `keep`（保留并添加警告标记）。
 
 **向后兼容**：旧格式（`case_format_enabled`、`case_format_max_retries`、`url_doc_match_rules`、`case_gen_rules` 等平铺 key）仍然生效，系统会自动识别新旧格式。
 
@@ -215,6 +226,8 @@ logging:
 | `--case-format-max-retries N` | 覆盖 `validation.case_gen_validation.max_retries`（用例格式校验重试次数，0 = 不重试） |
 | `--validation` / `--no-validation` | 启用/禁用用例格式校验（覆盖 `validation.case_gen_validation.enable`） |
 | `--url-doc-match-enabled` / `--no-url-doc-match-enabled` | 启用/禁用 URL 文档匹配校验（覆盖 `validation.url_doc_match_validation.enable`） |
+| `--parse-plan-validation-rule RULE` | 覆盖计划解析校验规则，格式 `check:strategy[:failure_action]`（如 `flow_match:warn:discard`），可多次指定 |
+| `--parse-plan-validation-max-retries N` | 覆盖 `validation.parse_plan_validation.max_retries`（计划解析校验重试次数，0 = 不重试） |
 | `--plugins` / `--no-plugins` | 启用/禁用插件（覆盖 `plugins.enabled`） |
 | `--skills` / `--no-skills` | 启用/禁用技能（覆盖 `skills.enabled`） |
 | `--lang {zh_CN,en_US}` | 覆盖 `agent.lang`（界面语言） |

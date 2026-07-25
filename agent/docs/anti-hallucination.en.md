@@ -32,6 +32,7 @@ Validation checks:
 | `data_fill_count` | Data fill count validation |
 | `assertion_count` | Assertion generation count validation |
 | `url_check` | URL existence validation (see below) |
+| `flow_match` | Flow association validation (plan parsing stage, see below) |
 
 For the config syntax (list/dict formats) and code defaults, see the [validation section of configuration.md](./configuration.en.md#validation--case-validation).
 
@@ -62,6 +63,28 @@ The interface URL is the field most prone to LLM hallucination. The agent valida
 URLs that cannot be corrected are flagged (e.g. `<URL not exist>` / `[URL_MAY_INCORRECT]`). When the executor reads a case with such a flag, it immediately marks it as failed and does not actually send an erroneous request.
 
 > **Recommended configuration**: Set all URL correction checks to `warn`, and use `keep` to retain cases when all retries fail. Rationale: LLMs inevitably make mistakes, and even strong models have a small chance of anomalies (e.g. unstable service during a vendor's API peak hours). `warn + keep` keeps the flow from being interrupted while clearly flagging suspicious cases for human review, rather than discarding them silently.
+
+### Flow Association Validation (flow_match)
+
+`flow_match` is a validation check in the plan parsing stage (step 9), configured in `validation.parse_plan_validation.rules`.
+
+**Purpose**: After plan parsing completes, the system matches LLM-generated Mermaid flow diagrams against the business scenarios extracted during the requirements analysis stage. If there are "orphaned flows" — Mermaid diagrams that describe flows not matching any requirement scenario — it indicates the LLM may have hallucinated (inventing business flows not present in the requirements).
+
+**Processing flow**:
+1. Calls `match_mermaids_to_scenarios()` to match each Mermaid diagram against requirement scenarios
+2. If mismatches exist, handles per `strategy`:
+   - `fail`: Raises an exception, aborting the pipeline
+   - `skip`: Bypasses the check, retaining all flows
+   - `warn`: Triggers LLM correction retries (up to `max_retries` times); after retries are exhausted, applies `failure_action`
+
+**failure_action** (only effective when `strategy: warn`):
+
+| failure_action | Behavior |
+|----------------|------|
+| `discard` (default) | Drops orphaned flows that cannot be matched, removing them from the plan |
+| `keep` | Retains orphaned flows with a warning marker for human review |
+
+> **Recommended configuration**: Consistent with URL correction, `warn + keep` is recommended. The LLM occasionally generates Mermaid diagrams for flows that genuinely exist in the requirements but cannot be matched by the algorithm; `keep` ensures valid test scenarios are not lost.
 
 ---
 

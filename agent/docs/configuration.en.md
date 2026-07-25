@@ -111,9 +111,20 @@ validation:
         strategy: warn
       - check: assertion_count
         strategy: warn
+
+  # ··· Parse plan validation ···
+  parse_plan_validation:
+    enable: true
+    max_retries: 3
+    rules:
+      - check: flow_match               # Flow association check
+        strategy: warn
+        failure_action: discard         # flow_match only: discard (drop) | keep (retain)
 ```
 
 **Strategy values**: `fail` (abort and retry) | `warn` (warn and continue) | `skip` (bypass).
+
+**parse_plan_validation notes**: The `flow_match` check runs during the plan parsing stage, matching LLM-generated Mermaid flow diagrams against business scenarios defined in the requirement document. Mismatched flows are handled per `strategy` — `fail` raises an exception, `skip` bypasses the check. When `strategy: warn`, `failure_action` determines the behavior after retries are exhausted: `discard` (drop orphaned flows, default) | `keep` (retain with a warning marker).
 
 **Backward compatibility**: Old formats (`case_format_enabled`, `case_format_max_retries`, `url_doc_match_rules`, `case_gen_rules` as flat keys) still work — the system auto-detects both old and new formats.
 
@@ -215,6 +226,8 @@ Main entry point: `python main.py`. Full argument list (matching `cli/parser.py`
 | `--case-format-max-retries N` | Overrides `validation.case_gen_validation.max_retries` (case format validation retry limit, 0 = no retries) |
 | `--validation` / `--no-validation` | Enable/disable case format validation (overrides `validation.case_gen_validation.enable`) |
 | `--url-doc-match-enabled` / `--no-url-doc-match-enabled` | Enable/disable URL doc-match validation (overrides `validation.url_doc_match_validation.enable`) |
+| `--parse-plan-validation-rule RULE` | Overrides plan parse validation rules, format `check:strategy[:failure_action]` (e.g. `flow_match:warn:discard`), can be specified multiple times |
+| `--parse-plan-validation-max-retries N` | Overrides `validation.parse_plan_validation.max_retries` (plan parse validation retry limit, 0 = no retries) |
 | `--plugins` / `--no-plugins` | Enable/disable plugins (overrides `plugins.enabled`) |
 | `--skills` / `--no-skills` | Enable/disable skills (overrides `skills.enabled`) |
 | `--lang {zh_CN,en_US}` | Overrides `agent.lang` (UI language) |

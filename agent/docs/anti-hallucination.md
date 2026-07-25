@@ -32,6 +32,7 @@ LLM 难免产生幻觉（编造接口、URL、数量对不上等）。智能体�
 | `data_fill_count` | 数据填充数量校验 |
 | `assertion_count` | 断言生成数量校验 |
 | `url_check` | URL 存在性校验（见下） |
+| `flow_match` | 流程关联校验（计划解析阶段，见下） |
 
 配置写法（列表/字典两种格式）与代码默认值详见 [configuration.md 的 validation 段](./configuration.md#validation--用例校验)。
 
@@ -62,6 +63,28 @@ LLM 难免产生幻觉（编造接口、URL、数量对不上等）。智能体�
 无法纠正的 URL 会被标记（如 `<URL not exist>` / `[URL_MAY_INCORRECT]`）。执行器读到带此标记的用例会立即判失败，不会真正发起错误请求。
 
 > **推荐配置**：URL 纠错建议全部设为 `warn`，重试全部失败时用 `keep` 保留。原因：LLM 难免出错，强模型也有低概率异常（如厂商 API 高峰期服务不稳定）。`warn + keep` 让流程不中断，同时把可疑用例明确标记出来交由人工复核，而非静默丢弃。
+
+### 流程关联校验（flow_match）
+
+`flow_match` 是计划解析阶段（第 9 步）的校验项，配置在 `validation.parse_plan_validation.rules` 中。
+
+**作用**：计划解析完成后，系统将 LLM 输出的 Mermaid 流程图与需求分析阶段提取的业务场景进行关联匹配。若存在 Mermaid 图中描述但无法匹配到任何需求场景的"孤立流程"，说明 LLM 可能产生了幻觉（编造了需求中不存在的业务流程）。
+
+**处理流程**：
+1. 调用 `match_mermaids_to_scenarios()` 将每个 Mermaid 图与需求场景逐一匹配
+2. 若存在失配，按 `strategy` 处理：
+   - `fail`：抛出异常，终止流水线
+   - `skip`：跳过校验，保留所有流程
+   - `warn`：触发 LLM 纠错重试（最多 `max_retries` 次），重试耗尽后按 `failure_action` 处理
+
+**failure_action**（仅 `strategy: warn` 时生效）：
+
+| failure_action | 行为 |
+|----------------|------|
+| `discard`（默认） | 丢弃无法匹配的孤立流程，从计划中移除 |
+| `keep` | 保留孤立流程，添加警告标记交由人工复核 |
+
+> **推荐配置**：与 URL 纠错一致，建议 `warn + keep`。LLM 在生成 Mermaid 图时偶尔会产生需求中确实存在但匹配算法无法关联的合法流程，`keep` 确保不丢失有效测试场景。
 
 ---
 

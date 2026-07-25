@@ -41,7 +41,7 @@ graph TD
 6. **轮廓生成**：基于需求分析和接口列表（仅名称/URL），生成轻量级 JSON 轮廓，将接口按业务领域分组、列出业务流程。数据量很小（< 1000 token），确保不被截断。
 7. **计划生成**：基于轮廓分块生成 Markdown 测试计划（四阶段法），同时输出 `plan_sections.json` 作为结构化数据源（见 [anti-hallucination.md](./anti-hallucination.md#骨架分批与计划分块)）。`plan.md` 仅作展示，代码不再读取。
 8. **人工审核**（强制中断点）：展示计划，用户选择批准、文字修改或按批注文件修改。批注直接携带 `chunk_id`（由 Studio 批注器提供），无需行号匹配。支持反馈循环直至批准（见下方 [人工审核模式](#人工审核模式ynr)）。
-9. **计划解析**：从 `plan_sections.json` 读取已切割好的 section 数据，通过 token 感知的贪心切分算法解析为结构化 TestPlan（整体 → case_type 拆分 → 贪心分批）。不再解析 `plan.md`。
+9. **计划解析**：从 `plan_sections.json` 读取已切割好的 section 数据，通过 token 感知的贪心切分算法解析为结构化 TestPlan（整体 → case_type 拆分 → 贪心分批）。不再解析 `plan.md`。解析完成后执行 `flow_match` 校验——将 LLM 输出的 Mermaid 流程图与需求文档中定义的业务场景进行关联匹配，失配的流程按 `parse_plan_validation` 配置的策略处理（重试纠错 / 丢弃 / 保留警告）。详见 [anti-hallucination.md](./anti-hallucination.md#流程关联校验flow_match)。
 10. **用例生成**（骨架 + 插件流水线）：分批生成骨架 → URL 校验 → 按配置依次执行插件（数据填充、断言生成等）。详见 [plugins-and-skills.md](./plugins-and-skills.md)。
 11. **输出**：YAML 文件（`single_cases/`、`biz_flows/`）+ 可选 Excel 导出。
 
@@ -255,7 +255,7 @@ max_chunk = context_window - system_prompt_tokens - max(output_tokens, 4096) - 2
 | **analyze_requirement**（需求分析） | `_process_long_text()` 自动切分 | 按 key（`business_flows`, `roles`, `constraints`, `exceptions`）合并去重 | 仅当单文档超阈值时触发 |
 | **analyze_api**（API 分析） | 使用结构化接口列表调用 LLM 生成分析摘要 | 无需合并/去重 | parse_docs 已完成接口提取和去重 |
 | **generate_plan**（测试计划生成） | 四阶段逻辑切分（Phase A/B/C/D） | 按阶段顺序拼接 | 不基于 token，基于**接口分组和业务流批次**拆分；每批独立 LLM 调用 + 全局上下文注入 |
-| **parse_plan**（计划解析） | plan_sections.json 结构切分 + 贪心算法 | 按 `test_id` + `url` 去重 | 从 `plan_sections.json` 读取已切好的 section，3 级策略：整体 → case_type 拆分（`single_api` / `biz_flows`）→ 贪心逐 section 累加，每批不超过 token 预算 |
+| **parse_plan**（计划解析） | plan_sections.json 结构切分 + 贪心算法 | 按 `test_id` + `url` 去重；解析后执行 `flow_match` 校验，匹配 Mermaid 图与需求场景，失配按 `parse_plan_validation` 策略处理 | 从 `plan_sections.json` 读取已切好的 section，3 级策略：整体 → case_type 拆分（`single_api` / `biz_flows`）→ 贪心逐 section 累加，每批不超过 token 预算 |
 | **batch_controller**（用例生成） | `skeleton_batch_size` 控制每批测试点数 | 用例列表拼接 | 不基于 token，基于**测试点数量**分批次 |
 | **revise_plan**（计划修订） | 标题层级自适应章节切分 + 注释/反馈精确定位到区块 | 按区块 key 替换后重新拼接 | 详见下文"计划审核与修订" |
 
