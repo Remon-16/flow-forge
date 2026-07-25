@@ -71,6 +71,22 @@ def _parse_validation_rules(rules_raw) -> List[Dict[str, str]]:
     return []
 
 
+def _ensure_list(value):
+    """规范化值为列表，处理 YAML 中字符串/列表两种写法。
+    Normalize value to list — handle both string and list forms in YAML.
+
+    用户可能误将单个模块路径写成字符串而非列表：
+    User may write a single module path as a string instead of a list:
+        modules: "a.b.Class"    →   ["a.b.Class"]
+        modules: ["a.b.Class"]  →   ["a.b.Class"]
+    """
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return value
+    return []
+
+
 @dataclass
 class Settings:
     llm_api_key: str = ""
@@ -443,7 +459,7 @@ def load_settings(yaml_path: str = "env.yaml") -> Settings:
         plugin_batch_size=int(pipeline.get("plugin_batch_size", 10)),
         output_format=output.get("format", "both"),
         enable_plugins=plugins.get("enabled", False),
-        plugin_modules=plugins.get("modules", []),
+        plugin_modules=_ensure_list(plugins.get("modules", [])),
         enable_skills=skills_cfg.get("enabled", True),
         skill_agents=skills_cfg.get("agents", {}),
         agent_lang=agent_cfg.get("lang", "zh_CN"),

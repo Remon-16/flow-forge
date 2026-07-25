@@ -91,7 +91,7 @@ def load_all_plugins(
     if actual < expected:
         logger.error(
             _("batch_controller.plugins_partial_load",
-              expected=expected, loaded=actual, missing=expected - actual)
+              expected=expected, actual=actual, missing=expected - actual)
         )
 
     for p in plugins:

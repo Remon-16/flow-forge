@@ -73,6 +73,11 @@ def _arg_kwargs(arg: dict) -> dict:
     if arg.get("required"):
         kwargs["required"] = True
 
+    # 处理 schema 中显式声明的 action（如 append）
+    # Handle explicit action declared in schema (e.g. append)
+    if arg.get("action") and "action" not in kwargs:
+        kwargs["action"] = arg["action"]
+
     return kwargs
 
 
