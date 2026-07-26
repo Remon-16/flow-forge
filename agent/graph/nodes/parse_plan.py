@@ -45,7 +45,8 @@ def parse_plan_node(state: GraphState) -> GraphState:
     _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
     _exts = load_skill_extensions('plan_parser', _h._settings, _skills_dir)
     agent = PlanParser(_h._settings, skill_extensions=_exts)
-    plan = agent.parse_from_sections(sections, interfaces=state.get("interfaces", []))
+    plan = agent.parse_from_sections(sections, interfaces=state.get("interfaces", []),
+                                      case_type=state.get("case_type", "both"))
 
     state["plan_parsed"] = plan
 

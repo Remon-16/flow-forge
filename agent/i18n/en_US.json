@@ -197,6 +197,8 @@
   "plan_parser.flow_match_llm_failed": "Batch {batch} LLM semantic matching all retries failed: {error}",
   "plan_parser.flow_match_failed": "Mermaid flow match FAILED (strategy=fail): {count} unmatched: {names}",
   "plan_parser.flow_match_orphaned": "Mermaid flow match incomplete ({count} unmatched), action={action}: {names}",
+  "plan_parser.case_type_skip_single_api": "Skipping single API test point parsing (case_type=biz)",
+  "plan_parser.case_type_skip_biz_flows": "Skipping business flow parsing (case_type=single)",
 
   "batch.generating": "Generating test cases (skeleton + plugin pipeline)...",
   "batch.batch_size": "  → batch_size={size}",

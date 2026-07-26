@@ -588,3 +588,124 @@ class TestParsePlanValidationSettings:
         rules = [{"check": "flow_match", "strategy": "warn",
                    "failure_action": "keep"}]
         assert get_flow_match_failure_action(rules) == "keep"
+
+
+# ============================================================================
+# 修改 7 测试：case_type 过滤
+# Change 7 tests: case_type filtering
+# ============================================================================
+
+
+class TestCaseTypeFiltering:
+    """case_type 过滤 — parse_from_sections 按 case_type 跳过不需要的 section。
+    case_type filtering — parse_from_sections skips irrelevant sections.
+    """
+
+    def test_case_type_biz_skips_single_api(self):
+        """case_type=biz 时不解析 single_api 内容。
+        case_type=biz should skip single_api content parsing.
+        """
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            agent._max_output_tokens = 12000
+            agent._token_counter.count = MagicMock(return_value=150)
+            agent.call_llm_json_object = MagicMock(return_value={
+                "api_definitions": [],
+                "single_test_points": {},
+                "biz_flow_scenarios": [],
+            })
+
+            sections = _sample_sections()
+            agent.parse_from_sections(sections, case_type="biz")
+
+            # 验证 LLM 调用存在 / Verify LLM was called
+            assert agent.call_llm_json_object.called
+
+            # 验证 prompt 不含 single_api 内容 / Verify prompt excludes single_api content
+            # _sample_sections 的 single_api 包含 "Login" / _sample_sections single_api contains "Login"
+            prompt = agent.call_llm_json_object.call_args[0][0]
+            assert "Login" not in prompt, (
+                f"case_type=biz should exclude single_api from prompt, but found 'Login'"
+            )
+
+    def test_case_type_single_skips_biz_flows(self):
+        """case_type=single 时不解析 biz_flows 内容。
+        case_type=single should skip biz_flows content parsing.
+        """
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            agent._max_output_tokens = 12000
+            agent._token_counter.count = MagicMock(return_value=150)
+            agent.call_llm_json_object = MagicMock(return_value={
+                "api_definitions": [],
+                "single_test_points": {},
+                "biz_flow_scenarios": [],
+            })
+
+            sections = _sample_sections()
+            agent.parse_from_sections(sections, case_type="single")
+
+            # 验证 LLM 调用存在 / Verify LLM was called
+            assert agent.call_llm_json_object.called
+
+            # 验证 prompt 不含 biz_flows 内容 / Verify prompt excludes biz_flows content
+            # _sample_sections 的 biz_flows 包含 "User Registration" / _sample_sections biz_flows contains "User Registration"
+            prompt = agent.call_llm_json_object.call_args[0][0]
+            assert "User Registration" not in prompt, (
+                f"case_type=single should exclude biz_flows from prompt, but found 'User Registration'"
+            )
+
+    def test_case_type_both_parses_all(self):
+        """case_type=both 时解析全部内容。
+        case_type=both should parse all content.
+        """
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            agent._max_output_tokens = 12000
+            agent._token_counter.count = MagicMock(return_value=150)
+            agent.call_llm_json_object = MagicMock(return_value={
+                "api_definitions": [],
+                "single_test_points": {},
+                "biz_flow_scenarios": [],
+            })
+
+            sections = _sample_sections()
+            agent.parse_from_sections(sections, case_type="both")
+
+            # 验证 LLM 调用存在 / Verify LLM was called
+            assert agent.call_llm_json_object.called
+
+            # 验证 prompt 包含 single_api 和 biz_flows 内容 / Verify prompt includes both
+            prompt = agent.call_llm_json_object.call_args[0][0]
+            assert "Login" in prompt, (
+                f"case_type=both should include single_api in prompt"
+            )
+            assert "User Registration" in prompt, (
+                f"case_type=both should include biz_flows in prompt"
+            )
+
+    def test_case_type_default_is_both(self):
+        """不传 case_type 时默认 "both"，向后兼容。
+        Default case_type is "both" for backward compatibility.
+        """
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            agent._max_output_tokens = 12000
+            agent._token_counter.count = MagicMock(return_value=150)
+            agent.call_llm_json_object = MagicMock(return_value={
+                "api_definitions": [],
+                "single_test_points": {},
+                "biz_flow_scenarios": [],
+            })
+
+            sections = _sample_sections()
+            # 不传 case_type → 应默认 "both" / Not passing case_type → should default to "both"
+            agent.parse_from_sections(sections)
+
+            prompt = agent.call_llm_json_object.call_args[0][0]
+            assert "Login" in prompt, (
+                f"Default case_type should be 'both', but single_api content missing"
+            )
+            assert "User Registration" in prompt, (
+                f"Default case_type should be 'both', but biz_flows content missing"
+            )

@@ -47,6 +47,7 @@ class PlanParser(BaseAgent):
 
     def parse_from_sections(
         self, sections: dict, interfaces: Optional[List[Dict[str, Any]]] = None,
+        case_type: str = "both",
     ) -> TestPlan:
         """从 plan_sections.json 结构解析为 TestPlan。
 
@@ -55,6 +56,11 @@ class PlanParser(BaseAgent):
           1. 整体尝试 → 若不超过窗口阈值，一次 LLM 调用
           2. 超过 → 按 case_type 拆分 (single_api / biz_flows)
           3. 仍超过 → 贪心算法逐 section 累加
+
+        case_type 控制解析范围 / case_type controls parsing scope:
+          "both"   → 解析全部 (single_api + biz_flows) / parse all
+          "biz"    → 仅解析 biz_flows / only parse biz_flows
+          "single" → 仅解析 single_api / only parse single_api
         """
         bu = sections.get("business_understanding", "")
         # 兼容新旧格式 / Compatible with old (str) and new (dict) format
@@ -64,6 +70,17 @@ class PlanParser(BaseAgent):
             business_summary = bu
         single_api = sections.get("single_api", [])
         biz_flows = sections.get("biz_flows", [])
+
+        # 按 case_type 过滤不需要解析的 section / Filter sections by case_type
+        # both   → 全部解析 / parse all
+        # biz    → 仅解析 biz_flows / only parse biz_flows
+        # single → 仅解析 single_api / only parse single_api
+        if case_type == "biz":
+            single_api = []
+            logger.info(_("plan_parser.case_type_skip_single_api"))
+        elif case_type == "single":
+            biz_flows = []
+            logger.info(_("plan_parser.case_type_skip_biz_flows"))
 
         from prompts.plan_parser import PLAN_PARSER_SYSTEM as system_msg
         # 估算 system prompt tokens / Estimate system prompt tokens

@@ -197,6 +197,8 @@
   "plan_parser.flow_match_llm_failed": "批次 {batch} LLM 语义关联全部重试失败：{error}",
   "plan_parser.flow_match_failed": "Mermaid 关联校验失败（策略=fail）：{count} 个场景失配：{names}",
   "plan_parser.flow_match_orphaned": "Mermaid 关联失败（{count} 个场景失配），处理方式={action}：{names}",
+  "plan_parser.case_type_skip_single_api": "跳过单接口测试点解析 (case_type=biz)",
+  "plan_parser.case_type_skip_biz_flows": "跳过业务链路解析 (case_type=single)",
 
   "batch.generating": "测试用例生成（骨架 + 插件流水线）...",
   "batch.batch_size": "  → batch_size={size}",
