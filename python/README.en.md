@@ -44,6 +44,7 @@ pip install -r requirements.txt
 
 # 1) Configure the environment: edit env-local.yml with the target app's baseURL / login info / user credentials
 #    (env.yml is the base configuration; env-{envName}.yml is the environment-specific configuration)
+#    (Tip: quote long integer IDs as strings, e.g., id: "1000000000000000001", to ensure correct display in Studio)
 
 # 2) Run YAML cases (recommended; the agent's default output format)
 python main.py --yamlDir ../agent/output --envName local --apiMode all

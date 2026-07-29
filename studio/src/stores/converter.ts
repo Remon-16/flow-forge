@@ -3,7 +3,8 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { ConverterSession, ConverterDirection } from '../types/converter'
+import type { ConverterSession, ConverterDirection, EditorConverterParams } from '../types/converter'
+import { DEFAULT_EDITOR_CONVERTER_PARAMS } from '../types/converter'
 import type { LogEntry } from '../types/agent'
 import { spawnConverter, killConverter, checkConverterRunning, listenToConverterEvents } from '../utils/converter-bridge'
 import { resolvePythonCommand } from '../utils/resolve-python'
@@ -29,6 +30,9 @@ export const useConverterStore = defineStore('converter', () => {
   // 每个运行中会话的健康检查 interval / Health check interval per running session
   const _healthChecks = new Map<string, ReturnType<typeof setInterval>>()
 
+  // 编辑器转换参数（按编辑器文件路径持久化）/ Editor converter params (persisted per editor file path)
+  const editorConverterParams = ref<Record<string, EditorConverterParams>>({})
+
   // ---- Getters / 计算属性 ----
 
   const activeSession = computed(() =>
@@ -38,6 +42,18 @@ export const useConverterStore = defineStore('converter', () => {
   const sortedSessions = computed(() =>
     [...sessions.value].sort((a, b) => b.updatedAt - a.updatedAt),
   )
+
+  // ---- Editor converter params / 编辑器转换参数 ----
+
+  /** 获取指定编辑器路径的转换参数 / Get converter params for a specific editor path */
+  function getEditorConverterParams(editorPath: string): EditorConverterParams {
+    return editorConverterParams.value[editorPath] ?? { ...DEFAULT_EDITOR_CONVERTER_PARAMS }
+  }
+
+  /** 设置指定编辑器路径的转换参数 / Set converter params for a specific editor path */
+  function setEditorConverterParams(editorPath: string, params: EditorConverterParams): void {
+    editorConverterParams.value[editorPath] = { ...params }
+  }
 
   // ---- Sessions / 会话管理 ----
 
@@ -320,6 +336,10 @@ export const useConverterStore = defineStore('converter', () => {
     // Getters
     activeSession,
     sortedSessions,
+    // Editor converter params
+    editorConverterParams,
+    getEditorConverterParams,
+    setEditorConverterParams,
     // Actions
     loadSessions,
     saveSessions,

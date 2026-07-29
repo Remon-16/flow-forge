@@ -5,6 +5,7 @@ import { useEditorStore } from '../stores/editor'
 import { useWorkbookStore } from '../stores/workbook'
 import { useExecutorStore } from '../stores/executor'
 import { useConverterStore } from '../stores/converter'
+import { DEFAULT_EDITOR_CONVERTER_PARAMS } from '../types/converter'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { writeFile, deleteToTrash, mkdir } from '../utils/desktop-bridge'
@@ -266,11 +267,17 @@ async function handleConvert(direction: 'excel2yaml' | 'yaml2excel' | 'excel2pyt
     message.warning(t('editor.toolbar.noFile'))
     return
   }
-  const outputPath = workbookPath.value.replace(/\.xlsx$/i, '_converted')
+  // 使用保存的转换参数（如有）/ Use saved converter params if available
+  const saved = converter.getEditorConverterParams(workbookPath.value || '__default__')
+  const effectiveDirection = saved.direction !== DEFAULT_EDITOR_CONVERTER_PARAMS.direction
+    ? saved.direction : direction
+  const defaultOutput = workbookPath.value.replace(/\.xlsx$/i, '_converted')
+  const effectiveOutput = saved.outputPath || defaultOutput
+
   const sessionId = converter.createSession({
-    direction,
+    direction: effectiveDirection,
     inputPath: workbookPath.value,
-    outputPath: direction === 'yaml2excel' ? workbookPath.value.replace(/\.xlsx$/i, '_from_yaml.xlsx') : outputPath,
+    outputPath: effectiveDirection === 'yaml2excel' ? workbookPath.value.replace(/\.xlsx$/i, '_from_yaml.xlsx') : effectiveOutput,
     interfacesDir: '',
     singleCasesDir: '',
     bizFlowsDir: '',

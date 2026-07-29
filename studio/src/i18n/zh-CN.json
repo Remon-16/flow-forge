@@ -522,7 +522,8 @@
     "paramEdit": {
       "confirm": "保存",
       "saved": "参数已保存",
-      "converterHint": "转换器使用编辑器当前文件的路径，无需额外参数。"
+      "converterDirection": "转换方向",
+      "converterInputFile": "输入文件路径（使用当前编辑文件）"
     }
   },
   "tray": {

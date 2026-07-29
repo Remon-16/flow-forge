@@ -109,10 +109,14 @@ async function handleConvertAll() {
   try {
     const dir = currentDir.value
     if (!dir) { message.warning(t('yaml.noFileSelected')); return }
+    // 使用保存的转换参数（如有）/ Use saved converter params if available
+    const saved = converter.getEditorConverterParams(currentFilePath.value || '__default__')
+    const effectiveOutput = saved.outputPath || dir + '/_converted.xlsx'
+
     const sessionId = converter.createSession({
       direction: 'yaml2excel',
       inputPath: '',
-      outputPath: dir + '/_converted.xlsx',
+      outputPath: effectiveOutput,
       interfacesDir: dir,
       singleCasesDir: dir,
       bizFlowsDir: dir,

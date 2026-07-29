@@ -522,7 +522,8 @@
     "paramEdit": {
       "confirm": "Save",
       "saved": "Parameters saved",
-      "converterHint": "Converter uses the current editor file path. No additional parameters needed."
+      "converterDirection": "Conversion Direction",
+      "converterInputFile": "Input File Path (uses current editor file)"
     }
   },
   "tray": {

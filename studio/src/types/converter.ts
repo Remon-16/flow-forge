@@ -26,6 +26,22 @@ export const CONVERTER_DIRECTIONS: { value: ConverterDirection; label: string }[
 ]
 
 // ============================================================================
+// 编辑器转换参数（从编辑器工具栏设置）/ Editor Converter Params (from editor toolbar)
+// ============================================================================
+
+/** 编辑器保存的转换参数 / Converter params saved from editor */
+export interface EditorConverterParams {
+  direction: ConverterDirection
+  outputPath: string
+}
+
+/** 编辑器转换参数默认值 / Default editor converter params */
+export const DEFAULT_EDITOR_CONVERTER_PARAMS: EditorConverterParams = {
+  direction: 'excel2yaml',
+  outputPath: '',
+}
+
+// ============================================================================
 // 转换器会话 / Converter Session
 // ============================================================================
 

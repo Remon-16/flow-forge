@@ -44,6 +44,7 @@ pip install -r requirements.txt
 
 # 1) 配置环境：编辑 env-local.yml，填入被测应用的 baseURL / 登录信息 / 用户凭据
 #    （env.yml 为基础配置，env-{envName}.yml 为环境特定配置）
+#    （注意：长整数 ID 建议加引号写成字符串，如 id: "1000000000000000001"，确保在 Studio 中正确读取）
 
 # 2) 运行 YAML 用例（推荐，智能体默认输出格式）
 python main.py --yamlDir ../agent/output --envName local --apiMode all

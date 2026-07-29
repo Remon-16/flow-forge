@@ -8,7 +8,7 @@ import type {
   WorkbookData,
 } from '../types/excel'
 import { readExcelFromBuffer } from '../utils/excel-reader'
-import { validateRelevanceID, findDuplicateStepIDs, validateInherit } from '../utils/validators'
+import { findDuplicateStepIDs, validateInherit } from '../utils/validators'
 import { isDesktop, writeFileBuffer, readFileBuffer, saveFileDialog } from '../utils/desktop-bridge'
 
 let uidCounter = 0
@@ -74,7 +74,6 @@ export const useWorkbookStore = defineStore('workbook', () => {
       singleCases.value = data.singleCases
       bizFlows.value = data.bizFlows
       modified.value = false
-      runAllValidations()
       loading.value = false
     } catch (err) {
       loading.value = false
@@ -175,7 +174,6 @@ export const useWorkbookStore = defineStore('workbook', () => {
   function removeApiDef(index: number) {
     apiDefinitions.value.splice(index, 1)
     markModified()
-    runAllValidations()
   }
 
   // --- Single Cases ---
@@ -271,30 +269,11 @@ export const useWorkbookStore = defineStore('workbook', () => {
 
   // --- Validation ---
 
-  function runAllValidations() {
-    validateSingleCases()
-    bizFlows.value.forEach((_, i) => validateBizFlow(i))
-  }
-
-  function validateSingleCases() {
-    const ids = validTestIds.value
-    for (const tc of singleCases.value) {
-      const err = validateRelevanceID(tc.RelevanceID, ids)
-      tc._relevanceValid = err === null
-      ;(tc as any)._urlWarning = String(tc.URL ?? '').includes('<URL not exist>')
-    }
-  }
-
   function validateBizFlow(flowIndex: number) {
     const flow = bizFlows.value[flowIndex]
-    const ids = validTestIds.value
     const dupes = findDuplicateStepIDs(flow.steps)
 
     for (const step of flow.steps) {
-      // RelevanceID
-      const relErr = validateRelevanceID(step.RelevanceID, ids)
-      step._relevanceValid = relErr === null
-
       // StepID duplicate
       step._stepIdDuplicate = dupes.has(step.StepID?.trim())
 
@@ -310,19 +289,11 @@ export const useWorkbookStore = defineStore('workbook', () => {
   function updateApiDefField(index: number, field: keyof ApiDefinition, value: unknown) {
     ;(apiDefinitions.value[index] as Record<string, unknown>)[field] = value
     markModified()
-    // Re-validate since TestID changed
-    if (field === 'TestID') {
-      validateSingleCases()
-      bizFlows.value.forEach((_, i) => validateBizFlow(i))
-    }
   }
 
   function updateSingleCaseField(index: number, field: keyof SingleTestCase, value: unknown) {
     ;(singleCases.value[index] as Record<string, unknown>)[field] = value
     markModified()
-    if (field === 'RelevanceID') {
-      validateSingleCases()
-    }
   }
 
   function updateBizStepField(
@@ -373,8 +344,6 @@ export const useWorkbookStore = defineStore('workbook', () => {
     moveBizStep,
     updateBizStepField,
     // validation
-    runAllValidations,
-    validateSingleCases,
     validateBizFlow,
   }
 })

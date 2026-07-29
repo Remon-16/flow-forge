@@ -68,6 +68,9 @@ Run test cases and view HTML reports in Studio.
 
 - **Input type**: YAML directory / Excel file
 - **Environment**: select from the `env-{name}.yml` list
+
+> **Large integer precision:** JavaScript Number can only safely represent integers in the range -9,007,199,254,740,991 ~ 9,007,199,254,740,991 (about 9×10¹⁵). If you need to configure integers exceeding this range in `env-*.yml` (e.g., 64-bit user IDs), always use YAML string syntax (quoted): `id: "1000000000000000001"`. The Python executor and converter have no such limitation and correctly handle arbitrarily large integers.
+
 - **Case mode**: single-API / business-flow / all
 - **Thread count**: control concurrent execution
 
