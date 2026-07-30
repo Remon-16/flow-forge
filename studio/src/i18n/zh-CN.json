@@ -517,7 +517,13 @@
       "selectAll": "全选",
       "singleCases": "单接口用例",
       "bizFlows": "业务链路",
+      "steps": "个步骤",
       "confirm": "确认执行"
+    },
+    "yamlCaseSelect": {
+      "title": "选择 YAML 文件",
+      "interfaces": "接口定义",
+      "noFiles": "未找到 YAML 文件"
     },
     "paramEdit": {
       "confirm": "保存",

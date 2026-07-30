@@ -78,26 +78,16 @@ function getConvertActionLabel(action: ConvertAction): string {
   return item?.label || ''
 }
 
+// 仅更新默认执行动作，不触发执行 — 执行由播放按钮单独触发。
+// Only update the default run action; execution is triggered separately by the play button.
 function handleRunMenuClick(info: { key: string }) {
-  const key = info.key
-  defaultRunAction.value = key as RunAction
-  switch (key) {
-    case 'all': emit('runAll'); break
-    case 'single': emit('runSingle'); break
-    case 'biz': emit('runBiz'); break
-    case 'select': emit('runSelect'); break
-  }
+  defaultRunAction.value = info.key as RunAction
 }
 
+// 仅更新默认转换动作，不触发转换 — 转换由转换按钮单独触发。
+// Only update the default convert action; conversion is triggered separately by the convert button.
 function handleConvertMenuClick(info: { key: string }) {
-  const key = info.key
-  defaultConvertAction.value = key as ConvertAction
-  switch (key) {
-    case 'all': emit('convertAll'); break
-    case 'single': emit('convertSingle'); break
-    case 'biz': emit('convertBiz'); break
-    case 'select': emit('convertSelect'); break
-  }
+  defaultConvertAction.value = info.key as ConvertAction
 }
 
 function handleRunDefault() {

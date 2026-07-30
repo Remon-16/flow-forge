@@ -517,7 +517,13 @@
       "selectAll": "Select All",
       "singleCases": "Single API Cases",
       "bizFlows": "Business Flows",
+      "steps": "steps",
       "confirm": "Execute"
+    },
+    "yamlCaseSelect": {
+      "title": "Select YAML Files",
+      "interfaces": "Interface Definitions",
+      "noFiles": "No YAML files found"
     },
     "paramEdit": {
       "confirm": "Save",

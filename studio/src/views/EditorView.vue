@@ -57,13 +57,12 @@ function buildCaseList() {
     cases.push({ id: (c as any)._uid || name, name, type: 'single', sheetName: 'SingleCases' })
   }
 
-  // Biz flows
+  // Biz flows — 每个业务链路是一个不可分割的整体 / Each biz flow is an indivisible unit
   for (const flow of workbook.bizFlows) {
     const sheetName = flow.sheetName || 'BizFlow'
-    for (const step of flow.steps) {
-      const name = (step as any).StepID || (step as any).APIName || `Step ${cases.length}`
-      cases.push({ id: (step as any)._uid || name, name, type: 'biz', sheetName })
-    }
+    const stepCount = flow.steps.length
+    const id = `biz_flow::${sheetName}`
+    cases.push({ id, name: `${sheetName} (${stepCount} ${t('editor.caseSelect.steps')})`, type: 'biz', sheetName })
   }
 
   return cases
@@ -103,12 +102,14 @@ async function writeTempYaml(caseFilter: 'all' | 'single' | 'biz' | string[]): P
       }
     }
     for (const flow of workbook.bizFlows) {
-      const selectedSteps = flow.steps.filter(s => selectedIds.has((s as any)._uid || ''))
-      if (selectedSteps.length > 0) {
+      const sheetName = flow.sheetName || 'BizFlow'
+      const flowId = `biz_flow::${sheetName}`
+      // 选中则包含全部步骤 — 业务链路不可切分 / Include all steps when selected — biz flows are indivisible
+      if (selectedIds.has(flowId)) {
         cases.push({
           case_type: 'biz',
-          sheet_name: flow.sheetName || 'BizFlow',
-          steps: selectedSteps.map(s => workbookRowToYaml(s, 'single')),
+          sheet_name: sheetName,
+          steps: flow.steps.map(s => workbookRowToYaml(s, 'single')),
         })
       }
     }
