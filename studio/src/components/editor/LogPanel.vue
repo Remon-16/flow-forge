@@ -6,10 +6,36 @@ import { useI18n } from 'vue-i18n'
 import { useExecutorStore } from '../../stores/executor'
 import { useConverterStore } from '../../stores/converter'
 import type { LogEntry } from '../../types/agent'
-
 const { t } = useI18n()
 const executor = useExecutorStore()
 const converter = useConverterStore()
+
+// 面板展开高度（可拖拽调整）/ Panel expanded height (draggable)
+const panelSize = ref(220)
+
+// 拖拽调整面板高度 / Drag to resize panel height
+function onDragHandleMousedown(e: MouseEvent) {
+  e.preventDefault()
+  const startY = e.clientY
+  const startSize = panelSize.value
+
+  function onMouseMove(ev: MouseEvent) {
+    const delta = startY - ev.clientY  // 向上拖 = 正 delta，面板变大 / drag up = positive delta, panel grows
+    panelSize.value = Math.max(80, startSize + delta)
+  }
+
+  function onMouseUp() {
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+}
 
 const collapsed = ref(true)
 const autoScroll = ref(true)
@@ -46,7 +72,7 @@ function toggleCollapse() {
   collapsed.value = !collapsed.value
 }
 
-const panelHeight = computed(() => collapsed.value ? '32px' : '220px')
+const panelHeight = computed(() => collapsed.value ? '32px' : panelSize.value + 'px')
 
 // 日志容器 DOM 引用 / Log container DOM ref
 const logBodyRef = ref<HTMLElement | null>(null)
@@ -61,6 +87,9 @@ watch(() => displayLogs.value.length, async () => {
 
 <template>
   <div v-if="hasLogs" class="log-panel" :style="{ height: panelHeight }">
+    <!-- 拖拽手柄 / Drag handle -->
+    <div v-if="!collapsed" class="drag-handle" @mousedown="onDragHandleMousedown" />
+
     <!-- Toggle bar / 切换栏 -->
     <div class="panel-toggle" @click="toggleCollapse">
       <span class="toggle-icon">{{ collapsed ? '▲' : '▼' }}</span>
@@ -122,6 +151,27 @@ watch(() => displayLogs.value.length, async () => {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+}
+/* 拖拽手柄（面板顶部）/ Drag handle (top of panel) */
+.drag-handle {
+  height: 6px;
+  cursor: row-resize;
+  flex-shrink: 0;
+  background: transparent;
+  position: relative;
+  z-index: 10;
+}
+/* 扩展可点击区域 / Expand clickable area */
+.drag-handle::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -4px;
+  bottom: -4px;
+}
+.drag-handle:hover {
+  background: #fa8c16;
 }
 .panel-toggle {
   display: flex;

@@ -397,6 +397,9 @@ export const useExecutorStore = defineStore('executor', () => {
         await agentStore.loadConfig()
       }
       const cmd = resolvePythonCommand(agentStore.config)
+      // 打印即将执行的完整命令，便于定位问题 / Log the full command for debugging
+      const fullCmd = [cmd.exe, ...cmd.preArgs, ...args].join(' ')
+      appendLog(sessionId, 'info', `[CMD] ${fullCmd}`)
       await spawnExecutor(
         sessionId,
         agentStore.config.executorRootDir,

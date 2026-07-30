@@ -196,6 +196,9 @@ export const useConverterStore = defineStore('converter', () => {
         await agentStore.loadConfig()
       }
       const cmd = resolvePythonCommand(agentStore.config)
+      // 打印即将执行的完整命令，便于定位问题 / Log the full command for debugging
+      const fullCmd = [cmd.exe, ...cmd.preArgs, ...args].join(' ')
+      appendLog(sessionId, 'info', `[CMD] ${fullCmd}`)
       await spawnConverter(
         sessionId,
         agentStore.config.executorRootDir, // converter_main.py 位于 python/ 目录（与 executor main.py 同级） / converter_main.py is in python/ dir (alongside executor main.py)

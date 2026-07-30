@@ -810,7 +810,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 </script>
 
 <template>
-  <div style="height: 100%; display: flex; flex-direction: column; background: #f5f5f5;">
+  <div style="height: 100%; display: flex; flex-direction: column; background: #f5f5f5; overflow: hidden;">
     <!-- Editor toolbar -->
     <div style="display: flex; justify-content: flex-end; border-bottom: 1px solid #f0f0f0">
       <EditorToolbar
@@ -869,7 +869,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
       />
     </div>
 
-    <div style="flex: 1; min-height: 0;">
+    <div style="flex: 1; min-height: 0; overflow: auto;">
       <!-- API Definitions -->
       <ApiDefEditor v-if="editor.activeSheetIndex === -1" :search-bar-visible="searchVisible || globalSearchVisible" />
 
