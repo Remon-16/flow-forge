@@ -38,6 +38,11 @@ def _ensure_sqlalchemy():
         return
     try:
         from sqlalchemy import create_engine as _ce, text as _t
+        # 注册内置 H2 方言（基于 JayDeBeApi / JDBC），支持 h2:// 连接串
+        # Register the built-in H2 dialect (JayDeBeApi/JDBC) for h2:// URLs
+        from sqlalchemy.dialects import registry
+
+        registry.register("h2", "processors.h2_dialect", "H2Dialect")
         _create_engine = _ce
         _text = _t
         _SA_AVAILABLE = True
@@ -152,9 +157,11 @@ class BaseDBPlugin(BaseExternalPlugin):
 
             def before_request(self, headers, body, case_config, global_config):
                 with self._get_connection(global_config) as conn:
-                    result = conn.execute(text("INSERT INTO ..."))
-                    conn.commit()
-                    body["order_id"] = result.lastrowid
+                    # SQLAlchemy 1.4+/2.0: 事务上下文，成功自动提交、异常自动回滚
+                    # Transaction context: auto-commit on success, auto-rollback on error
+                    with conn.begin():
+                        result = conn.execute(text("INSERT INTO ..."))
+                        body["order_id"] = result.lastrowid
                 return headers, body
 
             def after_response(self, req_h, req_b, resp_h, resp_b, cc, gc):

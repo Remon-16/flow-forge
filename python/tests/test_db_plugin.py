@@ -418,7 +418,8 @@ class TestReturnOrderDBPlugin:
         assert h == headers
         # 验证 execute 被调用 / Verify execute was called
         assert mock_conn.execute.call_count >= 2  # SELECT product + INSERT order + INSERT item
-        mock_conn.commit.assert_called_once()
+        # 验证事务上下文被使用 / Verify transaction context was used
+        mock_conn.begin.assert_called_once()
 
     def test_after_response_prints_return_record(self, global_config, _mock_sqlalchemy):
         """after_response 查询退货记录并 print（不抛异常）。"""

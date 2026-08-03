@@ -5,6 +5,10 @@ pytest>=8.0.0
 # 数据库处理器支持 / DB processor support
 SQLAlchemy>=2.0
 PyMySQL>=1.1.0
+# H2 数据库处理器支持（JDBC 桥接；H2 SQLAlchemy 方言内置在 processors/h2_dialect.py）
+# H2 DB processor support (JDBC bridge; H2 dialect built into processors/h2_dialect.py)
+JPype1>=1.4.1
+JayDeBeApi>=1.2.3
 # Redis 处理器支持 / Redis processor support
 redis>=5.0.0
 # MQ 处理器支持（Kombu 多 MQ 抽象：RabbitMQ/Redis/SQS/MongoDB）/ MQ processor support

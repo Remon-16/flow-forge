@@ -52,6 +52,16 @@ python main.py --yamlDir ../agent/output --envName local --apiMode all
 # 3) View the report: generated at python/report/{fileName}_{timestamp}.html
 ```
 
+## H2 Database Integration
+
+When using H2 database processors such as `return-order-db`, the H2 JDBC jar is not distributed with the repo. Run the bootstrap CLI first (it downloads to `~/.flow-forge/h2/` by default):
+
+```bash
+python tools/h2/init_h2.py
+```
+
+Then start the foli-mall backend (it starts an H2 TCP Server on port 9092 on boot) before running flow-forge cases. See [Processors, Assertions & Report](./docs/processors-and-report.en.md).
+
 ## Common Commands
 
 ```bash

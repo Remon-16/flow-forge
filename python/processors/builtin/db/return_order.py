@@ -28,10 +28,28 @@ env-local.yml 配置 / Configuration::
 
     processor_configs:
       return-order-db:
-        db_url: "mysql+pymysql://root:123456@localhost:3306/foli_mall"
-        test_buyer_id: 1        # 测试买家用户 ID / Test buyer user ID
-        test_store_id: 1        # 测试店铺 ID / Test store ID
-        test_product_id: 1      # 测试商品 ID / Test product ID
+        db_url: "h2://sa:@localhost:9092/mem:foli_mall;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
+        test_buyer_id: "1000000000000000007"   # 测试买家用户 ID (buyer01) / Test buyer user ID
+        test_store_id: "1000000000000002001"   # 测试店铺 ID (store1) / Test store ID
+        test_product_id: "1000000000000003001" # 测试商品 ID (product1) / Test product ID
+
+    H2 依赖安装 / H2 dependency install::
+
+        pip install JPype1 JayDeBeApi
+
+    H2 SQLAlchemy 方言内置在 / H2 SQLAlchemy dialect is built into::
+
+        processors/h2_dialect.py
+
+    H2 运行前提（对应 foli-mall 的 H2 内存库）/ H2 prerequisites::
+
+        1. 运行 python tools/h2/init_h2.py 下载 H2 JDBC jar（方言自动加载，无需 CLASSPATH）
+        2. 启动 foli-mall 后端（应用启动时自动开启 H2 TCP Server，默认端口 9092）
+        3. 运行 flow-forge 用例
+
+        1. Run python tools/h2/init_h2.py to download the H2 JDBC jar (auto-loaded, no CLASSPATH)
+        2. Start the foli-mall backend (it starts an H2 TCP Server on port 9092 on boot)
+        3. Run flow-forge cases
 """
 
 import logging
@@ -97,71 +115,72 @@ class ReturnOrderDBPlugin(BaseDBPlugin):
         with self._get_connection(global_config) as conn:
             try:
                 # 查询商品信息作为快照 / Query product info for snapshot
-                from sqlalchemy import text
-                prod_rows = conn.execute(
-                    text("SELECT name, main_image, price FROM fm_product WHERE id = :pid AND is_delete = 0"),
-                    {"pid": product_id},
-                ).fetchall()
+                # 事务上下文（SQLAlchemy 1.4+/2.0 兼容）：成功自动提交，异常自动回滚
+                # Transaction context (SQLAlchemy 1.4+/2.0 compatible): auto commit/rollback
+                with conn.begin():
+                    from sqlalchemy import text
+                    prod_rows = conn.execute(
+                        text("SELECT name, main_image, price FROM fm_product WHERE id = :pid AND is_delete = 0"),
+                        {"pid": product_id},
+                    ).fetchall()
 
-                if prod_rows:
-                    row = prod_rows[0]
-                    product_name, product_image, price = row[0], row[1], row[2]
-                else:
-                    # 商品不存在时使用默认值 / Fallback defaults when product not found
-                    logger.warning("Product id=%s not found, using defaults", product_id)
-                    product_name = "Test Product"
-                    product_image = ""
-                    price = 99.99
+                    if prod_rows:
+                        row = prod_rows[0]
+                        product_name, product_image, price = row[0], row[1], row[2]
+                    else:
+                        # 商品不存在时使用默认值 / Fallback defaults when product not found
+                        logger.warning("Product id=%s not found, using defaults", product_id)
+                        product_name = "Test Product"
+                        product_image = ""
+                        price = 99.99
 
-                # 1) INSERT 订单 / Insert order
-                conn.execute(
-                    text(
-                        "INSERT INTO fm_order (id, order_no, user_id, store_id, "
-                        "total_amount, status, create_time, edit_time, update_time) "
-                        "VALUES (:id, :order_no, :user_id, :store_id, "
-                        ":total_amount, :status, :now, :now, :now)"
-                    ),
-                    {
-                        "id": order_id,
-                        "order_no": order_no,
-                        "user_id": buyer_id,
-                        "store_id": store_id,
-                        "total_amount": price,
-                        "status": order_status,
-                        "now": now,
-                    },
-                )
+                    # 1) INSERT 订单 / Insert order
+                    conn.execute(
+                        text(
+                            "INSERT INTO fm_order (id, order_no, user_id, store_id, "
+                            "total_amount, status, create_time, edit_time, update_time) "
+                            "VALUES (:id, :order_no, :user_id, :store_id, "
+                            ":total_amount, :status, :now, :now, :now)"
+                        ),
+                        {
+                            "id": order_id,
+                            "order_no": order_no,
+                            "user_id": buyer_id,
+                            "store_id": store_id,
+                            "total_amount": price,
+                            "status": order_status,
+                            "now": now,
+                        },
+                    )
 
-                # 2) INSERT 订单明细 / Insert order item
-                conn.execute(
-                    text(
-                        "INSERT INTO fm_order_item (id, order_id, product_id, "
-                        "product_name, product_image, price, quantity, "
-                        "create_time, edit_time, update_time) "
-                        "VALUES (:id, :order_id, :product_id, "
-                        ":product_name, :product_image, :price, :quantity, "
-                        ":now, :now, :now)"
-                    ),
-                    {
-                        "id": order_item_id,
-                        "order_id": order_id,
-                        "product_id": product_id,
-                        "product_name": product_name,
-                        "product_image": product_image or "",
-                        "price": price,
-                        "quantity": 1,
-                        "now": now,
-                    },
-                )
+                    # 2) INSERT 订单明细 / Insert order item
+                    conn.execute(
+                        text(
+                            "INSERT INTO fm_order_item (id, order_id, product_id, "
+                            "product_name, product_image, price, quantity, "
+                            "create_time, edit_time, update_time) "
+                            "VALUES (:id, :order_id, :product_id, "
+                            ":product_name, :product_image, :price, :quantity, "
+                            ":now, :now, :now)"
+                        ),
+                        {
+                            "id": order_item_id,
+                            "order_id": order_id,
+                            "product_id": product_id,
+                            "product_name": product_name,
+                            "product_image": product_image or "",
+                            "price": price,
+                            "quantity": 1,
+                            "now": now,
+                        },
+                    )
 
-                conn.commit()
                 logger.info(
                     "Test order created: id=%s, order_no=%s, product=%s, price=%s",
                     order_id, order_no, product_name, price,
                 )
 
             except Exception as e:
-                conn.rollback()
                 raise DBQueryError(
                     f"Failed to create test order: {e}",
                     processor_name=self.name,

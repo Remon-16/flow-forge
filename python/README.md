@@ -52,6 +52,16 @@ python main.py --yamlDir ../agent/output --envName local --apiMode all
 # 3) 查看报告：生成在 python/report/{文件名}_{时间戳}.html
 ```
 
+## H2 数据库联调
+
+使用 `return-order-db` 等 H2 数据库插件时，H2 JDBC jar 不随仓库分发，需要先运行初始化脚本下载（默认下载到 `~/.flow-forge/h2/`）：
+
+```bash
+python tools/h2/init_h2.py
+```
+
+然后启动 foli-mall 后端（其应用启动时会自动开启 H2 TCP Server，默认端口 9092），再运行 flow-forge 用例。详见 [处理器、断言引擎与报告](./docs/processors-and-report.md)。
+
 ## 常用命令
 
 ```bash

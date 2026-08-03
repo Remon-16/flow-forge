@@ -187,6 +187,21 @@ postprocessors:
 > **Configuration**: Database connection is configured via `processor_configs.<name>.db_url` in `env-local.yml` (SQLAlchemy connection URL format). No sensitive info in test case YAML.
 >
 > **Dependencies**: `pip install sqlalchemy pymysql` (MySQL); install the corresponding driver for other databases (e.g., `psycopg2`, `cx_Oracle`).
+>
+> **H2 support**: Install `pip install JPype1 JayDeBeApi` and set `db_url` to `h2://sa:@localhost:9092/mem:foli_mall;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false` (the H2 in-memory database used by foli-mall). The H2 SQLAlchemy dialect is bundled in `processors/h2_dialect.py` and loads the H2 JDBC jar automatically via JayDeBeApi (no manual CLASSPATH setup required). The jar is not distributed with the repo; download it with the bootstrap CLI first:
+>
+> ```bash
+> python tools/h2/init_h2.py                # downloads to the default directory ~/.flow-forge/h2/
+> python tools/h2/init_h2.py --dir D:/h2    # or download to a custom directory
+> python tools/h2/init_h2.py --check        # only check readiness
+> ```
+>
+> The dialect probes for the jar in this order: `H2_JAR_PATH` (full path) → `H2_JAR_DIR` (directory) → the default directory `~/.flow-forge/h2/` → the legacy location `tools/h2/` (backward compatible). If you use a custom directory, set the `H2_JAR_DIR` environment variable.
+>
+> The foli-mall backend starts an H2 TCP Server on boot (default port 9092, configurable via `app.h2.tcp.enabled` / `app.h2.tcp.port`), so no manual server startup is needed. H2 is an in-memory database and loses all data on restart; run the services in this order:
+>
+> 1. Start the foli-mall backend (e.g. `./mvnw spring-boot:run`);
+> 2. Run flow-forge cases in a Python environment with `JPype1`/`JayDeBeApi` installed.
 
 ### Redis Processors (BaseRedisPlugin)
 

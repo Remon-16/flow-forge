@@ -187,6 +187,21 @@ postprocessors:
 > **配置说明**：数据库连接通过 `env-local.yml` 的 `processor_configs.<name>.db_url` 配置（SQLAlchemy connection URL 格式）。不需要在用例 YAML 中暴露敏感信息。
 >
 > **依赖安装**：`pip install sqlalchemy pymysql`（MySQL）；其他数据库需安装对应驱动（如 `psycopg2`、`cx_Oracle`）。
+>
+> **H2 支持**：安装 `pip install JPype1 JayDeBeApi`，`db_url` 配置为 `h2://sa:@localhost:9092/mem:foli_mall;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false`（对应 foli-mall 的 H2 内存库）。H2 SQLAlchemy 方言内置在 `processors/h2_dialect.py`，通过 JayDeBeApi 自动加载 H2 JDBC jar（无需手工设置 CLASSPATH）。jar 不随仓库分发，请先用初始化脚本下载：
+>
+> ```bash
+> python tools/h2/init_h2.py                # 下载到默认目录 ~/.flow-forge/h2/
+> python tools/h2/init_h2.py --dir D:/h2    # 或下载到自定义目录
+> python tools/h2/init_h2.py --check        # 仅检查是否已就绪
+> ```
+>
+> 方言按以下顺序自动探测 jar：`H2_JAR_PATH`（完整路径）→ `H2_JAR_DIR`（目录）→ 默认目录 `~/.flow-forge/h2/` → 旧位置 `tools/h2/`（向后兼容）。使用自定义目录时请设置 `H2_JAR_DIR` 环境变量。
+>
+> foli-mall 后端启动时会自动开启 H2 TCP Server（默认端口 9092，配置项 `app.h2.tcp.enabled` / `app.h2.tcp.port`），无需手工启动。H2 为内存数据库，重启后数据清空，请按以下顺序运行：
+>
+> 1. 启动 foli-mall 后端（如 `./mvnw spring-boot:run`）；
+> 2. 在已安装 `JPype1`/`JayDeBeApi` 的 Python 环境中运行 flow-forge 用例。
 
 ### Redis 处理器（BaseRedisPlugin）
 
