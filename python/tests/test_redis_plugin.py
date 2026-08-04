@@ -182,6 +182,67 @@ class TestRedisConnectionManager:
             assert c1 is not c3  # Different URL → different client
             assert mock_mod.ConnectionPool.from_url.call_count == 2
 
+    def test_uses_default_protocol_when_ping_succeeds(self):
+        """ping 成功时不降级，保持 redis-py 默认协议（新版 RESP3）。
+        No fallback when ping succeeds; keep the redis-py default protocol (RESP3 in recent versions)."""
+        _RedisConnectionManager._clients.clear()
+        mock_pool = MagicMock()
+
+        with patch("processors.redis._REDIS_AVAILABLE", True), \
+             patch("processors.redis._redis_module") as mock_mod:
+            mock_mod.ConnectionPool.from_url.return_value = mock_pool
+            mock_mod.Redis.return_value = MagicMock()
+            _RedisConnectionManager.get_client("redis://localhost:6379/0")
+
+        mock_mod.ConnectionPool.from_url.assert_called_once_with("redis://localhost:6379/0")
+
+    def test_falls_back_to_resp2_on_protocol_error(self):
+        """旧版 Redis（如 5.x，不支持 HELLO/RESP3）时自动降级为 RESP2。
+        Automatically fall back to RESP2 for legacy Redis (e.g. 5.x without HELLO/RESP3)."""
+        _RedisConnectionManager._clients.clear()
+
+        from redis.exceptions import ResponseError
+
+        class _FakePool:
+            pass
+
+        with patch("processors.redis._REDIS_AVAILABLE", True), \
+             patch("processors.redis._redis_module") as mock_mod:
+            mock_mod.ConnectionPool.from_url.side_effect = [
+                _FakePool(),  # 第一次默认协议 / first, default protocol
+                _FakePool(),  # 第二次 RESP2 / second, RESP2
+            ]
+            first_client = MagicMock()
+            second_client = MagicMock()
+            first_client.ping.side_effect = ResponseError("unknown command `HELLO`")
+            mock_mod.Redis.side_effect = [first_client, second_client]
+
+            client = _RedisConnectionManager.get_client("redis://localhost:6379/0")
+
+        assert client is second_client
+        calls = mock_mod.ConnectionPool.from_url.call_args_list
+        assert len(calls) == 2
+        assert calls[0] == (("redis://localhost:6379/0",), {})
+        assert calls[1] == (("redis://localhost:6379/0",), {"protocol": 2})
+        second_client.ping.assert_called_once()
+
+    def test_raises_connection_error_on_non_protocol_failure(self):
+        """非协议类连接失败应原样抛出 RedisConnectionError，不降级。
+        Non-protocol connection failures raise RedisConnectionError without fallback."""
+        _RedisConnectionManager._clients.clear()
+
+        with patch("processors.redis._REDIS_AVAILABLE", True), \
+             patch("processors.redis._redis_module") as mock_mod:
+            mock_mod.ConnectionPool.from_url.return_value = MagicMock()
+            mock_client = MagicMock()
+            mock_client.ping.side_effect = ConnectionError("connection refused")
+            mock_mod.Redis.return_value = mock_client
+
+            with pytest.raises(RedisConnectionError):
+                _RedisConnectionManager.get_client("redis://localhost:6379/0")
+
+        mock_mod.ConnectionPool.from_url.assert_called_once()
+
     def test_thread_safety(self):
         """多线程并发调用 get_client 无竞争。"""
         mock_pool = MagicMock()

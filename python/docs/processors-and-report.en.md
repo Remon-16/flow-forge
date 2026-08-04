@@ -86,9 +86,10 @@ processor_configs:
 | `response-time` | Post | Logs the response status code and content length; warns when a threshold is exceeded |
 | `print-demo-post` | Post | Debug helper; logs the response summary at INFO level |
 | `return-order-db` | Pre + Post | 🌟 DB processor example — pre-inserts an order, post-prints the return record (see Database Processors section) |
+| `mysql-demo` | Pre + Post | 🌟 MySQL database example — pre-writes test data, post-reads and cleans up (see Database Processors section) |
 | `cache-handler` | Pre + Post | 🌟 Redis cache handler example — pre-set cache, post-delete (see Redis Processors section) |
 | `order-publish` | Pre + Post | 🌟 MQ order publish example (Kombu) — pre-publish message, post-consume verify (see MQ Processors section) |
-| `rocketmq-order` | Pre | 🌟 RocketMQ order message example — pre-send message to RocketMQ topic (see RocketMQ Processors section) |
+| `rocketmq-order` | Pre + Post | 🌟 RocketMQ order message example — pre-sends the order event, post-consume and verify (see RocketMQ Processors section) |
 | `kafka-order-event` | Pre | 🌟 Kafka order event example — pre-send message to Kafka topic (see Kafka Processors section) |
 | `pulsar-order-event` | Pre | 🌟 Pulsar order event example — pre-send message to Pulsar topic (see Pulsar Processors section) |
 
@@ -184,6 +185,8 @@ postprocessors:
 
 **Built-in example**: `return-order-db` (`processors/builtin/db/return_order.py`) — return/refund scenario: pre-inserts order data, post-prints return record.
 
+> This example targets the foli-mall `POST /api/returns` API: the pre-processor creates a test order with `status=4` (completed) by default and injects `orderId` into the request body (matching the camelCase field of `ReturnCreateRequest`); the post-processor queries and prints the return record. Use the `order_status` option to override the order status.
+
 > **Configuration**: Database connection is configured via `processor_configs.<name>.db_url` in `env-local.yml` (SQLAlchemy connection URL format). No sensitive info in test case YAML.
 >
 > **Dependencies**: `pip install sqlalchemy pymysql` (MySQL); install the corresponding driver for other databases (e.g., `psycopg2`, `cx_Oracle`).
@@ -203,6 +206,10 @@ postprocessors:
 > 1. Start the foli-mall backend (e.g. `./mvnw spring-boot:run`);
 > 2. Run flow-forge cases in a Python environment with `JPype1`/`JayDeBeApi` installed.
 
+**Built-in example (MySQL)**: `mysql-demo` (`processors/builtin/db/mysql_demo.py`) — the pre-processor auto-creates the demo table `ff_plugin_demo` (if absent) and inserts one test row, then injects `mysql_demo_key` into the request body; the post-processor SELECTs the row to verify it is readable, prints it, DELETEs it, and verifies no residual rows remain. This plugin verifies that flow-forge DB processors can connect to MySQL and doubles as a template for custom DB plugins.
+
+> **Configuration**: configure the MySQL connection via `processor_configs.<name>.db_url` (SQLAlchemy URL format), e.g. `mysql+pymysql://root:password@localhost:3306/flow_forge_demo?charset=utf8mb4`. The demo table is created automatically — no manual DDL is needed.
+
 ### Redis Processors (BaseRedisPlugin)
 
 For scenarios requiring Redis cache operations before/after requests (e.g., "set cache before request, clean up after"), use the `BaseRedisPlugin` base class (`processors/redis.py`). Built on **redis-py**, it provides:
@@ -216,6 +223,7 @@ Usage follows the same pattern as `BaseDBPlugin`: subclass → set `name` → im
 
 > **Configuration**: Redis connection via `processor_configs.<name>.redis_url`.
 > **Dependencies**: `pip install redis`
+> **Protocol compatibility**: the client auto-probes protocol compatibility — recent redis-py defaults to RESP3; if the server does not support it (e.g. Redis 5.x has no `HELLO` command), it automatically falls back to RESP2, supporting both Redis 5.x and 6+/7.
 
 ### MQ Processors — Kombu Multi-MQ Abstraction (BaseMQPlugin)
 
@@ -241,16 +249,17 @@ Supported protocols:
 
 ### RocketMQ Processors (BaseRocketMQPlugin)
 
-Apache RocketMQ is widely used. Its protocol differs from AMQP/Redis (not supported by Kombu), so a separate `BaseRocketMQPlugin` is provided (`processors/rocketmq.py`). Uses the `rocketmq-client-python` official client:
+Apache RocketMQ is widely used. Its protocol differs from AMQP/Redis (not supported by Kombu), so a separate `BaseRocketMQPlugin` is provided (`processors/rocketmq.py`). A pure-Python client built on the remoting protocol (`processors/rocketmq_client.py`, stdlib only) lets you send and receive messages on Windows, Linux and macOS without a C++ build environment:
 
-- **Connection management**: `_RocketMQManager` caches Producer by `(namesrv_addr, group_id)`, thread-safe
-- **Convenience method**: `_send_message()` for synchronous message sending
+- **Connection management**: `_RocketMQManager` caches clients by `namesrv_addr`, thread-safe
+- **Convenience methods**: `_send_message()` sends a message (returning queueId/queueOffset metadata); `_receive_message()` consumes from a given offset using a dedicated `<group>-verify` consumer group
 - **Auto-registration**: Same pattern as DB/Redis/MQ
 
-**Built-in example**: `rocketmq-order` (`processors/builtin/rocketmq/order_message.py`) — pre send order event to RocketMQ topic.
+**Built-in example**: `rocketmq-order` (`processors/builtin/rocketmq/order_message.py`) — pre-sends an `order_created` order event, then consumes and verifies the message from the same offset in the post-processor; a verification failure (timeout or content mismatch) fails the test case.
 
 > **Configuration**: Connection via `processor_configs.<name>.namesrv_addr`, `group_id`, `topic`.
-> **Dependencies**: `pip install rocketmq-client-python` (requires C++ build environment)
+> `receive_timeout` (default 10 seconds) controls the post-consumption verification timeout.
+> **Dependencies**: none — the official `rocketmq-client-python` does not support Windows, so a pure-Python client is bundled instead.
 
 ### Kafka Processors (BaseKafkaPlugin)
 

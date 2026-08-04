@@ -86,9 +86,10 @@ processor_configs:
 | `response-time` | Post | 记录响应状态码和内容长度，超过阈值时 WARNING |
 | `print-demo-post` | Post | 调试用，INFO 级别打印响应摘要 |
 | `return-order-db` | Pre + Post | 🌟 数据库处理器示例 — 前置 INSERT 订单，后置 print 退货记录（详见数据库处理器章节） |
+| `mysql-demo` | Pre + Post | 🌟 MySQL 数据库示例 — 前置写入测试数据，后置读取并清理（详见数据库处理器章节） |
 | `cache-handler` | Pre + Post | 🌟 Redis 缓存处理示例 — 前置写缓存，后置清缓存（详见 Redis 处理器章节） |
 | `order-publish` | Pre + Post | 🌟 MQ 订单发布示例（Kombu）— 前置发布消息，后置消费验证（详见 MQ 处理器章节） |
-| `rocketmq-order` | Pre | 🌟 RocketMQ 订单消息示例 — 前置发送消息到 RocketMQ 主题（详见 RocketMQ 处理器章节） |
+| `rocketmq-order` | Pre + Post | 🌟 RocketMQ 订单消息示例 — 前置发送订单事件，后置消费校验（详见 RocketMQ 处理器章节） |
 | `kafka-order-event` | Pre | 🌟 Kafka 订单事件示例 — 前置发送消息到 Kafka topic（详见 Kafka 处理器章节） |
 | `pulsar-order-event` | Pre | 🌟 Pulsar 订单事件示例 — 前置发送消息到 Pulsar topic（详见 Pulsar 处理器章节） |
 
@@ -184,6 +185,8 @@ postprocessors:
 
 **内置示例**：`return-order-db`（`processors/builtin/db/return_order.py`）— 退货单场景，前置 INSERT 订单数据，后置 print 退货记录。
 
+> 该示例对应 foli-mall 的 `POST /api/returns` 退货接口：前置处理器默认创建 `status=4`（已完成）的测试订单，并把 `orderId` 注入请求体（与 `ReturnCreateRequest` 的驼峰字段一致）；后置处理器查询并打印退货记录。可用 `order_status` 配置项覆盖订单状态。
+
 > **配置说明**：数据库连接通过 `env-local.yml` 的 `processor_configs.<name>.db_url` 配置（SQLAlchemy connection URL 格式）。不需要在用例 YAML 中暴露敏感信息。
 >
 > **依赖安装**：`pip install sqlalchemy pymysql`（MySQL）；其他数据库需安装对应驱动（如 `psycopg2`、`cx_Oracle`）。
@@ -203,6 +206,10 @@ postprocessors:
 > 1. 启动 foli-mall 后端（如 `./mvnw spring-boot:run`）；
 > 2. 在已安装 `JPype1`/`JayDeBeApi` 的 Python 环境中运行 flow-forge 用例。
 
+**内置示例（MySQL）**：`mysql-demo`（`processors/builtin/db/mysql_demo.py`）— 前置处理器自动创建示例表 `ff_plugin_demo`（如不存在）并写入一行测试数据，再把 `mysql_demo_key` 注入请求体；后置处理器 SELECT 校验数据可读并 print 展示，随后 DELETE 并再次校验无残留。该插件用于验证 flow-forge 数据库处理器可连接 MySQL，同时作为自定义 DB 插件的样板。
+
+> **配置说明**：通过 `processor_configs.<name>.db_url` 配置 MySQL 连接（SQLAlchemy URL 格式），例如 `mysql+pymysql://root:password@localhost:3306/flow_forge_demo?charset=utf8mb4`；示例表会自动创建，无需手工建表。
+
 ### Redis 处理器（BaseRedisPlugin）
 
 对于需要 Redis 缓存操作的前置/后置场景（如"请求前写缓存、请求后清理"），可使用 `BaseRedisPlugin` 基类（`processors/redis.py`）。它基于 **redis-py** 提供：
@@ -216,6 +223,7 @@ postprocessors:
 
 > **配置说明**：Redis 连接通过 `processor_configs.<name>.redis_url` 配置。
 > **依赖安装**：`pip install redis`
+> **协议兼容**：客户端会自动探测协议兼容性——新版 redis-py 默认 RESP3，若服务器不支持（如 Redis 5.x 无 `HELLO` 命令）则自动降级为 RESP2，兼容 Redis 5.x 与 6+/7。
 
 ### MQ 处理器 — Kombu 多 MQ 抽象（BaseMQPlugin）
 
@@ -241,16 +249,17 @@ postprocessors:
 
 ### RocketMQ 处理器（BaseRocketMQPlugin）
 
-Apache RocketMQ 在国内是主流 MQ，因其协议特殊（Kombu 不支持），单独提供 `BaseRocketMQPlugin` 基类（`processors/rocketmq.py`）。使用 `rocketmq-client-python` 官方客户端：
+Apache RocketMQ 在国内是主流 MQ，因其协议特殊（Kombu 不支持），单独提供 `BaseRocketMQPlugin` 基类（`processors/rocketmq.py`）。内置基于 remoting 协议的纯 Python 客户端（`processors/rocketmq_client.py`，仅标准库），Windows/Linux/macOS 均可收发消息，无需 C++ 编译环境：
 
-- **连接管理**：`_RocketMQManager` 按 `(namesrv_addr, group_id)` 缓存 Producer，线程安全
-- **便捷方法**：`_send_message()` 同步发送消息
+- **连接管理**：`_RocketMQManager` 按 `namesrv_addr` 缓存客户端，线程安全
+- **便捷方法**：`_send_message()` 发送消息（返回 queueId/queueOffset 等元数据）、`_receive_message()` 从指定偏移消费消息（使用独立的 `<group>-verify` 消费组）
 - **自动注册**：与 DB/Redis/MQ 相同模式
 
-**内置示例**：`rocketmq-order`（`processors/builtin/rocketmq/order_message.py`）— 前置发送订单事件到 RocketMQ 主题。
+**内置示例**：`rocketmq-order`（`processors/builtin/rocketmq/order_message.py`）— 前置发送 `order_created` 订单事件，后置从同一偏移消费并校验消息内容；校验失败（超时或不匹配）会使用例失败。
 
 > **配置说明**：连接通过 `processor_configs.<name>.namesrv_addr`、`group_id`、`topic` 配置。
-> **依赖安装**：`pip install rocketmq-client-python`（需要 C++ 编译环境）
+> `receive_timeout`（默认 10 秒）控制后置消费校验超时。
+> **依赖说明**：无需安装额外依赖；官方 `rocketmq-client-python` 不支持 Windows，故内置纯 Python 客户端。
 
 ### Kafka 处理器（BaseKafkaPlugin）
 

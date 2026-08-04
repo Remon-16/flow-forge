@@ -391,7 +391,8 @@ class TestReturnOrderDBPlugin:
             yield mock_sa
 
     def test_before_request_inserts_order_and_injects_id(self, global_config, _mock_sqlalchemy):
-        """before_request 模拟 INSERT 后注入 order_id 到 body。"""
+        """before_request 模拟 INSERT 后注入 orderId 到 body（默认 status=4）。
+        before_request injects orderId into body (default status=4)."""
         mock_conn = MagicMock()
         # MagicMock.__enter__() 默认返回新 Mock，需要让它返回自己
         # MagicMock.__enter__() returns new mock by default, make it return self
@@ -411,15 +412,35 @@ class TestReturnOrderDBPlugin:
 
             h, b = plugin.before_request(headers, body, {}, global_config)
 
-        # 验证 order_id 已注入 / Verify order_id injected
-        assert "order_id" in b
-        assert isinstance(b["order_id"], int)
+        # 验证 orderId 已注入 / Verify orderId injected
+        assert "orderId" in b
+        assert isinstance(b["orderId"], int)
         assert b["reason"] == "defective item"
         assert h == headers
         # 验证 execute 被调用 / Verify execute was called
         assert mock_conn.execute.call_count >= 2  # SELECT product + INSERT order + INSERT item
         # 验证事务上下文被使用 / Verify transaction context was used
         mock_conn.begin.assert_called_once()
+        # 默认订单状态应为 4（已完成，foli-mall 创建退货要求 COMPLETED）
+        # Default order status should be 4 (completed; foli-mall requires COMPLETED)
+        insert_params = mock_conn.execute.call_args_list[1][0][1]
+        assert insert_params["status"] == 4
+
+    def test_before_request_honors_custom_order_status(self, global_config, _mock_sqlalchemy):
+        """case 级 order_status 配置应覆盖默认值。"""
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value = mock_conn
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [("Test Product", "img.png", 99.99)]
+        mock_conn.execute.return_value = mock_result
+
+        with patch.object(BaseDBPlugin, "_get_connection", return_value=mock_conn):
+            from processors.builtin.db.return_order import ReturnOrderDBPlugin
+            plugin = ReturnOrderDBPlugin()
+            plugin.before_request({}, {}, {"order_status": 3}, global_config)
+
+        insert_params = mock_conn.execute.call_args_list[1][0][1]
+        assert insert_params["status"] == 3
 
     def test_after_response_prints_return_record(self, global_config, _mock_sqlalchemy):
         """after_response 查询退货记录并 print（不抛异常）。"""
@@ -436,13 +457,30 @@ class TestReturnOrderDBPlugin:
             plugin = ReturnOrderDBPlugin()
             # 不应抛异常 / Should not raise
             plugin.after_response(
+                {}, {"orderId": 999}, {}, {"code": "100000", "msg": "success"}, {}, global_config
+            )
+
+        mock_conn.execute.assert_called_once()
+
+    def test_after_response_reads_legacy_order_id_fallback(self, global_config, _mock_sqlalchemy):
+        """旧版下划线 order_id 字段仍可被后置处理器读取（向后兼容）。"""
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value = mock_conn
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_conn.execute.return_value = mock_result
+
+        with patch.object(BaseDBPlugin, "_get_connection", return_value=mock_conn):
+            from processors.builtin.db.return_order import ReturnOrderDBPlugin
+            plugin = ReturnOrderDBPlugin()
+            plugin.after_response(
                 {}, {"order_id": 999}, {}, {"code": "100000", "msg": "success"}, {}, global_config
             )
 
         mock_conn.execute.assert_called_once()
 
     def test_after_response_no_order_id_skips(self, global_config, _mock_sqlalchemy):
-        """after_response 无 order_id 时跳过。"""
+        """after_response 无 orderId/order_id 时跳过。"""
         mock_conn = MagicMock()
         mock_conn.__enter__.return_value = mock_conn
 

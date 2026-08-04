@@ -1,62 +1,34 @@
-"""RocketMQ 处理器基类 — 提供连接管理、消息发送、自动注册。
-RocketMQ processor base — connection management, message sending, auto-registration.
+"""RocketMQ 处理器基类 — 基于内置纯 Python 客户端（跨平台）。
+RocketMQ processor base — built on the built-in pure-Python client (cross-platform).
 
-Apache RocketMQ 在国内是主流 MQ，因其协议与 AMQP/Redis 不同（Kombu 不支持），
-故单独创建此模块。使用 ``rocketmq-client-python`` 官方客户端。
+官方 ``rocketmq-client-python`` 不支持 Windows，因此本模块使用
+``processors.rocketmq_client`` 中基于 remoting 协议实现的纯 Python 客户端，
+在 Windows/Linux/macOS 上均可收发消息，无第三方原生依赖。
 
-Apache RocketMQ is widely used in China. Since its protocol differs from
-AMQP/Redis (not supported by Kombu), this module is created separately.
-Uses the ``rocketmq-client-python`` official client.
+The official ``rocketmq-client-python`` does not support Windows, so this module
+uses the pure-Python client in ``processors.rocketmq_client`` (implemented over
+the remoting protocol) to send and receive messages on Windows/Linux/macOS
+without third-party native dependencies.
 
-注意 / Note:
-    ``rocketmq-client-python`` 基于 C++ 扩展，安装可能需要编译环境。
-    对于纯 Python 环境，建议使用 Docker 部署 RocketMQ + Name Server。
-    ``rocketmq-client-python`` is a C++ extension; installation may require
-    build tools. For pure Python environments, consider Docker for RocketMQ.
+用户只需继承 ``BaseRocketMQPlugin``，实现 ``before_request`` / ``after_response``。
+Users extend ``BaseRocketMQPlugin`` and implement ``before_request`` /
+``after_response``.
 """
 
+import json
 import logging
 import threading
 from typing import Any, Dict, Optional, Tuple, Type
 
+from i18n import _
 from processors.base import (
     BaseExternalPlugin,
     ProcessorError,
     _create_external_plugin_wrappers,
 )
+from processors.rocketmq_client import RocketMQClient
 
 logger = logging.getLogger(__name__)
-
-# ============================================================================
-# rocketmq-client-python 延迟导入 / Lazy import
-# ============================================================================
-_ROCKETMQ_AVAILABLE = False
-_rocketmq_client = None
-_rocketmq_message = None
-
-
-def _ensure_rocketmq():
-    """确保 rocketmq-client-python 可用，否则给出友好错误提示。
-    Ensure rocketmq-client-python is importable; raise with install hint otherwise."""
-    global _ROCKETMQ_AVAILABLE, _rocketmq_client, _rocketmq_message
-    if _ROCKETMQ_AVAILABLE:
-        return
-    try:
-        from rocketmq.client import Producer, Message as RMessage, SendStatus
-        _rocketmq_client = type("_client", (), {
-            "Producer": Producer,
-            "SendStatus": SendStatus,
-        })
-        _rocketmq_message = RMessage
-        _ROCKETMQ_AVAILABLE = True
-    except ImportError:
-        raise ProcessorError(
-            "rocketmq-client-python is required for RocketMQ processors. "
-            "Install it with: pip install rocketmq-client-python\n"
-            "Note: this package requires a C++ build environment.\n"
-            "For Docker-based RocketMQ, see: https://rocketmq.apache.org/",
-            processor_name="rocketmq",
-        )
 
 
 # ============================================================================
@@ -64,56 +36,39 @@ def _ensure_rocketmq():
 # ============================================================================
 
 class RocketMQConnectionError(ProcessorError):
-    """RocketMQ 连接失败。RocketMQ connection failure."""
+    """RocketMQ 连接/配置失败。RocketMQ connection or configuration failure."""
 
 
 class RocketMQPublishError(ProcessorError):
     """RocketMQ 消息发送失败。RocketMQ message send failure."""
 
 
+class RocketMQReceiveError(ProcessorError):
+    """RocketMQ 消息消费失败。RocketMQ message receive failure."""
+
+
 # ============================================================================
-# RocketMQ Producer 管理器 — 单例、懒加载、按 namesrv_addr 缓存
+# 客户端管理器 — 按 namesrv_addr 缓存，线程安全 / Client manager cached by address
 # ============================================================================
 
 class _RocketMQManager:
-    """RocketMQ Producer 管理器（线程安全）。
-    RocketMQ Producer manager (thread-safe).
+    """RocketMQ 客户端管理器（线程安全）。
+    RocketMQ client manager (thread-safe)."""
 
-    相同 ``(namesrv_addr, group_id)`` 的多个处理器共享同一个 Producer 实例。
-    Multiple processors with the same ``(namesrv_addr, group_id)`` share one Producer.
-    """
-
-    _producers: Dict[str, Any] = {}
+    _clients: Dict[str, RocketMQClient] = {}
     _lock = threading.Lock()
 
     @classmethod
-    def _make_key(cls, namesrv_addr: str, group_id: str) -> str:
-        return f"{namesrv_addr}|{group_id}"
-
-    @classmethod
-    def get_producer(cls, namesrv_addr: str, group_id: str):
-        """获取或创建 Producer 实例。Get or create a Producer instance.
-
-        懒加载：首次调用时才创建 Producer 并启动。
-        Lazy: Producer is created and started on first access.
-        """
-        _ensure_rocketmq()
-        key = cls._make_key(namesrv_addr, group_id)
+    def get_client(cls, namesrv_addr: str) -> RocketMQClient:
+        """获取或创建客户端。Get or create a client."""
         with cls._lock:
-            if key not in cls._producers:
-                producer = _rocketmq_client.Producer(group_id)
-                producer.set_namesrv_addr(namesrv_addr)
-                producer.start()
-                cls._producers[key] = producer
-                logger.info(
-                    "RocketMQ Producer started — namesrv=%s, group=%s",
-                    namesrv_addr, group_id,
-                )
-        return cls._producers[key]
+            if namesrv_addr not in cls._clients:
+                cls._clients[namesrv_addr] = RocketMQClient(namesrv_addr)
+        return cls._clients[namesrv_addr]
 
 
 # ============================================================================
-# RocketMQ 插件注册表 / RocketMQ plugin registry
+# 插件注册表 / Plugin registry
 # ============================================================================
 
 _ROCKETMQ_PLUGIN_REGISTRY: Dict[str, Type["BaseRocketMQPlugin"]] = {}
@@ -122,8 +77,7 @@ _ROCKETMQ_PLUGIN_REGISTRY: Dict[str, Type["BaseRocketMQPlugin"]] = {}
 
 def _register_rocketmq_plugin(cls: Type["BaseRocketMQPlugin"]) -> None:
     """注册 BaseRocketMQPlugin 子类并自动创建 Pre/Post 包装类。
-    Register a BaseRocketMQPlugin subclass and auto-create Pre/Post wrapper classes.
-    """
+    Register a BaseRocketMQPlugin subclass and auto-create Pre/Post wrapper classes."""
     _create_external_plugin_wrappers(cls, _ROCKETMQ_PLUGIN_REGISTRY)
 
 
@@ -132,46 +86,9 @@ def _register_rocketmq_plugin(cls: Type["BaseRocketMQPlugin"]) -> None:
 # ============================================================================
 
 class BaseRocketMQPlugin(BaseExternalPlugin):
-    """RocketMQ 操作基类 — 管理连接，暴露 before_request / after_response 扩展点。
-    RocketMQ operation base — manages connections, exposes before/after extension points.
-
-    扩展点方法（can_process / before_request / after_response）继承自
-    BaseExternalPlugin，默认 no-op。子类按需覆写。
-    Extension point methods (can_process / before_request / after_response)
-    are inherited from BaseExternalPlugin with default no-op implementations.
-    Subclasses override as needed.
-
-    用户只需定义 ``name`` 类属性，实现 ``before_request`` / ``after_response``。
-    ``__init_subclass__`` 自动创建并注册 PreProcessor / PostProcessor 包装类。
-
-    Users only need to define ``name`` and implement ``before_request`` /
-    ``after_response``. ``__init_subclass__`` auto-creates and registers
-    PreProcessor / PostProcessor wrappers.
-
-    用法示例 / Usage::
-
-        class RocketMQOrderPlugin(BaseRocketMQPlugin):
-            name = "rocketmq-order"
-
-            def before_request(self, headers, body, case_config, global_config):
-                self._send_message("order-topic", body, "order_create", global_config)
-                return headers, body
-
-    环境配置 / Env config (env-local.yml)::
-
-        processor_configs:
-          rocketmq-order:
-            namesrv_addr: "localhost:9876"
-            group_id: "test-producer-group"
-            topic: "order-topic"
-            tag: "order_create"
-
-    用例 YAML / Test case YAML::
-
-        preprocessors:
-          - name: rocketmq-order
-            config: {}
-    """
+    """RocketMQ 操作基类 — 管理客户端，暴露 before_request / after_response 扩展点。
+    RocketMQ operation base — manages the client, exposes before_request /
+    after_response extension points."""
 
     name: str  # 子类必须定义 / Must be defined on each subclass
 
@@ -179,45 +96,45 @@ class BaseRocketMQPlugin(BaseExternalPlugin):
         super().__init_subclass__(**kwargs)
         _register_rocketmq_plugin(cls)
 
-    # ── 连接管理 / Connection management ─────────────────────────────────
+    # ── 配置与客户端 / Config and client ─────────────────────────────────
 
-    def _get_producer(self, global_config: Dict[str, Any]):
-        """获取 RocketMQ Producer 实例。Get a RocketMQ Producer instance.
-
-        配置读取路径 / Config read path:
-        ``global_config["processor_configs"][self.name].namesrv_addr``
-        ``global_config["processor_configs"][self.name].group_id``
-        """
+    def _get_config(self, global_config: Dict[str, Any]) -> Dict[str, Any]:
+        """读取当前插件的处理器配置。Read the processor config for this plugin."""
         proc_configs = global_config.get("processor_configs", {})
         if not isinstance(proc_configs, dict):
             raise RocketMQConnectionError(
-                "global_config['processor_configs'] is missing or not a dict",
+                _("rocketmq.global_config_required"),
                 processor_name=self.name,
             )
-        processor_cfg = proc_configs.get(self.name, {})
-        if not isinstance(processor_cfg, dict):
+        cfg = proc_configs.get(self.name, {})
+        if not isinstance(cfg, dict):
             raise RocketMQConnectionError(
-                f"processor_configs['{self.name}'] is missing or not a dict",
+                _("rocketmq.config_not_dict", name=self.name),
                 processor_name=self.name,
             )
-        namesrv_addr = processor_cfg.get("namesrv_addr", "")
-        group_id = processor_cfg.get("group_id", "")
+        return cfg
+
+    def _get_client(self, global_config: Dict[str, Any]) -> RocketMQClient:
+        """获取 RocketMQ 客户端。Get the RocketMQ client."""
+        cfg = self._get_config(global_config)
+        namesrv_addr = cfg.get("namesrv_addr", "")
         if not namesrv_addr:
             raise RocketMQConnectionError(
-                f"processor_configs['{self.name}'].namesrv_addr is not set. "
-                "Please configure the RocketMQ Name Server address in env.yml, e.g.:\n"
-                f"processor_configs:\n  {self.name}:\n"
-                '    namesrv_addr: "localhost:9876"\n'
-                '    group_id: "test-producer-group"',
+                _("rocketmq.namesrv_missing", name=self.name),
                 processor_name=self.name,
             )
+        return _RocketMQManager.get_client(namesrv_addr)
+
+    def _get_group(self, global_config: Dict[str, Any]) -> str:
+        """获取生产者组。Get the producer group."""
+        cfg = self._get_config(global_config)
+        group_id = cfg.get("group_id", "")
         if not group_id:
             raise RocketMQConnectionError(
-                f"processor_configs['{self.name}'].group_id is not set.",
+                _("rocketmq.group_missing", name=self.name),
                 processor_name=self.name,
             )
-
-        return _RocketMQManager.get_producer(namesrv_addr, group_id)
+        return group_id
 
     # ── 便捷方法 / Convenience methods ────────────────────────────────────
 
@@ -226,36 +143,52 @@ class BaseRocketMQPlugin(BaseExternalPlugin):
         topic: str,
         body: Any,
         tag: str = "",
+        key: str = "",
         global_config: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        """发送消息到 RocketMQ 主题。Send a message to a RocketMQ topic.
-
-        Args:
-            topic: 主题名称 / Topic name.
-            body: 消息体（自动 JSON 序列化）/ Message body (auto JSON serialized).
-            tag: 消息标签 / Message tag.
-            global_config: 全局配置 / Global config.
-        """
+    ) -> Dict[str, Any]:
+        """发送消息，返回 {broker_addr, queue_id, queue_offset, msg_id}。
+        Send a message; returns {broker_addr, queue_id, queue_offset, msg_id}."""
         if global_config is None:
             raise RocketMQPublishError(
-                "global_config is required for _send_message()",
+                _("rocketmq.global_config_required"),
                 processor_name=self.name,
             )
-        import json
+        client = self._get_client(global_config)
+        group = self._get_group(global_config)
+        msg_body = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        return client.send_message(
+            topic=topic,
+            body=msg_body,
+            tags=tag,
+            keys=key,
+            group=group,
+        )
 
-        producer = self._get_producer(global_config)
-        msg_body = json.dumps(body, ensure_ascii=False)
-        msg = _rocketmq_message(topic)
-        msg.set_keys(self.name)
-        if tag:
-            msg.set_tags(tag)
-        msg.set_body(msg_body)
-
-        result = producer.send_sync(msg)
-        status = _rocketmq_client.SendStatus.OK
-        if result != status:
-            raise RocketMQPublishError(
-                f"Failed to send message to topic '{topic}': status={result}",
+    def _receive_message(
+        self,
+        topic: str,
+        queue_id: int,
+        queue_offset: int,
+        broker_addr: Optional[str] = None,
+        tag: str = "",
+        timeout: float = 10.0,
+        global_config: Optional[Dict[str, Any]] = None,
+    ):
+        """从指定队列偏移消费消息（使用独立的 verify 消费组）。
+        Consume from the given queue offset (using a dedicated verify group)."""
+        if global_config is None:
+            raise RocketMQReceiveError(
+                _("rocketmq.global_config_required"),
                 processor_name=self.name,
             )
-        logger.info("RocketMQ message sent to topic '%s' (tag=%s)", topic, tag)
+        client = self._get_client(global_config)
+        group = self._get_group(global_config)
+        return client.receive_message(
+            topic=topic,
+            group="%s-verify" % group,
+            queue_id=queue_id,
+            offset=queue_offset,
+            broker_addr=broker_addr,
+            tags=tag,
+            timeout=timeout,
+        )

@@ -13,6 +13,7 @@ import logging
 import threading
 from typing import Any, Dict, Optional, Tuple, Type
 
+from i18n import _
 from processors.base import (
     BaseExternalPlugin,
     ProcessorError,
@@ -83,11 +84,58 @@ class _RedisConnectionManager:
         _ensure_redis()
         with cls._lock:
             if redis_url not in cls._clients:
-                pool = _redis_module.ConnectionPool.from_url(redis_url)
-                cls._clients[redis_url] = _redis_module.Redis(connection_pool=pool)
+                cls._clients[redis_url] = cls._create_probed_client(redis_url)
                 safe_url = _mask_password(redis_url)
                 logger.info("Redis client created for: %s", safe_url)
         return cls._clients[redis_url]
+
+    @classmethod
+    def _create_probed_client(cls, redis_url: str):
+        """创建客户端并探测协议兼容性；旧版服务器（如 Redis 5.x）自动降级 RESP2。
+        Create a client and probe protocol compatibility; automatically fall back
+        to RESP2 for legacy servers (e.g. Redis 5.x)."""
+        # 先按 redis-py 默认协议创建（新版默认 RESP3）
+        # Create with the redis-py default protocol first (RESP3 in recent versions)
+        client = cls._build_client(redis_url)
+        try:
+            client.ping()
+            return client
+        except Exception as exc:
+            if not cls._is_protocol_error(exc):
+                raise RedisConnectionError(
+                    _("redis.connect_failed", error=exc),
+                    processor_name="redis",
+                ) from exc
+            # 协议不兼容（如 Redis 5.x 不支持 HELLO/RESP3），降级为 RESP2 重建
+            # Protocol incompatibility (e.g. Redis 5.x has no HELLO/RESP3); rebuild with RESP2
+            logger.warning(
+                _("redis.protocol_fallback", url=_mask_password(redis_url), error=exc)
+            )
+            client = cls._build_client(redis_url, protocol=2)
+            client.ping()
+            return client
+
+    @classmethod
+    def _build_client(cls, redis_url: str, protocol: Optional[int] = None):
+        """按需指定协议创建客户端（兼容旧版 redis-py 无 protocol 参数）。
+        Build a client, optionally pinning the protocol (compatible with older
+        redis-py releases that lack the protocol kwarg)."""
+        try:
+            if protocol is not None:
+                pool = _redis_module.ConnectionPool.from_url(redis_url, protocol=protocol)
+            else:
+                pool = _redis_module.ConnectionPool.from_url(redis_url)
+        except TypeError:
+            # 旧版 redis-py 不支持 protocol 参数 / older redis-py lacks protocol kwarg
+            pool = _redis_module.ConnectionPool.from_url(redis_url)
+        return _redis_module.Redis(connection_pool=pool)
+
+    @staticmethod
+    def _is_protocol_error(exc: Exception) -> bool:
+        """判断异常是否由 RESP 协议不兼容引起。
+        Decide whether an exception is caused by RESP protocol incompatibility."""
+        text = str(exc).lower()
+        return "hello" in text or "resp" in text or "protocol" in text
 
 
 # ============================================================================

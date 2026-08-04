@@ -1,11 +1,14 @@
 """退货单数据库处理器 — 示例 BaseDBPlugin 实现。
 Return Order DB Processor — example BaseDBPlugin implementation.
 
-测试场景：申请退货退款（POST /api/return_refund）。
-该接口需要一个状态为"已收货"(status=3)的订单才能发起退货。
+测试场景：申请退货退款（POST /api/returns）。
+该接口需要一个状态为"已完成"(status=4)的订单才能发起退货；
+请求体需要 orderId / returnReason / returnType 字段，其中 orderId 由前置处理器注入。
 
-Test scenario: apply for return/refund (POST /api/return_refund).
-This API requires an order with status=3 (received) to exist beforehand.
+Test scenario: apply for return/refund (POST /api/returns).
+This API requires an order with status=4 (completed) to exist beforehand;
+the request body needs orderId / returnReason / returnType, with orderId
+injected by the pre-processor.
 
 前置处理器（before_request）：INSERT 测试订单 + 订单明细，注入 order_id 到请求体。
 后置处理器（after_response）：查询 API 创建的退货记录并 print（示例用 print，生产环境应 DELETE）。
@@ -32,6 +35,7 @@ env-local.yml 配置 / Configuration::
         test_buyer_id: "1000000000000000007"   # 测试买家用户 ID (buyer01) / Test buyer user ID
         test_store_id: "1000000000000002001"   # 测试店铺 ID (store1) / Test store ID
         test_product_id: "1000000000000003001" # 测试商品 ID (product1) / Test product ID
+        order_status: 4                        # 订单状态：4=已完成（foli-mall 要求） / order status: 4=completed (required by foli-mall)
 
     H2 依赖安装 / H2 dependency install::
 
@@ -57,6 +61,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Tuple
 
+from i18n import _
 from processors.db import BaseDBPlugin, DBQueryError
 from auth.login_manager import LoginManager
 
@@ -98,7 +103,9 @@ class ReturnOrderDBPlugin(BaseDBPlugin):
             buyer_id = int(cfg.get("test_buyer_id", 1))
         store_id = int(cfg.get("test_store_id", 1))
         product_id = int(cfg.get("test_product_id", 1))
-        order_status = int(cfg.get("order_status", 3))  # 3=已收货/received
+        # 4=已完成/completed（foli-mall 创建退货要求 COMPLETED）
+        # 4=completed (foli-mall requires COMPLETED to create a return)
+        order_status = int(cfg.get("order_status", 4))
 
         # 生成唯一 ID（简单雪花ID模拟）
         # Generate unique ID (simple Snowflake-ID-like)
@@ -108,8 +115,7 @@ class ReturnOrderDBPlugin(BaseDBPlugin):
         order_no = f"TEST{order_id % (10 ** 12):012d}"
 
         logger.info(
-            "Creating test order: order_id=%s, buyer=%s, store=%s, product=%s",
-            order_id, buyer_id, store_id, product_id,
+            _("return_order.creating_order", order_id=order_id, buyer=buyer_id, store=store_id, product=product_id)
         )
 
         with self._get_connection(global_config) as conn:
@@ -129,7 +135,7 @@ class ReturnOrderDBPlugin(BaseDBPlugin):
                         product_name, product_image, price = row[0], row[1], row[2]
                     else:
                         # 商品不存在时使用默认值 / Fallback defaults when product not found
-                        logger.warning("Product id=%s not found, using defaults", product_id)
+                        logger.warning(_("return_order.product_not_found", product_id=product_id))
                         product_name = "Test Product"
                         product_image = ""
                         price = 99.99
@@ -176,19 +182,19 @@ class ReturnOrderDBPlugin(BaseDBPlugin):
                     )
 
                 logger.info(
-                    "Test order created: id=%s, order_no=%s, product=%s, price=%s",
-                    order_id, order_no, product_name, price,
+                    _("return_order.order_created", order_id=order_id, order_no=order_no,
+                      product=product_name, price=price)
                 )
 
             except Exception as e:
                 raise DBQueryError(
-                    f"Failed to create test order: {e}",
+                    _("return_order.create_failed", error=e),
                     processor_name=self.name,
                 ) from e
 
-        # 3) 将 order_id 注入请求体，供 API 使用
-        # Inject order_id into request body for the API
-        body["order_id"] = order_id
+        # 3) 将 orderId 注入请求体，供 API 使用（与 ReturnCreateRequest 的驼峰字段一致）
+        # Inject orderId into the request body for the API (camelCase matches ReturnCreateRequest)
+        body["orderId"] = order_id
         return headers, body
 
     # ── 后置处理器：查询退货记录并展示 / Post: query return record and print ──
@@ -205,12 +211,14 @@ class ReturnOrderDBPlugin(BaseDBPlugin):
         """查询 API 创建的退货记录并 print 展示（生产环境应改为 DELETE 清理）。
         Query the return record created by the API and print it (prod: DELETE cleanup)."""
 
-        order_id = request_body.get("order_id")
+        # 优先读取驼峰 orderId，兼容旧版下划线 order_id
+        # Prefer camelCase orderId; fall back to legacy snake_case order_id
+        order_id = request_body.get("orderId") or request_body.get("order_id")
         if not order_id:
-            logger.warning("No order_id in request body, skipping post-processing")
+            logger.warning(_("return_order.post_no_order"))
             return
 
-        logger.info("Post-processing: querying return record for order_id=%s", order_id)
+        logger.info(_("return_order.post_querying", order_id=order_id))
 
         with self._get_connection(global_config) as conn:
             try:
@@ -228,22 +236,22 @@ class ReturnOrderDBPlugin(BaseDBPlugin):
                 # Print results (in production, DELETE test data instead)
                 print("\n" + "=" * 60)
                 print("  [DB Post-Processor: return-order-db]")
-                print(f"  Created test order: id={order_id}")
+                print(_("return_order.print_created", order_id=order_id))
                 if rows:
                     for r in rows:
-                        print(f"  Return record: id={r[0]}, return_no={r[1]}")
-                        print(f"    status={r[8]}, refund_amount={r[7]}")
-                        print(f"    reason={r[5]}")
+                        print(_("return_order.print_return", id=r[0], return_no=r[1]))
+                        print(_("return_order.print_return_detail", status=r[8], refund_amount=r[7]))
+                        print(_("return_order.print_return_reason", reason=r[5]))
                 else:
-                    print(f"  (No return record found — API may have failed)")
+                    print(_("return_order.print_no_return"))
                 print("=" * 60 + "\n")
 
                 if rows:
                     logger.info(
-                        "Found %d return record(s) for order_id=%s", len(rows), order_id,
+                        _("return_order.post_found", count=len(rows), order_id=order_id)
                     )
 
             except Exception as e:
                 # 后置处理器失败不抛异常，仅记录日志
                 # Post-processor failure only logs, does not throw
-                logger.warning("Post-processing query failed for order_id=%s: %s", order_id, e)
+                logger.warning(_("return_order.post_query_failed", order_id=order_id, error=e))
