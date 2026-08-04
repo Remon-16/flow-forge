@@ -123,10 +123,29 @@ npm run build        # production → src-tauri/target/release/
 | **[studio/](./studio/README.en.md)** | Flow Forge Studio desktop app: visual case editing, plan annotation, GUI agent/executor/converter launcher | [Docs →](./studio/README.en.md) |
 | **[agent/](./agent/README.en.md)** | AI test-case generation agent: requirements + API docs → test plan (human review) → YAML/Excel cases | [Docs →](./agent/README.en.md) |
 | **[python/](./python/README.en.md)** | API test executor + format converter: run YAML/Excel cases → HTML report; Excel↔YAML bidirectional, export to pytest | [Docs →](./python/README.en.md) |
+| **[flowforge-testing/](./flowforge-testing/README.en.md)** | Strong-model skill: packages the generate/modify/validate/execute/triage workflow as a skill loadable by Codex, opencode and Claude Code | [Docs →](./flowforge-testing/README.en.md) |
 
-The three communicate through **YAML files** as the primary contract (Excel remains compatible) — whatever format the agent generates, the executor parses. Users are free to choose: AI auto-generation, manual authoring, or visual editing in Studio.
+The agent, python, and studio ends communicate through **YAML files** as the primary contract (Excel remains compatible) — whatever format the agent generates, the executor parses. Users are free to choose: AI auto-generation, manual authoring, or visual editing in Studio.
 
 The `shared/` directory holds cross-language shared schemas (column definitions, field mappings, operators, etc.), keeping field definitions consistent across the agent, python, and studio ends.
+
+## Usage by Model Strength
+
+Flow Forge offers two AI case-generation paths; choose by model strength:
+
+- **Strong models (cloud models such as GPT / Claude / DeepSeek)**: use the
+  [flowforge-testing](./flowforge-testing/README.en.md) skill with a ReAct
+  agent (Codex / opencode / Claude Code). The skill turns generation,
+  validation, execution, triage and modification into concrete instructions
+  that drive the `python/` executor and converter directly, avoiding the
+  weak-model pipeline's chunking and compression overhead for better token
+  efficiency.
+- **Weak models (local small-parameter models such as llama.cpp / Ollama)**:
+  use the [agent/](./agent/README.en.md) LangGraph pipeline — English
+  prompts, document chunking, context compression and human review are
+  designed for weak models. Alternatively, generate an initial draft with a
+  weak model and have it revised by a strong model + ReAct agent using the
+  modify mode of [flowforge-testing](./flowforge-testing/README.en.md).
 
 ## CI/CD Integration (Jenkins)
 

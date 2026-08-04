@@ -123,10 +123,18 @@ npm run build        # 生产构建 → src-tauri/target/release/
 | **[studio/](./studio/README.md)** | Flow Forge Studio 桌面应用：可视化编辑用例、计划批注、GUI 启动智能体/执行器/转换器 | [文档 →](./studio/README.md) |
 | **[agent/](./agent/README.md)** | AI 用例生成智能体：需求 + 接口文档 → 测试计划（人工审核）→ YAML/Excel 用例 | [文档 →](./agent/README.md) |
 | **[python/](./python/README.md)** | 接口测试执行器 + 格式转换器：运行 YAML/Excel 用例 → HTML 报告；Excel↔YAML 互转、导出 pytest | [文档 →](./python/README.md) |
+| **[flowforge-testing/](./flowforge-testing/README.md)** | 强模型 Skill：把用例生成/修改/校验/执行/分诊流程打包成 Codex、opencode、Claude Code 可装载的 skill | [文档 →](./flowforge-testing/README.md) |
 
-三者通过 **YAML 文件**作为主要契约（Excel 仍兼容）——智能体生成什么格式，执行器就解析什么格式。用户可自由选择：AI 自动生成、手动编写、或 Studio 可视化编辑。
+agent、python、studio 三端通过 **YAML 文件**作为主要契约（Excel 仍兼容）——智能体生成什么格式，执行器就解析什么格式。用户可自由选择：AI 自动生成、手动编写、或 Studio 可视化编辑。
 
 `shared/` 目录存放跨语言共享的 schema（列定义、字段映射、运算符等），保证 agent / python / studio 三端的字段定义一致。
+
+## 不同强度模型的使用方式
+
+Flow Forge 提供两条 AI 用例生成路径，按模型强度选择：
+
+- **强模型（GPT / Claude / DeepSeek 等云端模型）**：推荐使用 [flowforge-testing](./flowforge-testing/README.md) skill + ReAct 智能体（Codex / opencode / Claude Code）。skill 把生成、校验、执行、分诊与修改流程固化为指令，直接驱动 `python/` 执行器与转换器，省去弱模型流水线的大规模分块与压缩开销，token 利用率更高。
+- **弱模型（llama.cpp / Ollama 等本地小参数模型）**：推荐走 [agent/](./agent/README.md) 的 LangGraph 流水线——英文提示词、文档分块、上下文压缩、人工审核等机制专为弱模型设计；也可以先用弱模型产出初版用例，再交给强模型 + ReAct 智能体按 [flowforge-testing](./flowforge-testing/README.md) 的修改模式修订。
 
 ## CI/CD 集成（Jenkins）
 
