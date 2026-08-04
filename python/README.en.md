@@ -62,6 +62,8 @@ python tools/h2/init_h2.py
 
 Then start the foli-mall backend (it starts an H2 TCP Server on port 9092 on boot) before running flow-forge cases. See [Processors, Assertions & Report](./docs/processors-and-report.en.md).
 
+Besides `return-order-db`, four test-data fixture plugins — `order-fixture`, `cart-fixture`, `return-fixture`, and `balance-fixture` — are bundled to set up prerequisite data (orders/cart items/returns/balance in a specific state) in one step. See the Database Processors section of the document above for usage.
+
 ## Common Commands
 
 ```bash

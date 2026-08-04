@@ -62,6 +62,8 @@ python tools/h2/init_h2.py
 
 然后启动 foli-mall 后端（其应用启动时会自动开启 H2 TCP Server，默认端口 9092），再运行 flow-forge 用例。详见 [处理器、断言引擎与报告](./docs/processors-and-report.md)。
 
+除 `return-order-db` 外，还内置了 `order-fixture` / `cart-fixture` / `return-fixture` / `balance-fixture` 四个前置数据夹具插件，可一步为用例补齐"指定状态的订单/购物车/退货/余额"等前置数据，用法详见上述文档的数据库处理器章节。
+
 ## 常用命令
 
 ```bash

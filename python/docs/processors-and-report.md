@@ -87,6 +87,10 @@ processor_configs:
 | `print-demo-post` | Post | 调试用，INFO 级别打印响应摘要 |
 | `return-order-db` | Pre + Post | 🌟 数据库处理器示例 — 前置 INSERT 订单，后置 print 退货记录（详见数据库处理器章节） |
 | `mysql-demo` | Pre + Post | 🌟 MySQL 数据库示例 — 前置写入测试数据，后置读取并清理（详见数据库处理器章节） |
+| `order-fixture` | Pre + Post | 🌟 订单前置数据夹具 — 一步创建指定状态的测试订单，后置可选清理（详见数据库处理器章节） |
+| `cart-fixture` | Pre | 🌟 购物车前置数据夹具 — add/clear/ensure 三种模式准备购物车数据（详见数据库处理器章节） |
+| `return-fixture` | Pre + Post | 🌟 退货前置数据夹具 — 创建已完成订单 + 指定状态退货记录，后置可选清理（详见数据库处理器章节） |
+| `balance-fixture` | Pre | 🌟 余额前置数据夹具 — 设置用户余额（详见数据库处理器章节） |
 | `cache-handler` | Pre + Post | 🌟 Redis 缓存处理示例 — 前置写缓存，后置清缓存（详见 Redis 处理器章节） |
 | `order-publish` | Pre + Post | 🌟 MQ 订单发布示例（Kombu）— 前置发布消息，后置消费验证（详见 MQ 处理器章节） |
 | `rocketmq-order` | Pre + Post | 🌟 RocketMQ 订单消息示例 — 前置发送订单事件，后置消费校验（详见 RocketMQ 处理器章节） |
@@ -209,6 +213,36 @@ postprocessors:
 **内置示例（MySQL）**：`mysql-demo`（`processors/builtin/db/mysql_demo.py`）— 前置处理器自动创建示例表 `ff_plugin_demo`（如不存在）并写入一行测试数据，再把 `mysql_demo_key` 注入请求体；后置处理器 SELECT 校验数据可读并 print 展示，随后 DELETE 并再次校验无残留。该插件用于验证 flow-forge 数据库处理器可连接 MySQL，同时作为自定义 DB 插件的样板。
 
 > **配置说明**：通过 `processor_configs.<name>.db_url` 配置 MySQL 连接（SQLAlchemy URL 格式），例如 `mysql+pymysql://root:password@localhost:3306/flow_forge_demo?charset=utf8mb4`；示例表会自动创建，无需手工建表。
+
+**内置示例（前置数据夹具 / test-data fixtures）**：以下 4 个插件直接向 foli-mall 的 H2 内存库写入测试数据，为需要"前置状态"的用例一步补齐数据，是 `return-order-db` 的通用化扩展：
+
+| 插件 | 功能 | 主要配置 |
+|------|------|---------|
+| `order-fixture` | 创建任意状态（0–5）的测试订单并注入 `orderId` | `order_status`（默认 4）、`quantity`、`total_amount`、`cleanup` |
+| `cart-fixture` | 购物车 `add`/`clear`/`ensure` 三种模式 | `mode`（默认 ensure）、`product_id`、`quantity`、`selected` |
+| `return-fixture` | 创建已完成订单 + 指定状态（0–7）退货记录并注入 `returnId` | `return_status`（默认 0）、`return_type`、`create_order` |
+| `balance-fixture` | 设置用户余额（如余额不足场景） | `balance`、`test_buyer_id` |
+
+> 四个插件复用 `processors/builtin/db/_fixtures_common.py` 中的共享建单/删单函数，避免重复实现；SQL 使用 SQLAlchemy 通用写法，默认连接 foli-mall 的 H2 内存库，`db_url` 切换为 MySQL 等同样可用。
+>
+> 使用示例（业务链路中叠加前置数据）：
+>
+> ```yaml
+> preprocessors:
+>   - name: order-fixture          # 造一条已完成订单 / create a completed order
+>     config:
+>       order_status: 4
+>   - name: cart-fixture           # 确保购物车有选中项 / ensure a selected cart item
+>     config:
+>       mode: ensure
+>   - name: balance-fixture        # 设置买家余额 / set the buyer balance
+>     config:
+>       balance: 10000
+> postprocessors:
+>   - name: order-fixture          # 跑完清理测试订单 / clean up after run
+>     config:
+>       cleanup: true
+> ```
 
 ### Redis 处理器（BaseRedisPlugin）
 

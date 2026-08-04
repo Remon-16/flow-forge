@@ -87,6 +87,10 @@ processor_configs:
 | `print-demo-post` | Post | Debug helper; logs the response summary at INFO level |
 | `return-order-db` | Pre + Post | 🌟 DB processor example — pre-inserts an order, post-prints the return record (see Database Processors section) |
 | `mysql-demo` | Pre + Post | 🌟 MySQL database example — pre-writes test data, post-reads and cleans up (see Database Processors section) |
+| `order-fixture` | Pre + Post | 🌟 Order test-data fixture — creates an order in any state in one step, optional post cleanup (see Database Processors section) |
+| `cart-fixture` | Pre | 🌟 Cart test-data fixture — add/clear/ensure modes for cart data (see Database Processors section) |
+| `return-fixture` | Pre + Post | 🌟 Return test-data fixture — creates a completed order plus a return record in any state, optional post cleanup (see Database Processors section) |
+| `balance-fixture` | Pre | 🌟 Balance test-data fixture — sets a user's balance (see Database Processors section) |
 | `cache-handler` | Pre + Post | 🌟 Redis cache handler example — pre-set cache, post-delete (see Redis Processors section) |
 | `order-publish` | Pre + Post | 🌟 MQ order publish example (Kombu) — pre-publish message, post-consume verify (see MQ Processors section) |
 | `rocketmq-order` | Pre + Post | 🌟 RocketMQ order message example — pre-sends the order event, post-consume and verify (see RocketMQ Processors section) |
@@ -209,6 +213,36 @@ postprocessors:
 **Built-in example (MySQL)**: `mysql-demo` (`processors/builtin/db/mysql_demo.py`) — the pre-processor auto-creates the demo table `ff_plugin_demo` (if absent) and inserts one test row, then injects `mysql_demo_key` into the request body; the post-processor SELECTs the row to verify it is readable, prints it, DELETEs it, and verifies no residual rows remain. This plugin verifies that flow-forge DB processors can connect to MySQL and doubles as a template for custom DB plugins.
 
 > **Configuration**: configure the MySQL connection via `processor_configs.<name>.db_url` (SQLAlchemy URL format), e.g. `mysql+pymysql://root:password@localhost:3306/flow_forge_demo?charset=utf8mb4`. The demo table is created automatically — no manual DDL is needed.
+
+**Built-in examples (test-data fixtures)**: the following 4 plugins write test data directly into foli-mall's H2 in-memory database, so cases that require a specific "prerequisite state" get their data in one step. They are a generalized extension of `return-order-db`:
+
+| Plugin | Purpose | Key options |
+|--------|---------|-------------|
+| `order-fixture` | Creates an order in any state (0–5) and injects `orderId` | `order_status` (default 4), `quantity`, `total_amount`, `cleanup` |
+| `cart-fixture` | Cart modes `add`/`clear`/`ensure` | `mode` (default ensure), `product_id`, `quantity`, `selected` |
+| `return-fixture` | Creates a completed order plus a return record in any state (0–7), injects `returnId` | `return_status` (default 0), `return_type`, `create_order` |
+| `balance-fixture` | Sets a user's balance (e.g. for insufficient-balance cases) | `balance`, `test_buyer_id` |
+
+> The four plugins share the order/return creation and deletion helpers in `processors/builtin/db/_fixtures_common.py` to avoid duplication. SQL is written in a generic SQLAlchemy style and targets foli-mall's H2 in-memory database by default; switching `db_url` to MySQL or another database also works.
+>
+> Example (stacking fixtures in a business flow):
+>
+> ```yaml
+> preprocessors:
+>   - name: order-fixture          # create a completed order
+>     config:
+>       order_status: 4
+>   - name: cart-fixture           # ensure a selected cart item
+>     config:
+>       mode: ensure
+>   - name: balance-fixture        # set the buyer balance
+>     config:
+>       balance: 10000
+> postprocessors:
+>   - name: order-fixture          # clean up after run
+>     config:
+>       cleanup: true
+> ```
 
 ### Redis Processors (BaseRedisPlugin)
 

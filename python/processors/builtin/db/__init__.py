@@ -3,3 +3,7 @@
 # Place BaseDBPlugin subclasses here — they are auto-discovered and registered.
 from . import return_order
 from . import mysql_demo
+from . import order_fixture
+from . import cart_fixture
+from . import return_fixture
+from . import balance_fixture
