@@ -168,6 +168,48 @@ cd agent && python -m pytest tests/ -v
 cd python && python -m pytest tests/ -v
 ```
 
+## Known Issues
+
+### Studio Reports "Process May Have Crashed" When Launching Python Directly (The Task Is Actually Complete)
+
+**Symptom**: In Studio, when the Python environment is set to "System Python" (or a venv) with an explicit executable path, on Windows systems whose locale uses a non-UTF-8 ANSI code page (e.g., Simplified Chinese), the executor/converter log ends with `OSError: [Errno 22] Invalid argument` and Studio shows "Process exited unexpectedly — may have crashed". The task and the report are actually **already complete**; only the final completion status fails to reach Studio.
+
+**Root cause**: Studio reads Python's stdout through a pipe and expects valid UTF-8. When Python is launched directly, its stdout uses the system ANSI code page (GBK on Chinese systems). Once Python writes non-ASCII text to stdout (e.g., the executor's Chinese summary lines), Studio's reader encounters invalid UTF-8, exits, and closes the read end of the pipe. The subsequent write of the final JSON completion line then fails — Windows surfaces a broken pipe as `OSError: [Errno 22] Invalid argument`.
+
+**Workaround (no code changes required)**:
+
+1. Set a user environment variable and restart Studio (verified on a Chinese-locale Windows system):
+
+   ```powershell
+   setx PYTHONIOENCODING utf-8
+   ```
+
+2. **Fully quit and reopen Studio** so the new variable takes effect.
+
+**Restoring the previous setting**:
+
+- Before making the change, note the current value. If the variable did not exist, restoring simply means removing it; if it had a different value, restore it with `setx PYTHONIOENCODING <original-value>`.
+- Check the current value (works in both cmd and PowerShell):
+
+  ```powershell
+  reg query HKCU\Environment /v PYTHONIOENCODING
+  ```
+
+- Remove the variable (preferably via "System Properties → Environment Variables", or with the following command):
+
+  ```powershell
+  reg delete HKCU\Environment /v PYTHONIOENCODING /f
+  ```
+
+  After removal, sign out and back in (or restart if necessary), then restart Studio.
+
+**Additional notes**:
+
+- Conda mode (select Conda, enter the environment name, and leave the executable path empty) is not affected, because conda sets UTF-8 environment variables for its child processes.
+- `PYTHONUTF8=1` also resolves the issue, but it additionally changes the default encoding for file I/O, which has a wider impact; `PYTHONIOENCODING` is therefore preferred.
+- Windows systems using a UTF-8 locale (e.g., English) are not affected.
+- This issue is unrelated to the test logic; task results and HTML reports are unaffected. Whether it will be addressed at the code level in a future release depends on adoption feedback.
+
 ## Technology Stack
 
 | Component | Technology |

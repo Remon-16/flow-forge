@@ -168,6 +168,48 @@ cd agent && python -m pytest tests/ -v
 cd python && python -m pytest tests/ -v
 ```
 
+## 已知问题
+
+### Studio 直接启动 Python 时报“进程可能已崩溃”（任务实际已完成）
+
+**现象**：在 Studio 中将 Python 环境设为“系统 Python”（或 venv）并直接填写可执行文件路径时，在中文等非 UTF-8 区域设置的 Windows 上，执行器/转换器运行结束后日志会出现 `OSError: [Errno 22] Invalid argument`，界面提示“进程可能已崩溃”。此时任务与报告**实际已完成**，只是最后的完成状态未能回传 Studio。
+
+**原因**：Studio 通过管道读取 Python 的 stdout，并要求内容为合法 UTF-8；而直接启动的 Python 其 stdout 使用系统 ANSI 代码页（中文系统为 GBK）。当 Python 向 stdout 输出中文（如执行器的统计摘要）时，Studio 读到非法 UTF-8 后关闭管道读端，Python 随后写入最后一行 JSON 完成消息即失败（Windows 将管道断裂表现为 `Errno 22`）。
+
+**规避方案（无需修改代码）**：
+
+1. 设置用户环境变量并重启 Studio（已在中文 Windows 环境实测有效）：
+
+   ```powershell
+   setx PYTHONIOENCODING utf-8
+   ```
+
+2. **完全退出并重新打开 Studio**，使新环境变量生效。
+
+**恢复旧设置**：
+
+- 修改前请先记录原值：若该变量原本不存在，恢复时直接删除即可；若原本有值，请用 `setx PYTHONIOENCODING <原值>` 恢复。
+- 查看当前值（cmd 或 PowerShell 均可执行）：
+
+  ```powershell
+  reg query HKCU\Environment /v PYTHONIOENCODING
+  ```
+
+- 删除该变量（推荐在“系统属性 → 环境变量”界面操作，或使用以下命令）：
+
+  ```powershell
+  reg delete HKCU\Environment /v PYTHONIOENCODING /f
+  ```
+
+  删除后重新登录 Windows（必要时重启），并重启 Studio。
+
+**补充说明**：
+
+- 使用 Conda 模式（选择 Conda、填写环境名、不填可执行文件路径）不受影响，因为 conda 会为子进程设置 UTF-8 环境变量。
+- 使用 `PYTHONUTF8=1` 亦可解决，但它还会改变文件读写等默认编码，影响面更大，建议优先使用 `PYTHONIOENCODING`。
+- 使用 UTF-8 区域设置的 Windows（如英文系统）不会触发此问题。
+- 此问题与测试逻辑无关，任务结果与 HTML 报告均不受影响。是否在后续版本从代码层面修复，将视项目推广反馈而定。
+
 ## 技术栈
 
 | 组件 | 技术 |
