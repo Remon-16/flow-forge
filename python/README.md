@@ -83,6 +83,8 @@ python converter_main.py yaml2pytest --single-cases ./cases/single_cases/ --outp
 python converter_main.py excel2pytest --input cases.xlsx --output ./tests/generated/
 ```
 
+`yaml2pytest` / `excel2pytest` 会整包复制 `python/processors/`（含全部内置处理器）及其框架依赖（`auth/`、`resolvers/`）到生成目录，后续新增处理器无需再改转换器；中间件处理器运行时需目标环境安装对应第三方库，详见[用例格式转换](./docs/converters.md)。
+
 `apiMode` 取值：`single`（仅单接口）/ `biz`（仅业务链路）/ `all`（全部）。
 
 ## 运行测试

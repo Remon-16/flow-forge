@@ -27,6 +27,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _fmt(message: str, **kwargs):
+    """格式化日志消息占位符（生成代码不携带翻译字典）。
+       Format log placeholders (generated code ships no translation dictionaries)."""
+    try:
+        return message.format(**kwargs)
+    except (KeyError, IndexError, ValueError):
+        return message
+
+
 def pytest_configure(config):
     """配置 pytest 日志输出到 CLI，使 print-demo 处理器默认可见。
        Enable log_cli so print-demo processor output is visible by default."""
@@ -316,18 +325,26 @@ def _do_login(app_name: str, app_config: Dict[str, Any], user_key: str) -> Optio
     user_config = app_config.get(user_key, {})
     login_body = {f: user_config.get(f, "") for f in login_body_fields}
     url = f"{base_url.rstrip('/')}/{login_path.lstrip('/')}"
-    logger.info("Logging in '%s' for app '%s': %s", user_key, app_name, url)
+    logger.info(
+        _fmt("Logging in '{user}' for app '{app}': {url}",
+             user=user_key, app=app_name, url=url)
+    )
     try:
         resp = requests.post(url, json=login_body, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         token = _resolve_path(data, res_token_path)
         if isinstance(token, _Missing) or token is None:
-            logger.warning("Token not found at '%s' in login response", res_token_path)
+            logger.warning(
+                _fmt("Token not found at '{path}' in login response",
+                     path=res_token_path)
+            )
             return None
         return str(token)
     except Exception as e:
-        logger.warning("Login failed for '%s': %s", user_key, e)
+        logger.warning(
+            _fmt("Login failed for '{user}': {error}", user=user_key, error=e)
+        )
         return None
 
 
@@ -357,8 +374,10 @@ def _build_processor_cache():
     try:
         import pkgutil
         import _processors as pkg
+        # 忽略依赖缺失的子包（如 kafka/pulsar 客户端未安装时跳过）。
+        # Skip subpackages whose third-party dependencies are missing.
         for _importer, mod_name, _is_pkg in pkgutil.walk_packages(
-            pkg.__path__, pkg.__name__ + "."
+            pkg.__path__, pkg.__name__ + ".", onerror=lambda _name: None
         ):
             try:
                 mod = importlib.import_module(mod_name)
@@ -374,10 +393,23 @@ def _build_processor_cache():
         pass
 
 
-def _get_processor_class(processor_name: str):
-    """从 _processors 缓存中获取处理器类。
-       Get processor class from _processors cache."""
+def _get_processor_class(processor_name: str, kind: str = "pre"):
+    """获取处理器类：优先框架注册表（外部插件包装类），其次扫描缓存。
+       Get a processor class: framework registries first (external-plugin
+       wrappers), then the scanned cache."""
     _build_processor_cache()
+    try:
+        from _processors.base import (
+            _PRE_PROCESSOR_REGISTRY,
+            _POST_PROCESSOR_REGISTRY,
+        )
+        registry = (
+            _PRE_PROCESSOR_REGISTRY if kind == "pre" else _POST_PROCESSOR_REGISTRY
+        )
+        if processor_name in registry:
+            return registry[processor_name]
+    except ImportError:
+        pass
     cls = _PROCESSOR_CACHE.get(processor_name)
     if cls is not None:
         return cls
@@ -394,7 +426,7 @@ def _run_preprocessor(name: str, headers: Dict[str, Any], body: Dict[str, Any],
 
        Returns (modified_headers, modified_body).
     """
-    cls = _get_processor_class(name)
+    cls = _get_processor_class(name, "pre")
     instance = cls()
     return instance.process(headers, body, config or {}, _GLOBAL_CONFIG)
 
@@ -404,7 +436,7 @@ def _run_postprocessor(name: str, req_headers: Dict[str, Any], req_body: Dict[st
                        config: Optional[Dict[str, Any]] = None) -> None:
     """动态加载并执行后置处理器。
        Dynamically load and execute a postprocessor by name."""
-    cls = _get_processor_class(name)
+    cls = _get_processor_class(name, "post")
     instance = cls()
     instance.process(req_headers, req_body, resp_headers, resp_body, config or {}, _GLOBAL_CONFIG)
 

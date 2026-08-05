@@ -83,6 +83,8 @@ python converter_main.py yaml2pytest --single-cases ./cases/single_cases/ --outp
 python converter_main.py excel2pytest --input cases.xlsx --output ./tests/generated/
 ```
 
+`yaml2pytest` / `excel2pytest` bundle the whole `python/processors/` package (including all built-in processors) and its framework dependencies (`auth/`, `resolvers/`) into the generated directory, so future processors need no converter changes. Middleware processors require their third-party libraries in the target environment at runtime; see [Case Format Conversion](./docs/converters.en.md) for details.
+
 `apiMode` values: `single` (single-API only) / `biz` (business-flow only) / `all` (everything).
 
 ## Running Tests

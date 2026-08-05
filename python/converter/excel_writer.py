@@ -17,6 +17,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from .common.columns import API_COLUMNS, CASE_COLUMNS, BIZ_COLUMNS
 from .common.utils import safe_sheet_name
+from i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -179,10 +180,12 @@ def write_excel(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(str(out_path))
     logger.info(
-        "Excel written to %s (%d interfaces, %d single cases, %d biz flows)",
-        output_path,
-        len(interfaces) if interfaces else 0,
-        len(single_cases) if single_cases else 0,
-        len(biz_flows) if biz_flows else 0,
+        _(
+            "converter.excel_written_summary",
+            path=output_path,
+            interfaces=len(interfaces) if interfaces else 0,
+            single=len(single_cases) if single_cases else 0,
+            biz=len(biz_flows) if biz_flows else 0,
+        )
     )
     return str(out_path)

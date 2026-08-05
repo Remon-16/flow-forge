@@ -13,6 +13,7 @@ import openpyxl
 
 from .field_mapping import convert_row_to_snake
 from .common.columns import API_COLUMNS, CASE_COLUMNS, BIZ_COLUMNS
+from i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,13 @@ def read_excel(file_path: str) -> dict[str, Any]:
                 converted = convert_row_to_snake(row, parse_json=True)
                 if converted:
                     interfaces.append(converted)
-            logger.info("Read %d interface definitions from sheet '%s'", len(interfaces), sheet_name)
+            logger.info(
+                _(
+                    "converter.excel_read_interfaces",
+                    count=len(interfaces),
+                    sheet=sheet_name,
+                )
+            )
 
         elif sheet_name == _CASE_SHEET:
             raw_rows = _parse_excel_sheet(ws, CASE_COLUMNS)
@@ -78,7 +85,13 @@ def read_excel(file_path: str) -> dict[str, Any]:
                 converted = convert_row_to_snake(row, parse_json=True)
                 if converted:
                     single_cases.append(converted)
-            logger.info("Read %d single cases from sheet '%s'", len(single_cases), sheet_name)
+            logger.info(
+                _(
+                    "converter.excel_read_single_cases",
+                    count=len(single_cases),
+                    sheet=sheet_name,
+                )
+            )
 
         else:
             # Any other sheet is treated as a biz flow
@@ -93,7 +106,13 @@ def read_excel(file_path: str) -> dict[str, Any]:
                     "sheet_name": sheet_name,
                     "steps": steps,
                 })
-            logger.info("Read biz flow '%s' with %d steps", sheet_name, len(steps))
+            logger.info(
+                _(
+                    "converter.excel_read_biz_flow",
+                    sheet=sheet_name,
+                    count=len(steps),
+                )
+            )
 
     wb.close()
     return {

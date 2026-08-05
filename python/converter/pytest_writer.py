@@ -10,6 +10,7 @@ from typing import Any
 from .common.utils import read_yaml_dir
 from .common.export_utils import write_ff_compat, write_env_configs, bundle_processors
 from .pytest.writers import write_conftest, write_single_tests, write_biz_flow_tests
+from i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,9 @@ def excel_to_pytest(
     """
     from .excel_reader import read_excel
 
-    logger.info("Converting Excel → pytest: %s → %s", input_path, output_dir)
+    logger.info(
+        _("converter.converting_excel", input=input_path, output=output_dir)
+    )
     data = read_excel(input_path)
 
     n_custom = _write_setup_files(output_dir, config_dir or ".", processors_dir)

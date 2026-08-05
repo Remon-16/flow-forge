@@ -46,7 +46,7 @@ python converter_main.py yaml2excel \
 
 ## yaml2pytest / excel2pytest — 生成独立 pytest 代码
 
-将用例转换为原生、独立的 pytest 代码，**零 Flow Forge 依赖**，仅需 `pytest` + `requests`。生成的代码可复制到任意项目直接运行，适合分享给其他团队或集成到 CI/CD。
+将用例转换为原生、独立的 pytest 代码，**不依赖 Flow Forge 执行器框架**。纯逻辑处理器仅需 `pytest` + `requests`；中间件处理器（Redis/MQ/RocketMQ/DB）运行时依赖对应第三方库（`redis`、`kombu`、`sqlalchemy`、`pymysql`、`jaydebeapi`、`JPype1` 等）。生成的代码可复制到安装好这些依赖的项目直接运行，适合分享给其他团队或集成到 CI/CD。
 
 ```bash
 # YAML → pytest（三个目录均可选，至少提供一个）
@@ -79,11 +79,13 @@ python converter_main.py yaml2pytest ... --processors-dir ./processors/  # 自�
 
 ```
 output_dir/
-    conftest.py                  # fixtures + 所有辅助函数 + 内置处理器独立实现
+    conftest.py                  # fixtures + 所有辅助函数 + 处理器调度
     _config.py                   # 环境选择器（ENV = "local" → 导入对应 _env_*.py）
     _env_local.py                # 每个环境独立的 app 配置（从 env-*.yml 解析）
-    _ff_compat.py                # 轻量兼容层（PreProcessor/PostProcessor/ProcessorError 桩）
-    _custom_processors/          # 用户自定义处理器原样复制（自动替换 import 路径）
+    _ff_compat.py                # 兼容层（基类再导出 + 最小 i18n + app 配置访问）
+    _processors/                 # 整包复制 python/processors（builtin 全量 + 基础模块，import 已重写）
+    _auth/                       # 处理器依赖的登录管理模块（import 已重写）
+    _resolvers/                  # 处理器依赖的路径/占位符解析模块（import 已重写）
     test_single_cases.py         # 单接口用例
     test_biz_flows.py            # 业务流用例
 ```
@@ -92,9 +94,9 @@ output_dir/
 
 - 请求头/请求体提取为文件顶部的 Python 常量，方便直接修改调试
 - 完整的内置断言规则引擎（多运算符 + SUM/SUM_PRODUCT/长度聚合函数）
-- 内置处理器全部转为独立函数（`_apply_timestamp()`、`_apply_hmac_sign()` 等），零框架依赖
+- 整包复制 `python/processors/`（含 builtin 全量与 `base.py`/`redis.py`/`mq.py`/`db.py`/`rocketmq.py` 等基础模块）及其配套依赖（`auth/`、`resolvers/`），统一重写 Flow Forge import；后续新增内置处理器或用户自定义处理器无需再改转换器
 - 登录/Token 管理自动转换为 `_resolve_token()` + `_do_login()` 辅助函数，保持 Token 缓存
-- 自定义处理器通过 `_ff_compat.py` 兼容层实现零修改打包
+- 自定义处理器复制到 `_processors/` 根目录，通过 `_ff_compat.py` 兼容层与 import 重写实现零修改打包
 
 ---
 

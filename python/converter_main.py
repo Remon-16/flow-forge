@@ -28,7 +28,7 @@ if os.path.isdir(_SHARED) and _SHARED not in sys.path:
 
 from converter.converter import excel_to_yaml, yaml_to_excel
 from converter.pytest_writer import yaml_to_pytest, excel_to_pytest
-from i18n import _
+from i18n import _, set_lang
 
 logger = logging.getLogger("converter")
 
@@ -121,6 +121,9 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     _setup_logging(args.verbose)
+    # 未设置 AGENT_LANG 时默认中文，确保 i18n 日志/输出可用。
+    # Default to Chinese when AGENT_LANG is unset so i18n logs render.
+    set_lang(os.environ.get("AGENT_LANG", "").strip() or "zh_CN")
 
     try:
         if args.command == "excel2yaml":
