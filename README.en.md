@@ -2,8 +2,8 @@
 
 [中文](README.md) | **English**
 
-![Development Status](https://img.shields.io/badge/status-early--stage-orange)
-![Version](https://img.shields.io/badge/version-v0.3.2--alpha-blue)
+![Development Status](https://img.shields.io/badge/status-beta-orange)
+![Version](https://img.shields.io/badge/version-v0.3.2--beta-blue)
 
 **Feed in requirement docs and API docs, and an AI agent automatically generates test cases; a command-line executor runs them in one shot and produces a test report.** A full API test automation chain from requirements to report — test cases are stored as YAML/Excel for easy Git management and human review, and the executor integrates seamlessly with Jenkins CI/CD.
 

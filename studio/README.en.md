@@ -36,6 +36,10 @@ npm run dev
 
 > **Non-Windows users should use the [CLI](../python/README.en.md) directly to execute agent / executor / converter tasks.** The CLI tools are cross-platform and work on Windows, Linux, and macOS.
 
+## Known Issues
+
+- **The "Open Test Report" button is temporarily hidden**: Tauri WebView2 blocks `window.open` with `file://` URLs, so the HTML report cannot be opened directly in the browser. Use "Show in Folder" and open the report manually for now; the next version will open it via a Rust `open_in_browser` command in the system default browser.
+
 ## Common Commands
 
 ```bash

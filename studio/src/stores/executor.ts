@@ -249,6 +249,13 @@ export const useExecutorStore = defineStore('executor', () => {
    * non-prefixed nested objects are treated as YAML maps directly,
    * null/undefined values trigger deletion.
    */
+  // 保存 env-only 参数时始终保留的键（防止误删执行器基础配置，如 caseFilePath/lang）。
+  // Keys always preserved when saving env-only params (prevents accidentally dropping
+  // executor base config such as caseFilePath/lang).
+  const ENV_PRESERVE_KEYS = new Set([
+    'envName', 'caseFilePath', 'scriptType', 'maxThread', 'reportName', 'apiMode', 'lang', 'excel_font',
+  ])
+
   function applyEnvOverrides(doc: YAML.Document, data: Record<string, unknown>): void {
     // 第一步：删除文档中存在但 data 中不存在的 key（处理字段删除，保留注释）
     // Step 1: Remove keys in doc that are NOT in data (handle field deletion, preserves comments)
@@ -259,6 +266,9 @@ export const useExecutorStore = defineStore('executor', () => {
       const keysToDelete: string[] = []
       for (const item of doc.contents.items) {
         const docKey = String((item.key as YAML.Scalar).value)
+        // 保留基础配置键：env-only 保存不应清掉执行器 CLI/默认配置。
+        // Preserve base config keys: env-only saves must not strip executor CLI/defaults.
+        if (ENV_PRESERVE_KEYS.has(docKey)) continue
         if (!dataKeys.has(docKey)) {
           // 检查是否有对应的 _app_ 前缀 key 在 data 中 / Check if corresponding _app_-prefixed key is in data
           if (!dataKeys.has(`_app_${docKey}`)) {

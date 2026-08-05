@@ -11,7 +11,7 @@ import { CONVERTER_DIRECTIONS } from '../../types/converter'
 import type { ConverterDirection } from '../../types/converter'
 import yaml from 'js-yaml'
 import JsonEditor from '../json-editor/JsonEditor.vue'
-import { openFileDialog, openDirectoryDialog } from '../../utils/desktop-bridge'
+import { openDirectoryDialog, saveFileDialog } from '../../utils/desktop-bridge'
 import { message } from 'ant-design-vue'
 
 const { t } = useI18n()
@@ -204,11 +204,15 @@ async function handleSaveEnv() {
 
 // ---- Converter 辅助函数 / Converter helper functions ----
 
-/** 浏览输出文件（Excel 方向）/ Browse output file (Excel direction) */
+// yaml2excel 输出为 Excel 文件，使用保存对话框让用户指定文件名。
+// yaml2excel outputs an Excel file; use the save dialog so users can pick a file name.
 async function browseConverterOutputFile() {
   try {
-    const result = await openFileDialog([{ name: 'Excel', extensions: ['xlsx'] }])
-    if (result) converterOutputPath.value = Array.isArray(result) ? result[0] : result
+    const result = await saveFileDialog({
+      defaultPath: 'cases.xlsx',
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+    })
+    if (result) converterOutputPath.value = result
   } catch { /* cancelled */ }
 }
 

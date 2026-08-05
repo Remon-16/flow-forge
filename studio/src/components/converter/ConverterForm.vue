@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // ConverterForm — 转换前配置表单。
 // Pre-conversion config form: direction selector, input/output paths.
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConverterStore } from '../../stores/converter'
 import { useAgentStore } from '../../stores/agent'
 import { CONVERTER_DIRECTIONS, type ConverterDirection } from '../../types/converter'
-import { openFileDialog, openDirectoryDialog } from '../../utils/desktop-bridge'
+import { openFileDialog, openDirectoryDialog, saveFileDialog } from '../../utils/desktop-bridge'
 import { message } from 'ant-design-vue'
 
 const { t } = useI18n()
@@ -45,12 +45,24 @@ async function browseOutputDir() {
   } catch { /* cancelled */ }
 }
 
-async function browseOutputFile() {
+// yaml2excel 输出为 Excel 文件，使用保存对话框让用户指定文件名。
+// yaml2excel outputs an Excel file; use the save dialog so users can pick a file name.
+async function browseOutputExcelFile() {
   try {
-    const result = await openFileDialog([{ name: 'Excel', extensions: ['xlsx'] }])
-    if (result) outputPath.value = Array.isArray(result) ? result[0] : result
+    const result = await saveFileDialog({
+      defaultPath: 'cases.xlsx',
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+    })
+    if (result) outputPath.value = result
   } catch { /* cancelled */ }
 }
+
+// 输出是否为目录（excel2yaml / yaml2pytest / excel2pytest 输出目录；yaml2excel 输出 Excel 文件）。
+// Whether the output is a directory (excel2yaml / yaml2pytest / excel2pytest output dirs;
+// yaml2excel outputs an Excel file).
+const isOutputDir = computed(() =>
+  direction.value === 'excel2yaml' || direction.value === 'yaml2pytest' || direction.value === 'excel2pytest',
+)
 
 async function browseDir(field: 'interfaces' | 'singleCases' | 'bizFlows' | 'config' | 'processors') {
   try {
@@ -172,16 +184,12 @@ async function handleSubmit() {
         <a-input-group compact>
           <a-input v-model:value="outputPath" style="width: calc(100% - 80px)" />
           <a-button
-            v-if="isYamlInput"
-            @click="browseOutputDir"
-          >{{ t('agent.settings_browse') }}</a-button>
-          <a-button
-            v-else-if="direction === 'excel2yaml' || direction === 'yaml2pytest'"
+            v-if="isOutputDir"
             @click="browseOutputDir"
           >{{ t('agent.settings_browse') }}</a-button>
           <a-button
             v-else
-            @click="browseOutputFile"
+            @click="browseOutputExcelFile"
           >{{ t('agent.settings_browse') }}</a-button>
         </a-input-group>
       </div>

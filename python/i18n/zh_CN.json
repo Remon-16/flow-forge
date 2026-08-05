@@ -23,6 +23,7 @@
     "cli.converted_count": "已转换 {interfaces} 个接口定义, {single} 个单接口用例, {biz} 个业务链路用例 → {output}/",
     "cli.excel_written": "Excel 已写入: {path}",
     "cli.pytest_generated": "已生成 {single} 个单接口测试, {biz} 个业务链路测试, {custom} 个自定义处理器 → {output}/",
+    "config.missing_required_keys": "缺少必需配置键: {keys}",
 
     "converter.wrote_conftest": "已写入 conftest.py → {path}",
     "converter.wrote_ff_compat": "已写入 _ff_compat.py → {path}",

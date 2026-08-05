@@ -77,7 +77,7 @@ Flow Forge Studio 提供六个功能入口，归为三个流程组（生成 → 
 ### 执行与报告
 
 - 点击「运行」启动执行器子进程，实时输出执行日志
-- 执行完成后自动生成 HTML 报告，可在浏览器中打开
+- 执行完成后自动生成 HTML 报告；「打开测试报告」按钮当前暂隐藏（见 README 已知问题），可点「在文件夹中显示」后手动打开
 - 报告内嵌样式脚本，无需 Web 服务器
 
 ---
@@ -93,10 +93,10 @@ Flow Forge Studio 提供六个功能入口，归为三个流程组（生成 → 
 
 ### 转换方向
 
-- **Excel → YAML**：读取 .xlsx，按 Sheet 分类输出 YAML 文件
-- **YAML → Excel**：读取 YAML 目录，合并输出 .xlsx
-- **YAML → pytest**：生成独立的 pytest 测试代码（零依赖）
-- **Excel → pytest**：从 Excel 直接生成 pytest 测试代码
+- **Excel → YAML**：读取 .xlsx，按 Sheet 分类输出 YAML 文件（输出为目录）
+- **YAML → Excel**：读取 YAML 目录，合并输出 .xlsx（输出为 Excel 文件路径）
+- **YAML → pytest**：生成 pytest 测试代码（输出为目录；依赖已安装的第三方库，如 api_test 环境）
+- **Excel → pytest**：从 Excel 直接生成 pytest 测试代码（输出为目录）
 
 ### 批量转换
 

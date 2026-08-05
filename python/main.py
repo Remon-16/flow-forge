@@ -53,6 +53,13 @@ def _args_to_overrides(args: argparse.Namespace) -> dict:
         value = getattr(args, key, None)
         if value is not None:
             overrides[key] = value
+    # yamlDir/yamlFiles 仅参与配置校验（提供时 caseFilePath 不再必填），不写入最终配置。
+    # yamlDir/yamlFiles participate in config validation only (caseFilePath becomes optional
+    # when either is provided) and are not written into the final config.
+    for key in ("yamlDir", "yamlFiles"):
+        value = getattr(args, key, None)
+        if value is not None:
+            overrides[key] = value
     return overrides
 
 

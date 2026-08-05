@@ -23,6 +23,7 @@
     "cli.converted_count": "Converted {interfaces} interfaces, {single} single cases, {biz} biz flows → {output}/",
     "cli.excel_written": "Excel written to: {path}",
     "cli.pytest_generated": "Generated {single} single tests, {biz} biz flows, {custom} custom processors → {output}/",
+    "config.missing_required_keys": "Missing required configuration keys: {keys}",
 
     "converter.wrote_conftest": "Wrote conftest.py → {path}",
     "converter.wrote_ff_compat": "Wrote _ff_compat.py → {path}",

@@ -77,7 +77,7 @@ Run test cases and view HTML reports in Studio.
 ### Execution & Report
 
 - Click "Run" to launch the executor subprocess with real-time execution logs
-- After completion, an HTML report is auto-generated and can be opened in the browser
+- After completion, an HTML report is auto-generated; the "Open Test Report" button is temporarily hidden (see Known Issues in the README) — use "Show in Folder" and open the HTML manually
 - Reports embed styles and scripts inline — no web server required
 
 ---
@@ -93,10 +93,10 @@ Convert between case formats in Studio, with batch support.
 
 ### Conversion Directions
 
-- **Excel → YAML**: read .xlsx, output YAML files by sheet type
-- **YAML → Excel**: read YAML directories, merge into .xlsx
-- **YAML → pytest**: generate standalone pytest test code (zero dependencies)
-- **Excel → pytest**: generate pytest code directly from Excel
+- **Excel → YAML**: read .xlsx, output YAML files by sheet type (output is a directory)
+- **YAML → Excel**: read YAML directories, merge into .xlsx (output is an Excel file path)
+- **YAML → pytest**: generate pytest test code (output is a directory; requires third-party libraries already installed, e.g., the api_test environment)
+- **Excel → pytest**: generate pytest code directly from Excel (output is a directory)
 
 ### Batch Conversion
 

@@ -23,11 +23,15 @@ onMounted(async () => {
   await executor.initialize()
 })
 
-// 在默认浏览器中打开报告 / Open report in default browser
-function openReport(path: string) {
-  // 尝试使用 Tauri shell 打开 / Try opening with Tauri shell
-  window.open(`file:///${path.replace(/\\/g, '/')}`, '_blank')
-}
+// [已暂缓 / Deferred] 在默认浏览器中打开报告。
+// Tauri WebView2 会拦截 file:// 的 window.open，导致按钮无效；本版本暂注释，
+// 下个版本通过 Rust open_in_browser 命令调用系统默认浏览器打开。
+// Open report in the default browser (deferred).
+// Tauri WebView2 blocks window.open with file:// URLs, so this is commented out
+// for now; the next version will open it via a Rust open_in_browser command.
+// function openReport(path: string) {
+//   window.open(`file:///${path.replace(/\\/g, '/')}`, '_blank')
+// }
 
 // 在文件资源管理器中打开 / Open in file explorer
 function browsePath(path: string) {
@@ -118,9 +122,16 @@ function browsePath(path: string) {
                 </a-tag>
               </div>
               <div v-if="executor.activeSession.reportPath" class="report-link">
-                <a-button type="primary" @click="openReport(executor.activeSession.reportPath!)">
+                <!--
+                  打开测试报告按钮已暂缓（Tauri WebView2 拦截 file:// window.open），
+                  下版本通过 Rust open_in_browser 实现；当前请用「在文件夹中显示」后手动打开。
+                  The "Open Test Report" button is deferred (Tauri WebView2 blocks file://
+                  window.open); next version will use a Rust open_in_browser command. For now,
+                  use "Show in Folder" and open the HTML report manually.
+                -->
+                <!-- <a-button type="primary" @click="openReport(executor.activeSession.reportPath!)">
                   📄 {{ t('executor.reportOpen') }}
-                </a-button>
+                </a-button> -->
                 <a-button @click="browsePath(executor.activeSession.reportPath!)" style="margin-left: 8px">
                   📂 {{ t('executor.reportShowInFolder') }}
                 </a-button>

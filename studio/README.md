@@ -36,6 +36,11 @@ npm run dev
 
 > **非 Windows 用户请直接使用 [CLI 命令行](../python/README.md) 执行 agent / executor / converter 任务。** 命令行工具是跨平台的，在 Windows、Linux、macOS 上均可正常运行。
 
+## 已知问题 / Known Issues
+
+- **「打开测试报告」按钮暂隐藏**：Tauri WebView2 会拦截 `file://` 的 `window.open`，导致无法直接用浏览器打开 HTML 报告。当前可点击「在文件夹中显示 / Show in Folder」后手动打开报告；下个版本将通过 Rust `open_in_browser` 命令调用系统默认浏览器打开。
+  **"Open Test Report" button is temporarily hidden**: Tauri WebView2 blocks `window.open` with `file://` URLs, so the HTML report cannot be opened directly in the browser. Use "Show in Folder" and open the report manually for now; the next version will open it via a Rust `open_in_browser` command in the system default browser.
+
 ## 常用命令
 
 ```bash
