@@ -105,7 +105,3 @@ The curated cases use six database fixture plugins (see [plugin-guide.md](./plug
 - 74 cases (65 single-API + 9 business flows): **71 passed; 3 bug-evidence cases fail as expected**.
 - Coverage: login/register/me, cart CRUD and boundaries, order creation with stock/balance boundaries, order detail and paging, positive/negative pay/cancel/receive state machines, the full return state machine, return dispute arbitration, disabled-account login, /me after user deletion, invalid order IDs, and cross-user order detail.
 - HTML report: [../curated/report/foli_mall_demo_20260806.html](../curated/report/foli_mall_demo_20260806.html).
-
-## Summary
-
-AI generation can reduce case authoring time from hours to minutes, but the quality of the output depends directly on the model used. The correction step supplements business understanding, and the fixture plugins prepare the prerequisite data. This article documents that process.

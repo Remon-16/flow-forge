@@ -8,7 +8,7 @@
 
 | 目录 | 内容 |
 |------|------|
-| [agent-out/](./agent-out/) | flowforge-testing skill 配合强智能体（如 Codex）对购物车与订单模块的完整输出：`order/` 下含测试计划（plan.md）、YAML 用例（interfaces / single_cases / biz_flows）、执行配置（config/）与执行报告（report/） |
+| [agent-out/](./agent-out/) | flowforge-testing skill 配合强智能体（如 Codex + deepseek-v4-flash）对购物车与订单模块的完整输出：`order/` 下含测试计划（plan.md）、YAML 用例（interfaces / single_cases / biz_flows）、执行配置（config/）与执行报告（report/） |
 | [curated/](./curated/) | 由弱模型初版修正而来的可运行用例（YAML + 环境配置），可直接执行 |
 | [raw/](./raw/) | Qwen3-8B-Q4_K_M 直接生成的原始输出（Excel），未做修正，与 curated/ 放在一起便于对比 |
 

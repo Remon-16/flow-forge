@@ -250,9 +250,7 @@ python -m pytest flowforge-testing/scripts/tests -v
 | 组件 | 技术 |
 |------|------|
 | Studio 桌面应用 | Vue 3, Ant Design Vue, Vite, Tauri 2, TypeScript |
-| agent 弱模型流水线 | Python 3.12, LangGraph, OpenAI 兼容 API, prance (OpenAPI), pymupdf (PDF), 上下文压缩 |
+| agent 弱模型流水线 | Python 3.12, LangGraph, OpenAI 兼容 API, prance (OpenAPI), pymupdf (PDF) |
 | skill 工具脚本 | Python 3.12（ff_tool / resolve_python，复用 python/ 执行器与转换器） |
 | 执行器与转换器 | Python 3.12, requests, openpyxl, pyyaml |
-| 配置管理 | YAML 多环境配置文件 |
-| 报告输出 | 自包含 HTML（无需外部 CSS/JS） |
 | CI/CD | Jenkins Pipeline, 命令行退出码 |

@@ -252,9 +252,7 @@ The release process (building the MSI, tagging, and creating a GitHub Release) i
 | Component | Technology |
 |-----------|------------|
 | Studio desktop app | Vue 3, Ant Design Vue, Vite, Tauri 2, TypeScript |
-| agent weak-model pipeline | Python 3.12, LangGraph, OpenAI-compatible API, prance (OpenAPI), pymupdf (PDF), context compression |
+| agent weak-model pipeline | Python 3.12, LangGraph, OpenAI-compatible API, prance (OpenAPI), pymupdf (PDF) |
 | skill tool scripts | Python 3.12 (ff_tool / resolve_python, reusing the python/ executor and converter) |
 | Executor and converter | Python 3.12, requests, openpyxl, pyyaml |
-| Configuration | YAML multi-environment config files |
-| Report output | Self-contained HTML (no external CSS/JS) |
 | CI/CD | Jenkins Pipeline, CLI exit codes |

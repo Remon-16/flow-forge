@@ -8,7 +8,7 @@ This directory contains example cases that ship with the flow-forge repository. 
 
 | Directory | Contents |
 |-----------|----------|
-| [agent-out/](./agent-out/) | The full output of the flowforge-testing skill with a strong agent (e.g. Codex) for the cart & order module: `order/` contains a test plan (`plan.md`), YAML cases (`interfaces` / `single_cases` / `biz_flows`), execution config (`config/`), and the execution report (`report/`) |
+| [agent-out/](./agent-out/) | The full output of the flowforge-testing skill with a strong agent (e.g. Codex + deepseek-v4-flash) for the cart & order module: `order/` contains a test plan (`plan.md`), YAML cases (`interfaces` / `single_cases` / `biz_flows`), execution config (`config/`), and the execution report (`report/`) |
 | [curated/](./curated/) | Runnable cases reworked from a weak-model first draft (YAML + environment config), ready to execute |
 | [raw/](./raw/) | The unmodified raw output generated directly by Qwen3-8B-Q4_K_M (Excel), kept next to `curated/` for comparison |
 
