@@ -4,8 +4,11 @@ import { toRaw } from 'vue'
 import { useEditorStore } from '../stores/editor'
 import { useWorkbookStore } from '../stores/workbook'
 import { useExecutorStore } from '../stores/executor'
-import { useConverterStore } from '../stores/converter'
-import { DEFAULT_EDITOR_CONVERTER_PARAMS } from '../types/converter'
+// 转换入口已关闭，下版本修复后恢复；以下转换器导入随入口一并停用。
+// Converter entry disabled; restore in the next version. The converter imports
+// below are disabled together with the entry.
+// import { useConverterStore } from '../stores/converter'
+// import { DEFAULT_EDITOR_CONVERTER_PARAMS } from '../types/converter'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { writeFile, deleteToTrash, mkdir } from '../utils/desktop-bridge'
@@ -27,7 +30,7 @@ const { t } = useI18n()
 const editor = useEditorStore()
 const workbook = useWorkbookStore()
 const executor = useExecutorStore()
-const converter = useConverterStore()
+// const converter = useConverterStore()
 
 // ============================================================================
 // Editor toolbar state / 编辑器工具栏状态
@@ -191,12 +194,12 @@ async function handleRunAll() {
   try {
     const tempPath = await writeTempYaml('all')
     const sessionId = executor.createSession({
-      envSuffix: '',
+      envSuffix: executor.getEditorEnvSuffix(workbookPath.value),
       caseFilePath: '',
       yamlDir: '',
       yamlFiles: tempPath,
       envOnlyParams: {},
-      cliParams: executor.getEditorCliParams(workbookPath.value),
+      cliParams: { ...executor.getEditorCliParams(workbookPath.value), apiMode: 'all' },
     })
     await executor.startSession(sessionId)
   } catch (e: unknown) {
@@ -208,12 +211,12 @@ async function handleRunSingle() {
   try {
     const tempPath = await writeTempYaml('single')
     const sessionId = executor.createSession({
-      envSuffix: '',
+      envSuffix: executor.getEditorEnvSuffix(workbookPath.value),
       caseFilePath: '',
       yamlDir: '',
       yamlFiles: tempPath,
       envOnlyParams: {},
-      cliParams: executor.getEditorCliParams(workbookPath.value),
+      cliParams: { ...executor.getEditorCliParams(workbookPath.value), apiMode: 'single' },
     })
     await executor.startSession(sessionId)
   } catch (e: unknown) {
@@ -225,12 +228,12 @@ async function handleRunBiz() {
   try {
     const tempPath = await writeTempYaml('biz')
     const sessionId = executor.createSession({
-      envSuffix: '',
+      envSuffix: executor.getEditorEnvSuffix(workbookPath.value),
       caseFilePath: '',
       yamlDir: '',
       yamlFiles: tempPath,
       envOnlyParams: {},
-      cliParams: executor.getEditorCliParams(workbookPath.value),
+      cliParams: { ...executor.getEditorCliParams(workbookPath.value), apiMode: 'biz' },
     })
     await executor.startSession(sessionId)
   } catch (e: unknown) {
@@ -248,13 +251,14 @@ async function handleCaseSelectConfirm(selectedIds: string[]) {
   if (selectedIds.length === 0) return
   try {
     const tempPath = await writeTempYaml(selectedIds)
+    const savedCli = executor.getEditorCliParams(workbookPath.value)
     const sessionId = executor.createSession({
-      envSuffix: '',
+      envSuffix: executor.getEditorEnvSuffix(workbookPath.value),
       caseFilePath: '',
       yamlDir: '',
       yamlFiles: tempPath,
       envOnlyParams: {},
-      cliParams: executor.getEditorCliParams(workbookPath.value),
+      cliParams: { ...savedCli, apiMode: savedCli.apiMode || 'all' },
     })
     await executor.startSession(sessionId)
   } catch (e: unknown) {
@@ -263,129 +267,132 @@ async function handleCaseSelectConfirm(selectedIds: string[]) {
 }
 
 // Converter handlers — 使用当前 Excel 文件路径 / Use current Excel file path
-async function handleConvert(direction: 'excel2yaml' | 'yaml2excel' | 'excel2pytest') {
-  if (!workbookPath.value) {
-    message.warning(t('editor.toolbar.noFile'))
-    return
-  }
-  // 使用保存的转换参数（如有）/ Use saved converter params if available
-  const saved = converter.getEditorConverterParams(workbookPath.value || '__default__')
-  const effectiveDirection = saved.direction !== DEFAULT_EDITOR_CONVERTER_PARAMS.direction
-    ? saved.direction : direction
-  const defaultOutput = workbookPath.value.replace(/\.xlsx$/i, '_converted')
-  const effectiveOutput = saved.outputPath || defaultOutput
-
-  const sessionId = converter.createSession({
-    direction: effectiveDirection,
-    inputPath: workbookPath.value,
-    outputPath: effectiveDirection === 'yaml2excel' ? workbookPath.value.replace(/\.xlsx$/i, '_from_yaml.xlsx') : effectiveOutput,
-    interfacesDir: '',
-    singleCasesDir: '',
-    bizFlowsDir: '',
-    configDir: '',
-    processorsDir: '',
-  })
-  await converter.startSession(sessionId)
-}
-
-function handleConvertAll() {
-  handleConvert('excel2yaml')
-}
-
-async function handleConvertSingle() {
-  if (!workbookPath.value) {
-    message.warning(t('editor.toolbar.noFile'))
-    return
-  }
-  try {
-    const tempPath = await writeTempYaml('single')
-    const tempDir = tempPath.replace(/[/\\][^/\\]+\.yaml$/i, '')
-    const sessionId = converter.createSession({
-      direction: 'yaml2excel',
-      inputPath: '',
-      outputPath: workbookPath.value.replace(/\.xlsx$/i, '_single.xlsx'),
-      interfacesDir: '',
-      singleCasesDir: tempDir,
-      bizFlowsDir: '',
-      configDir: '',
-      processorsDir: '',
-    })
-    await converter.startSession(sessionId)
-  } catch (e: unknown) { message.error(String(e)) }
-}
-
-async function handleConvertBiz() {
-  if (!workbookPath.value) {
-    message.warning(t('editor.toolbar.noFile'))
-    return
-  }
-  try {
-    const tempPath = await writeTempYaml('biz')
-    const tempDir = tempPath.replace(/[/\\][^/\\]+\.yaml$/i, '')
-    const sessionId = converter.createSession({
-      direction: 'yaml2excel',
-      inputPath: '',
-      outputPath: workbookPath.value.replace(/\.xlsx$/i, '_biz.xlsx'),
-      interfacesDir: '',
-      singleCasesDir: '',
-      bizFlowsDir: tempDir,
-      configDir: '',
-      processorsDir: '',
-    })
-    await converter.startSession(sessionId)
-  } catch (e: unknown) { message.error(String(e)) }
-}
-
-function handleConvertSelect() {
-  caseSelectCases.value = buildCaseList()
-  paramEditMode.value = 'converter'
-  caseSelectVisible.value = true
-}
-
-async function handleConvertCaseSelectConfirm(selectedIds: string[]) {
-  if (selectedIds.length === 0) return
-  try {
-    const tempPath = await writeTempYaml(selectedIds)
-    // 提取 temp 文件所在目录作为 yaml2excel 输入 / Extract temp file dir as yaml2excel input
-    const tempDir = tempPath.replace(/[/\\][^/\\]+\.yaml$/i, '')
-
-    // 保存对话框选择输出路径 / Save dialog for output path
-    let outputPath = ''
-    try {
-      const { saveFileDialog } = await import('../utils/desktop-bridge')
-      const picked = await saveFileDialog({
-        defaultPath: tempDir + '/selected_cases.xlsx',
-        filters: [{ name: 'Excel', extensions: ['xlsx'] }],
-      })
-      if (picked) outputPath = picked
-    } catch { /* 浏览器模式或用户取消 / browser mode or cancelled */ }
-    if (!outputPath) outputPath = tempDir + '/selected_cases.xlsx'
-
-    const sessionId = converter.createSession({
-      direction: 'yaml2excel',
-      inputPath: '',
-      outputPath,
-      interfacesDir: '',
-      singleCasesDir: tempDir,
-      bizFlowsDir: tempDir,
-      configDir: '',
-      processorsDir: '',
-    })
-    await converter.startSession(sessionId)
-  } catch (e: unknown) {
-    message.error(String(e))
-  }
-}
+// 转换入口已关闭，下版本修复后恢复；以下转换处理函数全部停用。
+// Converter entry disabled; restore in the next version. All converter handlers
+// below are disabled together with the entry.
+// async function handleConvert(direction: 'excel2yaml' | 'yaml2excel' | 'excel2pytest') {
+//   if (!workbookPath.value) {
+//     message.warning(t('editor.toolbar.noFile'))
+//     return
+//   }
+//   // 使用保存的转换参数（如有）/ Use saved converter params if available
+//   const saved = converter.getEditorConverterParams(workbookPath.value || '__default__')
+//   const effectiveDirection = saved.direction !== DEFAULT_EDITOR_CONVERTER_PARAMS.direction
+//     ? saved.direction : direction
+//   const defaultOutput = workbookPath.value.replace(/\.xlsx$/i, '_converted')
+//   const effectiveOutput = saved.outputPath || defaultOutput
+//
+//   const sessionId = converter.createSession({
+//     direction: effectiveDirection,
+//     inputPath: workbookPath.value,
+//     outputPath: effectiveDirection === 'yaml2excel' ? workbookPath.value.replace(/\.xlsx$/i, '_from_yaml.xlsx') : effectiveOutput,
+//     interfacesDir: '',
+//     singleCasesDir: '',
+//     bizFlowsDir: '',
+//     configDir: '',
+//     processorsDir: '',
+//   })
+//   await converter.startSession(sessionId)
+// }
+//
+// function handleConvertAll() {
+//   handleConvert('excel2yaml')
+// }
+//
+// async function handleConvertSingle() {
+//   if (!workbookPath.value) {
+//     message.warning(t('editor.toolbar.noFile'))
+//     return
+//   }
+//   try {
+//     const tempPath = await writeTempYaml('single')
+//     const tempDir = tempPath.replace(/[/\\][^/\\]+\.yaml$/i, '')
+//     const sessionId = converter.createSession({
+//       direction: 'yaml2excel',
+//       inputPath: '',
+//       outputPath: workbookPath.value.replace(/\.xlsx$/i, '_single.xlsx'),
+//       interfacesDir: '',
+//       singleCasesDir: tempDir,
+//       bizFlowsDir: '',
+//       configDir: '',
+//       processorsDir: '',
+//     })
+//     await converter.startSession(sessionId)
+//   } catch (e: unknown) { message.error(String(e)) }
+// }
+//
+// async function handleConvertBiz() {
+//   if (!workbookPath.value) {
+//     message.warning(t('editor.toolbar.noFile'))
+//     return
+//   }
+//   try {
+//     const tempPath = await writeTempYaml('biz')
+//     const tempDir = tempPath.replace(/[/\\][^/\\]+\.yaml$/i, '')
+//     const sessionId = converter.createSession({
+//       direction: 'yaml2excel',
+//       inputPath: '',
+//       outputPath: workbookPath.value.replace(/\.xlsx$/i, '_biz.xlsx'),
+//       interfacesDir: '',
+//       singleCasesDir: '',
+//       bizFlowsDir: tempDir,
+//       configDir: '',
+//       processorsDir: '',
+//     })
+//     await converter.startSession(sessionId)
+//   } catch (e: unknown) { message.error(String(e)) }
+// }
+//
+// function handleConvertSelect() {
+//   caseSelectCases.value = buildCaseList()
+//   paramEditMode.value = 'converter'
+//   caseSelectVisible.value = true
+// }
+//
+// async function handleConvertCaseSelectConfirm(selectedIds: string[]) {
+//   if (selectedIds.length === 0) return
+//   try {
+//     const tempPath = await writeTempYaml(selectedIds)
+//     // 提取 temp 文件所在目录作为 yaml2excel 输入 / Extract temp file dir as yaml2excel input
+//     const tempDir = tempPath.replace(/[/\\][^/\\]+\.yaml$/i, '')
+//
+//     // 保存对话框选择输出路径 / Save dialog for output path
+//     let outputPath = ''
+//     try {
+//       const { saveFileDialog } = await import('../utils/desktop-bridge')
+//       const picked = await saveFileDialog({
+//         defaultPath: tempDir + '/selected_cases.xlsx',
+//         filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+//       })
+//       if (picked) outputPath = picked
+//     } catch { /* 浏览器模式或用户取消 / browser mode or cancelled */ }
+//     if (!outputPath) outputPath = tempDir + '/selected_cases.xlsx'
+//
+//     const sessionId = converter.createSession({
+//       direction: 'yaml2excel',
+//       inputPath: '',
+//       outputPath,
+//       interfacesDir: '',
+//       singleCasesDir: tempDir,
+//       bizFlowsDir: tempDir,
+//       configDir: '',
+//       processorsDir: '',
+//     })
+//     await converter.startSession(sessionId)
+//   } catch (e: unknown) {
+//     message.error(String(e))
+//   }
+// }
 
 function handleEditRunParams() {
   paramEditMode.value = 'executor'
   paramEditVisible.value = true
 }
 
-function handleEditConvertParams() {
-  paramEditMode.value = 'converter'
-  paramEditVisible.value = true
-}
+// function handleEditConvertParams() {
+//   paramEditMode.value = 'converter'
+//   paramEditVisible.value = true
+// }
 
 // --- Search state ---
 const searchVisible = ref(false)
@@ -814,6 +821,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   <div style="height: 100%; display: flex; flex-direction: column; background: #f5f5f5; overflow: hidden;">
     <!-- Editor toolbar -->
     <div style="display: flex; justify-content: flex-end; border-bottom: 1px solid #f0f0f0">
+      <!--
+        转换入口已关闭，下版本修复后恢复；恢复时重新绑定以下事件即可：
+        Converter entry disabled; restore in the next version. Re-add these
+        bindings to restore:
+        @convert-all="handleConvertAll"
+        @convert-single="handleConvertSingle"
+        @convert-biz="handleConvertBiz"
+        @convert-select="handleConvertSelect"
+        @edit-convert-params="handleEditConvertParams"
+      -->
       <EditorToolbar
         editor-type="excel"
         :file-path="workbookPath"
@@ -821,12 +838,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         @run-single="handleRunSingle"
         @run-biz="handleRunBiz"
         @run-select="handleRunSelect"
-        @convert-all="handleConvertAll"
-        @convert-single="handleConvertSingle"
-        @convert-biz="handleConvertBiz"
-        @convert-select="handleConvertSelect"
         @edit-run-params="handleEditRunParams"
-        @edit-convert-params="handleEditConvertParams"
       />
     </div>
 
@@ -900,7 +912,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
     <CaseSelectModal
       v-model:visible="caseSelectVisible"
       :cases="caseSelectCases"
-      @confirm="paramEditMode === 'converter' ? handleConvertCaseSelectConfirm($event) : handleCaseSelectConfirm($event)"
+      @confirm="handleCaseSelectConfirm"
     />
 
     <!-- Param edit modal -->

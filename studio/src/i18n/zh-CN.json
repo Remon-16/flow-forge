@@ -193,6 +193,7 @@
     "delete": "删除",
     "rename": "重命名",
     "noFileSelected": "请选择一个 YAML 文件",
+    "noDirectorySelected": "请先打开目录或文件",
     "selectFileHint": "从左侧文件树选择文件，或点击「打开文件」按钮",
     "selectFileHintUpdated": "从左侧文件树选择文件，或点击上方「打开」菜单",
     "formView": "表单编辑",

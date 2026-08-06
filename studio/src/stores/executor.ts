@@ -4,7 +4,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { ExecutorSession, ExecutorSettings, ExecutorCliParams } from '../types/executor'
-import { DEFAULT_CLI_PARAMS, DEFAULT_EXECUTOR_SETTINGS } from '../types/executor'
+import { UNSET_CLI_PARAMS, DEFAULT_EXECUTOR_SETTINGS } from '../types/executor'
 import type { LogEntry } from '../types/agent'
 import { spawnExecutor, killExecutor, checkExecutorRunning, listenToExecutorEvents } from '../utils/executor-bridge'
 import { resolvePythonCommand } from '../utils/resolve-python'
@@ -32,6 +32,10 @@ export const useExecutorStore = defineStore('executor', () => {
 
   // 编辑器联动：每个编辑器路径对应的 CLI 参数 / Editor integration: CLI params per editor path
   const editorCliParams = ref<Record<string, ExecutorCliParams>>({})
+
+  // 编辑器联动：每个编辑器路径对应的环境后缀（env-{suffix}.yml，空表示 env.yml）
+  // Editor integration: env suffix per editor path (env-{suffix}.yml; empty means env.yml)
+  const editorEnvSuffix = ref<Record<string, string>>({})
 
   // 每个运行中会话的 listener 清理函数 / Listener cleanup per running session
   const _listeners = new Map<string, () => void>()
@@ -551,11 +555,24 @@ export const useExecutorStore = defineStore('executor', () => {
   // ---- Editor integration / 编辑器联动 ----
 
   function getEditorCliParams(editorPath: string): ExecutorCliParams {
-    return editorCliParams.value[editorPath] ?? { ...DEFAULT_CLI_PARAMS }
+    // 未保存时返回“未设置”哨兵，运行时跳过这些 CLI 参数，由 env.yml 决定。
+    // When nothing is saved, return the unset sentinel so buildCliArgs skips
+    // these params and env.yml remains authoritative.
+    return editorCliParams.value[editorPath] ?? { ...UNSET_CLI_PARAMS }
   }
 
   function setEditorCliParams(editorPath: string, params: ExecutorCliParams): void {
     editorCliParams.value[editorPath] = { ...params }
+  }
+
+  /** 获取编辑器保存的环境后缀（空字符串表示默认 env.yml）。Get the saved env suffix for an editor path. */
+  function getEditorEnvSuffix(editorPath: string): string {
+    return editorEnvSuffix.value[editorPath] ?? ''
+  }
+
+  /** 保存编辑器使用的环境后缀。Save the env suffix used by an editor path. */
+  function setEditorEnvSuffix(editorPath: string, suffix: string): void {
+    editorEnvSuffix.value[editorPath] = suffix
   }
 
   return {
@@ -565,6 +582,7 @@ export const useExecutorStore = defineStore('executor', () => {
     settings,
     settingsLoaded,
     editorCliParams,
+    editorEnvSuffix,
     // Getters
     activeSession,
     sortedSessions,
@@ -576,6 +594,7 @@ export const useExecutorStore = defineStore('executor', () => {
     createSession,
     selectSession,
     removeSession,
+    getExecutorRootDir,
     readEnvSuffixes,
     readEnvFile,
     writeEnvFile,
@@ -584,5 +603,7 @@ export const useExecutorStore = defineStore('executor', () => {
     initialize,
     getEditorCliParams,
     setEditorCliParams,
+    getEditorEnvSuffix,
+    setEditorEnvSuffix,
   }
 })

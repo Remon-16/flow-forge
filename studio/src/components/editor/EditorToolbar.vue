@@ -3,7 +3,10 @@
 // Editor toolbar with independent dropdown selectors, action buttons, and param edit.
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PlayCircleOutlined, RetweetOutlined, MoreOutlined } from '@ant-design/icons-vue'
+// 转换入口已关闭，下版本修复后恢复；RetweetOutlined 随转换组一并停用。
+// Converter entry disabled; restore in the next version. RetweetOutlined is
+// disabled together with the convert group.
+import { PlayCircleOutlined, MoreOutlined } from '@ant-design/icons-vue'
 
 const { t } = useI18n()
 
@@ -24,14 +27,15 @@ const emit = defineEmits<{
   runSingle: []
   runBiz: []
   runSelect: []
-  /** 转换动作 / Convert actions */
-  convertAll: []
-  convertSingle: []
-  convertBiz: []
-  convertSelect: []
+  // 转换动作已停用（转换入口关闭，下版本恢复）/
+  // Convert actions disabled (converter entry closed; restore in next version)
+  // convertAll: []
+  // convertSingle: []
+  // convertBiz: []
+  // convertSelect: []
   /** 编辑参数 / Edit params */
   editRunParams: []
-  editConvertParams: []
+  // editConvertParams: []
 }>()
 
 // ============================================================================
@@ -39,10 +43,10 @@ const emit = defineEmits<{
 // ============================================================================
 
 type RunAction = 'all' | 'single' | 'biz' | 'select'
-type ConvertAction = 'all' | 'single' | 'biz' | 'select'
+// type ConvertAction = 'all' | 'single' | 'biz' | 'select'
 
 const defaultRunAction = ref<RunAction>('all')
-const defaultConvertAction = ref<ConvertAction>('all')
+// const defaultConvertAction = ref<ConvertAction>('all')
 
 // Simple per-file memory (not persisted across sessions)
 
@@ -57,12 +61,13 @@ const runActionItems = computed(() => [
   { key: 'select', label: t('editor.toolbar.runSelect') },
 ])
 
-const convertActionItems = computed(() => [
-  { key: 'all', label: t('editor.toolbar.convertAll') },
-  { key: 'single', label: t('editor.toolbar.convertSingle') },
-  { key: 'biz', label: t('editor.toolbar.convertBiz') },
-  { key: 'select', label: t('editor.toolbar.convertSelect') },
-])
+// 转换动作列表已停用 / Convert action items disabled
+// const convertActionItems = computed(() => [
+//   { key: 'all', label: t('editor.toolbar.convertAll') },
+//   { key: 'single', label: t('editor.toolbar.convertSingle') },
+//   { key: 'biz', label: t('editor.toolbar.convertBiz') },
+//   { key: 'select', label: t('editor.toolbar.convertSelect') },
+// ])
 
 // ============================================================================
 // Action handlers / 动作处理
@@ -73,10 +78,10 @@ function getRunActionLabel(action: RunAction): string {
   return item?.label || ''
 }
 
-function getConvertActionLabel(action: ConvertAction): string {
-  const item = convertActionItems.value.find(i => i.key === action)
-  return item?.label || ''
-}
+// function getConvertActionLabel(action: ConvertAction): string {
+//   const item = convertActionItems.value.find(i => i.key === action)
+//   return item?.label || ''
+// }
 
 // 仅更新默认执行动作，不触发执行 — 执行由播放按钮单独触发。
 // Only update the default run action; execution is triggered separately by the play button.
@@ -86,9 +91,9 @@ function handleRunMenuClick(info: { key: string }) {
 
 // 仅更新默认转换动作，不触发转换 — 转换由转换按钮单独触发。
 // Only update the default convert action; conversion is triggered separately by the convert button.
-function handleConvertMenuClick(info: { key: string }) {
-  defaultConvertAction.value = info.key as ConvertAction
-}
+// function handleConvertMenuClick(info: { key: string }) {
+//   defaultConvertAction.value = info.key as ConvertAction
+// }
 
 function handleRunDefault() {
   switch (defaultRunAction.value) {
@@ -99,14 +104,14 @@ function handleRunDefault() {
   }
 }
 
-function handleConvertDefault() {
-  switch (defaultConvertAction.value) {
-    case 'all': emit('convertAll'); break
-    case 'single': emit('convertSingle'); break
-    case 'biz': emit('convertBiz'); break
-    case 'select': emit('convertSelect'); break
-  }
-}
+// function handleConvertDefault() {
+//   switch (defaultConvertAction.value) {
+//     case 'all': emit('convertAll'); break
+//     case 'single': emit('convertSingle'); break
+//     case 'biz': emit('convertBiz'); break
+//     case 'select': emit('convertSelect'); break
+//   }
+// }
 </script>
 
 <template>
@@ -139,11 +144,17 @@ function handleConvertDefault() {
       <MoreOutlined />
     </a-button>
 
+    <!--
+      转换入口已关闭（下版本修复后恢复）/
+      Converter entry disabled; restore in the next version
+      原转换组：分隔线 + 转换动作下拉 + ⟳ 转换按钮 + 转换参数编辑按钮。
+      Former convert group: separator + convert action dropdown + ⟳ button + convert param edit button.
+    -->
     <!-- 分隔 / Separator -->
-    <div class="toolbar-separator"></div>
+    <!-- <div class="toolbar-separator"></div> -->
 
     <!-- ====== 转换组 / Convert Group ====== -->
-    <a-dropdown :trigger="['click']">
+    <!-- <a-dropdown :trigger="['click']">
       <a-button size="small" class="toolbar-select-btn">
         {{ getConvertActionLabel(defaultConvertAction) }}
         <span class="arrow">▼</span>
@@ -168,7 +179,7 @@ function handleConvertDefault() {
 
     <a-button size="small" type="text" class="toolbar-icon-btn" @click="emit('editConvertParams')" :title="t('editor.toolbar.editConvertParams')">
       <MoreOutlined />
-    </a-button>
+    </a-button> -->
   </div>
 </template>
 

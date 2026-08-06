@@ -77,6 +77,21 @@ export const DEFAULT_CLI_PARAMS: ExecutorCliParams = {
   apiMode: 'all',
 }
 
+/**
+ * 未设置哨兵 — 编辑器未显式覆盖时使用，表示“该参数交给 env.yml 决定”。
+ * Unset sentinel — used when the editor has no explicit override,
+ * meaning the parameter should be resolved from env.yml.
+ *
+ * 空字符串 / 0 在 buildCliArgs 中会被跳过，从而不产生 CLI 覆盖。
+ * Empty string / 0 are skipped by buildCliArgs, so no CLI override is produced.
+ */
+export const UNSET_CLI_PARAMS: ExecutorCliParams = {
+  scriptType: '',
+  maxThread: 0,
+  reportName: '',
+  apiMode: '',
+}
+
 // ============================================================================
 // 执行统计 / Execution Summary
 // ============================================================================

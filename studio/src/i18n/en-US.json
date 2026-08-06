@@ -193,6 +193,7 @@
     "delete": "Delete",
     "rename": "Rename",
     "noFileSelected": "Please select a YAML file",
+    "noDirectorySelected": "Please open a directory or file first",
     "selectFileHint": "Select a file from the left file tree, or click 'Open File'",
     "selectFileHintUpdated": "Select a file from the left tree, or use the 'Open' menu above",
     "formView": "Form View",

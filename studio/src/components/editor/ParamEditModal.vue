@@ -5,7 +5,7 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useExecutorStore } from '../../stores/executor'
 import { useAgentStore } from '../../stores/agent'
-import { DEFAULT_CLI_PARAMS, type ExecutorCliParams } from '../../types/executor'
+import { DEFAULT_CLI_PARAMS, UNSET_CLI_PARAMS, type ExecutorCliParams } from '../../types/executor'
 import { useConverterStore } from '../../stores/converter'
 import { CONVERTER_DIRECTIONS } from '../../types/converter'
 import type { ConverterDirection } from '../../types/converter'
@@ -33,6 +33,14 @@ const emit = defineEmits<{
 
 // CLI params
 const cliParams = ref<ExecutorCliParams>({ ...DEFAULT_CLI_PARAMS })
+
+// 当前 env 文件中的 Block2 基准值，用于计算“显式覆盖”。
+// Block2 base values from the selected env file, used to compute explicit overrides.
+const envBaseCliParams = ref<ExecutorCliParams>({ ...UNSET_CLI_PARAMS })
+
+// 编辑器已保存的显式覆盖（打开时从 store 加载）。
+// Explicit overrides previously saved for this editor path (loaded on open).
+const savedCliParams = ref<ExecutorCliParams>({ ...UNSET_CLI_PARAMS })
 
 // 是否有 env-only 参数（executor mode 才显示）/ Whether to show env-only params
 const isExecutor = computed(() => props.mode === 'executor')
@@ -69,48 +77,21 @@ function stripAppPrefix(data: Record<string, unknown>): Record<string, unknown> 
 // 用于显示的 env-only 参数（去 _app_ 前缀）/ Env-only params for display (without _app_ prefix)
 const envOnlyParamsForDisplay = computed(() => stripAppPrefix(envOnlyParams.value))
 
-watch(() => props.visible, async (v) => {
-  if (!v) return
-
-  // 从 store 加载上次保存的参数 / Load last saved params from store
-  const saved = executor.getEditorCliParams(props.filePath || '__default__')
-  cliParams.value = { ...saved }
-
-  // 如果是 executor 模式，加载 env 数据 / Load env data for executor mode
-  if (isExecutor.value) {
-    const suffixes = await executor.readEnvSuffixes()
-    envSuffixes.value = suffixes
-    selectedSuffix.value = suffixes[0] || ''
-    if (selectedSuffix.value) {
-      const raw = await executor.readEnvFile(selectedSuffix.value)
-      // 过滤 CLI 键，仅保留 env-only 参数 / Filter CLI keys, keep only env-only params
-      const cliKeys = ['scriptType', 'maxThread', 'reportName', 'apiMode', 'caseFilePath']
-      const filtered: Record<string, unknown> = {}
-      for (const [key, val] of Object.entries(raw)) {
-        if (key.startsWith('_app_')) {
-          filtered[key] = val
-        } else if (!cliKeys.includes(key) && key !== 'lang' && key !== 'excel_font') {
-          filtered[key] = val
-        }
-      }
-      envOnlyParams.value = filtered
-      syncEnvYamlFromData()
-    }
-  } else {
-    // Converter 模式：从 store 加载保存的参数 / Converter mode: load saved params from store
-    const saved = converter.getEditorConverterParams(props.filePath || '__default__')
-    converterDirection.value = saved.direction
-    converterInputPath.value = props.filePath || ''
-    converterOutputPath.value = saved.outputPath || ''
+/** 从 env 原始数据中提取 Block2（CLI 可用）参数，缺失字段返回“未设置”。 */
+/** Extract Block2 (CLI-available) params from raw env data; missing fields become unset. */
+function extractBlock2(raw: Record<string, unknown>): ExecutorCliParams {
+  // 兼容数字与数字字符串（如 maxThread: "10"）/ Accept number or numeric string
+  const rawMaxThread = Number(raw['maxThread'])
+  return {
+    scriptType: typeof raw['scriptType'] === 'string' ? raw['scriptType'] : '',
+    maxThread: Number.isFinite(rawMaxThread) ? rawMaxThread : 0,
+    reportName: typeof raw['reportName'] === 'string' ? raw['reportName'] : '',
+    apiMode: typeof raw['apiMode'] === 'string' ? raw['apiMode'] : '',
   }
+}
 
-  loaded.value = true
-})
-
-// 环境切换时重新加载 env 数据 / Reload env data when suffix changes
-watch(selectedSuffix, async (newVal) => {
-  if (!newVal || !isExecutor.value || !loaded.value) return
-  const raw = await executor.readEnvFile(newVal)
+/** 过滤 CLI 键，仅保留 env-only 参数。Filter CLI keys, keep only env-only params. */
+function filterEnvOnly(raw: Record<string, unknown>): Record<string, unknown> {
   const cliKeys = ['scriptType', 'maxThread', 'reportName', 'apiMode', 'caseFilePath']
   const filtered: Record<string, unknown> = {}
   for (const [key, val] of Object.entries(raw)) {
@@ -120,8 +101,71 @@ watch(selectedSuffix, async (newVal) => {
       filtered[key] = val
     }
   }
-  envOnlyParams.value = filtered
+  return filtered
+}
+
+/** 显示值 = 显式覆盖优先，未覆盖的字段回退到 env 基准。 */
+/** Display value = explicit override first, falling back to the env base. */
+function mergeCliParams(base: ExecutorCliParams, overrides: ExecutorCliParams): ExecutorCliParams {
+  return {
+    scriptType: overrides.scriptType || base.scriptType,
+    maxThread: overrides.maxThread > 0 ? overrides.maxThread : base.maxThread,
+    reportName: overrides.reportName || base.reportName,
+    apiMode: overrides.apiMode || base.apiMode,
+  }
+}
+
+/** 只保留与 env 基准不同的字段作为显式覆盖，其余置为“未设置”。 */
+/** Keep only fields differing from the env base as explicit overrides; unset the rest. */
+function diffCliParams(base: ExecutorCliParams, current: ExecutorCliParams): ExecutorCliParams {
+  return {
+    scriptType: current.scriptType !== base.scriptType ? current.scriptType : '',
+    maxThread: current.maxThread !== base.maxThread ? current.maxThread : 0,
+    reportName: current.reportName !== base.reportName ? current.reportName : '',
+    apiMode: current.apiMode !== base.apiMode ? current.apiMode : '',
+  }
+}
+
+/** 重新读取所选 env 文件，刷新 env-only 参数与 Block2 显示基准。 */
+/** Reload the selected env file, refreshing env-only params and the Block2 display base. */
+async function loadEnvData() {
+  const raw = await executor.readEnvFile(selectedSuffix.value)
+  envOnlyParams.value = filterEnvOnly(raw)
   syncEnvYamlFromData()
+  envBaseCliParams.value = extractBlock2(raw)
+  cliParams.value = mergeCliParams(envBaseCliParams.value, savedCliParams.value)
+}
+
+watch(() => props.visible, async (v) => {
+  if (!v) return
+
+  // 从 store 加载上次保存的显式覆盖 / Load last saved explicit overrides from store
+  savedCliParams.value = { ...executor.getEditorCliParams(props.filePath || '__default__') }
+  cliParams.value = { ...savedCliParams.value }
+
+  // 如果是 executor 模式，加载 env 数据 / Load env data for executor mode
+  if (isExecutor.value) {
+    const suffixes = await executor.readEnvSuffixes()
+    envSuffixes.value = suffixes
+    // 优先使用上次保存的环境后缀 / Prefer the previously saved env suffix
+    selectedSuffix.value = executor.getEditorEnvSuffix(props.filePath || '__default__') || suffixes[0] || ''
+    // 空后缀表示默认 env.yml，同样需要加载 / Empty suffix means default env.yml; load it too
+    await loadEnvData()
+  } else {
+    // Converter 模式：从 store 加载保存的参数 / Converter mode: load saved params from store
+    const savedConverter = converter.getEditorConverterParams(props.filePath || '__default__')
+    converterDirection.value = savedConverter.direction
+    converterInputPath.value = props.filePath || ''
+    converterOutputPath.value = savedConverter.outputPath || ''
+  }
+
+  loaded.value = true
+})
+
+// 环境切换时重新加载 env 数据 / Reload env data when suffix changes
+watch(selectedSuffix, async () => {
+  if (!isExecutor.value || !loaded.value) return
+  await loadEnvData()
 })
 
 // ---- YAML 编辑函数（复用 ExecutorForm 模式）/ YAML editing functions (reuse ExecutorForm pattern) ----
@@ -241,19 +285,32 @@ async function handleSave() {
     applyEnvYamlEdit()
   }
 
-  // 保存 CLI 参数到 store / Save CLI params to store
-  executor.setEditorCliParams(props.filePath || '__default__', { ...cliParams.value })
+  const editorKey = props.filePath || '__default__'
+  if (isExecutor.value) {
+    // 只保存与 env 基准不同的字段（显式覆盖），未设置字段交给 env.yml。
+    // Persist only fields differing from the env base (explicit overrides);
+    // unset fields are left to env.yml.
+    executor.setEditorCliParams(editorKey, diffCliParams(envBaseCliParams.value, cliParams.value))
+    executor.setEditorEnvSuffix(editorKey, selectedSuffix.value)
+  } else {
+    // Converter 模式：保存转换参数到 store / Converter mode: save converter params to store
+    converter.setEditorConverterParams(editorKey, {
+      direction: converterDirection.value,
+      outputPath: converterOutputPath.value,
+    })
+  }
 
   // 构建完整 env 数据，根据同步开关决定是否包含 CLI 参数 / Build complete env data
   if (isExecutor.value && selectedSuffix.value) {
     let envData: Record<string, unknown> = { ...envOnlyParams.value }
     if (agent.config.saveToEnvFile) {
-      const cliForEnv: Record<string, unknown> = {
-        scriptType: cliParams.value.scriptType,
-        maxThread: cliParams.value.maxThread,
-        reportName: cliParams.value.reportName,
-        apiMode: cliParams.value.apiMode,
-      }
+      // 跳过“未设置”字段，避免向 env.yml 写入空值。
+      // Skip unset fields to avoid writing empty values into env.yml.
+      const cliForEnv: Record<string, unknown> = {}
+      if (cliParams.value.scriptType) cliForEnv['scriptType'] = cliParams.value.scriptType
+      if (cliParams.value.maxThread > 0) cliForEnv['maxThread'] = cliParams.value.maxThread
+      if (cliParams.value.reportName) cliForEnv['reportName'] = cliParams.value.reportName
+      if (cliParams.value.apiMode) cliForEnv['apiMode'] = cliParams.value.apiMode
       envData = { ...envData, ...cliForEnv }
     }
     try {
@@ -264,12 +321,6 @@ async function handleSave() {
       message.error(t('executor.envSaveFailed', { reason: err?.message || String(e) }))
       return
     }
-  } else {
-    // Converter 模式：保存转换参数到 store / Converter mode: save converter params to store
-    converter.setEditorConverterParams(props.filePath || '__default__', {
-      direction: converterDirection.value,
-      outputPath: converterOutputPath.value,
-    })
   }
 
   message.success(t('editor.paramEdit.saved'))
