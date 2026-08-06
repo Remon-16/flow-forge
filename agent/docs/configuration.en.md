@@ -217,20 +217,21 @@ Main entry point: `python main.py`. Full argument list (matching `cli/parser.py`
 | `--plugin-batch-size N` | Overrides `pipeline.plugin_batch_size` (plugin processing batch size); defaults to `env.yaml`. Note: this is the **plugin batch**, not plan chunking |
 | `--max-steps N` | Overrides `pipeline.max_steps` (max agent steps) |
 | `--max-retries N` | Overrides `pipeline.max_retries` (max retries for LLM calls) |
-| `--max-steps-no-progress N` | Overrides `pipeline.max_steps_no_progress` (max steps with no progress) |
 | `--consecutive-batch-failure-limit N` | Overrides `pipeline.consecutive_batch_failure_limit` (consecutive batch failure limit) |
 | `--skeleton-batch-size N` | Overrides `pipeline.skeleton_batch_size` (skeleton generation batch size) |
 | `--plan-single-batch-size N` | Overrides `pipeline.plan_single_batch_size` (single-API test point group size) |
 | `--url-doc-match-max-retries N` | Overrides `validation.url_doc_match_validation.max_retries` (URL-to-document match retry limit, 0 = no retries) |
 | `--url-doc-match-strategy {fail,warn,skip}` | URL correction exhaustion strategy (default from `env.yaml`) |
-| `--case-format-max-retries N` | Overrides `validation.case_gen_validation.max_retries` (case format validation retry limit, 0 = no retries) |
-| `--validation` / `--no-validation` | Enable/disable case format validation (overrides `validation.case_gen_validation.enable`) |
+| `--case-gen-validation-rule RULE` | Overrides case-generation validation rules, format `check:strategy[:failure_action]` (e.g. `url_check:skip:keep`), can be specified multiple times |
+| `--case-gen-validation-max-retries N` | Overrides `validation.case_gen_validation.max_retries` (case-generation validation retry limit, 0 = no retries) |
 | `--url-doc-match-enabled` / `--no-url-doc-match-enabled` | Enable/disable URL doc-match validation (overrides `validation.url_doc_match_validation.enable`) |
 | `--parse-plan-validation-rule RULE` | Overrides plan parse validation rules, format `check:strategy[:failure_action]` (e.g. `flow_match:warn:discard`), can be specified multiple times |
 | `--parse-plan-validation-max-retries N` | Overrides `validation.parse_plan_validation.max_retries` (plan parse validation retry limit, 0 = no retries) |
 | `--plugins` / `--no-plugins` | Enable/disable plugins (overrides `plugins.enabled`) |
+| `--plugin-module PATH` | Plugin module path (repeatable, overrides `plugins.modules`) |
 | `--skills` / `--no-skills` | Enable/disable skills (overrides `skills.enabled`) |
-| `--lang {zh_CN,en_US}` | Overrides `agent.lang` (UI language) |
+| `--skill-agent MAPPING` | Skill-to-agent mapping (repeatable, format `agent_name:skill1,skill2`, e.g. `data_filler:foli_mall_data_filling`) |
+| `--lang LANG` | Overrides `agent.lang` (UI language: `zh_CN` / `en_US`, default from `env.yaml`) |
 | `--debug-snapshots` | Save debug snapshots (`interfaces.json` + `extracted_texts.json`) |
 | `--debug` | Enable debug logging (full LLM I/O written to the session `debug.log`) |
 | `--env PATH` | Configuration file path (default `env.yaml`) |

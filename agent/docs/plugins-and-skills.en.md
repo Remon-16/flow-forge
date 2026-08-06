@@ -95,7 +95,7 @@ skills:
       - foli_mall_assertion
     # Main pipeline agents (uncomment as needed)
     # case_generator:
-    #   - boundary_test
+    #   - <your_skill>            # put your custom skill YAML into skills/builtin/
 ```
 
 ### Injectable Agents
@@ -109,7 +109,6 @@ Skills can be injected into **all** agents (including main pipeline agents and p
 
 | Skill file | Location | Purpose |
 |-----------|------|------|
-| `boundary_test.yaml` | `skills/builtin/` | Injects boundary-value testing hints into `case_generator` |
 | `foli_mall_data_filling.yaml` | `plugins/official/skills/` | Data filling rules for the Foli Mall project |
 | `db_processors.yaml` | `plugins/official/skills/` | Available DB pre/post-processor list (users can extend via template) |
 | `redis_processors.yaml` | `plugins/official/skills/` | Available Redis cache processor list |

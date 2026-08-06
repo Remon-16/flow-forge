@@ -1,0 +1,20 @@
+case_type: single
+test_id: TC_ORDER_RECEIVE_NEG_001
+relevance_id: api_api_orders_id_receive_put
+tag: P1
+api_name: 未发货订单确认收货（负向，期望 204002）
+app_name: foliMail
+method: PUT
+url: /api/orders/9000000000000000003/receive
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: order-fixture
+    config:
+      order_status: 1
+      order_id: 9000000000000000003
+assert_dict:
+  code: '204002'

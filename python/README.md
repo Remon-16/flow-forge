@@ -62,7 +62,11 @@ python tools/h2/init_h2.py
 
 然后启动 foli-mall 后端（其应用启动时会自动开启 H2 TCP Server，默认端口 9092），再运行 flow-forge 用例。详见 [处理器、断言引擎与报告](./docs/processors-and-report.md)。
 
-除 `return-order-db` 外，还内置了 `order-fixture` / `cart-fixture` / `return-fixture` / `balance-fixture` 四个前置数据夹具插件，可一步为用例补齐"指定状态的订单/购物车/退货/余额"等前置数据，用法详见上述文档的数据库处理器章节。
+除 `return-order-db` 外，还内置了 `order-fixture` / `cart-fixture` / `return-fixture` / `balance-fixture` / `user-fixture` / `product-fixture` 六个前置数据夹具插件，可一步为用例补齐"指定状态的订单/购物车/退货/余额/用户/商品"等前置数据，用法详见上述文档的数据库处理器章节。
+
+> 说明：H2 插件通过 JayDeBeApi 启动 JPype JVM。内置 H2 方言会在引擎创建时设置
+> `jpype.config.destroy_jvm = False`，使进程退出时不再等待 JVM 销毁，避免执行器
+> 输出报告后无法退出（挂尾），自动化调用方无需额外超时/强杀。
 
 ## 常用命令
 

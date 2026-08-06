@@ -1,0 +1,17 @@
+case_type: single
+test_id: TC_LOGIN_BOUND_002
+relevance_id: api_api_auth_login_post
+tag: P1
+api_name: 用户登录（错误密码，负向，期望 201002）
+app_name: foliMail
+method: POST
+url: /api/auth/login
+request_head:
+  Content-Type: application/json
+request_body:
+  username: buyer01
+  password: Pass123!
+status_code: 200
+assert_dict:
+  code: '201002'
+remark: 修正：buyer01 的真实密码是 buyer123，Pass123! 为错误密码。

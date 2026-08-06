@@ -1,0 +1,17 @@
+case_type: single
+test_id: TC_CART_ADD_POS_001
+relevance_id: api_api_cart_post
+tag: P0
+api_name: 添加商品到购物车
+app_name: foliMail
+method: POST
+url: /api/cart
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body:
+  productId: 1000000000000003001
+  quantity: 2
+status_code: 200
+assert_dict:
+  code: '100000'

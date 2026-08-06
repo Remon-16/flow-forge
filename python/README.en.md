@@ -62,7 +62,13 @@ python tools/h2/init_h2.py
 
 Then start the foli-mall backend (it starts an H2 TCP Server on port 9092 on boot) before running flow-forge cases. See [Processors, Assertions & Report](./docs/processors-and-report.en.md).
 
-Besides `return-order-db`, four test-data fixture plugins — `order-fixture`, `cart-fixture`, `return-fixture`, and `balance-fixture` — are bundled to set up prerequisite data (orders/cart items/returns/balance in a specific state) in one step. See the Database Processors section of the document above for usage.
+Besides `return-order-db`, six test-data fixture plugins — `order-fixture`, `cart-fixture`, `return-fixture`, `balance-fixture`, `user-fixture`, and `product-fixture` — are bundled to set up prerequisite data (orders/cart items/returns/balance/users/products in a specific state) in one step. See the Database Processors section of the document above for usage.
+
+> Note: H2 processors start a JPype JVM through JayDeBeApi. The built-in H2
+> dialect sets `jpype.config.destroy_jvm = False` when the engine is created, so
+> the process no longer waits for JVM destruction on exit and the executor does
+> not hang after writing the report — callers do not need extra timeouts or
+> forced kills.
 
 ## Common Commands
 

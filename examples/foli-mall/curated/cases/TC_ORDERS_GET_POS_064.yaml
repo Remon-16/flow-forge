@@ -1,0 +1,25 @@
+case_type: single
+test_id: TC_ORDERS_GET_POS_064
+relevance_id: api_api_orders_get
+tag: P0
+api_name: 买家订单列表（分页，正向）
+app_name: foliMail
+method: GET
+url: /api/orders?page=1&pageSize=10
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: order-fixture
+    config:
+      order_status: 1
+      order_id: 9000000000000000012
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.total >= 1
+  - $.data.records.length() >= 1
+  - $.data.records[0].orderNo is_not_null
+remark: 列表按创建时间倒序，同秒订单排序不稳定，订单状态断言改由详情用例 TC_ORDERS_ID_GET_POS_068 覆盖。

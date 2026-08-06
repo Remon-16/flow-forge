@@ -1,0 +1,144 @@
+case_type: biz
+sheet_name: 标准退货退款流程测试
+api_name: 退货退款完整状态机（创建→审批→寄回→收货→验货→退款）
+steps:
+  - step_id: Step_LoginBuyer
+    relevance_id: IF_AUTH_LOGIN
+    api_name: 买家登录
+    app_name: foliMail
+    method: POST
+    url: /api/auth/login
+    request_head:
+      Content-Type: application/json
+    request_body:
+      username: buyer01
+      password: buyer123
+    status_code: 200
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.token is_not_null
+
+  - step_id: Step_CreateReturn
+    relevance_id: IF_RETURNS_CREATE
+    api_name: 创建退货退款申请
+    app_name: foliMail
+    method: POST
+    url: /api/returns
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body:
+      returnReason: e2e-return-reason
+      returnType: 1
+    status_code: 200
+    preprocessors:
+      - name: order-fixture
+        config:
+          order_status: 4
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.id is_not_null
+      - $.data.status == 0
+
+  - step_id: Step_LoginSeller
+    relevance_id: IF_AUTH_LOGIN
+    api_name: 卖家登录
+    app_name: foliMail
+    method: POST
+    url: /api/auth/login
+    request_head:
+      Content-Type: application/json
+    request_body:
+      username: seller01
+      password: seller123
+    status_code: 200
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.token is_not_null
+
+  - step_id: Step_Approve
+    relevance_id: IF_SELLER_RETURNS_APPROVE
+    api_name: 卖家审批通过
+    app_name: foliMail
+    method: PUT
+    url: /api/seller/returns/#{returnId}/approve
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{seller01}"
+    request_body:
+      sellerComment: approved-ok
+    status_code: 200
+    inherit:
+      returnId: Step_CreateReturn.data.id
+    assert_dict:
+      code: '100000'
+
+  - step_id: Step_ShipBack
+    relevance_id: IF_RETURNS_SHIP_BACK
+    api_name: 买家寄回商品
+    app_name: foliMail
+    method: PUT
+    url: /api/returns/#{returnId}/ship-back
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body: {}
+    status_code: 200
+    inherit:
+      returnId: Step_CreateReturn.data.id
+    assert_dict:
+      code: '100000'
+
+  - step_id: Step_ConfirmReceipt
+    relevance_id: IF_SELLER_RETURNS_CONFIRM_RECEIPT
+    api_name: 卖家确认收货
+    app_name: foliMail
+    method: PUT
+    url: /api/seller/returns/#{returnId}/confirm-receipt
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{seller01}"
+    request_body: {}
+    status_code: 200
+    inherit:
+      returnId: Step_CreateReturn.data.id
+    assert_dict:
+      code: '100000'
+
+  - step_id: Step_InspectPass
+    relevance_id: IF_SELLER_RETURNS_INSPECT_PASS
+    api_name: 卖家验货通过（自动退款）
+    app_name: foliMail
+    method: PUT
+    url: /api/seller/returns/#{returnId}/inspect-pass
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{seller01}"
+    request_body: {}
+    status_code: 200
+    inherit:
+      returnId: Step_CreateReturn.data.id
+    assert_dict:
+      code: '100000'
+
+  - step_id: Step_Verify
+    relevance_id: IF_RETURNS_DETAIL
+    api_name: 校验退货已退款
+    app_name: foliMail
+    method: GET
+    url: /api/returns/#{returnId}
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body: {}
+    status_code: 200
+    inherit:
+      returnId: Step_CreateReturn.data.id
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.status == 6
+      - $.data.refundTime is_not_null

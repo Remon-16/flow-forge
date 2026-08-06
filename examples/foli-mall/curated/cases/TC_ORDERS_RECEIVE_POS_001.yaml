@@ -1,0 +1,23 @@
+case_type: single
+test_id: TC_ORDERS_RECEIVE_POS_001
+relevance_id: api_api_orders_id_receive_put
+tag: P0
+api_name: 确认收货（已发货订单，正向）
+app_name: foliMail
+method: PUT
+url: /api/orders/9000000000000000019/receive
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: order-fixture
+    config:
+      order_status: 2
+      order_id: 9000000000000000019
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data is_null
+remark: 对应 raw 用例 TC_orders_receive_POS_060/BOUND_062；receive 直接置 COMPLETED(4)。

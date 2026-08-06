@@ -1,0 +1,23 @@
+case_type: single
+test_id: TC_ME_POS_001
+relevance_id: api_api_auth_me_get
+tag: P0
+api_name: 获取当前用户信息（正向，合并 ME_POS/GET_USERINFO_POS）
+app_name: foliMail
+method: GET
+url: /api/auth/me
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.id is_not_null
+  - $.data.username is_not_null
+  - $.data.nickname is_not_null
+  - $.data.balance > 0
+  - $.data.role is_not_null
+  - $.data.status is_not_null
+  - $.data.createTime is_not_null

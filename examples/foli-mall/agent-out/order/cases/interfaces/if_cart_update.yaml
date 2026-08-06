@@ -1,0 +1,6 @@
+case_type: interfaces
+test_id: IF_CART_UPDATE
+api_name: 更新购物车项
+app_name: foliMail
+method: PUT
+url: /api/cart/{id}

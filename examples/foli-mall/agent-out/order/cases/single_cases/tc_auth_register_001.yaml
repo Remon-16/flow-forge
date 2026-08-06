@@ -1,0 +1,30 @@
+case_type: single
+test_id: TC_AUTH_REGISTER_001
+relevance_id: IF_AUTH_REGISTER
+api_name: 用户注册-新用户成功
+app_name: foliMail
+method: POST
+url: /api/auth/register
+request_head:
+  Content-Type: application/json
+request_body:
+  username: reg_cart_0806_01
+  password: Test@123
+  nickname: 购物车订单测试用户
+status_code: 200
+preprocessors:
+  - name: user-fixture
+    config:
+      mode: predelete
+      username: reg_cart_0806_01
+postprocessors:
+  - name: user-fixture
+    config:
+      cleanup: true
+assert_dict:
+  $.code: "100000"
+assert_rules:
+  - "$.data.id is_not_null"
+  - "$.data.username == reg_cart_0806_01"
+tag: P2
+remark: 新用户名注册成功；user-fixture 前置 predelete 保证可重复执行

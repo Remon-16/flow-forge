@@ -1,0 +1,4588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>foli_mall_demo</title>
+<style>
+
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+       margin: 20px; background: #f5f5f5; color: #333; }
+h1 { color: #1a1a1a; border-bottom: 2px solid #4a90d9; padding-bottom: 10px; }
+.summary { background: #fff; padding: 15px 20px; border-radius: 6px; margin-bottom: 20px;
+           box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.section { margin-bottom: 20px; }
+.section-header { background: #4a90d9; color: #fff; padding: 10px 16px;
+                  border-radius: 6px; cursor: pointer; font-weight: bold; }
+.section-header .pass { margin-left: 12px; }
+.section-header .fail { color: #ffcccc; margin-left: 8px; }
+.section-body { display: block; margin-top: 10px; }
+.case-card { background: #fff; border-radius: 6px; margin-bottom: 10px;
+             box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
+.case-pass { border-left: 4px solid #28a745; }
+.case-fail { border-left: 4px solid #dc3545; }
+.case-title { padding: 10px 16px; font-weight: bold;
+              background: #fafafa; border-bottom: 1px solid #eee; }
+.case-pass .case-title { color: #155724; }
+.case-fail .case-title { color: #721c24; }
+.case-detail { padding: 12px 16px; }
+.case-detail p { margin: 4px 0; }
+.tag { background: #e9ecef; padding: 1px 6px; border-radius: 3px; font-size: 0.85em; }
+.error-msg { color: #dc3545; font-weight: bold; }
+.step-card { border-radius: 4px; margin: 8px 0; border: 1px solid #dee2e6; }
+.step-pass { border-left: 3px solid #28a745; }
+.step-fail { border-left: 3px solid #dc3545; }
+.step-header { padding: 8px 12px; cursor: pointer; font-weight: bold; background: #f8f9fa; }
+.step-body { padding: 8px 12px; display: block; }
+pre { background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; }
+code { font-size: 0.9em; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+th, td { border: 1px solid #dee2e6; padding: 6px 10px; text-align: left; }
+th { background: #e9ecef; }
+.assert-pass { background: #d4edda; }
+.assert-fail { background: #f8d7da; }
+
+</style>
+</head>
+<body>
+<h1>foli_mall_demo 接口测试报告</h1>
+<div class="summary">
+<p><strong>环境:</strong> foli-mall</p>
+<p><strong>测试时间:</strong> 2026-08-06 18:51:20</p>
+<p><strong>总用例数:</strong> 74</p>
+</div>
+<div class="section">
+<div class="section-header" onclick="toggle('single_list')">▼ 单接口用例数 <span class="pass">通过 63</span> <span class="fail">失败 2</span> 通过率 96.9%</div>
+<div class="section-body" id="single_list">
+<div class="case-card case-fail">
+<div class="case-title">[FAIL] 1. TC_CART_ID_PUT_NEG_004 - 更新购物车项数量超库存（缺陷证据） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart/9000000000000000025</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDgsInVzZXJuYW1lIjoiYnV5ZXIwMiIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDgiLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.FINSPaeDueZm3HOUQurXKCSpe74j7kAt_MP97U1edWk"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "quantity": 100,
+  "selected": 1
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-fail"><td>code</td><td>203002</td><td>100000</td><td>FAIL</td></tr>
+</table>
+</div></div>
+<div class="case-card case-fail">
+<div class="case-title">[FAIL] 2. TC_CART_POST_NEG_001 - 添加商品到购物车（数量超库存，缺陷证据） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDgsInVzZXJuYW1lIjoiYnV5ZXIwMiIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDgiLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.FINSPaeDueZm3HOUQurXKCSpe74j7kAt_MP97U1edWk"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "productId": 1000000000000003001,
+  "quantity": 100
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-fail"><td>code</td><td>203002</td><td>100000</td><td>FAIL</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 3. TC_ADD_CART_BOUND_010 - 添加商品到购物车（数量超库存，边界） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDgsInVzZXJuYW1lIjoiYnV5ZXIwMiIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDgiLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.FINSPaeDueZm3HOUQurXKCSpe74j7kAt_MP97U1edWk"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "productId": 1000000000000003001,
+  "quantity": 1000
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 4. TC_ADD_CART_NEG_009 - 添加商品到购物车（商品不存在，负向，期望 203001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "productId": -1,
+  "quantity": 1
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "203001",
+  "message": "商品不存在",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>203001</td><td>203001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 5. TC_ADD_CART_POS_008 - 添加商品到购物车（正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDgsInVzZXJuYW1lIjoiYnV5ZXIwMiIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDgiLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.FINSPaeDueZm3HOUQurXKCSpe74j7kAt_MP97U1edWk"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "productId": 1000000000000003001,
+  "quantity": 2
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 6. TC_BALANCE_INSUFFICIENT_001 - 余额不足下单失败（期望 205001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "receiverName": "张三",
+  "receiverPhone": "13800001111",
+  "receiverAddress": "北京市朝阳区"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "205001",
+  "message": "余额不足",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>205001</td><td>205001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 7. TC_BALANCE_RESTORE_001 - 恢复买家余额（balance-fixture 10000） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/me</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "phone": "13800000007",
+    "email": "buyer01@folimall.com",
+    "avatar": null,
+    "balance": 10000.0,
+    "role": 0,
+    "status": 1,
+    "createTime": "2026-08-06T18:51:00.387094"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.username is_not_null</td><td>None</td><td>buyer01</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 8. TC_CART_ADD_POS_001 - 添加商品到购物车 <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "productId": 1000000000000003001,
+  "quantity": 2
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 9. TC_CART_DELETE_BOUND_003 - 清空购物车（空购物车，边界） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> DELETE</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 10. TC_CART_DELETE_NEG_002 - 清空购物车（未登录，负向，期望 401 + 200001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> DELETE</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "200001",
+  "message": "Missing or invalid Authorization header",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>401</td><td>401</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>200001</td><td>200001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 11. TC_CART_DELETE_POS_001 - 清空购物车（正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> DELETE</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data is_null</td><td>None</td><td>None</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 12. TC_CART_EMPTY_ORDER_FAIL_001 - 购物车为空下单失败（期望 207001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "receiverName": "张三",
+  "receiverPhone": "13800001111",
+  "receiverAddress": "北京市朝阳区"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "207001",
+  "message": "没有选中的商品",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>207001</td><td>207001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 13. TC_CART_GET_BOUND_002 - 获取购物车列表（空购物车，边界） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": []
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.length() == 0</td><td>0</td><td>0</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 14. TC_CART_GET_BUS_003 - 获取购物车列表（商品已删除，边界） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDgsInVzZXJuYW1lIjoiYnV5ZXIwMiIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDgiLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.FINSPaeDueZm3HOUQurXKCSpe74j7kAt_MP97U1edWk"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "_product_fixture_id": 1000000000000003001,
+  "_product_fixture_original": [
+    50,
+    2,
+    0
+  ]
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": [
+    {
+      "id": "9000000000000000021",
+      "productId": "1000000000000003001",
+      "productName": null,
+      "productImage": null,
+      "price": null,
+      "stock": null,
+      "quantity": 1,
+      "selected": 1
+    },
+    {
+      "id": "2085317774799724546",
+      "productId": "1000000000000003001",
+      "productName": null,
+      "productImage": null,
+      "price": null,
+      "stock": null,
+      "quantity": 1002,
+      "selected": 1
+    }
+  ]
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data[0].productName is_null</td><td>None</td><td>None</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 15. TC_CART_GET_NEG_001 - 获取购物车列表（未登录，负向，期望 401 + 200001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "200001",
+  "message": "Missing or invalid Authorization header",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>401</td><td>401</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>200001</td><td>200001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 16. TC_CART_GET_POS_001 - 获取购物车列表（cart-fixture 确保有选中项） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": [
+    {
+      "id": "786013477049905",
+      "productId": "1000000000000003001",
+      "productName": "iPhone 15 Pro Max 256GB",
+      "productImage": "/images/product-01.jpg",
+      "price": 4999.0,
+      "stock": 50,
+      "quantity": 1,
+      "selected": 1
+    }
+  ]
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.length() &gt;= 1</td><td>1</td><td>1</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data[0].productId is_not_null</td><td>None</td><td>1000000000000003001</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data[0].selected == 1</td><td>1</td><td>1</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 17. TC_CART_ID_DELETE_BOUND_003 - 删除最后一个购物车项（边界） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart/9000000000000000027</p>
+<p><strong>Method:</strong> DELETE</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data is_null</td><td>None</td><td>None</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 18. TC_CART_ID_DELETE_NEG_002 - 删除购物车项（ID 不存在，负向，期望 207002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart/999999999999999999</p>
+<p><strong>Method:</strong> DELETE</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "207002",
+  "message": "购物车项不存在或无权限操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>207002</td><td>207002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 19. TC_CART_ID_DELETE_NEG_004 - 删除已下架商品的购物车项（正向，修正） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart/9000000000000000028</p>
+<p><strong>Method:</strong> DELETE</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDgsInVzZXJuYW1lIjoiYnV5ZXIwMiIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDgiLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.FINSPaeDueZm3HOUQurXKCSpe74j7kAt_MP97U1edWk"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "_product_fixture_id": 1000000000000003001,
+  "_product_fixture_original": [
+    50,
+    2,
+    0
+  ]
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 20. TC_CART_ID_DELETE_POS_001 - 删除购物车项（正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart/9000000000000000026</p>
+<p><strong>Method:</strong> DELETE</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDgsInVzZXJuYW1lIjoiYnV5ZXIwMiIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDgiLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.FINSPaeDueZm3HOUQurXKCSpe74j7kAt_MP97U1edWk"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data is_null</td><td>None</td><td>None</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 21. TC_CART_ID_PUT_BOUND_003 - 更新购物车项数量为 0（边界） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart/9000000000000000024</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDgsInVzZXJuYW1lIjoiYnV5ZXIwMiIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDgiLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.FINSPaeDueZm3HOUQurXKCSpe74j7kAt_MP97U1edWk"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "quantity": 0,
+  "selected": 1
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 22. TC_CART_ID_PUT_NEG_002 - 更新购物车项（ID 不存在，负向，期望 207002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart/999999999999999999</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "quantity": 2,
+  "selected": 1
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "207002",
+  "message": "购物车项不存在或无权限操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>207002</td><td>207002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 23. TC_CART_ID_PUT_POS_001 - 更新购物车项数量（正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart/9000000000000000023</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDgsInVzZXJuYW1lIjoiYnV5ZXIwMiIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDgiLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.FINSPaeDueZm3HOUQurXKCSpe74j7kAt_MP97U1edWk"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "quantity": 2,
+  "selected": 1
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 24. TC_GET_USERINFO_BOUND_005 - 获取当前用户信息（角色/状态边界） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/me</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "phone": "13800000007",
+    "email": "buyer01@folimall.com",
+    "avatar": null,
+    "balance": 10000.0,
+    "role": 0,
+    "status": 1,
+    "createTime": "2026-08-06T18:51:00.387094"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.role &gt;= 0</td><td>0</td><td>0</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.role &lt;= 2</td><td>2</td><td>0</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.status &gt;= 0</td><td>0</td><td>1</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.status &lt;= 1</td><td>1</td><td>1</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 25. TC_GET_USERINFO_NEG_002 - 获取当前用户信息（未登录，负向，期望 401 + 200001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/me</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "200001",
+  "message": "Missing or invalid Authorization header",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>401</td><td>401</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>200001</td><td>200001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 26. TC_LOGIN_BOUND_001 - 用户登录（不存在用户，负向，期望 201002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "username20characters",
+  "password": "password20characters"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "201002",
+  "message": "用户名或密码错误",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>201002</td><td>201002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 27. TC_LOGIN_BOUND_002 - 用户登录（错误密码，负向，期望 201002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "buyer01",
+  "password": "Pass123!"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "201002",
+  "message": "用户名或密码错误",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>201002</td><td>201002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 28. TC_LOGIN_NEG_003 - 用户登录（空用户名，负向，期望 400 + 200001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "",
+  "password": "Test@123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "200001",
+  "message": "username: 用户名不能为空 / Username cannot be blank",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>400</td><td>400</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>200001</td><td>200001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 29. TC_LOGIN_POS_001 - 用户登录（基线） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "admin",
+  "password": "admin123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoyLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDEsInVzZXJuYW1lIjoiYWRtaW4iLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAxIiwiaWF0IjoxNzg2MDEzNDc3LCJleHAiOjE3ODYwOTk4Nzd9.LRxhbTRjMdE6Bq7b7SPyI7bDNFfnR7IB_ZVqES49UcI",
+    "userId": "1000000000000000001",
+    "username": "admin",
+    "nickname": "系统管理员",
+    "role": 2
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoyLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDEsInVzZXJuYW1lIjoiYWRtaW4iLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAxIiwiaWF0IjoxNzg2MDEzNDc3LCJleHAiOjE3ODYwOTk4Nzd9.LRxhbTRjMdE6Bq7b7SPyI7bDNFfnR7IB_ZVqES49UcI</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 30. TC_LOGIN_POS_001 - 用户登录（admin 正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "admin",
+  "password": "admin123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoyLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDEsInVzZXJuYW1lIjoiYWRtaW4iLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAxIiwiaWF0IjoxNzg2MDEzNDc3LCJleHAiOjE3ODYwOTk4Nzd9.LRxhbTRjMdE6Bq7b7SPyI7bDNFfnR7IB_ZVqES49UcI",
+    "userId": "1000000000000000001",
+    "username": "admin",
+    "nickname": "系统管理员",
+    "role": 2
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoyLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDEsInVzZXJuYW1lIjoiYWRtaW4iLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAxIiwiaWF0IjoxNzg2MDEzNDc3LCJleHAiOjE3ODYwOTk4Nzd9.LRxhbTRjMdE6Bq7b7SPyI7bDNFfnR7IB_ZVqES49UcI</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.userId is_not_null</td><td>None</td><td>1000000000000000001</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.role == 2</td><td>2</td><td>2</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 31. TC_ME_POS_001 - 获取当前用户信息（正向，合并 ME_POS/GET_USERINFO_POS） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/me</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "phone": "13800000007",
+    "email": "buyer01@folimall.com",
+    "avatar": null,
+    "balance": 10000.0,
+    "role": 0,
+    "status": 1,
+    "createTime": "2026-08-06T18:51:00.387094"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.id is_not_null</td><td>None</td><td>1000000000000000007</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.username is_not_null</td><td>None</td><td>buyer01</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.nickname is_not_null</td><td>None</td><td>小明</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.balance &gt; 0</td><td>0</td><td>10000.0</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.role is_not_null</td><td>None</td><td>0</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.status is_not_null</td><td>None</td><td>1</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.createTime is_not_null</td><td>None</td><td>2026-08-06T18:51:00.387094</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 32. TC_ORDERS_CANCEL_POS_001 - 取消待支付订单（正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000017/cancel</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000017
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data is_null</td><td>None</td><td>None</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 33. TC_ORDERS_CANCEL_SHIPPED_NEG_001 - 取消已发货订单（负向，期望 204002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000018/cancel</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000018
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "204002",
+  "message": "订单状态不正确，不允许此操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>204002</td><td>204002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 34. TC_ORDERS_GET_NEG_065 - 买家订单列表（页码为负数，负向） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders?page=-1&pageSize=10</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "total": "6",
+    "page": 1,
+    "pageSize": 10,
+    "records": [
+      {
+        "id": "2085317783674871810",
+        "orderNo": "FO20260806031931",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 1,
+        "receiverName": "张三",
+        "receiverPhone": "13800001111",
+        "receiverAddress": "北京市朝阳区",
+        "createTime": "2026-08-06T18:51:17.615674",
+        "payTime": "2026-08-06T18:51:17.615674",
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "2085317783674871811",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "9000000000000000001",
+        "orderNo": "TEST000000000001",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 1,
+        "receiverName": "Test Buyer",
+        "receiverPhone": "13800000000",
+        "receiverAddress": "Test Address",
+        "createTime": "2026-08-06T18:51:17",
+        "payTime": null,
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "9000000000000000002",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "9000000000000000002",
+        "orderNo": "TEST000000000002",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 1,
+        "receiverName": "Test Buyer",
+        "receiverPhone": "13800000000",
+        "receiverAddress": "Test Address",
+        "createTime": "2026-08-06T18:51:17",
+        "payTime": null,
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "9000000000000000003",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "9000000000000000003",
+        "orderNo": "TEST000000000003",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 1,
+        "receiverName": "Test Buyer",
+        "receiverPhone": "13800000000",
+        "receiverAddress": "Test Address",
+        "createTime": "2026-08-06T18:51:17",
+        "payTime": null,
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "9000000000000000004",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "9000000000000000017",
+        "orderNo": "TEST000000000017",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 5,
+        "receiverName": "Test Buyer",
+        "receiverPhone": "13800000000",
+        "receiverAddress": "Test Address",
+        "createTime": "2026-08-06T18:51:17",
+        "payTime": null,
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "9000000000000000018",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "9000000000000000018",
+        "orderNo": "TEST000000000018",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 2,
+        "receiverName": "Test Buyer",
+        "receiverPhone": "13800000000",
+        "receiverAddress": "Test Address",
+        "createTime": "2026-08-06T18:51:17",
+        "payTime": null,
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "9000000000000000019",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.total &gt;= 0</td><td>0</td><td>6</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 35. TC_ORDERS_GET_POS_064 - 买家订单列表（分页，正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders?page=1&pageSize=10</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000012
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "total": "7",
+    "page": 1,
+    "pageSize": 10,
+    "records": [
+      {
+        "id": "2085317783674871810",
+        "orderNo": "FO20260806031931",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 1,
+        "receiverName": "张三",
+        "receiverPhone": "13800001111",
+        "receiverAddress": "北京市朝阳区",
+        "createTime": "2026-08-06T18:51:17.615674",
+        "payTime": "2026-08-06T18:51:17.615674",
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "2085317783674871811",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "9000000000000000001",
+        "orderNo": "TEST000000000001",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 1,
+        "receiverName": "Test Buyer",
+        "receiverPhone": "13800000000",
+        "receiverAddress": "Test Address",
+        "createTime": "2026-08-06T18:51:17",
+        "payTime": null,
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "9000000000000000002",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "9000000000000000002",
+        "orderNo": "TEST000000000002",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 1,
+        "receiverName": "Test Buyer",
+        "receiverPhone": "13800000000",
+        "receiverAddress": "Test Address",
+        "createTime": "2026-08-06T18:51:17",
+        "payTime": null,
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "9000000000000000003",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "9000000000000000003",
+        "orderNo": "TEST000000000003",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 1,
+        "receiverName": "Test Buyer",
+        "receiverPhone": "13800000000",
+        "receiverAddress": "Test Address",
+        "createTime": "2026-08-06T18:51:17",
+        "payTime": null,
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "9000000000000000004",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "9000000000000000012",
+        "orderNo": "TEST000000000012",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 1,
+        "receiverName": "Test Buyer",
+        "receiverPhone": "13800000000",
+        "receiverAddress": "Test Address",
+        "createTime": "2026-08-06T18:51:17",
+        "payTime": null,
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "9000000000000000013",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "9000000000000000017",
+        "orderNo": "TEST000000000017",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 5,
+        "receiverName": "Test Buyer",
+        "receiverPhone": "13800000000",
+        "receiverAddress": "Test Address",
+        "createTime": "2026-08-06T18:51:17",
+        "payTime": null,
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "9000000000000000018",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "9000000000000000018",
+        "orderNo": "TEST000000000018",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "totalAmount": 4999.0,
+        "status": 2,
+        "receiverName": "Test Buyer",
+        "receiverPhone": "13800000000",
+        "receiverAddress": "Test Address",
+        "createTime": "2026-08-06T18:51:17",
+        "payTime": null,
+        "shipTime": null,
+        "receiveTime": null,
+        "items": [
+          {
+            "id": "9000000000000000019",
+            "productId": "1000000000000003001",
+            "productName": "iPhone 15 Pro Max 256GB",
+            "productImage": "/images/product-01.jpg",
+            "price": 4999.0,
+            "quantity": 1
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.total &gt;= 1</td><td>1</td><td>7</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.records.length() &gt;= 1</td><td>1</td><td>7</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.records[0].orderNo is_not_null</td><td>None</td><td>FO20260806031931</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 36. TC_ORDERS_ID_GET_NEG_069 - 获取订单详情（订单不存在，负向，期望 204001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/999999999999999999</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "204001",
+  "message": "订单不存在",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>204001</td><td>204001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 37. TC_ORDERS_ID_GET_POS_068 - 获取订单详情（正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000013</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000013
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "9000000000000000013",
+    "orderNo": "TEST000000000013",
+    "storeId": "1000000000000002001",
+    "storeName": "数码先锋店 / Digital Pioneer Store",
+    "totalAmount": 4999.0,
+    "status": 1,
+    "receiverName": "Test Buyer",
+    "receiverPhone": "13800000000",
+    "receiverAddress": "Test Address",
+    "createTime": "2026-08-06T18:51:17",
+    "payTime": null,
+    "shipTime": null,
+    "receiveTime": null,
+    "items": [
+      {
+        "id": "9000000000000000014",
+        "productId": "1000000000000003001",
+        "productName": "iPhone 15 Pro Max 256GB",
+        "productImage": "/images/product-01.jpg",
+        "price": 4999.0,
+        "quantity": 1
+      }
+    ]
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.orderNo is_not_null</td><td>None</td><td>TEST000000000013</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.status == 1</td><td>1</td><td>1</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.items[0].productId is_not_null</td><td>None</td><td>1000000000000003001</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.totalAmount &gt; 0</td><td>0</td><td>4999.0</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 38. TC_ORDERS_PAY_INSUFFICIENT_BALANCE_001 - 支付待支付订单（余额不足，负向，期望 205001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000015/pay</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000015
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "205001",
+  "message": "余额不足",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>205001</td><td>205001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 39. TC_ORDERS_PAY_POS_001 - 支付待支付订单（正向，合并 pay_POS_052/BOUNDARY_054） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000014/pay</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000014
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data is_null</td><td>None</td><td>None</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 40. TC_ORDERS_PAY_SHIPPED_NEG_001 - 支付已发货订单（负向，期望 204002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000016/pay</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000016
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "204002",
+  "message": "订单状态不正确，不允许此操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>204002</td><td>204002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 41. TC_ORDERS_POST_INSUFFICIENT_STOCK_001 - 创建订单（购物车数量超库存，负向，期望 203002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDgsInVzZXJuYW1lIjoiYnV5ZXIwMiIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDgiLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.FINSPaeDueZm3HOUQurXKCSpe74j7kAt_MP97U1edWk"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "receiverName": "张三",
+  "receiverPhone": "13800001111",
+  "receiverAddress": "北京市朝阳区",
+  "_product_fixture_id": 1000000000000003001,
+  "_product_fixture_original": [
+    50,
+    2,
+    0
+  ]
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "203002",
+  "message": "库存不足 : iPhone 15 Pro Max 256GB",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>203002</td><td>203002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 42. TC_ORDERS_RECEIVE_POS_001 - 确认收货（已发货订单，正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000019/receive</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000019
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data is_null</td><td>None</td><td>None</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 43. TC_ORDER_CANCEL_NEG_001 - 取消已支付订单（负向，期望 204002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000002/cancel</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000002
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "204002",
+  "message": "订单状态不正确，不允许此操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>204002</td><td>204002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 44. TC_ORDER_CREATE_POS_001 - 创建订单（余额复位 + 购物车造数） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "receiverName": "张三",
+  "receiverPhone": "13800001111",
+  "receiverAddress": "北京市朝阳区"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": [
+    {
+      "id": "2085317783674871810",
+      "orderNo": "FO20260806031931",
+      "storeId": "1000000000000002001",
+      "storeName": "数码先锋店 / Digital Pioneer Store",
+      "totalAmount": 4999.0,
+      "status": 1,
+      "receiverName": "张三",
+      "receiverPhone": "13800001111",
+      "receiverAddress": "北京市朝阳区",
+      "createTime": "2026-08-06T18:51:17.6156741",
+      "payTime": "2026-08-06T18:51:17.6156741",
+      "shipTime": null,
+      "receiveTime": null,
+      "items": null
+    }
+  ]
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data[0].id is_not_null</td><td>None</td><td>2085317783674871810</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data[0].orderNo is_not_null</td><td>None</td><td>FO20260806031931</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data[0].status == 1</td><td>1</td><td>1</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data[0].totalAmount &gt; 0</td><td>0</td><td>4999.0</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 45. TC_ORDER_PAY_NEG_001 - 支付已支付订单（负向，期望 204002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000001/pay</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000001
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "204002",
+  "message": "订单状态不正确，不允许此操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>204002</td><td>204002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 46. TC_ORDER_RECEIVE_NEG_001 - 未发货订单确认收货（负向，期望 204002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000003/receive</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000003
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "204002",
+  "message": "订单状态不正确，不允许此操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>204002</td><td>204002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 47. TC_REGISTER_BOUNDARY_006 - 用户注册（用户名最小长度边界，正向） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/register</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "user1234",
+  "password": "Pass1234",
+  "nickname": ""
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "2085317785910435841",
+    "username": "user1234",
+    "nickname": "",
+    "phone": null,
+    "email": null,
+    "avatar": null,
+    "balance": 0,
+    "role": 0,
+    "status": 1,
+    "createTime": "2026-08-06T18:51:18.1597581"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.id is_not_null</td><td>None</td><td>2085317785910435841</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.username == user1234</td><td>user1234</td><td>user1234</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 48. TC_REGISTER_BOUNDARY_007 - 用户注册（密码最小长度边界，正向） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/register</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "testuser",
+  "password": "Pass12",
+  "nickname": ""
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "2085317786329866242",
+    "username": "testuser",
+    "nickname": "",
+    "phone": null,
+    "email": null,
+    "avatar": null,
+    "balance": 0,
+    "role": 0,
+    "status": 1,
+    "createTime": "2026-08-06T18:51:18.2493077"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.id is_not_null</td><td>None</td><td>2085317786329866242</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.username == testuser</td><td>testuser</td><td>testuser</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 49. TC_REGISTER_BOUNDARY_008 - 用户注册（空昵称原样保留，边界） <span class="tag">P2</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/register</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "testuser8",
+  "password": "Test@123",
+  "nickname": ""
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "2085317786740908033",
+    "username": "testuser8",
+    "nickname": "",
+    "phone": null,
+    "email": null,
+    "avatar": null,
+    "balance": 0,
+    "role": 0,
+    "status": 1,
+    "createTime": "2026-08-06T18:51:18.347754"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.nickname == ""</td><td></td><td></td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 50. TC_REGISTER_NEG_003 - 用户注册（空用户名，负向，期望 400 + 200001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/register</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "",
+  "password": "Test@123",
+  "nickname": "TestNickname"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "200001",
+  "message": "username: 用户名长度为3-50个字符 / Username must be 3-50 characters; username: 用户名不能为空 / Username cannot be blank",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>400</td><td>400</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>200001</td><td>200001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 51. TC_REGISTER_NEG_004 - 用户注册（用户名已存在，负向，期望 201001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/register</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "admin",
+  "password": "admin123",
+  "nickname": "AdminUser"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "201001",
+  "message": "用户名已存在",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>201001</td><td>201001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 52. TC_REGISTER_POS_001 - 用户注册（合法信息，正向） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/register</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "newuser1",
+  "password": "Test@123",
+  "nickname": "New User"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "2085317787302944770",
+    "username": "newuser1",
+    "nickname": "New User",
+    "phone": null,
+    "email": null,
+    "avatar": null,
+    "balance": 0,
+    "role": 0,
+    "status": 1,
+    "createTime": "2026-08-06T18:51:18.4815431"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.id is_not_null</td><td>None</td><td>2085317787302944770</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.username == newuser1</td><td>newuser1</td><td>newuser1</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.role == 0</td><td>0</td><td>0</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 53. TC_REGISTER_POS_002 - 用户注册（特殊字符用户名，正向） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/register</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "user!@#",
+  "password": "Pass#123",
+  "nickname": "SpecialCharsUser"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "2085317787789484034",
+    "username": "user!@#",
+    "nickname": "SpecialCharsUser",
+    "phone": null,
+    "email": null,
+    "avatar": null,
+    "balance": 0,
+    "role": 0,
+    "status": 1,
+    "createTime": "2026-08-06T18:51:18.5974489"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.id is_not_null</td><td>None</td><td>2085317787789484034</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.username == user!@#</td><td>user!@#</td><td>user!@#</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 54. TC_RETURNS_CREATE_POS_001 - 创建退货退款申请（order-fixture 造已完成订单） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "returnReason": "e2e-return-reason",
+  "returnType": 1,
+  "orderId": 786013478598151
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "2085317787869175809",
+    "returnNo": "RT20260806574500",
+    "orderId": "786013478598151",
+    "orderNo": "TEST013478598151",
+    "userId": "1000000000000000007",
+    "buyerNickname": null,
+    "storeId": "1000000000000002001",
+    "storeName": null,
+    "returnReason": "e2e-return-reason",
+    "returnType": 1,
+    "refundAmount": 4999.0,
+    "status": 0,
+    "sellerComment": null,
+    "evidenceImages": null,
+    "adminHandleResult": null,
+    "createTime": "2026-08-06T18:51:18.6150473",
+    "shipBackTime": null,
+    "refundTime": null
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.id is_not_null</td><td>None</td><td>2085317787869175809</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.returnNo is_not_null</td><td>None</td><td>RT20260806574500</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.orderId is_not_null</td><td>None</td><td>786013478598151</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.status == 0</td><td>0</td><td>0</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.refundAmount &gt; 0</td><td>0</td><td>4999.0</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 55. TC_RETURNS_DISPUTE_NEG_001 - 已通过退货发起争议（负向，期望 208002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/9000000000000000010/dispute</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "reason": "not satisfied",
+  "returnId": 9000000000000000010
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "208002",
+  "message": "退货状态不正确，不允许此操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>208002</td><td>208002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 56. TC_RETURNS_DISPUTE_NOT_FOUND_001 - 买家争议申诉（退货不存在，负向，期望 208001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/999999999999999999/dispute</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "reason": "e2e-dispute-reason"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "208001",
+  "message": "退货记录不存在",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>208001</td><td>208001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 57. TC_RETURNS_DISPUTE_POS_001 - 买家争议申诉（已拒绝退货，正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/9000000000000000045/dispute</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "reason": "e2e-dispute-reason",
+  "returnId": 9000000000000000045
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data is_null</td><td>None</td><td>None</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 58. TC_RETURNS_DISPUTE_REFUNDED_NEG_001 - 买家争议申诉（已退款退货，负向，期望 208002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/9000000000000000046/dispute</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "reason": "e2e-dispute-reason",
+  "returnId": 9000000000000000046
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "208002",
+  "message": "退货状态不正确，不允许此操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>208002</td><td>208002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 59. TC_RETURNS_GET_DETAIL_NEG_001 - 查询不存在的退货详情（期望 208001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/999999999</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "208001",
+  "message": "退货记录不存在",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>208001</td><td>208001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 60. TC_RETURNS_GET_DETAIL_POS_001 - 获取退货详情（正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/9000000000000000043</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "returnId": 9000000000000000043
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "9000000000000000043",
+    "returnNo": "RT20260806000043",
+    "orderId": "9000000000000000033",
+    "orderNo": "TEST000000000033",
+    "userId": "1000000000000000007",
+    "buyerNickname": "小明",
+    "storeId": "1000000000000002001",
+    "storeName": "数码先锋店 / Digital Pioneer Store",
+    "returnReason": "e2e fixture return",
+    "returnType": 1,
+    "refundAmount": 4999.0,
+    "status": 0,
+    "sellerComment": null,
+    "evidenceImages": null,
+    "adminHandleResult": null,
+    "createTime": "2026-08-06T18:51:18",
+    "shipBackTime": null,
+    "refundTime": null
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.returnNo is_not_null</td><td>None</td><td>RT20260806000043</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.orderId is_not_null</td><td>None</td><td>9000000000000000033</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.status == 0</td><td>0</td><td>0</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.refundAmount &gt; 0</td><td>0</td><td>4999.0</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 61. TC_RETURNS_GET_LIST_POS_001 - 买家退货列表（正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "returnId": 9000000000000000044
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "total": "6",
+    "page": 1,
+    "pageSize": 10,
+    "records": [
+      {
+        "id": "2085317787869175809",
+        "returnNo": "RT20260806574500",
+        "orderId": "786013478598151",
+        "orderNo": "TEST013478598151",
+        "userId": "1000000000000000007",
+        "buyerNickname": "小明",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "returnReason": "e2e-return-reason",
+        "returnType": 1,
+        "refundAmount": 4999.0,
+        "status": 0,
+        "sellerComment": null,
+        "evidenceImages": null,
+        "adminHandleResult": null,
+        "createTime": "2026-08-06T18:51:18.615047",
+        "shipBackTime": null,
+        "refundTime": null
+      },
+      {
+        "id": "9000000000000000010",
+        "returnNo": "RT20260806000010",
+        "orderId": "9000000000000000005",
+        "orderNo": "TEST000000000005",
+        "userId": "1000000000000000007",
+        "buyerNickname": "小明",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "returnReason": "e2e fixture return",
+        "returnType": 1,
+        "refundAmount": 4999.0,
+        "status": 1,
+        "sellerComment": null,
+        "evidenceImages": null,
+        "adminHandleResult": null,
+        "createTime": "2026-08-06T18:51:18",
+        "shipBackTime": null,
+        "refundTime": null
+      },
+      {
+        "id": "9000000000000000043",
+        "returnNo": "RT20260806000043",
+        "orderId": "9000000000000000033",
+        "orderNo": "TEST000000000033",
+        "userId": "1000000000000000007",
+        "buyerNickname": "小明",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "returnReason": "e2e fixture return",
+        "returnType": 1,
+        "refundAmount": 4999.0,
+        "status": 0,
+        "sellerComment": null,
+        "evidenceImages": null,
+        "adminHandleResult": null,
+        "createTime": "2026-08-06T18:51:18",
+        "shipBackTime": null,
+        "refundTime": null
+      },
+      {
+        "id": "9000000000000000044",
+        "returnNo": "RT20260806000044",
+        "orderId": "9000000000000000034",
+        "orderNo": "TEST000000000034",
+        "userId": "1000000000000000007",
+        "buyerNickname": "小明",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "returnReason": "e2e fixture return",
+        "returnType": 1,
+        "refundAmount": 4999.0,
+        "status": 0,
+        "sellerComment": null,
+        "evidenceImages": null,
+        "adminHandleResult": null,
+        "createTime": "2026-08-06T18:51:18",
+        "shipBackTime": null,
+        "refundTime": null
+      },
+      {
+        "id": "9000000000000000045",
+        "returnNo": "RT20260806000045",
+        "orderId": "9000000000000000035",
+        "orderNo": "TEST000000000035",
+        "userId": "1000000000000000007",
+        "buyerNickname": "小明",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "returnReason": "e2e fixture return",
+        "returnType": 1,
+        "refundAmount": 4999.0,
+        "status": 7,
+        "sellerComment": "e2e-dispute-reason",
+        "evidenceImages": null,
+        "adminHandleResult": null,
+        "createTime": "2026-08-06T18:51:18",
+        "shipBackTime": null,
+        "refundTime": null
+      },
+      {
+        "id": "9000000000000000046",
+        "returnNo": "RT20260806000046",
+        "orderId": "9000000000000000036",
+        "orderNo": "TEST000000000036",
+        "userId": "1000000000000000007",
+        "buyerNickname": "小明",
+        "storeId": "1000000000000002001",
+        "storeName": "数码先锋店 / Digital Pioneer Store",
+        "returnReason": "e2e fixture return",
+        "returnType": 1,
+        "refundAmount": 4999.0,
+        "status": 6,
+        "sellerComment": null,
+        "evidenceImages": null,
+        "adminHandleResult": null,
+        "createTime": "2026-08-06T18:51:18",
+        "shipBackTime": null,
+        "refundTime": null
+      }
+    ]
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.records.length() &gt;= 1</td><td>1</td><td>6</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.records[0].returnNo is_not_null</td><td>None</td><td>RT20260806574500</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 62. TC_RETURNS_SHIP_BACK_NEG_001 - 待审核退货寄回（负向，期望 208002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/9000000000000000009/ship-back</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "returnId": 9000000000000000009
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "208002",
+  "message": "退货状态不正确，不允许此操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>208002</td><td>208002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 63. TC_RETURNS_SHIP_BACK_NOT_FOUND_001 - 买家退回商品（退货不存在，负向，期望 208001） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/999999999999999999/ship-back</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "208001",
+  "message": "退货记录不存在",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>208001</td><td>208001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 64. TC_RETURNS_SHIP_BACK_POS_001 - 买家退回商品（已通过退货，正向） <span class="tag">P0</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/9000000000000000041/ship-back</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "returnId": 9000000000000000041
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data is_null</td><td>None</td><td>None</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">[PASS] 65. TC_RETURNS_SHIP_BACK_REFUNDED_NEG_001 - 买家退回商品（已退款退货，负向，期望 208002） <span class="tag">P1</span></div>
+<div class="case-detail">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/9000000000000000042/ship-back</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "returnId": 9000000000000000042
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "208002",
+  "message": "退货状态不正确，不允许此操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>208002</td><td>208002</td><td>PASS</td></tr>
+</table>
+</div></div>
+</div></div>
+<div class="section">
+<div class="section-header" onclick="toggle('biz_list')">▼ 业务用例数 <span class="pass">通过 8</span> <span class="fail">失败 1</span> 通过率 88.9%</div>
+<div class="section-body" id="biz_list">
+<div class="case-card case-fail">
+<div class="case-title">1. 跨用户订单详情访问验证</div>
+<div class="case-detail">
+<p><strong>执行链路:</strong> 为 buyer02 造一条已支付订单 → 买家 01 登录 → × 查询他人订单详情（缺陷证据，期望 200003）</p>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_1_1')">PASS Step1. Step_PrepareOrderForBuyer02 - 为 buyer02 造一条已支付订单</div>
+<div class="step-body" id="biz_1_1">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/me</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDgsInVzZXJuYW1lIjoiYnV5ZXIwMiIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDgiLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.FINSPaeDueZm3HOUQurXKCSpe74j7kAt_MP97U1edWk"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000020
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "1000000000000000008",
+    "username": "buyer02",
+    "nickname": "小红",
+    "phone": "13800000008",
+    "email": "buyer02@folimall.com",
+    "avatar": null,
+    "balance": 10000.0,
+    "role": 0,
+    "status": 1,
+    "createTime": "2026-08-06T18:51:00.485257"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_1_2')">PASS Step2. Step_LoginBuyer01 - 买家 01 登录</div>
+<div class="step-body" id="biz_1_2">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "buyer01",
+  "password": "buyer123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzksImV4cCI6MTc4NjA5OTg3OX0.KoYgf40GhLmLeDUqlXkmIvo-p-IDD2hp6dNJ-1QpKj0",
+    "userId": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "role": 0
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzksImV4cCI6MTc4NjA5OTg3OX0.KoYgf40GhLmLeDUqlXkmIvo-p-IDD2hp6dNJ-1QpKj0</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-fail">
+<div class="step-header" onclick="toggle('biz_1_3')">FAIL Step3. Step_GetCrossUserOrder - 查询他人订单详情（缺陷证据，期望 200003）</div>
+<div class="step-body" id="biz_1_3">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000020</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "9000000000000000020",
+    "orderNo": "TEST000000000020",
+    "storeId": "1000000000000002001",
+    "storeName": "数码先锋店 / Digital Pioneer Store",
+    "totalAmount": 4999.0,
+    "status": 1,
+    "receiverName": "Test Buyer",
+    "receiverPhone": "13800000000",
+    "receiverAddress": "Test Address",
+    "createTime": "2026-08-06T18:51:19",
+    "payTime": null,
+    "shipTime": null,
+    "receiveTime": null,
+    "items": [
+      {
+        "id": "9000000000000000021",
+        "productId": "1000000000000003001",
+        "productName": "iPhone 15 Pro Max 256GB",
+        "productImage": "/images/product-01.jpg",
+        "price": 4999.0,
+        "quantity": 1
+      }
+    ]
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-fail"><td>code</td><td>200003</td><td>100000</td><td>FAIL</td></tr>
+</table>
+</div></div>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">2. 删除用户后访问当前用户信息</div>
+<div class="case-detail">
+<p><strong>执行链路:</strong> 创建测试用户（user-fixture） → 测试用户登录 → 删除用户后访问 /me（负向，期望 201004）</p>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_2_1')">PASS Step1. Step_CreateUser - 创建测试用户（user-fixture）</div>
+<div class="step-body" id="biz_2_1">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/categories</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": [
+    {
+      "id": "1000000000000001001",
+      "parentId": "0",
+      "name": "数码电子 / Electronics",
+      "icon": null,
+      "sortOrder": 1,
+      "children": [
+        {
+          "id": "1000000000000001006",
+          "parentId": "1000000000000001001",
+          "name": "手机 / Phones",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001007",
+          "parentId": "1000000000000001001",
+          "name": "电脑 / Computers",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001008",
+          "parentId": "1000000000000001001",
+          "name": "耳机 / Headphones",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        },
+        {
+          "id": "1000000000000001009",
+          "parentId": "1000000000000001001",
+          "name": "相机 / Cameras",
+          "icon": null,
+          "sortOrder": 4,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001002",
+      "parentId": "0",
+      "name": "服装鞋帽 / Clothing &amp; Shoes",
+      "icon": null,
+      "sortOrder": 2,
+      "children": [
+        {
+          "id": "1000000000000001010",
+          "parentId": "1000000000000001002",
+          "name": "男装 / Men's Clothing",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001011",
+          "parentId": "1000000000000001002",
+          "name": "女装 / Women's Clothing",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001012",
+          "parentId": "1000000000000001002",
+          "name": "鞋子 / Shoes",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        },
+        {
+          "id": "1000000000000001013",
+          "parentId": "1000000000000001002",
+          "name": "配饰 / Accessories",
+          "icon": null,
+          "sortOrder": 4,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001003",
+      "parentId": "0",
+      "name": "食品饮料 / Food &amp; Beverages",
+      "icon": null,
+      "sortOrder": 3,
+      "children": [
+        {
+          "id": "1000000000000001014",
+          "parentId": "1000000000000001003",
+          "name": "零食 / Snacks",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001015",
+          "parentId": "1000000000000001003",
+          "name": "饮品 / Beverages",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001016",
+          "parentId": "1000000000000001003",
+          "name": "生鲜 / Fresh Food",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001004",
+      "parentId": "0",
+      "name": "家居生活 / Home &amp; Living",
+      "icon": null,
+      "sortOrder": 4,
+      "children": [
+        {
+          "id": "1000000000000001017",
+          "parentId": "1000000000000001004",
+          "name": "家具 / Furniture",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001018",
+          "parentId": "1000000000000001004",
+          "name": "厨具 / Kitchenware",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001019",
+          "parentId": "1000000000000001004",
+          "name": "收纳 / Storage",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001005",
+      "parentId": "0",
+      "name": "运动户外 / Sports &amp; Outdoors",
+      "icon": null,
+      "sortOrder": 5,
+      "children": [
+        {
+          "id": "1000000000000001020",
+          "parentId": "1000000000000001005",
+          "name": "运动鞋服 / Sportswear",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001021",
+          "parentId": "1000000000000001005",
+          "name": "健身器材 / Fitness Equipment",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001022",
+          "parentId": "1000000000000001005",
+          "name": "户外装备 / Outdoor Gear",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        }
+      ]
+    }
+  ]
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_2_2')">PASS Step2. Step_LoginUser - 测试用户登录</div>
+<div class="step-body" id="biz_2_2">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "e2e_me_deleted",
+  "password": "e2e123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjkwMDAwMDAwMDAwMDAwMDAxMDIsInVzZXJuYW1lIjoiZTJlX21lX2RlbGV0ZWQiLCJzdWIiOiI5MDAwMDAwMDAwMDAwMDAwMTAyIiwiaWF0IjoxNzg2MDEzNDc5LCJleHAiOjE3ODYwOTk4Nzl9.1U7JSu2f8edyLf7M-MYJ0O3zQbaSr6cEhIfeblKCKgg",
+    "userId": "9000000000000000102",
+    "username": "e2e_me_deleted",
+    "nickname": "e2e_me_deleted",
+    "role": 0
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjkwMDAwMDAwMDAwMDAwMDAxMDIsInVzZXJuYW1lIjoiZTJlX21lX2RlbGV0ZWQiLCJzdWIiOiI5MDAwMDAwMDAwMDAwMDAwMTAyIiwiaWF0IjoxNzg2MDEzNDc5LCJleHAiOjE3ODYwOTk4Nzl9.1U7JSu2f8edyLf7M-MYJ0O3zQbaSr6cEhIfeblKCKgg</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_2_3')">PASS Step3. Step_DeleteUserAndMe - 删除用户后访问 /me（负向，期望 201004）</div>
+<div class="step-body" id="biz_2_3">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/me</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjkwMDAwMDAwMDAwMDAwMDAxMDIsInVzZXJuYW1lIjoiZTJlX21lX2RlbGV0ZWQiLCJzdWIiOiI5MDAwMDAwMDAwMDAwMDAwMTAyIiwiaWF0IjoxNzg2MDEzNDc5LCJleHAiOjE3ODYwOTk4Nzl9.1U7JSu2f8edyLf7M-MYJ0O3zQbaSr6cEhIfeblKCKgg"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "201004",
+  "message": "用户不存在",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>201004</td><td>201004</td><td>PASS</td></tr>
+</table>
+</div></div>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">3. 无效订单ID操作验证</div>
+<div class="case-detail">
+<p><strong>执行链路:</strong> 买家登录 → 查询不存在的订单详情 → 取消不存在的订单 → 对不存在的订单确认收货</p>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_3_1')">PASS Step1. Step_LoginBuyer - 买家登录</div>
+<div class="step-body" id="biz_3_1">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "buyer01",
+  "password": "buyer123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzksImV4cCI6MTc4NjA5OTg3OX0.KoYgf40GhLmLeDUqlXkmIvo-p-IDD2hp6dNJ-1QpKj0",
+    "userId": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "role": 0
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzksImV4cCI6MTc4NjA5OTg3OX0.KoYgf40GhLmLeDUqlXkmIvo-p-IDD2hp6dNJ-1QpKj0</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_3_2')">PASS Step2. Step_GetInvalidOrder - 查询不存在的订单详情</div>
+<div class="step-body" id="biz_3_2">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/999999999999999999</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "204001",
+  "message": "订单不存在",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>204001</td><td>204001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_3_3')">PASS Step3. Step_CancelInvalidOrder - 取消不存在的订单</div>
+<div class="step-body" id="biz_3_3">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/999999999999999999/cancel</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "204001",
+  "message": "订单不存在",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>204001</td><td>204001</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_3_4')">PASS Step4. Step_ReceiveInvalidOrder - 对不存在的订单确认收货</div>
+<div class="step-body" id="biz_3_4">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/999999999999999999/receive</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "204001",
+  "message": "订单不存在",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>204001</td><td>204001</td><td>PASS</td></tr>
+</table>
+</div></div>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">4. 标准退货退款流程测试</div>
+<div class="case-detail">
+<p><strong>执行链路:</strong> 买家登录 → 创建退货退款申请 → 卖家登录 → 卖家审批通过 → 买家寄回商品 → 卖家确认收货 → 卖家验货通过（自动退款） → 校验退货已退款</p>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_4_1')">PASS Step1. Step_LoginBuyer - 买家登录</div>
+<div class="step-body" id="biz_4_1">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "buyer01",
+  "password": "buyer123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0ODAsImV4cCI6MTc4NjA5OTg4MH0.b1FLP8wC6spDg_LBpk6ch5OnEnpvmVMB_JMuexjIY3E",
+    "userId": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "role": 0
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0ODAsImV4cCI6MTc4NjA5OTg4MH0.b1FLP8wC6spDg_LBpk6ch5OnEnpvmVMB_JMuexjIY3E</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_4_2')">PASS Step2. Step_CreateReturn - 创建退货退款申请</div>
+<div class="step-body" id="biz_4_2">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "returnReason": "e2e-return-reason",
+  "returnType": 1,
+  "orderId": 786013480513781
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "2085317795976765442",
+    "returnNo": "RT20260806872531",
+    "orderId": "786013480513781",
+    "orderNo": "TEST013480513781",
+    "userId": "1000000000000000007",
+    "buyerNickname": null,
+    "storeId": "1000000000000002001",
+    "storeName": null,
+    "returnReason": "e2e-return-reason",
+    "returnType": 1,
+    "refundAmount": 4999.0,
+    "status": 0,
+    "sellerComment": null,
+    "evidenceImages": null,
+    "adminHandleResult": null,
+    "createTime": "2026-08-06T18:51:20.5492028",
+    "shipBackTime": null,
+    "refundTime": null
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.id is_not_null</td><td>None</td><td>2085317795976765442</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.status == 0</td><td>0</td><td>0</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_4_3')">PASS Step3. Step_LoginSeller - 卖家登录</div>
+<div class="step-body" id="biz_4_3">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "seller01",
+  "password": "seller123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoxLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDIsInVzZXJuYW1lIjoic2VsbGVyMDEiLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzg2MDEzNDgwLCJleHAiOjE3ODYwOTk4ODB9.BvSk3PP0-2H4eyM_dMa0kVqxsuln8md99QHjqBEw1kg",
+    "userId": "1000000000000000002",
+    "username": "seller01",
+    "nickname": "数码达人",
+    "role": 1
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoxLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDIsInVzZXJuYW1lIjoic2VsbGVyMDEiLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzg2MDEzNDgwLCJleHAiOjE3ODYwOTk4ODB9.BvSk3PP0-2H4eyM_dMa0kVqxsuln8md99QHjqBEw1kg</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_4_4')">PASS Step4. Step_Approve - 卖家审批通过</div>
+<div class="step-body" id="biz_4_4">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/seller/returns/#{returnId}/approve</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoxLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDIsInVzZXJuYW1lIjoic2VsbGVyMDEiLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzg2MDEzNDc5LCJleHAiOjE3ODYwOTk4Nzl9.H-aMDl2ydoDP7xddxVA7Sti6CfyMz4b6w6bR_Gg_JNg"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "sellerComment": "approved-ok"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_4_5')">PASS Step5. Step_ShipBack - 买家寄回商品</div>
+<div class="step-body" id="biz_4_5">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/#{returnId}/ship-back</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_4_6')">PASS Step6. Step_ConfirmReceipt - 卖家确认收货</div>
+<div class="step-body" id="biz_4_6">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/seller/returns/#{returnId}/confirm-receipt</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoxLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDIsInVzZXJuYW1lIjoic2VsbGVyMDEiLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzg2MDEzNDc5LCJleHAiOjE3ODYwOTk4Nzl9.H-aMDl2ydoDP7xddxVA7Sti6CfyMz4b6w6bR_Gg_JNg"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_4_7')">PASS Step7. Step_InspectPass - 卖家验货通过（自动退款）</div>
+<div class="step-body" id="biz_4_7">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/seller/returns/#{returnId}/inspect-pass</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoxLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDIsInVzZXJuYW1lIjoic2VsbGVyMDEiLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzg2MDEzNDc5LCJleHAiOjE3ODYwOTk4Nzl9.H-aMDl2ydoDP7xddxVA7Sti6CfyMz4b6w6bR_Gg_JNg"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_4_8')">PASS Step8. Step_Verify - 校验退货已退款</div>
+<div class="step-body" id="biz_4_8">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/#{returnId}</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "2085317795976765442",
+    "returnNo": "RT20260806872531",
+    "orderId": "786013480513781",
+    "orderNo": "TEST013480513781",
+    "userId": "1000000000000000007",
+    "buyerNickname": "小明",
+    "storeId": "1000000000000002001",
+    "storeName": "数码先锋店 / Digital Pioneer Store",
+    "returnReason": "e2e-return-reason",
+    "returnType": 1,
+    "refundAmount": 4999.0,
+    "status": 6,
+    "sellerComment": "approved-ok",
+    "evidenceImages": null,
+    "adminHandleResult": null,
+    "createTime": "2026-08-06T18:51:20.549203",
+    "shipBackTime": "2026-08-06T18:51:20.665983",
+    "refundTime": "2026-08-06T18:51:20.697561"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.status == 6</td><td>6</td><td>6</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.refundTime is_not_null</td><td>None</td><td>2026-08-06T18:51:20.697561</td><td>PASS</td></tr>
+</table>
+</div></div>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">5. 状态不合规操作验证</div>
+<div class="case-detail">
+<p><strong>执行链路:</strong> 买家登录 → 造一条已支付订单 → 取消已支付订单 → 对已支付订单确认收货</p>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_5_1')">PASS Step1. Step_LoginBuyer - 买家登录</div>
+<div class="step-body" id="biz_5_1">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "buyer01",
+  "password": "buyer123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0ODAsImV4cCI6MTc4NjA5OTg4MH0.b1FLP8wC6spDg_LBpk6ch5OnEnpvmVMB_JMuexjIY3E",
+    "userId": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "role": 0
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0ODAsImV4cCI6MTc4NjA5OTg4MH0.b1FLP8wC6spDg_LBpk6ch5OnEnpvmVMB_JMuexjIY3E</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_5_2')">PASS Step2. Step_PreparePaidOrder - 造一条已支付订单</div>
+<div class="step-body" id="biz_5_2">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/me</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "orderId": 9000000000000000040
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "phone": "13800000007",
+    "email": "buyer01@folimall.com",
+    "avatar": null,
+    "balance": 5001.0,
+    "role": 0,
+    "status": 1,
+    "createTime": "2026-08-06T18:51:00.387094"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_5_3')">PASS Step3. Step_CancelPaid - 取消已支付订单</div>
+<div class="step-body" id="biz_5_3">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000040/cancel</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "204002",
+  "message": "订单状态不正确，不允许此操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>204002</td><td>204002</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_5_4')">PASS Step4. Step_ReceivePaid - 对已支付订单确认收货</div>
+<div class="step-body" id="biz_5_4">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/9000000000000000040/receive</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "204002",
+  "message": "订单状态不正确，不允许此操作",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>204002</td><td>204002</td><td>PASS</td></tr>
+</table>
+</div></div>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">6. 禁用账号登录验证</div>
+<div class="case-detail">
+<p><strong>执行链路:</strong> 创建测试用户（user-fixture） → 禁用测试用户（user-fixture set_status=0） → 禁用账号登录（负向，期望 201003）</p>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_6_1')">PASS Step1. Step_CreateUser - 创建测试用户（user-fixture）</div>
+<div class="step-body" id="biz_6_1">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/categories</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": [
+    {
+      "id": "1000000000000001001",
+      "parentId": "0",
+      "name": "数码电子 / Electronics",
+      "icon": null,
+      "sortOrder": 1,
+      "children": [
+        {
+          "id": "1000000000000001006",
+          "parentId": "1000000000000001001",
+          "name": "手机 / Phones",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001007",
+          "parentId": "1000000000000001001",
+          "name": "电脑 / Computers",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001008",
+          "parentId": "1000000000000001001",
+          "name": "耳机 / Headphones",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        },
+        {
+          "id": "1000000000000001009",
+          "parentId": "1000000000000001001",
+          "name": "相机 / Cameras",
+          "icon": null,
+          "sortOrder": 4,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001002",
+      "parentId": "0",
+      "name": "服装鞋帽 / Clothing &amp; Shoes",
+      "icon": null,
+      "sortOrder": 2,
+      "children": [
+        {
+          "id": "1000000000000001010",
+          "parentId": "1000000000000001002",
+          "name": "男装 / Men's Clothing",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001011",
+          "parentId": "1000000000000001002",
+          "name": "女装 / Women's Clothing",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001012",
+          "parentId": "1000000000000001002",
+          "name": "鞋子 / Shoes",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        },
+        {
+          "id": "1000000000000001013",
+          "parentId": "1000000000000001002",
+          "name": "配饰 / Accessories",
+          "icon": null,
+          "sortOrder": 4,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001003",
+      "parentId": "0",
+      "name": "食品饮料 / Food &amp; Beverages",
+      "icon": null,
+      "sortOrder": 3,
+      "children": [
+        {
+          "id": "1000000000000001014",
+          "parentId": "1000000000000001003",
+          "name": "零食 / Snacks",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001015",
+          "parentId": "1000000000000001003",
+          "name": "饮品 / Beverages",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001016",
+          "parentId": "1000000000000001003",
+          "name": "生鲜 / Fresh Food",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001004",
+      "parentId": "0",
+      "name": "家居生活 / Home &amp; Living",
+      "icon": null,
+      "sortOrder": 4,
+      "children": [
+        {
+          "id": "1000000000000001017",
+          "parentId": "1000000000000001004",
+          "name": "家具 / Furniture",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001018",
+          "parentId": "1000000000000001004",
+          "name": "厨具 / Kitchenware",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001019",
+          "parentId": "1000000000000001004",
+          "name": "收纳 / Storage",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001005",
+      "parentId": "0",
+      "name": "运动户外 / Sports &amp; Outdoors",
+      "icon": null,
+      "sortOrder": 5,
+      "children": [
+        {
+          "id": "1000000000000001020",
+          "parentId": "1000000000000001005",
+          "name": "运动鞋服 / Sportswear",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001021",
+          "parentId": "1000000000000001005",
+          "name": "健身器材 / Fitness Equipment",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001022",
+          "parentId": "1000000000000001005",
+          "name": "户外装备 / Outdoor Gear",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        }
+      ]
+    }
+  ]
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_6_2')">PASS Step2. Step_DisableUser - 禁用测试用户（user-fixture set_status=0）</div>
+<div class="step-body" id="biz_6_2">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/categories</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": [
+    {
+      "id": "1000000000000001001",
+      "parentId": "0",
+      "name": "数码电子 / Electronics",
+      "icon": null,
+      "sortOrder": 1,
+      "children": [
+        {
+          "id": "1000000000000001006",
+          "parentId": "1000000000000001001",
+          "name": "手机 / Phones",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001007",
+          "parentId": "1000000000000001001",
+          "name": "电脑 / Computers",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001008",
+          "parentId": "1000000000000001001",
+          "name": "耳机 / Headphones",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        },
+        {
+          "id": "1000000000000001009",
+          "parentId": "1000000000000001001",
+          "name": "相机 / Cameras",
+          "icon": null,
+          "sortOrder": 4,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001002",
+      "parentId": "0",
+      "name": "服装鞋帽 / Clothing &amp; Shoes",
+      "icon": null,
+      "sortOrder": 2,
+      "children": [
+        {
+          "id": "1000000000000001010",
+          "parentId": "1000000000000001002",
+          "name": "男装 / Men's Clothing",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001011",
+          "parentId": "1000000000000001002",
+          "name": "女装 / Women's Clothing",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001012",
+          "parentId": "1000000000000001002",
+          "name": "鞋子 / Shoes",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        },
+        {
+          "id": "1000000000000001013",
+          "parentId": "1000000000000001002",
+          "name": "配饰 / Accessories",
+          "icon": null,
+          "sortOrder": 4,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001003",
+      "parentId": "0",
+      "name": "食品饮料 / Food &amp; Beverages",
+      "icon": null,
+      "sortOrder": 3,
+      "children": [
+        {
+          "id": "1000000000000001014",
+          "parentId": "1000000000000001003",
+          "name": "零食 / Snacks",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001015",
+          "parentId": "1000000000000001003",
+          "name": "饮品 / Beverages",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001016",
+          "parentId": "1000000000000001003",
+          "name": "生鲜 / Fresh Food",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001004",
+      "parentId": "0",
+      "name": "家居生活 / Home &amp; Living",
+      "icon": null,
+      "sortOrder": 4,
+      "children": [
+        {
+          "id": "1000000000000001017",
+          "parentId": "1000000000000001004",
+          "name": "家具 / Furniture",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001018",
+          "parentId": "1000000000000001004",
+          "name": "厨具 / Kitchenware",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001019",
+          "parentId": "1000000000000001004",
+          "name": "收纳 / Storage",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "1000000000000001005",
+      "parentId": "0",
+      "name": "运动户外 / Sports &amp; Outdoors",
+      "icon": null,
+      "sortOrder": 5,
+      "children": [
+        {
+          "id": "1000000000000001020",
+          "parentId": "1000000000000001005",
+          "name": "运动鞋服 / Sportswear",
+          "icon": null,
+          "sortOrder": 1,
+          "children": []
+        },
+        {
+          "id": "1000000000000001021",
+          "parentId": "1000000000000001005",
+          "name": "健身器材 / Fitness Equipment",
+          "icon": null,
+          "sortOrder": 2,
+          "children": []
+        },
+        {
+          "id": "1000000000000001022",
+          "parentId": "1000000000000001005",
+          "name": "户外装备 / Outdoor Gear",
+          "icon": null,
+          "sortOrder": 3,
+          "children": []
+        }
+      ]
+    }
+  ]
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_6_3')">PASS Step3. Step_LoginDisabled - 禁用账号登录（负向，期望 201003）</div>
+<div class="step-body" id="biz_6_3">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "e2e_disabled",
+  "password": "e2e123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "201003",
+  "message": "账号已被禁用",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>201003</td><td>201003</td><td>PASS</td></tr>
+</table>
+</div></div>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">7. 订单生命周期操作验证</div>
+<div class="case-detail">
+<p><strong>执行链路:</strong> 买家登录 → 确保购物车有选中项 → 创建订单 → 卖家登录 → 卖家发货 → 买家确认收货 → 校验订单已完成</p>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_7_1')">PASS Step1. Step_LoginBuyer - 买家登录</div>
+<div class="step-body" id="biz_7_1">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "buyer01",
+  "password": "buyer123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzksImV4cCI6MTc4NjA5OTg3OX0.KoYgf40GhLmLeDUqlXkmIvo-p-IDD2hp6dNJ-1QpKj0",
+    "userId": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "role": 0
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzksImV4cCI6MTc4NjA5OTg3OX0.KoYgf40GhLmLeDUqlXkmIvo-p-IDD2hp6dNJ-1QpKj0</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_7_2')">PASS Step2. Step_EnsureCart - 确保购物车有选中项</div>
+<div class="step-body" id="biz_7_2">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": [
+    {
+      "id": "786013479668541",
+      "productId": "1000000000000003001",
+      "productName": "iPhone 15 Pro Max 256GB",
+      "productImage": "/images/product-01.jpg",
+      "price": 4999.0,
+      "stock": 50,
+      "quantity": 1,
+      "selected": 1
+    }
+  ]
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.length() &gt;= 1</td><td>1</td><td>1</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_7_3')">PASS Step3. Step_CreateOrder - 创建订单</div>
+<div class="step-body" id="biz_7_3">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "receiverName": "张三",
+  "receiverPhone": "13800001111",
+  "receiverAddress": "北京市朝阳区"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": [
+    {
+      "id": "2085317792403218434",
+      "orderNo": "FO20260806484974",
+      "storeId": "1000000000000002001",
+      "storeName": "数码先锋店 / Digital Pioneer Store",
+      "totalAmount": 4999.0,
+      "status": 1,
+      "receiverName": "张三",
+      "receiverPhone": "13800001111",
+      "receiverAddress": "北京市朝阳区",
+      "createTime": "2026-08-06T18:51:19.6975177",
+      "payTime": "2026-08-06T18:51:19.6975177",
+      "shipTime": null,
+      "receiveTime": null,
+      "items": null
+    }
+  ]
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data[0].id is_not_null</td><td>None</td><td>2085317792403218434</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data[0].status == 1</td><td>1</td><td>1</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_7_4')">PASS Step4. Step_LoginSeller - 卖家登录</div>
+<div class="step-body" id="biz_7_4">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "seller01",
+  "password": "seller123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoxLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDIsInVzZXJuYW1lIjoic2VsbGVyMDEiLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzg2MDEzNDc5LCJleHAiOjE3ODYwOTk4Nzl9.H-aMDl2ydoDP7xddxVA7Sti6CfyMz4b6w6bR_Gg_JNg",
+    "userId": "1000000000000000002",
+    "username": "seller01",
+    "nickname": "数码达人",
+    "role": 1
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoxLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDIsInVzZXJuYW1lIjoic2VsbGVyMDEiLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzg2MDEzNDc5LCJleHAiOjE3ODYwOTk4Nzl9.H-aMDl2ydoDP7xddxVA7Sti6CfyMz4b6w6bR_Gg_JNg</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_7_5')">PASS Step5. Step_Ship - 卖家发货</div>
+<div class="step-body" id="biz_7_5">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/seller/orders/#{orderId}/ship</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoxLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDIsInVzZXJuYW1lIjoic2VsbGVyMDEiLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzg2MDEzNDc5LCJleHAiOjE3ODYwOTk4Nzl9.H-aMDl2ydoDP7xddxVA7Sti6CfyMz4b6w6bR_Gg_JNg"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_7_6')">PASS Step6. Step_Receive - 买家确认收货</div>
+<div class="step-body" id="biz_7_6">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/#{orderId}/receive</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_7_7')">PASS Step7. Step_Verify - 校验订单已完成</div>
+<div class="step-body" id="biz_7_7">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders/#{orderId}</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "2085317792403218434",
+    "orderNo": "FO20260806484974",
+    "storeId": "1000000000000002001",
+    "storeName": "数码先锋店 / Digital Pioneer Store",
+    "totalAmount": 4999.0,
+    "status": 4,
+    "receiverName": "张三",
+    "receiverPhone": "13800001111",
+    "receiverAddress": "北京市朝阳区",
+    "createTime": "2026-08-06T18:51:19.697518",
+    "payTime": "2026-08-06T18:51:19.697518",
+    "shipTime": "2026-08-06T18:51:19.897634",
+    "receiveTime": "2026-08-06T18:51:19.91662",
+    "items": [
+      {
+        "id": "2085317792403218435",
+        "productId": "1000000000000003001",
+        "productName": "iPhone 15 Pro Max 256GB",
+        "productImage": "/images/product-01.jpg",
+        "price": 4999.0,
+        "quantity": 1
+      }
+    ]
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.status == 4</td><td>4</td><td>4</td><td>PASS</td></tr>
+</table>
+</div></div>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">8. 购物车为空下单失败验证</div>
+<div class="case-detail">
+<p><strong>执行链路:</strong> 买家登录 → 清空购物车 → 空购物车创建订单（负向）</p>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_8_1')">PASS Step1. Step_LoginBuyer - 买家登录</div>
+<div class="step-body" id="biz_8_1">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "buyer01",
+  "password": "buyer123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzgsImV4cCI6MTc4NjA5OTg3OH0.VMBPqoLjd1Pii8glU_tyw24iGTP8mv7QtScu-01xjVs",
+    "userId": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "role": 0
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzgsImV4cCI6MTc4NjA5OTg3OH0.VMBPqoLjd1Pii8glU_tyw24iGTP8mv7QtScu-01xjVs</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_8_2')">PASS Step2. Step_ClearCart - 清空购物车</div>
+<div class="step-body" id="biz_8_2">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/cart</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": []
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.length() == 0</td><td>0</td><td>0</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_8_3')">PASS Step3. Step_CreateOrder - 空购物车创建订单（负向）</div>
+<div class="step-body" id="biz_8_3">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/orders</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "receiverName": "张三",
+  "receiverPhone": "13800001111",
+  "receiverAddress": "北京市朝阳区"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "207001",
+  "message": "没有选中的商品",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>207001</td><td>207001</td><td>PASS</td></tr>
+</table>
+</div></div>
+</div></div>
+<div class="case-card case-pass">
+<div class="case-title">9. 退货争议仲裁流程测试</div>
+<div class="case-detail">
+<p><strong>执行链路:</strong> 买家登录 → 造一条已拒绝的退货记录 → 买家发起争议申诉 → 管理员登录 → 管理员仲裁同意退款 → 校验退货已退款</p>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_9_1')">PASS Step1. Step_LoginBuyer - 买家登录</div>
+<div class="step-body" id="biz_9_1">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "buyer01",
+  "password": "buyer123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0ODAsImV4cCI6MTc4NjA5OTg4MH0.b1FLP8wC6spDg_LBpk6ch5OnEnpvmVMB_JMuexjIY3E",
+    "userId": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "role": 0
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0ODAsImV4cCI6MTc4NjA5OTg4MH0.b1FLP8wC6spDg_LBpk6ch5OnEnpvmVMB_JMuexjIY3E</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_9_2')">PASS Step2. Step_PrepareRejectedReturn - 造一条已拒绝的退货记录</div>
+<div class="step-body" id="biz_9_2">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/me</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "returnId": 9000000000000000011
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "1000000000000000007",
+    "username": "buyer01",
+    "nickname": "小明",
+    "phone": "13800000007",
+    "email": "buyer01@folimall.com",
+    "avatar": null,
+    "balance": 5001.0,
+    "role": 0,
+    "status": 1,
+    "createTime": "2026-08-06T18:51:00.387094"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_9_3')">PASS Step3. Step_Dispute - 买家发起争议申诉</div>
+<div class="step-body" id="biz_9_3">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/9000000000000000011/dispute</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "reason": "not satisfied with rejection"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_9_4')">PASS Step4. Step_LoginAdmin - 管理员登录</div>
+<div class="step-body" id="biz_9_4">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/auth/login</p>
+<p><strong>Method:</strong> POST</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "username": "admin",
+  "password": "admin123"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoyLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDEsInVzZXJuYW1lIjoiYWRtaW4iLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAxIiwiaWF0IjoxNzg2MDEzNDgwLCJleHAiOjE3ODYwOTk4ODB9.VH_MpvkXgm-K6Hkz_f3wdvgdUQZlunQHnTcLyRAkNXo",
+    "userId": "1000000000000000001",
+    "username": "admin",
+    "nickname": "系统管理员",
+    "role": 2
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.token is_not_null</td><td>None</td><td>eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoyLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDEsInVzZXJuYW1lIjoiYWRtaW4iLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAxIiwiaWF0IjoxNzg2MDEzNDgwLCJleHAiOjE3ODYwOTk4ODB9.VH_MpvkXgm-K6Hkz_f3wdvgdUQZlunQHnTcLyRAkNXo</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_9_5')">PASS Step5. Step_Arbitrate - 管理员仲裁同意退款</div>
+<div class="step-body" id="biz_9_5">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/admin/returns/9000000000000000011/handle-dispute</p>
+<p><strong>Method:</strong> PUT</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoyLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDEsInVzZXJuYW1lIjoiYWRtaW4iLCJzdWIiOiIxMDAwMDAwMDAwMDAwMDAwMDAxIiwiaWF0IjoxNzg2MDEzNDgwLCJleHAiOjE3ODYwOTk4ODB9.VH_MpvkXgm-K6Hkz_f3wdvgdUQZlunQHnTcLyRAkNXo"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{
+  "decision": "refund",
+  "result": "approved-by-admin"
+}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": null
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+</table>
+</div></div>
+<div class="step-card step-pass">
+<div class="step-header" onclick="toggle('biz_9_6')">PASS Step6. Step_Verify - 校验退货已退款</div>
+<div class="step-body" id="biz_9_6">
+<p><strong>AppName:</strong> foliMail</p>
+<p><strong>baseURL:</strong> http://localhost:8080</p>
+<p><strong>URL:</strong> /api/returns/9000000000000000011</p>
+<p><strong>Method:</strong> GET</p>
+<p><strong>Request Headers:</strong></p>
+<pre><code>{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjowLCJ1c2VySWQiOjEwMDAwMDAwMDAwMDAwMDAwMDcsInVzZXJuYW1lIjoiYnV5ZXIwMSIsInN1YiI6IjEwMDAwMDAwMDAwMDAwMDAwMDciLCJpYXQiOjE3ODYwMTM0NzUsImV4cCI6MTc4NjA5OTg3NX0.jeeL5CaOtKLQxvhGdTIzdFvxIikZh82vU0HvDD9W7OA"
+}</code></pre>
+<p><strong>Request Body:</strong></p>
+<pre><code>{}</code></pre>
+<p><strong>Response Body:</strong></p>
+<pre><code>{
+  "code": "100000",
+  "message": "成功",
+  "data": {
+    "id": "9000000000000000011",
+    "returnNo": "RT20260806000011",
+    "orderId": "9000000000000000006",
+    "orderNo": "TEST000000000006",
+    "userId": "1000000000000000007",
+    "buyerNickname": "小明",
+    "storeId": "1000000000000002001",
+    "storeName": "数码先锋店 / Digital Pioneer Store",
+    "returnReason": "e2e fixture return",
+    "returnType": 1,
+    "refundAmount": 4999.0,
+    "status": 6,
+    "sellerComment": "not satisfied with rejection",
+    "evidenceImages": null,
+    "adminHandleResult": "approved-by-admin",
+    "createTime": "2026-08-06T18:51:20",
+    "shipBackTime": null,
+    "refundTime": "2026-08-06T18:51:20.41631"
+  }
+}</code></pre>
+<p><strong>断言结果:</strong></p>
+<table><tr><th>字段</th><th>期望值</th><th>实际值</th><th>结果</th></tr>
+<tr class="assert-pass"><td>status_code</td><td>200</td><td>200</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>code</td><td>100000</td><td>100000</td><td>PASS</td></tr>
+<tr class="assert-pass"><td>$.data.status == 6</td><td>6</td><td>6</td><td>PASS</td></tr>
+</table>
+</div></div>
+</div></div>
+</div></div>
+<script>
+function toggle(id) {
+  var el = document.getElementById(id);
+  if (el) { el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+}
+</script>
+</body>
+</html>

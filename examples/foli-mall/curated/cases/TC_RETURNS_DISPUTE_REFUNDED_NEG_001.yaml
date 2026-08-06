@@ -1,0 +1,23 @@
+case_type: single
+test_id: TC_RETURNS_DISPUTE_REFUNDED_NEG_001
+relevance_id: api_api_returns_id_dispute_put
+tag: P1
+api_name: 买家争议申诉（已退款退货，负向，期望 208002）
+app_name: foliMail
+method: PUT
+url: /api/returns/9000000000000000046/dispute
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body:
+  reason: e2e-dispute-reason
+status_code: 200
+preprocessors:
+  - name: return-fixture
+    config:
+      return_status: 6
+      return_id: 9000000000000000046
+      order_id: 9000000000000000036
+assert_dict:
+  code: '208002'
+remark: 对应 raw 用例 TC_RETURNS_NEG_002（已处理退货争议，修正为 208002）。

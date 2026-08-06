@@ -1,0 +1,18 @@
+case_type: single
+test_id: TC_ORDER_LIST_003
+relevance_id: IF_ORDER_LIST
+api_name: 买家订单列表-页码越界
+app_name: foliMail
+method: GET
+url: /api/orders?page=999&pageSize=10
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+assert_dict:
+  $.code: "100000"
+assert_rules:
+  - "$.data.records.length() == 0"
+tag: P1
+remark: 超界页码应返回空记录

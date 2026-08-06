@@ -1,0 +1,6 @@
+case_type: interfaces
+test_id: IF_ORDER_CANCEL
+api_name: 取消订单
+app_name: foliMail
+method: PUT
+url: /api/orders/{id}/cancel

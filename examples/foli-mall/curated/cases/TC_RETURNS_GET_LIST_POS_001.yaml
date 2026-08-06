@@ -1,0 +1,25 @@
+case_type: single
+test_id: TC_RETURNS_GET_LIST_POS_001
+relevance_id: api_api_returns_get
+tag: P0
+api_name: 买家退货列表（正向）
+app_name: foliMail
+method: GET
+url: /api/returns
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: return-fixture
+    config:
+      return_status: 0
+      return_id: 9000000000000000044
+      order_id: 9000000000000000034
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.records.length() >= 1
+  - $.data.records[0].returnNo is_not_null
+remark: 合并 raw 用例 TC_RETURNS_GET_BUS_002 / POS_005（分页列表）。

@@ -47,7 +47,7 @@ env.yaml
 translate_env.yaml
 flowforge-testing/flowforge.config.yaml
 logs/
-report/
+python/report/
 node_modules/
 .claude/
 flow_forge_schemas.egg-info/

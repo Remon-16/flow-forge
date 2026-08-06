@@ -1,0 +1,18 @@
+case_type: single
+test_id: TC_ADD_CART_NEG_009
+relevance_id: api_api_cart_post
+tag: P1
+api_name: 添加商品到购物车（商品不存在，负向，期望 203001）
+app_name: foliMail
+method: POST
+url: /api/cart
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body:
+  productId: -1
+  quantity: 1
+status_code: 200
+assert_dict:
+  code: '203001'
+remark: 修正：productId 不存在返回 203001（商品不存在），而非 207002。

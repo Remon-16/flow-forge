@@ -1,0 +1,15 @@
+case_type: single
+test_id: TC_GET_USERINFO_NEG_002
+relevance_id: api_api_auth_me_get
+tag: P1
+api_name: 获取当前用户信息（未登录，负向，期望 401 + 200001）
+app_name: foliMail
+method: GET
+url: /api/auth/me
+request_head:
+  Content-Type: application/json
+request_body: {}
+status_code: 401
+assert_dict:
+  code: '200001'
+remark: 修正：缺少 Authorization 头时 JwtInterceptor 返回 HTTP 401 + 200001。

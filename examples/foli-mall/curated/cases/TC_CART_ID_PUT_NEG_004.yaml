@@ -1,0 +1,25 @@
+case_type: single
+test_id: TC_CART_ID_PUT_NEG_004
+relevance_id: api_api_cart_id_put
+tag: P2
+api_name: 更新购物车项数量超库存（缺陷证据）
+app_name: foliMail
+method: PUT
+url: /api/cart/9000000000000000025
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer02}"
+request_body:
+  quantity: 100
+  selected: 1
+status_code: 200
+preprocessors:
+  - name: cart-fixture
+    config:
+      mode: add
+      product_id: 1000000000000003001
+      quantity: 1
+      cart_item_id: 9000000000000000025
+assert_dict:
+  code: '203002'
+remark: "BugEvidence：期望 203002（库存不足）；foli-mall updateCartItem 不校验库存，实测返回 100000。缺陷详情见 docs/foli-mall-bugs-found.md。"

@@ -1,0 +1,22 @@
+case_type: single
+test_id: TC_RETURNS_SHIP_BACK_REFUNDED_NEG_001
+relevance_id: api_api_returns_id_ship_back_put
+tag: P1
+api_name: 买家退回商品（已退款退货，负向，期望 208002）
+app_name: foliMail
+method: PUT
+url: /api/returns/9000000000000000042/ship-back
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: return-fixture
+    config:
+      return_status: 6
+      return_id: 9000000000000000042
+      order_id: 9000000000000000032
+assert_dict:
+  code: '208002'
+remark: 合并 raw 用例 TC_RETURNS_NEG_010（已处理退货寄回，修正为 208002）。

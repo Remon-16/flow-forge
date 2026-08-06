@@ -1,0 +1,17 @@
+case_type: single
+test_id: TC_LOGIN_BOUND_001
+relevance_id: api_api_auth_login_post
+tag: P1
+api_name: 用户登录（不存在用户，负向，期望 201002）
+app_name: foliMail
+method: POST
+url: /api/auth/login
+request_head:
+  Content-Type: application/json
+request_body:
+  username: username20characters
+  password: password20characters
+status_code: 200
+assert_dict:
+  code: '201002'
+remark: 修正：foli-mall 对不存在用户返回 201002（用户名或密码错误），而非 201004。

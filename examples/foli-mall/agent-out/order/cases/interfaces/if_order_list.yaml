@@ -1,0 +1,6 @@
+case_type: interfaces
+test_id: IF_ORDER_LIST
+api_name: 买家订单列表
+app_name: foliMail
+method: GET
+url: /api/orders

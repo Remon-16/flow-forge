@@ -5,179 +5,192 @@
 ![Development Status](https://img.shields.io/badge/status-beta-orange)
 ![Version](https://img.shields.io/badge/version-v0.3.2--beta-blue)
 
-**Feed in requirement docs and API docs, and an AI agent automatically generates test cases; a command-line executor runs them in one shot and produces a test report.** A full API test automation chain from requirements to report — test cases are stored as YAML/Excel for easy Git management and human review, and the executor integrates seamlessly with Jenkins CI/CD.
+**Feed in requirement docs and API docs, let AI generate test cases, and run them with a command-line executor that produces an HTML report.** A full-chain API test automation workflow from requirements to reports — cases are stored as YAML/Excel for easy Git management and human review, and the executor integrates with Jenkins CI/CD.
 
-## What It Does
+## Features
 
-- **AI-generated test cases**: Reads requirement docs (Markdown/PDF/text) plus API docs (OpenAPI/Markdown) and automatically generates single-API and business-flow test cases.
-- **Controllable human review**: The AI-produced test plan is confirmed by a human first (visual annotation supported in Studio) before cases are generated, suppressing AI hallucinations.
-- **Visual editing**: The Studio desktop app batch-edits Excel/YAML cases and graphically edits JSON fields and assertion rules.
-- **Multi-threaded execution**: The executor runs cases concurrently, automatically manages login/session state, supports cross-request parameter passing (tokens, etc.), and provides a two-tier assertion engine.
-- **Self-contained reports**: Produces HTML reports with inline styles and scripts that open directly in a browser; integrates with Jenkins via exit codes.
-- **Flexible formats**: Bidirectional YAML/Excel conversion, plus generation of zero-dependency standalone pytest code.
+- **Two AI case-generation paths**: the `flowforge-testing` skill drives strong agents (Codex / opencode / Claude Code) to generate, validate, execute, and triage cases directly; the `agent/` LangGraph pipeline targets local small-parameter models such as llama.cpp / Ollama. Both paths produce the same YAML/Excel case format.
+- **An automated loop from requirements to reports**: requirement docs (Markdown/PDF/text) + API docs (OpenAPI/Markdown) → test plan (human review) → YAML/Excel cases → execution → self-contained HTML report → exit codes for CI/CD.
+- **Quality mechanisms**: cases are only generated after the test plan is confirmed by a human; API URLs are corrected against the source docs and LLM output counts are validated to suppress hallucinations; `ff_tool validate` performs static checks against the shared schema.
+- **Studio desktop workbench (Windows)**: six features in one place — AI case generation, plan annotation, Excel/YAML visual editing, case execution, and format conversion — no CLI flags to memorize.
+- **Executor & converter**: multi-threaded execution, automatic login/session management, cross-step parameter passing (`inherit`), and a two-tier assertion engine; bidirectional Excel↔YAML conversion and zero-dependency pytest export; extensible processors/plugins.
+- **Bundled examples**: [examples/foli-mall/](./examples/foli-mall/README.en.md) provides runnable cases against an e-commerce playground and shows real output from both generation paths.
 
 ```mermaid
 graph TD
-    REQ[Requirements Doc] --> AGENT[AI Test Case Generation Agent]
-    API[API Documentation] --> AGENT
-    AGENT --> |plan.md| REVIEW[Human Review / Studio Annotation]
-    REVIEW --> |Review Confirmed| AGENT
-    STUDIO --> |Launch Agent| AGENT
-    AGENT --> |YAML/Excel Cases| STUDIO[Studio Visual Editing]
-    STUDIO --> EXEC[Test Executor]
-    AGENT --> |YAML/Excel Cases| EXEC
-    EXEC --> LM[Login/Session Manager]
-    EXEC --> AE[Assertion Engine]
-    EXEC --> |HTML Report| REPORT[Test Report]
-    JENKINS[Jenkins CI/CD] --> |Trigger| EXEC
-    EXEC --> |Exit Code| JENKINS
+    REQ[Requirements Doc] --> PA[Path A: strong agent + flowforge-testing skill]
+    API[API Documentation] --> PA
+    REQ --> PB[Path B: agent/ LangGraph weak-model pipeline]
+    API --> PB
+    PA --> |test plan + human review| CASES[YAML / Excel cases]
+    PB --> |test plan + human review| CASES
+    CASES --> STUDIO[Studio visual editing / annotation]
+    STUDIO --> EXEC[Executor]
+    CASES --> EXEC
+    EXEC --> REPORT[HTML report]
+    EXEC --> |exit codes 0/1/2| CI[Jenkins CI/CD]
 ```
 
-## Recommended: Flow Forge Studio (GUI)
+## Path A — Generate cases with a strong agent + skill (recommended)
 
-**The Studio desktop app covers all 6 features in one place — complete the entire workflow without memorizing CLI commands.**
+For users working with strong agents such as Codex / opencode / Claude Code. [flowforge-testing](./flowforge-testing/README.en.md) distills the full workflow — multi-document analysis → test plan → YAML generation → schema validation → execution → triage → revision — into a skill. The agent follows the instructions in `SKILL.md` and only calls the `python/` executor and converter when determinism is needed, avoiding the chunking and compression overhead designed for weak models.
 
-### Workflow: Generate → Edit → Execute & Convert
+### Quick start
 
-```text
-① Generate                ② Edit                    ③ Execute & Convert
-┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-│  AI Agent     │ ───▶ │  Excel Editor │ ───▶ │  Executor     │
-│  Annotator    │      │  YAML Editor  │      │  Converter    │
-└──────────────┘      └──────────────┘      └──────────────┘
-```
+1. Install the skill into your agent (Codex example):
 
-### 🏆 The Most Recommended Approach
+   ```bash
+   # copy or symlink into the user-level skills directory (recommended, auto-discovered)
+   ln -s <repo-root>/flowforge-testing ~/.codex/skills/flowforge-testing
+   ```
 
-**Edit in Excel, then convert to YAML for version control.** This is the best practice balancing efficiency and traceability:
+   Alternatively, point to it directly in a session: ask the agent to read `<repo-root>/flowforge-testing/SKILL.md` and start working.
 
-1. **AI generates Excel**: Configure requirement docs and API docs in Studio's "AI Case Generator", launch the agent to auto-generate test cases. Review and annotate the test plan before generating.
-2. **Batch-edit in Excel**: Use the Excel Editor to quickly browse, sort, and batch-modify tags, parameters, and assertions. The spreadsheet UI is ideal for mass editing.
-3. **Convert to YAML for git diff**: Use the Converter to transform Excel into YAML (one file per case), commit file-by-file to Git. Code review diffs are crystal clear, making every change traceable.
-4. **Run with Executor**: Execute YAML (or Excel directly) in the Case Executor to generate HTML reports.
+2. Create the config file and fill it in (`language` / `mode` / Python environment):
 
-> **💡 Why Excel → YAML?** Excel excels at batch editing, YAML excels at diffing. Use each where it shines: Excel for editing, YAML for commits. When you need standalone tests, use `yaml2pytest` / `excel2pytest` to produce zero-dependency pytest code.
+   ```bash
+   cp flowforge-testing/flowforge.config.yaml.example flowforge-testing/flowforge.config.yaml
+   ```
 
-### 🤖 Auto Mode After Debugging
+3. Describe the task in the session, e.g. "Use the flowforge-testing skill to generate test cases from `docs/req.md` and `docs/api.yaml`, then execute them." The agent will: produce a test plan (plan mode by default, human review first) → generate YAML cases → run static validation → execute → report results with triage.
 
-Once your Skills (business rules) and plugins are debugged, use `--auto` to skip human review — ideal for overnight batch generation or CI/CD:
+4. You can also validate and execute manually (the agent calls the same commands):
+
+   ```bash
+   python flowforge-testing/scripts/ff_tool.py validate --yamlDir <cases-dir>
+   python flowforge-testing/scripts/ff_tool.py execute --yamlDir <cases-dir> --envName local
+   ```
+
+### Capabilities
+
+- **Generate**: requirement/API docs (multiple files supported) + table structures/business rules → plan (default) → YAML cases.
+- **Modify**: requirement/API changes + existing cases → diff analysis → add/update/delete → validate and execute.
+- **Validate**: static checks against `shared/schemas` (required fields, assertions, inherit, processor configs).
+- **Execute & triage**: runs the `python/` executor and distinguishes "case bug / business bug / environment issue".
+- **Convert**: YAML ↔ Excel (on demand).
+- **Two modes**: plan (default, plan confirmation first) / auto (unattended run).
+
+The generated YAML cases can be opened and edited directly in [Studio](./studio/README.en.md).
+
+## Path B — Weak-model LangGraph pipeline
+
+For users who only have local small-parameter models (llama.cpp / Ollama) or care about data privacy and calling costs. [agent/](./agent/README.en.md) is a LangGraph-based multi-agent pipeline designed for weak models: English prompts, document chunking, context compression, batched generation, and human review, with resume support for interrupted runs.
+
+### Quick start
 
 ```bash
 cd agent
+pip install -r requirements.txt
+pip install -e ../shared/py          # required on first use
+cp env.example.yaml env.yaml         # fill in api_key / model / base_url (any OpenAI-compatible API)
+
+python main.py --requirement docs/req.md --api docs/api.yaml
+# Review the test plan: y approve / n text feedback / r revise via annotation file
+# After approval, cases are generated to ./output_<timestamp>/
+```
+
+Once everything is debugged, use `--auto` to skip human review — suitable for overnight batch generation:
+
+```bash
 python main.py --requirement docs/req.md --api docs/api.yaml --auto
 ```
 
-### 💻 Pure CLI (SSH / CI/CD)
+The two paths can be chained: draft cases with a weak model first, then have a strong agent revise them with flowforge-testing's modify mode.
 
-If you prefer the command line or operate over SSH on a server, full CLI workflow is also supported:
+## Which path to choose
 
-```bash
-cd agent
-python main.py --requirement docs/req.md --api docs/api.yaml  # AI generation + human review
-cd ../python
-python main.py --yamlDir ../agent/output --envName local       # Executor run
-```
+| Path | Best for | How it works | Output | Docs |
+|------|----------|--------------|--------|------|
+| **Path A: strong agent + skill** | Users of Codex / opencode / Claude Code who want efficiency and quality | The skill turns the workflow into instructions that drive the executor and converter directly | Test plan + YAML cases + validate/execute/triage | [flowforge-testing/README.en.md](./flowforge-testing/README.en.md) |
+| **Path B: weak-model pipeline** | Local small models, offline / privacy / cost-sensitive scenarios | LangGraph multi-agent + chunking/compression/human review | YAML cases (Excel optional) | [agent/README.en.md](./agent/README.en.md) |
 
-> **Quick editor actions**: In the Excel / YAML Editor, use the `▶ Run` and `⟳ Convert` split buttons in the top-right toolbar to execute or convert the current file directly — no need to switch views, ideal for single-file debugging.
+Both paths produce the same case format, so they are interchangeable and chainable; everything after generation (editing, execution, reports, CI) is identical.
 
-### Studio Installation
+## Flow Forge Studio (GUI workbench)
+
+Studio is a Windows desktop app (Vue 3 + Tauri 2) that puts "generate → edit → execute & convert" into a single interface with no CLI flags to memorize. Cases from either path can be opened and edited here.
+
+![Flow Forge Studio home page](./studio/docs/images/studio_main_en.png)
+
+| Entry | Description |
+|-------|-------------|
+| **AI Case Generator** | Configure requirement/API docs and launch the agent, with real-time logs and plan review |
+| **Plan Annotator** | Add annotations on the rendered test plan for the agent to revise |
+| **Excel Editor** | Batch-edit API definitions / single-API cases / business flows in a spreadsheet UI |
+| **YAML Editor** | Form-based editing with a raw-YAML split view — one file per case, ideal for git diff |
+| **Case Executor** | Run cases and generate HTML reports, with multi-environment switching and multi-threaded execution |
+| **Case Converter** | Convert Excel ↔ YAML and export pytest, with batch conversion |
+
+### Recommended workflow: edit in Excel → diff in YAML
+
+1. Launch AI generation in Studio (or open cases produced by either path);
+2. Batch-adjust tags, parameters, and assertions in the Excel editor;
+3. Convert to YAML (one file per case) and commit file-by-file to Git so every change is obvious in review;
+4. Run the cases in the executor and generate an HTML report.
+
+> Excel is ideal for batch editing and YAML for diffing — use each where it shines. For standalone tests, use `yaml2pytest` / `excel2pytest` to generate zero-dependency pytest code. The editors also provide `▶ Run` / `⟳ Convert` quick buttons for single-file debugging.
+
+### Installation and platform compatibility
 
 <!-- RELEASE_MSI -->
-> 🚧 **MSI installer coming soon**: The installer will be published as a [GitHub Release](https://github.com/your-org/flow-forge/releases) asset. Stay tuned.
+> **Download the installer**: the Windows installer (MSI) is published as a [GitHub Release](https://github.com/Remon-16/flow-forge/releases) (currently v0.3.2-beta). You can also build from source.
 <!-- /RELEASE_MSI -->
-
-To build from source:
 
 ```bash
 cd studio
 npm install
 npm run dev          # development mode
-# or
-npm run build        # production → src-tauri/target/release/
+npm run build        # production build → src-tauri/target/release/
 ```
 
-### Platform Compatibility
+**Windows only**: Studio's process management relies on the Windows Job Object mechanism (`KILL_ON_JOB_CLOSE`) to guarantee automatic child-process termination — a Windows kernel feature with no equivalent elsewhere. Linux/macOS users should use the cross-platform [CLI](./python/README.en.md) to run agent / executor / converter tasks.
 
-**Flow Forge Studio is Windows-only.** Studio's process management relies on the Windows Job Object mechanism (`KILL_ON_JOB_CLOSE`) to guarantee automatic child process termination. This is a Windows kernel feature with no equivalent on other platforms.
+## Executor & converter (python/)
 
-- **Windows**: ✅ The only supported platform. All features — automatic child process termination (Job Object), real-time log output, full process tree cleanup — are fully functional.
-- **Linux / macOS**: ❌ Not supported. Studio cannot be compiled as a Linux/macOS executable and should not be run on these platforms.
+`python/` provides cross-platform command-line executor and converter tools — the common "downstream" of both paths:
 
-> **Non-Windows users should use the [CLI](python/README.en.md) directly to execute agent / executor / converter tasks.** The CLI tools are cross-platform and work on Windows, Linux, and macOS.
+- **Execute**: YAML directory or Excel file → multi-threaded run → self-contained HTML report; automatic login/session management, cross-step parameter passing (`inherit`), and a two-tier assertion engine (`assert_dict` / `assert_rules`).
+- **CI/CD**: results are reported via exit codes (`0` = all passed, `1` = failures present, `2` = config/parse error) and integrate directly with Jenkins.
+- **Convert**: `excel2yaml` / `yaml2excel` / `yaml2pytest` / `excel2pytest`.
+- **Extend**: pre/post processors (HMAC signing, SQL cleanup, DB fixtures, etc.) with plugin base classes for database / Redis / MQ / Kafka / Pulsar / RocketMQ.
 
-### Six Feature Entries
+```bash
+cd python
+python main.py --yamlDir <cases-dir> --envName local
+# Report is written to python/report/, open it directly in a browser
+```
 
-| Entry | Description |
-| ------ | ------ |
-| **AI Case Generator** | Configure and run the AI agent to generate test cases from requirement and API docs, with real-time logs and plan review |
-| **Plan Annotator** | Add annotations directly on the rendered test plan; annotations can be used by the AI for plan revision |
-| **Excel Editor** | Batch-edit .xlsx case files in a spreadsheet UI, covering API definitions, single-API cases, and business-flow cases |
-| **YAML Editor** | Form-based structured editing with a tree-directory browser — one case per file, ideal for git diff |
-| **Case Executor** | Run test cases and generate HTML reports, with multi-environment switching and multi-threaded execution |
-| **Case Converter** | Convert Excel ↔ YAML bidirectionally + export to pytest, with batch conversion support |
+## Example cases
 
-## The Three Sub-projects
+[examples/foli-mall/](./examples/foli-mall/README.en.md) uses the foli-mall e-commerce playground and shows real output from both paths, in the order agent-out → curated → raw:
 
-| Sub-project | Purpose | Quick Access |
-| -------- | ------ | ---------- |
-| **[studio/](./studio/README.en.md)** | Flow Forge Studio desktop app: visual case editing, plan annotation, GUI agent/executor/converter launcher | [Docs →](./studio/README.en.md) |
-| **[agent/](./agent/README.en.md)** | AI test-case generation agent: requirements + API docs → test plan (human review) → YAML/Excel cases | [Docs →](./agent/README.en.md) |
-| **[python/](./python/README.en.md)** | API test executor + format converter: run YAML/Excel cases → HTML report; Excel↔YAML bidirectional, export to pytest | [Docs →](./python/README.en.md) |
-| **[flowforge-testing/](./flowforge-testing/README.en.md)** | Strong-model skill: packages the generate/modify/validate/execute/triage workflow as a skill loadable by Codex, opencode and Claude Code | [Docs →](./flowforge-testing/README.en.md) |
+- **agent-out/**: cases generated by the flowforge-testing skill with a strong agent (test plan + YAML cases + execution report).
+- **curated/**: runnable cases reworked from a weak-model first draft (YAML + environment config), ready to run as-is.
+- **raw/**: unmodified raw output from a weak model (Qwen3-8B-Q4_K_M) as Excel files, for comparing the full "AI-generated → corrected" journey.
 
-The agent, python, and studio ends communicate through **YAML files** as the primary contract (Excel remains compatible) — whatever format the agent generates, the executor parses. Users are free to choose: AI auto-generation, manual authoring, or visual editing in Studio.
+Companion docs include the weak-model case modification record, the database fixture plugin guide, and the record of bugs found during testing.
 
-The `shared/` directory holds cross-language shared schemas (column definitions, field mappings, operators, etc.), keeping field definitions consistent across the agent, python, and studio ends.
+## Project layout
 
-## Usage by Model Strength
+| Sub-project | Purpose |
+|-------------|---------|
+| [studio/](./studio/README.en.md) | Windows desktop workbench: visual editing, plan annotation, GUI launcher for agent/executor/converter |
+| [agent/](./agent/README.en.md) | Weak-model LangGraph pipeline: requirements + API docs → test plan (human review) → YAML/Excel cases |
+| [python/](./python/README.en.md) | Executor + converter: run cases → HTML report; Excel↔YAML, pytest export |
+| [flowforge-testing/](./flowforge-testing/README.en.md) | Strong-agent skill: generate/modify/validate/execute/triage workflow loadable by Codex, opencode, and Claude Code |
+| [shared/](./shared/schemas/README.en.md) | Cross-language shared schemas (column definitions, field mappings, operators) that keep all ends consistent |
 
-Flow Forge offers two AI case-generation paths; choose by model strength:
+The agent, python, and studio ends communicate through **YAML files** as the primary contract (Excel remains compatible) — whatever format the agent generates, the executor parses. Users are free to choose AI generation, manual authoring, or visual editing in Studio.
 
-- **Strong models (cloud models such as GPT / Claude / DeepSeek)**: use the
-  [flowforge-testing](./flowforge-testing/README.en.md) skill with a ReAct
-  agent (Codex / opencode / Claude Code). The skill turns generation,
-  validation, execution, triage and modification into concrete instructions
-  that drive the `python/` executor and converter directly, avoiding the
-  weak-model pipeline's chunking and compression overhead for better token
-  efficiency.
-- **Weak models (local small-parameter models such as llama.cpp / Ollama)**:
-  use the [agent/](./agent/README.en.md) LangGraph pipeline — English
-  prompts, document chunking, context compression and human review are
-  designed for weak models. Alternatively, generate an initial draft with a
-  weak model and have it revised by a strong model + ReAct agent using the
-  modify mode of [flowforge-testing](./flowforge-testing/README.en.md).
+## Plugin & extension mechanism
 
-## CI/CD Integration (Jenkins)
+| Module | Extension point | Description |
+|--------|-----------------|-------------|
+| [`python/processors/`](./python/docs/processors-and-report.en.md#pre-processors--post-processors) | PreProcessor / PostProcessor | Logic before and after requests (HMAC signing, SQL cleanup, path parameters, etc.) |
+| [`agent/plugins/`](./agent/docs/plugins-and-skills.en.md) | CaseAttributeGenerator | Automatically enrich cases after generation (data filling, assertion generation, etc.) |
+| `studio/` | Agent Runner / Editor Toolbar / processor fields | Launch the agent from the GUI, run/convert from the editor, edit processor configs visually |
 
-The executor is a pure command-line tool that reports results through exit codes (`0` = all passed, `1` = failures present, `2` = config/parse error), so it can be integrated directly into a Jenkins pipeline.
-
-## Anti-Hallucination & Quality Control
-
-AI hallucinations are inevitable; Flow Forge controls quality through multiple mechanisms:
-
-- **Human review node**: cases are only generated after the test plan is confirmed by a human.
-- **URL correction and count validation**: API URLs are corrected by comparing against the source document, and the number of LLM output items is automatically validated and retried (see the [agent anti-hallucination doc](./agent/docs/anti-hallucination.en.md)).
-- **Text-only limitation**: only extractable text is processed; binary/scanned files raise an explicit error rather than silently producing empty results.
-
-## Design Philosophy
-
-- **YAML/Excel as contract**: the agent and executor are decoupled, and users freely choose how to generate cases.
-- **Human review**: cases are only generated after the AI plan is confirmed by a human, keeping quality controllable.
-- **CLI & GUI dual mode**: Studio desktop app provides visual operations; CLI is preserved for CI/CD.
-- **Self-contained reports**: HTML reports embed styles and scripts inline, requiring no web server.
-- **Extensible processors/plugins**: users can customize case generation. When executing cases, they can apply custom signatures, insert timestamps, and more.
-
-## Plugin & Extension Mechanism
-
-| Module | Extension Point | Description |
-| ------ | -------- | ------ |
-| [`python/processors/`](./python/docs/processors-and-report.en.md#pre-processors--post-processors) | PreProcessor / PostProcessor | Processing logic before and after requests (HMAC signing, SQL cleanup, path parameters, etc.) |
-| [`agent/plugins/`](./agent/docs/plugins-and-skills.en.md) | CaseAttributeGenerator | Automatically enrich attributes after case generation (data filling, assertion generation, etc.) |
-| `studio/` | Agent Runner | Configure and launch the AI agent from Studio, view real-time logs, and interact with prompts and plan reviews |
-| `studio/` | Editor Toolbar | Execute or convert cases directly from the editor, ideal for single-file debugging |
-| `studio/` | PreProcessors / PostProcessors fields | Visually edit and validate processor configs in the editor |
-
-## Running Tests
+## Tests
 
 ```bash
 # agent/ tests (all LLM calls are mocked, no API costs)
@@ -185,15 +198,20 @@ cd agent && python -m pytest tests/ -v
 
 # python/ tests
 cd python && python -m pytest tests/ -v
+
+# skill tool tests
+python -m pytest flowforge-testing/scripts/tests -v
 ```
 
-## Known Issues
+The release process (building the MSI, tagging, and creating a GitHub Release) is documented in [docs/release.md](./docs/release.md).
 
-### Studio Reports "Process May Have Crashed" When Launching Python Directly (The Task Is Actually Complete)
+## Known issues
 
-**Symptom**: In Studio, when the Python environment is set to "System Python" (or a venv) with an explicit executable path, on Windows systems whose locale uses a non-UTF-8 ANSI code page (e.g., Simplified Chinese), the executor/converter log ends with `OSError: [Errno 22] Invalid argument` and Studio shows "Process exited unexpectedly — may have crashed". The task and the report are actually **already complete**; only the final completion status fails to reach Studio.
+### Studio reports "Process May Have Crashed" when launching Python directly (the task is actually complete)
 
-**Root cause**: Studio reads Python's stdout through a pipe and expects valid UTF-8. When Python is launched directly, its stdout uses the system ANSI code page (GBK on Chinese systems). Once Python writes non-ASCII text to stdout (e.g., the executor's Chinese summary lines), Studio's reader encounters invalid UTF-8, exits, and closes the read end of the pipe. The subsequent write of the final JSON completion line then fails — Windows surfaces a broken pipe as `OSError: [Errno 22] Invalid argument`.
+**Symptom**: In Studio, when the Python environment is set to "System Python" (or a venv) with an explicit executable path, on Windows systems whose locale uses a non-UTF-8 ANSI code page (e.g. Simplified Chinese), the executor/converter log ends with `OSError: [Errno 22] Invalid argument` and Studio shows "Process exited unexpectedly — may have crashed". The task and the report are actually **already complete**; only the final completion status fails to reach Studio.
+
+**Root cause**: Studio reads Python's stdout through a pipe and expects valid UTF-8. When Python is launched directly, its stdout uses the system ANSI code page (GBK on Chinese systems). Once Python writes non-ASCII text to stdout (e.g. the executor's Chinese summary lines), Studio's reader encounters invalid UTF-8, exits, and closes the read end of the pipe. The subsequent write of the final JSON completion line then fails — Windows surfaces a broken pipe as `OSError: [Errno 22] Invalid argument`.
 
 **Workaround (no code changes required)**:
 
@@ -229,13 +247,14 @@ cd python && python -m pytest tests/ -v
 - Windows systems using a UTF-8 locale (e.g., English) are not affected.
 - This issue is unrelated to the test logic; task results and HTML reports are unaffected. Whether it will be addressed at the code level in a future release depends on adoption feedback.
 
-## Technology Stack
+## Technology stack
 
 | Component | Technology |
-| ------ | ------ |
-| Studio Desktop App | Vue 3, Ant Design Vue, Vite, Tauri 2, TypeScript |
-| Test Case Generation Agent | Python 3.12, LangGraph, OpenAI-compatible API, prance (OpenAPI), pymupdf (PDF), context compression |
-| Test Executor and Converter | Python 3.12, requests, openpyxl, pyyaml |
-| Configuration Management | YAML multi-environment config files |
-| Report Output | Self-contained HTML (no external CSS/JS) |
+|-----------|------------|
+| Studio desktop app | Vue 3, Ant Design Vue, Vite, Tauri 2, TypeScript |
+| agent weak-model pipeline | Python 3.12, LangGraph, OpenAI-compatible API, prance (OpenAPI), pymupdf (PDF), context compression |
+| skill tool scripts | Python 3.12 (ff_tool / resolve_python, reusing the python/ executor and converter) |
+| Executor and converter | Python 3.12, requests, openpyxl, pyyaml |
+| Configuration | YAML multi-environment config files |
+| Report output | Self-contained HTML (no external CSS/JS) |
 | CI/CD | Jenkins Pipeline, CLI exit codes |

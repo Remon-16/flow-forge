@@ -77,5 +77,5 @@ Tests incur no LLM API costs (all LLM calls are mocked).
 |------|------|
 | [Configuration & CLI Reference](./docs/configuration.en.md) | All `env.yaml` fields, `translate_env.yaml`, all CLI parameters, the translation tool |
 | [How It Works](./docs/how-it-works.en.md) | The 11-step pipeline architecture, review modes y/n/r, auto mode, context window management & document chunking strategy, directory structure, design philosophy |
-| [Plugin & Skill System](./docs/plugins-and-skills.en.md) | Plugin development and configuration, skill injection, official plugins and built-in skills |
+| [Plugin & Skill System](./docs/plugins-and-skills.en.md) | Plugin development and configuration, skill injection, built-in plugins and built-in skills |
 | [Anti-Hallucination & Error Handling](./docs/anti-hallucination.en.md) | URL correction, count validation, retry strategies (warn/retry/keep) |

@@ -1,0 +1,23 @@
+case_type: single
+test_id: TC_ORDER_RECEIVE_001
+relevance_id: IF_ORDER_RECEIVE
+api_name: 确认收货-已发货订单
+app_name: foliMail
+method: PUT
+url: /api/orders/9000000000000000210/receive
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: order-fixture
+    config:
+      order_status: 2
+      order_id: 9000000000000000210
+assert_dict:
+  $.code: "100000"
+assert_rules:
+  - "$.data is_null"
+tag: P0
+remark: SHIPPED(2) 订单收货成功，直接置为 COMPLETED(4)

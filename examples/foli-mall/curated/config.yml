@@ -1,0 +1,10 @@
+# flow-forge 执行器配置（指向 env-foli-mall.yml）
+scriptType: APITest
+envName: foli-mall
+# 仅在使用 Excel 用例时填写；配合 --yamlDir 运行时此字段不会被使用
+# Only used when running Excel cases; ignored when --yamlDir is provided
+caseFilePath: ./dummy.xlsx
+maxThread: 1
+reportName: foli_mall_demo
+apiMode: all
+lang: zh_CN

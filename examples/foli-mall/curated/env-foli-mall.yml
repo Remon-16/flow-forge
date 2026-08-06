@@ -1,0 +1,47 @@
+# foli-mall 环境配置（flow-forge 执行器）
+foliMail:
+  baseURL: http://localhost:8080
+  loginPath: /api/auth/login
+  loginBody: username,password
+  headTokenName: Authorization
+  resTokenPath: $.data.token
+  admin:
+    id: "1000000000000000001"
+    username: admin
+    password: admin123
+  seller01:
+    id: "1000000000000000002"
+    username: seller01
+    password: seller123
+  buyer01:
+    id: "1000000000000000007"
+    username: buyer01
+    password: buyer123
+  buyer02:
+    id: "1000000000000000008"
+    username: buyer02
+    password: buyer123
+
+processor_configs:
+  order-fixture:
+    db_url: "h2://sa:@localhost:9092/mem:foli_mall;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
+    test_buyer_id: "1000000000000000007"
+    test_store_id: "1000000000000002001"
+    test_product_id: "1000000000000003001"
+  cart-fixture:
+    db_url: "h2://sa:@localhost:9092/mem:foli_mall;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
+    test_buyer_id: "1000000000000000007"
+    test_product_id: "1000000000000003001"
+  return-fixture:
+    db_url: "h2://sa:@localhost:9092/mem:foli_mall;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
+    test_buyer_id: "1000000000000000007"
+    test_store_id: "1000000000000002001"
+    test_product_id: "1000000000000003001"
+  balance-fixture:
+    db_url: "h2://sa:@localhost:9092/mem:foli_mall;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
+    test_buyer_id: "1000000000000000007"
+  user-fixture:
+    db_url: "h2://sa:@localhost:9092/mem:foli_mall;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
+  product-fixture:
+    db_url: "h2://sa:@localhost:9092/mem:foli_mall;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false"
+    test_product_id: "1000000000000003001"

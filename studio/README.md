@@ -15,6 +15,12 @@
 - **查找替换**：Excel 按单元格、YAML 按原始文本，支持大小写/全词/正则，含跨文件全局搜索。
 - **完全兼容执行器**：读写的 Excel/YAML 格式与 [python/](../python/README.md) 执行器完全一致。
 
+## 界面预览
+
+![Flow Forge Studio 首页（中文）](./docs/images/studio_main_chs.png)
+
+首页提供六大功能入口，按流程分组：生成（AI 用例生成 / 计划批注）、编辑（Excel / YAML 编辑器）、执行与转换（用例执行器 / 用例转换器）。更多界面截图见 [功能详解](./docs/features.md)。
+
 ## 快速开始
 
 ```bash

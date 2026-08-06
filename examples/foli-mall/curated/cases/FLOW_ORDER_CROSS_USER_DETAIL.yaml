@@ -1,0 +1,54 @@
+case_type: biz
+sheet_name: 跨用户订单详情访问验证
+api_name: 查询他人订单详情（缺陷证据：缺少属主校验）
+steps:
+  - step_id: Step_PrepareOrderForBuyer02
+    relevance_id: IF_AUTH_ME
+    api_name: 为 buyer02 造一条已支付订单
+    app_name: foliMail
+    method: GET
+    url: /api/auth/me
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer02}"
+    request_body: {}
+    status_code: 200
+    preprocessors:
+      - name: order-fixture
+        config:
+          order_status: 1
+          order_id: 9000000000000000020
+    assert_dict:
+      code: '100000'
+
+  - step_id: Step_LoginBuyer01
+    relevance_id: IF_AUTH_LOGIN
+    api_name: 买家 01 登录
+    app_name: foliMail
+    method: POST
+    url: /api/auth/login
+    request_head:
+      Content-Type: application/json
+    request_body:
+      username: buyer01
+      password: buyer123
+    status_code: 200
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.token is_not_null
+
+  - step_id: Step_GetCrossUserOrder
+    relevance_id: IF_ORDER_DETAIL
+    api_name: 查询他人订单详情（缺陷证据，期望 200003）
+    app_name: foliMail
+    method: GET
+    url: /api/orders/9000000000000000020
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body: {}
+    status_code: 200
+    assert_dict:
+      code: '200003'
+    remark: "BugEvidence：期望 200003（无权执行此操作）；foli-mall getOrderDetail 缺少属主校验，实测返回 100000。缺陷详情见 docs/foli-mall-bugs-found.md。"

@@ -1,0 +1,18 @@
+case_type: single
+test_id: TC_AUTH_REGISTER_004
+relevance_id: IF_AUTH_REGISTER
+api_name: 用户注册-空密码
+app_name: foliMail
+method: POST
+url: /api/auth/register
+request_head:
+  Content-Type: application/json
+request_body:
+  username: reg_cart_0806_pw
+  password: ""
+  nickname: 空密码
+status_code: 400
+assert_dict:
+  $.code: "200001"
+tag: P2
+remark: 空密码触发 @NotBlank 参数校验，返回 HTTP 400 + 200001

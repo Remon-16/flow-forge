@@ -1,0 +1,21 @@
+case_type: single
+test_id: TC_CART_ADD_001
+relevance_id: IF_CART_ADD
+api_name: 添加商品到购物车-默认数量
+app_name: foliMail
+method: POST
+url: /api/cart
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body:
+  productId: 1000000000000003001
+status_code: 200
+preprocessors:
+  - name: cart-fixture
+    config:
+      mode: clear
+assert_dict:
+  $.code: "100000"
+tag: P0
+remark: 未传 quantity 时默认 quantity=1（累加结果由 BF_01 校验）

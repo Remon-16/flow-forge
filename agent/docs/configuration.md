@@ -217,20 +217,21 @@ logging:
 | `--plugin-batch-size N` | 覆盖 `pipeline.plugin_batch_size`（插件处理批次大小）；默认取自 `env.yaml`。注意：这是**插件批次**，非计划分块 |
 | `--max-steps N` | 覆盖 `pipeline.max_steps`（最大智能体步数） |
 | `--max-retries N` | 覆盖 `pipeline.max_retries`（LLM 调用最大重试次数） |
-| `--max-steps-no-progress N` | 覆盖 `pipeline.max_steps_no_progress`（进度无变化最大步数） |
 | `--consecutive-batch-failure-limit N` | 覆盖 `pipeline.consecutive_batch_failure_limit`（连续批次失败上限） |
 | `--skeleton-batch-size N` | 覆盖 `pipeline.skeleton_batch_size`（骨架生成分批大小） |
 | `--plan-single-batch-size N` | 覆盖 `pipeline.plan_single_batch_size`（单接口测试点分组大小） |
 | `--url-doc-match-max-retries N` | 覆盖 `validation.url_doc_match_validation.max_retries`（URL 与文档原文匹配重试上限，0 = 不重试） |
 | `--url-doc-match-strategy {fail,warn,skip}` | 覆盖 URL 纠错耗尽后策略（默认取自 `env.yaml`） |
-| `--case-format-max-retries N` | 覆盖 `validation.case_gen_validation.max_retries`（用例格式校验重试次数，0 = 不重试） |
-| `--validation` / `--no-validation` | 启用/禁用用例格式校验（覆盖 `validation.case_gen_validation.enable`） |
+| `--case-gen-validation-rule RULE` | 覆盖用例生成校验规则，格式 `check:strategy[:failure_action]`（如 `url_check:skip:keep`），可多次指定 |
+| `--case-gen-validation-max-retries N` | 覆盖 `validation.case_gen_validation.max_retries`（用例生成校验重试次数，0 = 不重试） |
 | `--url-doc-match-enabled` / `--no-url-doc-match-enabled` | 启用/禁用 URL 文档匹配校验（覆盖 `validation.url_doc_match_validation.enable`） |
 | `--parse-plan-validation-rule RULE` | 覆盖计划解析校验规则，格式 `check:strategy[:failure_action]`（如 `flow_match:warn:discard`），可多次指定 |
 | `--parse-plan-validation-max-retries N` | 覆盖 `validation.parse_plan_validation.max_retries`（计划解析校验重试次数，0 = 不重试） |
 | `--plugins` / `--no-plugins` | 启用/禁用插件（覆盖 `plugins.enabled`） |
+| `--plugin-module PATH` | 插件模块路径（可重复，覆盖 `plugins.modules`） |
 | `--skills` / `--no-skills` | 启用/禁用技能（覆盖 `skills.enabled`） |
-| `--lang {zh_CN,en_US}` | 覆盖 `agent.lang`（界面语言） |
+| `--skill-agent MAPPING` | Skill 代理映射（可重复，格式 `agent_name:skill1,skill2`，如 `data_filler:foli_mall_data_filling`） |
+| `--lang LANG` | 覆盖 `agent.lang`（界面语言：`zh_CN` / `en_US`，默认取自 `env.yaml`） |
 | `--debug-snapshots` | 保存调试快照（`interfaces.json` + `extracted_texts.json`） |
 | `--debug` | 启用调试日志（完整 LLM I/O 写入 session `debug.log`） |
 | `--env PATH` | 配置文件路径（默认 `env.yaml`） |

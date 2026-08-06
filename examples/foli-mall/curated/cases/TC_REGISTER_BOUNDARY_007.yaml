@@ -1,0 +1,30 @@
+case_type: single
+test_id: TC_REGISTER_BOUNDARY_007
+relevance_id: api_api_auth_register_post
+tag: P2
+api_name: 用户注册（密码最小长度边界，正向）
+app_name: foliMail
+method: POST
+url: /api/auth/register
+request_head:
+  Content-Type: application/json
+request_body:
+  username: testuser
+  password: Pass12
+  nickname: ""
+status_code: 200
+preprocessors:
+  - name: user-fixture
+    config:
+      mode: predelete
+      username: testuser
+postprocessors:
+  - name: user-fixture
+    config:
+      cleanup: true
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.id is_not_null
+  - $.data.username == testuser
+remark: 修正：foli-mall 密码仅校验长度（6-100），6 位密码可注册成功。

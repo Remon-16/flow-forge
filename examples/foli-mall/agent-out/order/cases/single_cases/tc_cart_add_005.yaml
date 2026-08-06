@@ -1,0 +1,29 @@
+case_type: single
+test_id: TC_CART_ADD_005
+relevance_id: IF_CART_ADD
+api_name: 添加商品到购物车-商品下架
+app_name: foliMail
+method: POST
+url: /api/cart
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body:
+  productId: 1000000000000003001
+  quantity: 1
+status_code: 200
+preprocessors:
+  - name: product-fixture
+    config:
+      mode: set_status
+      status: 4
+      product_id: 1000000000000003001
+      cleanup: true
+postprocessors:
+  - name: product-fixture
+    config:
+      cleanup: true
+assert_dict:
+  $.code: "203004"
+tag: P1
+remark: 下架商品加购应返回 203004

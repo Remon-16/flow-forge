@@ -1,0 +1,18 @@
+case_type: single
+test_id: TC_CART_UPDATE_005
+relevance_id: IF_CART_UPDATE
+api_name: 更新购物车项-项不存在
+app_name: foliMail
+method: PUT
+url: /api/cart/999999999999999999
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body:
+  quantity: 2
+  selected: 1
+status_code: 200
+assert_dict:
+  $.code: "207002"
+tag: P1
+remark: 不存在的购物车项应返回 207002

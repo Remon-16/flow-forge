@@ -34,6 +34,8 @@ Click the "AI Case Generator" card on the home page, then fill in the task confi
 - Output format (YAML / Excel / both)
 - Optional: enable auto mode to skip human review
 
+![Agent workflow task configuration](./images/studio_agent_workflow_setting.png)
+
 ### Running & Logs
 
 - After clicking "Launch", the Agent runs as a subprocess, outputting logs to the right-side log panel in real time
@@ -46,6 +48,14 @@ Click the "AI Case Generator" card on the home page, then fill in the task confi
 - When the Agent encounters critical uncertainties (e.g., unknown auth type), a prompt pops up in Studio
 - After the test plan is generated, a plan review drawer opens automatically, allowing you to approve the plan or provide text feedback directly on the rendered plan
 - All interaction uses a JSON protocol over the Agent subprocess
+
+![Resumed at the plan-review node (annotator sidebars closed)](./images/studio_agent_workflow_resume_plan_confirm_node_example.png)
+
+![Resumed at the plan-review node (both annotator sidebars open)](./images/studio_agent_workflow_resume_plan_confirm_node_example2.png)
+
+![Resumed at the plan-review node (annotator closed, entering feedback with n)](./images/studio_agent_workflow_resume_plan_confirm_node_example3_hide_plan.png)
+
+> **Note**: these three screenshots show the "resume from the plan-review node" interaction. The plan data shown comes from an earlier run generated with Qwen3-8B-Q4_K_M and resumed from the review node. 
 
 ### Settings Panel
 
@@ -69,7 +79,7 @@ Run test cases and view HTML reports in Studio.
 - **Input type**: YAML directory / Excel file
 - **Environment**: select from the `env-{name}.yml` list
 
-> **Large integer precision:** JavaScript Number can only safely represent integers in the range -9,007,199,254,740,991 ~ 9,007,199,254,740,991 (about 9×10¹⁵). If you need to configure integers exceeding this range in `env-*.yml` (e.g., 64-bit user IDs), always use YAML string syntax (quoted): `id: "1000000000000000001"`. The Python executor and converter have no such limitation and correctly handle arbitrarily large integers.
+> **Large integer precision:** JavaScript Number can only safely represent integers in the range -9,007,199,254,740,991 ~ 9,007,199,254,740,991 (about 9×10¹⁵). If you need to configure integers exceeding this range in `env-*.yml` (e.g., 64-bit user IDs), use YAML string syntax (quoted): `id: "1000000000000000001"`. The Python executor and converter have no such limitation and correctly handle arbitrarily large integers.
 
 - **Case mode**: single-API / business-flow / all
 - **Thread count**: control concurrent execution
@@ -122,6 +132,8 @@ In the Excel / YAML Editor, the top-right toolbar provides quick-action buttons:
 - Save (Ctrl+S): writes back to the original file path
 - Save As (Ctrl+Alt+S): opens a save dialog to choose a new path
 
+![Excel editor example](./images/excel_edit_example.png)
+
 ### Editing Features
 
 - API definition sheet editing (table form, with add/delete row support)
@@ -155,6 +167,8 @@ Turns JSON fields such as RequestHead, RequestBody, and AssertDict into an inter
 - **Open Directory**: header "Open" → "Open Directory", select a directory containing `.yaml` files, and a file tree (VS Code style) appears on the left
 - **Open File**: header "Open" → "Open File", select a single `.yaml` file directly
 - **File tabs**: open multiple files at once, switch between them via tabs, and click × to close
+
+![YAML editor example](./images/yaml_edit_example.png)
 
 ### Form Editing
 
@@ -193,6 +207,8 @@ Used to add structured annotations to an AI-generated test plan (`plan.md`) for 
 3. Right-click and choose "Add Annotation", then enter your review comment
 4. Annotation record format: line number, selected text, review comment
 5. Annotated text is shown with a yellow highlight and a light-blue numbered badge at the bottom-right corner
+
+![Plan annotator example](./images/studio_plan_example.png)
 
 ### Managing Annotations
 

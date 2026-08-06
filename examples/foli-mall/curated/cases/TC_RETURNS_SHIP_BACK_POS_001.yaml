@@ -1,0 +1,24 @@
+case_type: single
+test_id: TC_RETURNS_SHIP_BACK_POS_001
+relevance_id: api_api_returns_id_ship_back_put
+tag: P0
+api_name: 买家退回商品（已通过退货，正向）
+app_name: foliMail
+method: PUT
+url: /api/returns/9000000000000000041/ship-back
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: return-fixture
+    config:
+      return_status: 1
+      return_id: 9000000000000000041
+      order_id: 9000000000000000031
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data is_null
+remark: 合并 raw 用例 TC_RETURNS_POS_001 / SHIP_BOUND_003 / SHIP_BUS_004 / SHIP_POS_001；寄回后状态变为 BUYER_SHIPPING(3)。

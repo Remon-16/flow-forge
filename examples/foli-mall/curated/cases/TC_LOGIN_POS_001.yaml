@@ -1,0 +1,20 @@
+case_type: single
+test_id: TC_LOGIN_POS_001
+relevance_id: api_api_auth_login_post
+tag: P0
+api_name: 用户登录（admin 正向）
+app_name: foliMail
+method: POST
+url: /api/auth/login
+request_head:
+  Content-Type: application/json
+request_body:
+  username: admin
+  password: admin123
+status_code: 200
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.token is_not_null
+  - $.data.userId is_not_null
+  - $.data.role == 2

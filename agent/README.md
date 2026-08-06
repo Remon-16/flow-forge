@@ -77,5 +77,5 @@ python -m pytest tests/ -v
 |------|------|
 | [配置与命令行参考](./docs/configuration.md) | `env.yaml` 全字段、`translate_env.yaml`、全部 CLI 参数、翻译工具 |
 | [工作原理](./docs/how-it-works.md) | 11 步流水线架构、审核模式 y/n/r、自动模式、上下文窗口管理与文档切分策略、目录结构、设计理念 |
-| [插件与技能系统](./docs/plugins-and-skills.md) | 插件开发与配置、Skill 注入、官方插件与内置技能 |
+| [插件与技能系统](./docs/plugins-and-skills.md) | 插件开发与配置、Skill 注入、内置插件与内置技能 |
 | [反幻觉与错误处理](./docs/anti-hallucination.md) | URL 纠错、数量校验、重试策略（warn/retry/keep） |

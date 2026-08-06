@@ -1,0 +1,17 @@
+case_type: single
+test_id: TC_AUTH_LOGIN_004
+relevance_id: IF_AUTH_LOGIN
+api_name: 用户登录-空用户名
+app_name: foliMail
+method: POST
+url: /api/auth/login
+request_head:
+  Content-Type: application/json
+request_body:
+  username: ""
+  password: Test@123
+status_code: 400
+assert_dict:
+  $.code: "200001"
+tag: P1
+remark: 空用户名触发 @NotBlank 参数校验，返回 HTTP 400 + 200001

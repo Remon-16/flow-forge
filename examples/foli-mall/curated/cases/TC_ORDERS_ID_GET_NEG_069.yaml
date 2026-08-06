@@ -1,0 +1,15 @@
+case_type: single
+test_id: TC_ORDERS_ID_GET_NEG_069
+relevance_id: api_api_orders_id_get
+tag: P1
+api_name: 获取订单详情（订单不存在，负向，期望 204001）
+app_name: foliMail
+method: GET
+url: /api/orders/999999999999999999
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+assert_dict:
+  code: '204001'

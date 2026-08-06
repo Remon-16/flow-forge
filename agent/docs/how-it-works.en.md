@@ -199,7 +199,7 @@ Flow Forge's core strategy for handling large documents is "**user splitting fir
 
 Users can pass multiple files via `--requirement` and `--api`; the system makes one independent LLM call per document, then merges results.
 
-**Why split documents yourself?**
+**Splitting documents yourself is recommended**
 - One document = one independent LLM call, preserving parse quality
 - Avoids context breakage from auto-splitting at arbitrary boundaries
 - Critical for weaker models: smaller per-document context → more focused model → higher quality output
@@ -363,7 +363,7 @@ agent/
 ├── prompts/                     # All prompt modules (English)
 ├── tools/                       # Tool registry (built-in + custom)
 ├── skills/                      # Skill data classes, registry, built-in/custom skills
-├── plugins/                     # Plugin base classes, loader, official plugins
+├── plugins/                     # Plugin base classes, loader, built-in plugins
 │   └── official/                #   data_filling / assertion_generation
 ├── agents/                      # Individual agent implementations (requirement/API/plan/skeleton/batch controller)
 ├── graph/                       # StateGraph workflow and nodes

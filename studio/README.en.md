@@ -15,6 +15,12 @@ A desktop test-case workbench built with Vue 3 + Ant Design Vue + Tauri 2: AI ca
 - **Find and replace**: by cell in Excel and by raw text in YAML, with match-case / whole-word / regex options, including cross-file global search.
 - **Full executor compatibility**: the Excel/YAML formats it reads and writes are identical to those of the [python/](../python/README.en.md) executor.
 
+## UI Preview
+
+![Flow Forge Studio home page](./docs/images/studio_main_en.png)
+
+The home page offers six feature entries grouped by workflow: generation (AI Case Generator / Plan Annotator), editing (Excel / YAML Editor), and execution & conversion (Case Executor / Case Converter). More UI screenshots are in the [Feature Guide](./docs/features.en.md).
+
 ## Quick Start
 
 ```bash

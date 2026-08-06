@@ -1,0 +1,21 @@
+case_type: single
+test_id: TC_ORDER_CANCEL_003
+relevance_id: IF_ORDER_CANCEL
+api_name: 取消订单-已发货订单
+app_name: foliMail
+method: PUT
+url: /api/orders/9000000000000000209/cancel
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: order-fixture
+    config:
+      order_status: 2
+      order_id: 9000000000000000209
+assert_dict:
+  $.code: "204002"
+tag: P1
+remark: 状态机校验：已发货订单不可取消，返回 204002

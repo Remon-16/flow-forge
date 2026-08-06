@@ -1,0 +1,15 @@
+case_type: single
+test_id: TC_AUTH_ME_002
+relevance_id: IF_AUTH_ME
+api_name: 获取当前用户-未登录
+app_name: foliMail
+method: GET
+url: /api/auth/me
+request_head:
+  Content-Type: application/json
+request_body: {}
+status_code: 401
+assert_dict:
+  $.code: "200001"
+tag: P1
+remark: 未携带 token 应返回 HTTP 401 + 200001

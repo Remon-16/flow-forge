@@ -19,7 +19,7 @@ plugins:
     - plugins.official.assertion_generation.AssertionGenerationPlugin
 ```
 
-### 官方插件
+### 内置插件
 
 | 插件 | 作用 | 适用范围 |
 |------|------|----------|
@@ -95,7 +95,7 @@ skills:
       - foli_mall_assertion
     # 主流水线 Agent（按需取消注释）
     # case_generator:
-    #   - boundary_test
+    #   - <your_skill>            # 将自定义技能 YAML 放入 skills/builtin/
 ```
 
 ### 可注入的 Agent
@@ -109,7 +109,6 @@ Skill 可注入到**所有** Agent（含主流水线 Agent 和插件内部 Agent
 
 | Skill 文件 | 位置 | 作用 |
 |-----------|------|------|
-| `boundary_test.yaml` | `skills/builtin/` | 为 `case_generator` 注入边界值测试提示 |
 | `foli_mall_data_filling.yaml` | `plugins/official/skills/` | Foli Mall 项目的数据填充规则 |
 | `db_processors.yaml` | `plugins/official/skills/` | 可用的 DB 前后置处理器列表（用户可按模板扩展） |
 | `redis_processors.yaml` | `plugins/official/skills/` | 可用的 Redis 缓存处理器列表 |

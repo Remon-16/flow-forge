@@ -1,0 +1,28 @@
+case_type: single
+test_id: TC_CART_ID_DELETE_BOUND_003
+relevance_id: api_api_cart_id_delete
+tag: P2
+api_name: 删除最后一个购物车项（边界）
+app_name: foliMail
+method: DELETE
+url: /api/cart/9000000000000000027
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: cart-fixture
+    config:
+      mode: clear
+  - name: cart-fixture
+    config:
+      mode: add
+      product_id: 1000000000000003001
+      quantity: 1
+      cart_item_id: 9000000000000000027
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data is_null
+remark: 边界：先清空再加唯一购物车项，删除后购物车为空（由后续 GET 用例验证）。

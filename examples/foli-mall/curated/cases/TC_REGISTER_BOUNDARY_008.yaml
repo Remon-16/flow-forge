@@ -1,0 +1,29 @@
+case_type: single
+test_id: TC_REGISTER_BOUNDARY_008
+relevance_id: api_api_auth_register_post
+tag: P2
+api_name: 用户注册（空昵称原样保留，边界）
+app_name: foliMail
+method: POST
+url: /api/auth/register
+request_head:
+  Content-Type: application/json
+request_body:
+  username: testuser8
+  password: Test@123
+  nickname: ""
+status_code: 200
+preprocessors:
+  - name: user-fixture
+    config:
+      mode: predelete
+      username: testuser8
+postprocessors:
+  - name: user-fixture
+    config:
+      cleanup: true
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.nickname == ""
+remark: 修正：foli-mall 无默认昵称逻辑，空字符串昵称原样保留（仅 null 时回退为用户名）。
