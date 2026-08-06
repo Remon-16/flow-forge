@@ -7,3 +7,5 @@ from . import order_fixture
 from . import cart_fixture
 from . import return_fixture
 from . import balance_fixture
+from . import user_fixture
+from . import product_fixture

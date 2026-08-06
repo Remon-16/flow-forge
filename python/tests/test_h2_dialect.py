@@ -9,6 +9,25 @@ from sqlalchemy.engine.url import make_url
 from processors.h2_dialect import H2Dialect
 
 
+class TestJvmExitConfig:
+    """验证 DB 用例退出不再阻塞（JPype destroy_jvm=False）。
+    Verify DB-fixture runs no longer block exit (JPype destroy_jvm=False)."""
+
+    def test_import_dbapi_disables_jvm_destroy_on_exit(self):
+        """import_dbapi 后 JPype 退出时不等待 JVM 销毁。
+        After import_dbapi, JPype no longer waits for JVM destruction on exit."""
+        jpype = pytest.importorskip("jpype")
+        H2Dialect.import_dbapi()
+        assert jpype.config.destroy_jvm is False
+
+    def test_dbapi_hook_disables_jvm_destroy_on_exit(self):
+        """1.4 兼容钩子 dbapi() 同样设置退出配置。
+        The 1.4-compat dbapi() hook also applies the exit config."""
+        jpype = pytest.importorskip("jpype")
+        H2Dialect.dbapi()
+        assert jpype.config.destroy_jvm is False
+
+
 class TestCreateConnectArgs:
     """验证 h2:// 连接串到 JDBC 参数的转换。Verify h2:// URL to JDBC args conversion."""
 

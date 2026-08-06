@@ -59,11 +59,12 @@ class BalanceFixturePlugin(BaseDBPlugin):
         from sqlalchemy import text
 
         cfg = self._merge_config(case_config, global_config)
-        current_user = LoginManager.get_current_user()
-        if current_user and "user_id" in current_user:
-            user_id = int(current_user["user_id"])
-        else:
-            user_id = int(cfg.get("test_buyer_id", common.SEED_BUYER_ID))
+        user_id = int(
+            common.resolve_user_id(
+                LoginManager.get_current_user(),
+                cfg.get("test_buyer_id", common.SEED_BUYER_ID),
+            )
+        )
         balance = float(cfg.get("balance", 10000.0))
 
         try:

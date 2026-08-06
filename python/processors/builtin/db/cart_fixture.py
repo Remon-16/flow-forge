@@ -24,6 +24,7 @@ between these two states via the mode option.
           product_id: 1000000000000003001
           quantity: 2
           selected: 1
+          cart_item_id: 9000000000000000021   # 可选：固定购物车项 ID（幂等，add 模式）
 """
 
 import logging
@@ -66,11 +67,12 @@ class CartFixturePlugin(BaseDBPlugin):
         from sqlalchemy import text
 
         cfg = self._merge_config(case_config, global_config)
-        current_user = LoginManager.get_current_user()
-        if current_user and "user_id" in current_user:
-            user_id = int(current_user["user_id"])
-        else:
-            user_id = int(cfg.get("test_buyer_id", common.SEED_BUYER_ID))
+        user_id = int(
+            common.resolve_user_id(
+                LoginManager.get_current_user(),
+                cfg.get("test_buyer_id", common.SEED_BUYER_ID),
+            )
+        )
 
         mode = str(cfg.get("mode", "ensure")).lower()
         product_id = int(cfg.get("product_id", common.SEED_PRODUCT_ID))
@@ -90,33 +92,15 @@ class CartFixturePlugin(BaseDBPlugin):
                         )
                         logger.info(_("cart_fixture.cleared", user=user_id, count=result.rowcount))
                     elif mode == "add":
-                        # 只认未删除行（MyBatis-Plus 逻辑删除约定 is_delete=0）
-                        # Only treat non-deleted rows as existing (MyBatis-Plus logic-delete convention)
-                        rows = conn.execute(
-                            text(
-                                "SELECT id, quantity FROM fm_cart_item "
-                                "WHERE user_id = :uid AND product_id = :pid AND is_delete = 0"
-                            ),
-                            {"uid": user_id, "pid": product_id},
-                        ).fetchall()
-                        if rows:
-                            # 遵循 foli-mall 语义：同商品累加数量 / Follow foli-mall semantics: accumulate quantity
-                            item_id, old_qty = rows[0][0], rows[0][1]
+                        # 固定 ID 模式：幂等先删后插，便于 URL 直接使用字面 ID
+                        # Fixed-ID mode: idempotent delete-then-insert so the URL can use a literal ID
+                        fixed_item_id = int(cfg["cart_item_id"]) if cfg.get("cart_item_id") else None
+                        if fixed_item_id is not None:
                             conn.execute(
-                                text(
-                                    "UPDATE fm_cart_item SET quantity = :qty, selected = :sel, "
-                                    "edit_time = :now, update_time = :now WHERE id = :id"
-                                ),
-                                {"qty": old_qty + quantity, "sel": selected, "now": now, "id": item_id},
+                                text("DELETE FROM fm_cart_item WHERE id = :id"),
+                                {"id": fixed_item_id},
                             )
-                            logger.info(
-                                _("cart_fixture.updated",
-                                  cart_item_id=item_id, quantity=old_qty + quantity, selected=selected)
-                            )
-                            if cfg.get("inject_cart_item_id"):
-                                body["cartItemId"] = item_id
-                        else:
-                            item_id = common.gen_id(offset=1)
+                            item_id = fixed_item_id
                             conn.execute(
                                 text(
                                     "INSERT INTO fm_cart_item (id, user_id, product_id, quantity, selected, is_delete, "
@@ -135,6 +119,53 @@ class CartFixturePlugin(BaseDBPlugin):
                             )
                             if cfg.get("inject_cart_item_id"):
                                 body["cartItemId"] = item_id
+                        else:
+                            # 只认未删除行（MyBatis-Plus 逻辑删除约定 is_delete=0）
+                            # Only treat non-deleted rows as existing (MyBatis-Plus logic-delete convention)
+                            rows = conn.execute(
+                                text(
+                                    "SELECT id, quantity FROM fm_cart_item "
+                                    "WHERE user_id = :uid AND product_id = :pid AND is_delete = 0"
+                                ),
+                                {"uid": user_id, "pid": product_id},
+                            ).fetchall()
+                            if rows:
+                                # 遵循 foli-mall 语义：同商品累加数量
+                                # Follow foli-mall semantics: accumulate quantity
+                                item_id, old_qty = rows[0][0], rows[0][1]
+                                conn.execute(
+                                    text(
+                                        "UPDATE fm_cart_item SET quantity = :qty, selected = :sel, "
+                                        "edit_time = :now, update_time = :now WHERE id = :id"
+                                    ),
+                                    {"qty": old_qty + quantity, "sel": selected, "now": now, "id": item_id},
+                                )
+                                logger.info(
+                                    _("cart_fixture.updated",
+                                      cart_item_id=item_id, quantity=old_qty + quantity, selected=selected)
+                                )
+                                if cfg.get("inject_cart_item_id"):
+                                    body["cartItemId"] = item_id
+                            else:
+                                item_id = common.gen_id(offset=1)
+                                conn.execute(
+                                    text(
+                                        "INSERT INTO fm_cart_item (id, user_id, product_id, quantity, selected, is_delete, "
+                                        "create_time, edit_time, update_time) "
+                                        "VALUES (:id, :uid, :pid, :qty, :sel, 0, :now, :now, :now)"
+                                    ),
+                                    {
+                                        "id": item_id, "uid": user_id, "pid": product_id,
+                                        "qty": quantity, "sel": selected, "now": now,
+                                    },
+                                )
+                                logger.info(
+                                    _("cart_fixture.inserted",
+                                      cart_item_id=item_id, user=user_id,
+                                      product=product_id, quantity=quantity)
+                                )
+                                if cfg.get("inject_cart_item_id"):
+                                    body["cartItemId"] = item_id
                     elif mode == "ensure":
                         count = conn.execute(
                             text(

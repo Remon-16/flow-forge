@@ -23,6 +23,25 @@ from i18n import _
 from processors.h2_support import resolve_jar_path
 
 
+def _disable_jvm_destroy_on_exit() -> None:
+    """禁用 JPype 退出时销毁 JVM，避免 DestroyJavaVM 阻塞进程退出。
+    Disable JVM destruction on exit so DestroyJavaVM does not block process exit.
+
+    通过 JayDeBeApi 启动的 JPype JVM 会在 atexit 钩子中调用 JVM_DestroyJavaVM，
+    在本环境下会无限等待非守护线程结束，导致执行器输出报告后进程不退出（挂尾）。
+    置为 False 后，退出时不再等待 JVM 销毁——JVM 随进程终止，对短生命周期
+    的 CLI 执行器是安全的。
+    The JPype JVM started via JayDeBeApi shuts down through JVM_DestroyJavaVM
+    in an atexit hook, which blocks forever on non-daemon threads in this
+    environment and leaves the executor hanging after the report is written.
+    Setting this to False skips that wait — the JVM dies with the process,
+    which is safe for short-lived CLI executors.
+    """
+    import jpype.config
+
+    jpype.config.destroy_jvm = False
+
+
 class H2Dialect(DefaultDialect):
     """最小 H2 方言：通过 jaydebeapi 连接 org.h2.Driver。"""
 
@@ -38,6 +57,7 @@ class H2Dialect(DefaultDialect):
     def import_dbapi(cls):
         """SQLAlchemy 2.x 方言钩子：返回 DBAPI 模块。
         SQLAlchemy 2.x dialect hook: return the DBAPI module."""
+        _disable_jvm_destroy_on_exit()
         import jaydebeapi
 
         return jaydebeapi
@@ -46,6 +66,7 @@ class H2Dialect(DefaultDialect):
     def dbapi(cls):
         """SQLAlchemy 1.4 方言钩子：返回 DBAPI 模块。
         SQLAlchemy 1.4 dialect hook: return the DBAPI module."""
+        _disable_jvm_destroy_on_exit()
         import jaydebeapi
 
         return jaydebeapi

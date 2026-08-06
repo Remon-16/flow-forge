@@ -115,6 +115,33 @@ class TestOrderFixtureBefore:
             with pytest.raises(DBQueryError):
                 plugin.before_request({}, {}, {}, global_config)
 
+    def test_uses_current_user_with_id_key(self, global_config, _mock_sqlalchemy):
+        """当前用户配置使用 env 惯例的 id 键时应被采用（而非回退默认买家）。"""
+        mock_conn = _mock_conn()
+        with patch(
+            "processors.builtin.db.order_fixture.LoginManager.get_current_user",
+            return_value={"id": 8, "username": "buyer02"},
+        ):
+            with patch.object(BaseDBPlugin, "_get_connection", return_value=mock_conn):
+                plugin = OrderFixturePlugin()
+                plugin.before_request({}, {}, {"order_status": 1}, global_config)
+        # 无固定 ID 时：第一次为 SELECT 商品快照，第二次为 INSERT fm_order
+        insert_params = mock_conn.execute.call_args_list[1][0][1]
+        assert insert_params["user_id"] == 8
+
+    def test_uses_current_user_with_user_id_key(self, global_config, _mock_sqlalchemy):
+        """旧式 user_id 键名同样被支持（回归保护）。"""
+        mock_conn = _mock_conn()
+        with patch(
+            "processors.builtin.db.order_fixture.LoginManager.get_current_user",
+            return_value={"user_id": 9, "username": "buyer03"},
+        ):
+            with patch.object(BaseDBPlugin, "_get_connection", return_value=mock_conn):
+                plugin = OrderFixturePlugin()
+                plugin.before_request({}, {}, {"order_status": 1}, global_config)
+        insert_params = mock_conn.execute.call_args_list[1][0][1]
+        assert insert_params["user_id"] == 9
+
 
 class TestOrderFixtureAfter:
     """验证 after_response 清理逻辑。"""

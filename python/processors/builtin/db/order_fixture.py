@@ -75,11 +75,12 @@ class OrderFixturePlugin(BaseDBPlugin):
 
         # 优先取当前登录用户（#{userParamName} 解析出的 buyer），否则取静态配置
         # Prefer the current logged-in user; fall back to static config
-        current_user = LoginManager.get_current_user()
-        if current_user and "user_id" in current_user:
-            buyer_id = int(current_user["user_id"])
-        else:
-            buyer_id = int(cfg.get("test_buyer_id", common.SEED_BUYER_ID))
+        buyer_id = int(
+            common.resolve_user_id(
+                LoginManager.get_current_user(),
+                cfg.get("test_buyer_id", common.SEED_BUYER_ID),
+            )
+        )
         store_id = int(cfg.get("test_store_id", common.SEED_STORE_ID))
         product_id = int(cfg.get("test_product_id", common.SEED_PRODUCT_ID))
         status = int(cfg.get("order_status", 4))

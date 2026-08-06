@@ -69,11 +69,12 @@ class ReturnFixturePlugin(BaseDBPlugin):
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """创建退货夹具并注入 returnId。Create the return fixture and inject returnId."""
         cfg = self._merge_config(case_config, global_config)
-        current_user = LoginManager.get_current_user()
-        if current_user and "user_id" in current_user:
-            buyer_id = int(current_user["user_id"])
-        else:
-            buyer_id = int(cfg.get("test_buyer_id", common.SEED_BUYER_ID))
+        buyer_id = int(
+            common.resolve_user_id(
+                LoginManager.get_current_user(),
+                cfg.get("test_buyer_id", common.SEED_BUYER_ID),
+            )
+        )
         store_id = int(cfg.get("test_store_id", common.SEED_STORE_ID))
         product_id = int(cfg.get("test_product_id", common.SEED_PRODUCT_ID))
         return_status = int(cfg.get("return_status", 0))

@@ -23,6 +23,23 @@ SEED_STORE_ID = 1000000000000002001   # store1 (Digital Pioneer Store)
 SEED_PRODUCT_ID = 1000000000000003001 # product1 (iPhone 15 Pro Max)
 
 
+def resolve_user_id(current_user: Any, default: Any = None) -> Any:
+    """从登录用户配置中提取用户 ID（兼容 id / user_id 两种键名）。
+    Extract the user id from a logged-in user config (accepts both id and user_id keys).
+
+    env 文件中用户账号通常写作 ``id:``（如 buyer01.id），而部分旧配置使用
+    ``user_id:``；两种都支持，避免插件静默回退到默认买家。
+    Env user accounts usually use ``id:`` (e.g. buyer01.id), while some legacy
+    configs use ``user_id:``; both are accepted so plugins do not silently
+    fall back to the default buyer.
+    """
+    if isinstance(current_user, dict):
+        for key in ("user_id", "id"):
+            if current_user.get(key) is not None:
+                return current_user[key]
+    return default
+
+
 def gen_id(offset: int = 0) -> int:
     """生成与 return-order-db 一致的唯一 ID。
     Generate a unique ID consistent with return-order-db."""
