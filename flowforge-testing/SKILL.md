@@ -67,15 +67,25 @@ mention that `auto` mode is available.
 
 ## 4. Plan Mode Unified Structure
 
-Follow `references/PLAN_TEMPLATE.md` and produce exactly four parts in the
-configured language:
+Follow `references/PLAN_TEMPLATE.md` and produce five parts in the
+configured language (the last one is optional but recommended):
 
 ### 4.1 Business Understanding
 
 Business background, test scope, key business flows, user roles and test
 objectives in 2-3 paragraphs.
 
-### 4.2 Single API Test Points
+### 4.2 Interface Summary
+
+Start with a one-line summary: total interface count, how many require
+login, and how many business-domain groups. Then present one table per
+business domain, one row per interface, with columns: `URL path`, `method`,
+`description`, `login required`, `auth type`, `request parameter summary`,
+`response summary`, and `uncertainties/missing info` (leave blank or write
+"none" when there is none). Keep parameter summaries compact
+(`name: type (required?)`) instead of pasting full JSON.
+
+### 4.3 Single API Test Points
 
 Group interfaces by business domain (for example authentication, orders,
 payments). For each interface list test points of these types: normal,
@@ -83,21 +93,22 @@ invalid parameters, boundary values and business exceptions. Annotate
 middleware dependencies per point (for example "needs Redis cache
 pre-seeded" or "needs a completed order created in the database").
 
-### 4.3 Business Flow Scenarios
+### 4.4 Business Flow Scenarios
 
 Each flow must span at least 2 interfaces. For every flow provide: scenario
 description, step order, data-passing relationships between steps,
 required middleware pre/post processing per step, and one Mermaid sequence
 diagram.
 
-### 4.4 Test Execution Plan (light constraints)
+### 4.5 Test Execution Plan (light constraints, optional)
 
-Environment, execution scope and priorities in brief. Do not over-constrain
-the format.
+Environment, execution scope and priorities in one or two lines. Do not
+over-constrain the format.
 
 Present the plan to the user, accept feedback (add/remove scenarios, adjust
 priorities, correct understanding), and iterate until the user approves.
-Do not generate cases before approval.
+Do not generate cases before approval. The `plan.md` workspace artifact
+follows the same structure in both `plan` and `auto` modes.
 
 ## 5. Case Generation
 
