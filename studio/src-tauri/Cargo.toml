@@ -1,5 +1,5 @@
 [package]
-name = "flow-forge-studio"
+name = "flow-forge-studio-beta"
 version = "0.3.2-beta"
 description = "Flow Forge Studio — Desktop test case workspace"
 authors = ["you"]
