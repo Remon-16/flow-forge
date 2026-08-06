@@ -1,0 +1,30 @@
+case_type: single
+test_id: TC_ORDER_CREATE_002
+relevance_id: IF_ORDER_CREATE
+api_name: 创建订单-收货信息缺省
+app_name: foliMail
+method: POST
+url: /api/orders
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: cart-fixture
+    config:
+      mode: clear
+  - name: balance-fixture
+    config:
+      balance: 10000
+  - name: cart-fixture
+    config:
+      mode: ensure
+      product_id: 1000000000000003001
+      quantity: 1
+assert_dict:
+  $.code: "100000"
+assert_rules:
+  - "$.data[0].status == 1"
+tag: P1
+remark: receiver* 均为可选参数，缺省仍可下单

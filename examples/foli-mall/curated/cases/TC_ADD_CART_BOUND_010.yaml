@@ -1,0 +1,18 @@
+case_type: single
+test_id: TC_ADD_CART_BOUND_010
+relevance_id: api_api_cart_post
+tag: P2
+api_name: 添加商品到购物车（数量超库存，边界）
+app_name: foliMail
+method: POST
+url: /api/cart
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer02}"
+request_body:
+  productId: 1000000000000003001
+  quantity: 1000
+status_code: 200
+assert_dict:
+  code: '100000'
+remark: 边界：foli-mall 加购只校验库存>0，不校验数量是否超库存；库存校验发生在下单时。

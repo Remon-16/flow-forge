@@ -1,6 +1,20 @@
 use serde::Serialize;
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::process::{Command, Stdio};
+use std::thread;
+use tauri::{
+    menu::{MenuBuilder, MenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Emitter, Manager, State, WindowEvent,
+};
+
+mod process_manager;
+mod process_utils;
+mod job_manager;
+use process_manager::{ProcessHandle, ProcessManager};
+use job_manager::JobHandle;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +43,21 @@ fn read_file_bytes(path: String) -> Result<Vec<u8>, String> {
 #[tauri::command]
 fn write_file_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, &data).map_err(|e| e.to_string())
+}
+
+/// 创建目录（递归），替代受 scope 限制的 plugin-fs mkdir。
+/// Create directory recursively, replacing scope-restricted plugin-fs mkdir.
+#[tauri::command]
+fn create_dir(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())
+}
+
+/// 检查文件或目录是否存在（使用 std::path::Path::exists，无 FS scope 限制）。
+/// Check if a file or directory exists (uses std::path::Path::exists, no FS scope restrictions).
+/// 比读取整个文件内容轻量得多 / Much lighter than reading the entire file content.
+#[tauri::command]
+fn path_exists(path: String) -> Result<bool, String> {
+    Ok(std::path::Path::new(&path).exists())
 }
 
 #[tauri::command]
@@ -187,12 +216,432 @@ fn list_dir_all(dir_path: String) -> Result<Vec<FileEntry>, String> {
     walk(Path::new(&dir_path))
 }
 
+// ============================================================================
+// Agent subprocess commands / Agent 子进程命令
+// ============================================================================
+
+#[derive(Clone, Serialize)]
+struct AgentLinePayload {
+    task_id: String,
+    line: String,
+}
+
+/// 通用 Python 子进程启动函数 — 被 spawn_agent / spawn_executor / spawn_converter 复用。
+/// Generic Python process spawner — shared by agent, executor, and converter commands.
+fn _spawn_python_process(
+    app: &AppHandle,
+    state: &ProcessManager,
+    task_id: &str,
+    working_dir: &str,
+    python_exe: &str,
+    pre_args: &[String],
+    args: &[String],
+    stdout_event: &str,
+    stderr_event: &str,
+    allow_non_windows: bool,  // 由前端 ENABLE_NON_WINDOWS_SPAWN feature flag 控制 / controlled by frontend feature flag
+) -> Result<(), String> {
+    // 启动子进程 / Spawn the subprocess
+
+    // 非 Windows 平台守卫：由前端 feature flag 控制，默认禁止，方便后续测试。
+    // Non-Windows guard: controlled by frontend ENABLE_NON_WINDOWS_SPAWN flag; disabled by default for future testing.
+    if cfg!(not(target_os = "windows")) && !allow_non_windows {
+        return Err(
+            "Flow Forge Studio only supports Windows. Non-Windows spawn is disabled. \
+             Set ENABLE_NON_WINDOWS_SPAWN=true to test.".into()
+        );
+    }
+
+    // 构建命令：先添加前置参数（如 conda run -n env python），再添加主参数
+    // Build command: pre_args first (e.g. conda run -n env python), then main args
+    let mut cmd = Command::new(python_exe);
+    cmd.args(pre_args);
+    // Python -u 强制无缓冲 stdout/stderr，与 PYTHONUNBUFFERED 环境变量双重保障
+    // Python -u forces unbuffered stdout/stderr, alongside PYTHONUNBUFFERED env var
+    cmd.arg("-u");
+    cmd.args(args);
+
+    // 跨平台：禁止控制台弹窗 / Cross-platform: suppress console window
+    process_utils::suppress_console_window(&mut cmd);
+
+    // Python 无缓冲输出：防止 CREATE_NO_WINDOW 导致全量缓冲后日志不实时显示
+    // Unbuffered Python I/O: prevent full buffering when no TTY is detected
+    cmd.env("PYTHONUNBUFFERED", "1");
+    // 通知 Python 端使用 JSON stderr 格式（shared/py/flow_forge_logging 模块检测此变量）
+    // Notify Python side to use JSON stderr format (detected by flow_forge_logging)
+    cmd.env("FLOW_FORGE_STUDIO", "1");
+
+    // Unix: 设置进程组，使子进程及其后代在同一组中，便于 kill -9 -PGID 整体终止
+    // Unix: set process group so child + descendants are in one group for tree kill via kill -9 -PGID
+    process_utils::apply_process_group(&mut cmd);
+
+    let mut child = cmd
+        .current_dir(working_dir)
+        .stdout(Stdio::piped())
+        .stdin(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn process: {} (dir={}, exe={})", e, working_dir, python_exe))?;
+
+    let child_pid = child.id();
+    // 进程组 ID = 子进程 PID（process_group(0) 设置子进程为自己的进程组 leader）
+    // PGID = child PID (process_group(0) makes child its own process group leader)
+    let child_pgid = child_pid;
+    // 诊断：记录子进程 spawn 信息，便于排查输出管道问题
+    // Diagnostic: log spawn info to aid output pipeline troubleshooting
+    log::info!("[spawn] task={} pid={} pgid={} exe={} dir={}", task_id, child_pid, child_pgid, python_exe, working_dir);
+
+    // Windows: 为每个子进程创建独立的 Job Object（强制，创建失败则拒绝 spawn）。
+    // Windows: create a per-task Job Object (mandatory — spawn fails if creation fails).
+    // OS 通过 KILL_ON_JOB_CLOSE 强制终止该 Job 内所有进程（含孤儿孙进程）。
+    // OS forcibly terminates all processes in this Job (incl. orphaned grandchildren) via KILL_ON_JOB_CLOSE.
+    let job_handle = JobHandle::new();
+    #[cfg(target_os = "windows")]
+    if job_handle.is_none() {
+        // Job Object 创建失败 → kill 已 spawn 的子进程并拒绝，防止产生无保护孤儿进程
+        // Job Object creation failed → kill spawned child and refuse to prevent unprotected orphans
+        let _ = child.kill();
+        let _ = child.try_wait();
+        return Err("Failed to create Job Object for orphan protection".to_string());
+    }
+    if let Some(ref jh) = job_handle {
+        jh.assign(child_pid);
+    }
+
+    // Unix: fork 守护进程，监控父进程存活状态 / Fork guardian process to monitor parent liveness
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        process_utils::spawn_orphan_guardian(child_pgid)?;
+    }
+
+    let stdin = child.stdin.take()
+        .ok_or_else(|| "Failed to open stdin".to_string())?;
+
+    // stdout 后台读取线程 / stdout background reader thread
+    // 诊断增强：记录每行 trace 日志 + emit 失败告警，便于排查输出丢失问题
+    // Diagnostic enhancement: trace each line + warn on emit failure
+    let stdout = child.stdout.take()
+        .ok_or_else(|| "Failed to open stdout".to_string())?;
+    let app_stdout = app.clone();
+    let tid_stdout = task_id.to_string();
+    let evt_stdout = stdout_event.to_string();
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        let mut count: u64 = 0;
+        for line in reader.lines() {
+            match line {
+                Ok(l) => {
+                    count += 1;
+                    log::trace!("[stdout] task={} line#{}: {}", tid_stdout, count, &l);
+                    if let Err(e) = app_stdout.emit(&evt_stdout,
+                        AgentLinePayload { task_id: tid_stdout.clone(), line: l })
+                    {
+                        log::warn!("[stdout] emit FAILED task={}: {}", tid_stdout, e);
+                    }
+                }
+                Err(e) => {
+                    log::debug!("[stdout] reader end task={} count={} err={}", tid_stdout, count, e);
+                    break;
+                }
+            }
+        }
+        log::debug!("[stdout] reader exited task={} total_lines={}", tid_stdout, count);
+    });
+
+    // stderr 后台读取线程 / stderr background reader thread
+    // 诊断增强：记录每行 trace 日志 + emit 失败告警，便于排查输出丢失问题
+    // Diagnostic enhancement: trace each line + warn on emit failure
+    let stderr = child.stderr.take()
+        .ok_or_else(|| "Failed to open stderr".to_string())?;
+    let app_stderr = app.clone();
+    let tid_stderr = task_id.to_string();
+    let evt_stderr = stderr_event.to_string();
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        let mut count: u64 = 0;
+        for line in reader.lines() {
+            match line {
+                Ok(l) => {
+                    count += 1;
+                    log::trace!("[stderr] task={} line#{}: {}", tid_stderr, count, &l);
+                    if let Err(e) = app_stderr.emit(&evt_stderr,
+                        AgentLinePayload { task_id: tid_stderr.clone(), line: l })
+                    {
+                        log::warn!("[stderr] emit FAILED task={}: {}", tid_stderr, e);
+                    }
+                }
+                Err(e) => {
+                    log::debug!("[stderr] reader end task={} count={} err={}", tid_stderr, count, e);
+                    break;
+                }
+            }
+        }
+        log::debug!("[stderr] reader exited task={} total_lines={}", tid_stderr, count);
+    });
+
+    // 存储进程句柄 / Store process handle
+    state.insert(task_id.to_string(), ProcessHandle { child, stdin, job_handle })?;
+
+    Ok(())
+}
+
+/// 检查是否有 agent 子进程在运行。
+/// Check whether any agent subprocess is running.
+#[tauri::command]
+fn has_running_agents(
+    state: State<'_, ProcessManager>,
+) -> Result<bool, String> {
+    state.has_running()
+}
+
+/// 返回当前 OS 平台标识，用于前端跨平台路径解析。
+/// Returns current OS platform identifier for cross-platform path resolution.
+#[tauri::command]
+fn get_os_platform() -> String {
+    if cfg!(target_os = "windows") { "windows".into() }
+    else if cfg!(target_os = "macos") { "macos".into() }
+    else { "linux".into() }
+}
+
+/// 终止所有子进程并退出应用 — 所有退出路径的统一入口。
+/// Kill all subprocesses and exit — single entry point for all exit paths.
+fn _kill_all_and_exit(state: &ProcessManager, app: &AppHandle) {
+    if let Err(e) = state.kill_all() {
+        log::warn!("[_kill_all_and_exit] kill_all error: {}", e);
+    }
+    app.exit(0);
+}
+
+/// 终止所有 agent 子进程并退出应用。
+/// Kill all agent subprocesses and exit the app.
+#[tauri::command]
+fn force_quit_app(
+    state: State<'_, ProcessManager>,
+    app: AppHandle,
+) -> Result<(), String> {
+    _kill_all_and_exit(&state, &app);
+    Ok(())
+}
+
+#[tauri::command]
+fn spawn_agent(
+    app: AppHandle,
+    state: State<'_, ProcessManager>,
+    task_id: String,
+    working_dir: String,
+    python_exe: String,
+    pre_args: Vec<String>,
+    args: Vec<String>,
+    allow_non_windows: bool,
+) -> Result<(), String> {
+    // 构建完整的命令行参数 / Build full command-line args
+    // argv: [python_exe, ...pre_args, main.py, --studio, ...user_args]
+    let mut full_args: Vec<String> = vec![
+        "main.py".to_string(),
+        "--studio".to_string(),
+    ];
+    full_args.extend(args);
+
+    _spawn_python_process(
+        &app, &state, &task_id, &working_dir, &python_exe,
+        &pre_args, &full_args, "agent-stdout", "agent-stderr",
+        allow_non_windows,
+    )
+}
+
+// ============================================================================
+// Executor subprocess commands / 执行器子进程命令
+// ============================================================================
+
+#[tauri::command]
+fn spawn_executor(
+    app: AppHandle,
+    state: State<'_, ProcessManager>,
+    task_id: String,
+    working_dir: String,
+    python_exe: String,
+    pre_args: Vec<String>,
+    args: Vec<String>,
+    allow_non_windows: bool,
+) -> Result<(), String> {
+    // 执行器直接使用传入的 args，前端负责构建完整的 CLI 参数
+    // Executor uses args as-is; the frontend constructs the full CLI
+    // argv: [python_exe, ...pre_args, main.py, --config, ..., --yamlFiles, ...]
+    _spawn_python_process(
+        &app, &state, &task_id, &working_dir, &python_exe,
+        &pre_args, &args, "executor-stdout", "executor-stderr",
+        allow_non_windows,
+    )
+}
+
+// ============================================================================
+// Converter subprocess commands / 转换器子进程命令
+// ============================================================================
+
+#[tauri::command]
+fn spawn_converter(
+    app: AppHandle,
+    state: State<'_, ProcessManager>,
+    task_id: String,
+    working_dir: String,
+    python_exe: String,
+    pre_args: Vec<String>,
+    args: Vec<String>,
+    allow_non_windows: bool,
+) -> Result<(), String> {
+    // 转换器直接使用传入的 args，前端负责构建完整的 CLI 参数
+    // Converter uses args as-is; the frontend constructs the full CLI
+    // argv: [python_exe, ...pre_args, converter_main.py, excel2yaml, --input, ..., --output, ...]
+    _spawn_python_process(
+        &app, &state, &task_id, &working_dir, &python_exe,
+        &pre_args, &args, "converter-stdout", "converter-stderr",
+        allow_non_windows,
+    )
+}
+
+#[tauri::command]
+fn send_to_agent(
+    state: State<'_, ProcessManager>,
+    task_id: String,
+    command: String,
+) -> Result<(), String> {
+    state.send_command(&task_id, &command)
+}
+
+#[tauri::command]
+fn kill_agent(
+    state: State<'_, ProcessManager>,
+    task_id: String,
+) -> Result<(), String> {
+    state.kill(&task_id)
+}
+
+#[tauri::command]
+fn check_agent_running(
+    state: State<'_, ProcessManager>,
+    task_id: String,
+) -> Result<bool, String> {
+    // 先尝试清理已退出的进程 / First try to clean up exited processes
+    let code = state.cleanup(&task_id)?;
+    match code {
+        Some(c) if c < 0 => Ok(false),  // 未找到 / Not found
+        Some(_) => Ok(false),            // 已退出 / Exited
+        None => Ok(true),                // 仍运行 / Still running
+    }
+}
+
+// ---- 执行器/转换器的 kill/check 复用 ProcessManager，仅注册新命令名 / Executor/converter kill/check reuse ProcessManager ----
+
+#[tauri::command]
+fn kill_executor(
+    state: State<'_, ProcessManager>,
+    task_id: String,
+) -> Result<(), String> {
+    state.kill(&task_id)
+}
+
+#[tauri::command]
+fn kill_converter(
+    state: State<'_, ProcessManager>,
+    task_id: String,
+) -> Result<(), String> {
+    state.kill(&task_id)
+}
+
+#[tauri::command]
+fn check_executor_running(
+    state: State<'_, ProcessManager>,
+    task_id: String,
+) -> Result<bool, String> {
+    let code = state.cleanup(&task_id)?;
+    match code {
+        Some(c) if c < 0 => Ok(false),
+        Some(_) => Ok(false),
+        None => Ok(true),
+    }
+}
+
+#[tauri::command]
+fn check_converter_running(
+    state: State<'_, ProcessManager>,
+    task_id: String,
+) -> Result<bool, String> {
+    let code = state.cleanup(&task_id)?;
+    match code {
+        Some(c) if c < 0 => Ok(false),
+        Some(_) => Ok(false),
+        None => Ok(true),
+    }
+}
+
+// ============================================================================
+// Counter subprocess commands / 计数器子进程命令（诊断用 / diagnostic）
+// ============================================================================
+
+#[tauri::command]
+fn spawn_counter(
+    app: AppHandle,
+    state: State<'_, ProcessManager>,
+    task_id: String,
+    working_dir: String,
+    python_exe: String,
+    pre_args: Vec<String>,
+    args: Vec<String>,
+    allow_non_windows: bool,
+) -> Result<(), String> {
+    // 计数器直接使用传入的 args（含 counter_main.py + --output-dir）
+    // Counter uses args as-is (counter_main.py + --output-dir)
+    // argv: [python_exe, ...pre_args, counter_main.py, --output-dir, ...]
+    _spawn_python_process(
+        &app, &state, &task_id, &working_dir, &python_exe,
+        &pre_args, &args, "counter-stdout", "counter-stderr",
+        allow_non_windows,
+    )
+}
+
+#[tauri::command]
+fn kill_counter(
+    state: State<'_, ProcessManager>,
+    task_id: String,
+) -> Result<(), String> {
+    state.kill(&task_id)
+}
+
+#[tauri::command]
+fn check_counter_running(
+    state: State<'_, ProcessManager>,
+    task_id: String,
+) -> Result<bool, String> {
+    let code = state.cleanup(&task_id)?;
+    match code {
+        Some(c) if c < 0 => Ok(false),  // 未找到 / Not found
+        Some(_) => Ok(false),            // 已退出 / Exited
+        None => Ok(true),                // 仍运行 / Still running
+    }
+}
+
+// ============================================================================
+// App entry point / 应用入口
+// ============================================================================
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(process_manager::ProcessManager::new())
         .setup(|app| {
+            // 非 Windows 平台守卫：弹窗告警后退出，防止用户在无 Job Object 保护的环境下运行子进程。
+            // Non-Windows guard: show warning dialog and exit to prevent running without Job Object.
+            if cfg!(not(target_os = "windows")) {
+                use tauri_plugin_dialog::DialogExt;
+                app.handle().dialog()
+                    .message("Flow Forge Studio 仅支持 Windows 平台。\n\nFlow Forge Studio is Windows-only.\n\n请使用命令行工具代替：\nPlease use the CLI tools instead:\n  cd agent && python main.py ...\n  cd python && python main.py ...")
+                    .title("平台不支持 / Platform Not Supported")
+                    .show(|_| {
+                        std::process::exit(1);
+                    });
+            }
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -200,6 +649,68 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // 系统托盘 / System tray
+            let show_item = MenuItem::with_id(app, "show", "显示 Flow Forge", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let tray_menu = MenuBuilder::new(app)
+                .items(&[&show_item, &quit_item])
+                .build()?;
+
+            TrayIconBuilder::with_id("main-tray")
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        // 统一退出入口 / Single exit entry point
+                        if let Some(state) = app.try_state::<ProcessManager>() {
+                            _kill_all_and_exit(&state, app);
+                        } else {
+                            app.exit(0);
+                        }
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // 左键点击显示窗口 / Left-click shows window
+                    if let tauri::tray::TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            // 拦截窗口关闭事件，防止被托盘图标默认行为吞掉
+            // Intercept window close event to prevent it from being swallowed by tray default behavior
+            if let Some(window) = app.get_webview_window("main") {
+                let app_handle = app.handle().clone();
+                window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        // 阻止默认关闭/隐藏行为 / Prevent default close/hide behavior
+                        api.prevent_close();
+                        // 通知 JS 层弹出确认弹框 / Notify JS layer to show confirmation dialog
+                        let _ = app_handle.emit("window-close-requested", ());
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -207,6 +718,7 @@ pub fn run() {
             write_file_text,
             read_file_bytes,
             write_file_bytes,
+            create_dir,
             read_dir_recursive,
             list_dir_all,
             rename_file,
@@ -214,6 +726,23 @@ pub fn run() {
             copy_file_or_dir,
             move_file_or_dir,
             open_in_explorer,
+            path_exists,
+            get_os_platform,
+            has_running_agents,
+            force_quit_app,
+            spawn_agent,
+            send_to_agent,
+            kill_agent,
+            check_agent_running,
+            spawn_executor,
+            kill_executor,
+            check_executor_running,
+            spawn_converter,
+            kill_converter,
+            check_converter_running,
+            spawn_counter,
+            kill_counter,
+            check_counter_running,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

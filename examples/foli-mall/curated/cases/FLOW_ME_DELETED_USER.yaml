@@ -1,0 +1,66 @@
+case_type: biz
+sheet_name: 删除用户后访问当前用户信息
+api_name: 用户被删除后访问 /me（user-fixture 删除 → 返回 201004）
+steps:
+  - step_id: Step_CreateUser
+    relevance_id: IF_CATEGORY_LIST
+    api_name: 创建测试用户（user-fixture）
+    app_name: foliMail
+    method: GET
+    url: /api/categories
+    request_head:
+      Content-Type: application/json
+    request_body: {}
+    status_code: 200
+    preprocessors:
+      - name: user-fixture
+        config:
+          mode: create
+          username: e2e_me_deleted
+          user_id: 9000000000000000102
+          status: 1
+    assert_dict:
+      code: '100000'
+
+  - step_id: Step_LoginUser
+    relevance_id: IF_AUTH_LOGIN
+    api_name: 测试用户登录
+    app_name: foliMail
+    method: POST
+    url: /api/auth/login
+    request_head:
+      Content-Type: application/json
+    request_body:
+      username: e2e_me_deleted
+      password: e2e123
+    status_code: 200
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.token is_not_null
+
+  - step_id: Step_DeleteUserAndMe
+    relevance_id: IF_AUTH_ME
+    inherit:
+      authToken: Step_LoginUser.data.token
+    api_name: 删除用户后访问 /me（负向，期望 201004）
+    app_name: foliMail
+    method: GET
+    url: /api/auth/me
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{authToken}"
+    request_body: {}
+    status_code: 200
+    preprocessors:
+      - name: user-fixture
+        config:
+          mode: delete
+          username: e2e_me_deleted
+    postprocessors:
+      - name: user-fixture
+        config:
+          cleanup: true
+    assert_dict:
+      code: '201004'
+    remark: 对应 raw 用例 TC_GET_USERINFO_BUSI_006（修正为 201004：用户不存在）。

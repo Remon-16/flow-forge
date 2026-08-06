@@ -371,7 +371,7 @@ class SingleSkeletonCountWarnSkipTest:
         """warn 策略下数量不匹配返回不完整结果 / Returns partial results on warn."""
         with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
             settings = _make_settings()
-            settings.validation_rules = [
+            settings.case_gen_validation = [
                 {"check": "skeleton_count", "strategy": "warn"},
             ]
             agent = _make_agent(SingleSkeletonGenerator, settings=settings)
@@ -390,7 +390,7 @@ class SingleSkeletonCountWarnSkipTest:
         """skip 策略下不重试直接返回 / No retries on skip strategy."""
         with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
             settings = _make_settings()
-            settings.validation_rules = [
+            settings.case_gen_validation = [
                 {"check": "skeleton_count", "strategy": "skip"},
             ]
             agent = _make_agent(SingleSkeletonGenerator, settings=settings)
@@ -412,7 +412,7 @@ class BizSkeletonCountWarnSkipTest:
     def should_return_partial_results_on_warn_strategy(self):
         with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
             settings = _make_settings()
-            settings.validation_rules = [
+            settings.case_gen_validation = [
                 {"check": "skeleton_count", "strategy": "warn"},
             ]
             agent = _make_agent(BizSkeletonGenerator, settings=settings)
@@ -432,7 +432,7 @@ class DataFillerCountWarnTest:
     def should_return_partial_results_on_warn_strategy(self):
         with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
             settings = _make_settings()
-            settings.validation_rules = [
+            settings.case_gen_validation = [
                 {"check": "data_fill_count", "strategy": "warn"},
             ]
             agent = _make_agent(SingleDataFiller, settings=settings)
@@ -452,7 +452,7 @@ class AssertionGeneratorCountWarnTest:
     def should_return_partial_results_on_warn_strategy(self):
         with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
             settings = _make_settings()
-            settings.validation_rules = [
+            settings.case_gen_validation = [
                 {"check": "assertion_count", "strategy": "warn"},
             ]
             agent = _make_agent(SingleAssertionGenerator, settings=settings)

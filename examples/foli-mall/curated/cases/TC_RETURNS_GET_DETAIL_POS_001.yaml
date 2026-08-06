@@ -1,0 +1,27 @@
+case_type: single
+test_id: TC_RETURNS_GET_DETAIL_POS_001
+relevance_id: api_api_returns_id_get
+tag: P0
+api_name: 获取退货详情（正向）
+app_name: foliMail
+method: GET
+url: /api/returns/9000000000000000043
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: return-fixture
+    config:
+      return_status: 0
+      return_id: 9000000000000000043
+      order_id: 9000000000000000033
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.returnNo is_not_null
+  - $.data.orderId is_not_null
+  - $.data.status == 0
+  - $.data.refundAmount > 0
+remark: 对应 raw 用例 TC_RETURNS_GET_BOUND_001（修正字段名为 returnNo/orderId）。

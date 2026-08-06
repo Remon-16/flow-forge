@@ -33,6 +33,9 @@ def save_interfaces_node(state: GraphState) -> GraphState:
 
     if not interfaces:
         logger.warning(_("ifaces.no_interfaces_to_save"))
+        # 空接口时也保存阶段标记，确保 resume 路由完整 / Save stage marker for complete resume routing
+        if memory_dir:
+            save_pipeline_state(memory_dir, "save_interfaces")
         return state
 
     interfaces_dir = Path(cases_dir) / "interfaces"
@@ -116,6 +119,11 @@ def reload_interfaces_node(state: GraphState) -> GraphState:
 
     state["interfaces"] = reloaded
     logger.info(_("ifaces.reloaded", count=len(reloaded)))
+
+    # Save pipeline state for resume / 保存流水线状态供 resume 使用
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        save_pipeline_state(memory_dir, "reload_interfaces")
 
     if _sl():
         _sl().log_event("reload_interfaces", count=len(reloaded), url_issues=len(url_issues))

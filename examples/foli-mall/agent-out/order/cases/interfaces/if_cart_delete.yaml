@@ -1,0 +1,6 @@
+case_type: interfaces
+test_id: IF_CART_DELETE
+api_name: 删除购物车项
+app_name: foliMail
+method: DELETE
+url: /api/cart/{id}

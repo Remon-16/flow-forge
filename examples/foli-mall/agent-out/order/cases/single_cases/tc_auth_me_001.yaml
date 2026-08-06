@@ -1,0 +1,21 @@
+case_type: single
+test_id: TC_AUTH_ME_001
+relevance_id: IF_AUTH_ME
+api_name: 获取当前用户-已登录
+app_name: foliMail
+method: GET
+url: /api/auth/me
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+assert_dict:
+  $.code: "100000"
+assert_rules:
+  - "$.data.username == buyer01"
+  - "$.data.balance >= 0"
+  - "$.data.role is_not_null"
+  - "$.data.status is_not_null"
+tag: P0
+remark: 携带 token 查询当前用户信息

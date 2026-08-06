@@ -1,0 +1,30 @@
+case_type: single
+test_id: TC_REGISTER_POS_002
+relevance_id: api_api_auth_register_post
+tag: P1
+api_name: 用户注册（特殊字符用户名，正向）
+app_name: foliMail
+method: POST
+url: /api/auth/register
+request_head:
+  Content-Type: application/json
+request_body:
+  username: user!@#
+  password: Pass#123
+  nickname: SpecialCharsUser
+status_code: 200
+preprocessors:
+  - name: user-fixture
+    config:
+      mode: predelete
+      username: user!@#
+postprocessors:
+  - name: user-fixture
+    config:
+      cleanup: true
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.id is_not_null
+  - $.data.username == user!@#
+remark: 修正：foli-mall 注册不做用户名黑名单/字符集校验，特殊字符用户名可注册成功。

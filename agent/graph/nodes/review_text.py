@@ -1,388 +1,311 @@
-"""文本反馈修订 + 影响分析回退路径 / Text feedback revision + impact analysis fallback.
+"""n 模式文本反馈修订 — 统一走 Chunk 级操作 / Text feedback revision via chunk-level ops.
 
-Supports "n" mode (text feedback):
-  - Small plans: direct PLAN_REVISER call
-  - Large plans: impact analysis + targeted chunk regeneration
-
-Also provides the fallback path when annotation mode can't use plan_sections.json.
+新设计（与 r 模式共享 chunk 操作代码）/ New design (shares chunk ops with r mode):
+  Step 1: Section 影响分析 (1 LLM → 哪些 section 受影响)
+  Step 2: 逐 section Chunk 意图分析 (LLM → noop/fix/delete_chunk/add_chunk)
+  Step 3: 执行 chunk 级操作 (共用 review_annotation._execute_chunk_actions)
 """
 
 import json
 import logging
+import os
+from pathlib import Path
+from typing import Dict, List, Optional
 
 from agents.base import BaseAgent
-from agents.plan_generator import PlanGenerator, _serialize_interfaces
 from graph.state import GraphState
 from i18n import get_language_name, _
+from plugins.skill_loader import load_skill_extensions
 from prompts.plan_reviser import (
-    PLAN_REVISION_ANALYSIS_SYSTEM,
-    PLAN_REVISION_ANALYSIS_USER,
-    PLAN_REVISER_SYSTEM,
-    PLAN_REVISER_USER,
+    PLAN_SECTION_IMPACT_SYSTEM,
+    PLAN_SECTION_IMPACT_USER,
+    PLAN_TEXT_CHUNK_INTENT_SYSTEM,
+    PLAN_TEXT_CHUNK_INTENT_USER,
 )
 from prompts.render import render_prompt
 
 from . import helpers as _h
-from .helpers import _, save_pipeline_artifact
-from .review import _parse_plan_to_sections
+from .helpers import _
+from .review import (
+    _load_or_parse_sections,
+    _save_plan_sections,
+)
+from .review_annotation import _execute_chunk_actions
+from flow_forge_schemas.plan_sections import assemble_plan_md
 
 logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# 文本反馈修订 / Text Feedback Revision
+# n 模式入口 / Text Revision Entry Point
 # ============================================================================
 
 
 def _text_revision(
-    state: GraphState, plan_md: str, feedback: str,
+    state: GraphState, feedback: str,
     analysis: dict, api_summary: list,
 ) -> str:
-    """文本反馈修订 — 优先直接修订, 大计划回退影响分析。
+    """文本反馈修订 — Section 分析 → Chunk 意图 → 执行 / Text revision via chunk-level ops.
 
-    Text revision: use PLAN_REVISER directly for small plans,
-    fall back to impact analysis + targeted regeneration for large plans.
+    Step 1: 确定受影响 section / Determine affected sections
+    Step 2: 逐 section 做 chunk 意图分析 / Per-section chunk intent analysis
+    Step 3: 执行 chunk 操作 (与 r 模式共用) / Execute (shared with r mode)
     """
-    # 渲染 PLAN_REVISER_SYSTEM (修复 {{language}} 遗漏)
-    system_rendered = render_prompt(
-        PLAN_REVISER_SYSTEM,
-        language=get_language_name(),
+    case_type = state.get("case_type", "both")
+    memory_dir = state.get("memory_dir", "")
+
+    # 加载 skill 扩展 / Load skill extensions
+    _skills_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        'skills', 'builtin',
     )
+    _exts = load_skill_extensions('plan_generator', _h._settings, _skills_dir)
+
+    # 加载 chunk 注册表 / Load chunk registry
+    sections = _load_or_parse_sections(memory_dir)
+
+    from utils.token_counter import TokenCounter
+    token_counter = TokenCounter(model=_h._settings.llm_model)
+
+    # Step 1: Section 影响分析 / Section impact analysis
+    section_impact = _section_impact_analysis(feedback, case_type, token_counter, skill_extensions=_exts)
+    if not any(section_impact.values()):
+        logger.info(_("review.no_section_affected"))
+        return assemble_plan_md(sections)
+
+    logger.info(
+        _("review.section_impact_result",
+          global_sec=section_impact.get("global", False),
+          single=section_impact.get("single_api", False),
+          biz=section_impact.get("biz_flows", False))
+    )
+
+    # Step 2: 逐 section 做 chunk 意图分析 / Per-section chunk intent analysis
+    all_actions: List[dict] = []
+
+    if section_impact.get("global"):
+        actions = _chunk_intent_for_global(feedback, token_counter, sections=sections, skill_extensions=_exts)
+        all_actions.extend(actions)
+
+    # section 数据直接按顶层 key 访问 / Section data accessed directly by top-level key
+    # sections["single_api"] → type:"api", sections["biz_flows"] → type:"biz"
+    for sec_type in ("single_api", "biz_flows"):
+        if not section_impact.get(sec_type):
+            continue
+        sec_chunks = sections.get(sec_type, [])
+        if not sec_chunks:
+            continue
+        actions = _chunk_intent_for_section(
+            sec_chunks, sec_type, feedback, token_counter, skill_extensions=_exts,
+        )
+        all_actions.extend(actions)
+
+    if not all_actions:
+        logger.info(_("review.no_chunk_affected"))
+        return assemble_plan_md(sections)
+
+    # 意图分布日志 / Intent distribution log
+    logger.info(_(
+        "review.intent_distribution",
+        total=len(all_actions),
+        fix=sum(1 for a in all_actions if a.get("action") == "fix"),
+        delete_chunk=sum(1 for a in all_actions if a.get("action") == "delete_chunk"),
+        add=sum(1 for a in all_actions if a.get("action") == "add_chunk"),
+        noop=sum(1 for a in all_actions if a.get("action") == "noop"),
+    ))
+
+    # Step 3: 执行 chunk 操作 (与 r 模式共用) / Execute (shared with r mode)
+    _execute_chunk_actions(sections, all_actions, state, analysis, api_summary,
+                           skill_extensions=_exts)
+
+    # 保存 + 拼接 / Save + assemble
+    if memory_dir:
+        _save_plan_sections(memory_dir, sections)
+        # 修订后清除旧的 chunk 进度缓存，避免 resume 时使用过时进度
+        # Delete stale chunk progress cache after revision to avoid outdated resume
+        progress_path = Path(memory_dir) / "plan_chunks_progress.json"
+        if progress_path.exists():
+            progress_path.unlink()
+            logger.debug("Deleted stale plan_chunks_progress.json after revision")
+    return assemble_plan_md(sections)
+
+
+# ============================================================================
+# Step 1: Section 影响分析 / Section Impact Analysis
+# ============================================================================
+
+
+def _section_impact_analysis(
+    feedback: str, case_type: str, token_counter,
+    skill_extensions: List[str] | None = None,
+) -> Dict[str, bool]:
+    """分析用户文本反馈涉及哪些顶层 section / Determine which sections are affected.
+
+    全英文 prompt; JSON object 输出。
+    All-English prompt; JSON object output.
+    """
+    system_msg = render_prompt(PLAN_SECTION_IMPACT_SYSTEM)
     prompt = render_prompt(
-        PLAN_REVISER_USER,
-        original_plan=plan_md,
+        PLAN_SECTION_IMPACT_USER,
         feedback=feedback,
-        requirement_analysis=str(analysis),
-        api_summary=str(api_summary),
+        case_type=case_type,
     )
 
     agent = BaseAgent(
-        api_key=_h._settings.llm_api_key,
-        model=_h._settings.llm_model,
-        temperature=0.3,
-        max_tokens=_h._settings.llm_max_tokens,
-        base_url=_h._settings.llm_base_url,
-        context_window=_h._settings.llm_context_window,
-        max_output_tokens=_h._settings.llm_max_output_tokens,
-    )
-
-    total_tokens = agent._estimate_input_tokens(system_rendered, prompt)
-    if total_tokens <= _h._settings.llm_context_window - 4096:
-        logger.info(_("review.revising"))
-        return agent.call_llm(prompt, system_rendered)
-
-    # 计划过大 → 回退到影响分析 + 分块重生成 / Plan too large → fallback
-    logger.info(_("review.text_context_overflow",
-                  tokens=total_tokens, window=_h._settings.llm_context_window))
-    return _impact_based_revision(state, plan_md, feedback, analysis, api_summary, "text")
-
-
-# ============================================================================
-# 影响分析 + 分块重生成 / Impact Analysis + Chunked Regeneration
-# ============================================================================
-
-
-def _impact_based_revision(
-    state: GraphState, plan_md: str, feedback: str,
-    analysis: dict, api_summary: list, feedback_type: str,
-) -> str:
-    """影响分析 + 精准分块重生成 — 大计划回退路径。
-
-    Impact analysis + targeted chunk regeneration fallback for large plans.
-    Fixes {{outline}} rendering, passes feedback to chunk generators via
-    augmented user_guidance, and fixes flows_list mismatch.
-    """
-    outline = state.get("plan_outline")
-
-    if outline is None:
-        logger.warning(_("review.no_outline_fallback"))
-        return _full_revision_fallback(state, plan_md, feedback, feedback_type)
-
-    # Step 1: 影响分析 / Impact analysis
-    impact_agent = BaseAgent(
         api_key=_h._settings.llm_api_key,
         model=_h._settings.llm_model,
         temperature=0.1,
-        max_tokens=_h._settings.llm_max_tokens,
+        max_retries=_h._settings.max_retries,
+        max_steps=_h._settings.max_steps,
         base_url=_h._settings.llm_base_url,
+        context_window=_h._settings.llm_context_window,
+        max_output_tokens=_h._settings.llm_max_output_tokens,
+        compression_threshold=_h._settings.llm_context_compression_threshold,
+        rate_limit_delay=_h._settings.llm_rate_limit_delay,
+        retry_base_delay=_h._settings.llm_retry_base_delay,
+        max_concurrency=_h._settings.llm_max_concurrency,
+        request_timeout=_h._settings.llm_request_timeout,
+        extra_params=_h._settings.llm_extra_params,
+        skill_extensions=skill_extensions,
     )
 
-    # 渲染 {{outline}} 占位符 / Render {{outline}} placeholder
-    impact_system_rendered = render_prompt(
-        PLAN_REVISION_ANALYSIS_SYSTEM,
-        outline=json.dumps(outline, ensure_ascii=False, indent=2),
-    )
+    result = agent.call_llm_json(prompt, system_msg)
+    # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
+    if isinstance(result, list):
+        result = {}
+    # 规范化输出 / Normalize output
+    impact = {
+        "global": bool(result.get("global", False)),
+        "single_api": bool(result.get("single_api", False)),
+        "biz_flows": bool(result.get("biz_flows", False)),
+    }
+    # case_type 约束 / Respect case_type
+    if case_type == "single":
+        impact["biz_flows"] = False
+    elif case_type == "biz":
+        impact["single_api"] = False
+    return impact
 
-    impact_prompt = render_prompt(
-        PLAN_REVISION_ANALYSIS_USER,
-        outline=json.dumps(outline, ensure_ascii=False, indent=2),
+
+# ============================================================================
+# Step 2: Chunk 意图分析 (文本输入) / Chunk Intent Analysis (text input)
+# ============================================================================
+
+
+def _chunk_intent_for_global(
+    feedback: str, token_counter,
+    sections: dict = None,
+    skill_extensions: List[str] | None = None,
+) -> List[dict]:
+    """分析 global section 是否需要修改 / Check if global section needs changes.
+
+    使用简化判定 (noop vs fix) — global 只有一个"chunk"。
+    Simple decision (noop vs fix) — global is effectively a single chunk.
+    """
+    # 从 section 对象读取 chunk_id / Read chunk_id from section object
+    chunk_id = "business_understanding"
+    if sections:
+        bu = sections.get("business_understanding")
+        if isinstance(bu, dict):
+            chunk_id = bu.get("chunk_id", chunk_id)
+
+    system_msg = render_prompt(PLAN_TEXT_CHUNK_INTENT_SYSTEM)
+    prompt = render_prompt(
+        PLAN_TEXT_CHUNK_INTENT_USER,
         feedback=feedback,
+        chunks_list=f"- {chunk_id}: Business Understanding (global context section)",
     )
-
-    try:
-        impact = impact_agent.call_llm_json(impact_prompt, impact_system_rendered)
-    except Exception as e:
-        logger.warning(_("review.impact_analysis_failed", error=str(e)))
-        return _full_revision_fallback(state, plan_md, feedback, feedback_type)
-
-    change_summary = impact.get("change_summary", "")
-    logger.info(_("review.revision_impact", summary=change_summary))
-
-    # Step 2: 更新 outline (如果需要) / Update outline if needed
-    outline_needs_update = impact.get("outline_needs_update", False)
-    affected_groups = impact.get("affected_groups", [])
-    affected_flows = impact.get("affected_flows", [])
-
-    if outline_needs_update and impact.get("new_outline"):
-        outline = impact["new_outline"]
-        state["plan_outline"] = outline
-        memory_dir = state.get("memory_dir", "")
-        if memory_dir:
-            save_pipeline_artifact(memory_dir, "plan_outline.json", outline)
-
-    # Step 3: 重新生成 / Regenerate
-    if outline_needs_update or not (affected_groups or affected_flows):
-        logger.info(_("review.full_regeneration_required"))
-        agent = PlanGenerator(_h._settings, _h._knowledge)
-        interfaces = state.get("interfaces", [])
-        user_guidance = state.get("user_guidance", "")
-        augmented = _augment_guidance(user_guidance, feedback, feedback_type)
-        revised = agent.generate_from_outline(
-            outline=outline,
-            requirement_analysis=analysis,
-            interfaces=interfaces,
-            api_summary=api_summary,
-            user_guidance=augmented,
-            memory_dir=state.get("memory_dir", ""),
-        )
-    else:
-        revised = _targeted_regenerate(
-            state, outline, plan_md, analysis, api_summary,
-            affected_groups, affected_flows,
-            feedback=feedback,
-            feedback_type=feedback_type,
-        )
-
-    return revised
-
-
-def _augment_guidance(user_guidance: str, feedback: str, feedback_type: str) -> str:
-    """将修订反馈追加到用户指导中, 供分块生成提示词使用。
-
-    Append revision feedback to user guidance for chunk generation prompts.
-    This ensures the LLM knows what changes were requested when regenerating.
-    """
-    base = user_guidance or "(none)"
-    if not feedback:
-        return base
-    if feedback_type == "annotations":
-        return (
-            f"{base}\n\n"
-            f"## Revision Instructions (from Annotations)\n"
-            f"The user reviewed the previous plan and provided the following "
-            f"line-level annotations. Apply ONLY the changes that are relevant "
-            f"to the content you are generating. Keep everything else identical "
-            f"to the previous version.\n\n{feedback}"
-        )
-    else:
-        return (
-            f"{base}\n\n"
-            f"## Revision Instructions (from User Feedback)\n"
-            f"The user reviewed the previous plan and provided this feedback. "
-            f"Apply ONLY the changes that are relevant to the content you are "
-            f"generating. Keep everything else identical to the previous version."
-            f"\n\n{feedback}"
-        )
-
-
-# ============================================================================
-# 全量修订回退 / Full Revision Fallback
-# ============================================================================
-
-
-def _full_revision_fallback(
-    state: GraphState, plan_md: str, feedback: str, feedback_type: str,
-) -> str:
-    """全量修订回退 (无 outline 时使用) / Full revision fallback when outline unavailable.
-
-    Fix: renders {{language}} in PLAN_REVISER_SYSTEM before calling LLM.
-    """
-    analysis = state.get("requirement_analysis", {})
-    api_summary = state.get("api_summary", [])
 
     agent = BaseAgent(
         api_key=_h._settings.llm_api_key,
         model=_h._settings.llm_model,
-        temperature=0.3,
-        max_tokens=_h._settings.llm_max_tokens,
+        temperature=0.1,
+        max_retries=_h._settings.max_retries,
+        max_steps=_h._settings.max_steps,
         base_url=_h._settings.llm_base_url,
         context_window=_h._settings.llm_context_window,
         max_output_tokens=_h._settings.llm_max_output_tokens,
+        compression_threshold=_h._settings.llm_context_compression_threshold,
+        rate_limit_delay=_h._settings.llm_rate_limit_delay,
+        retry_base_delay=_h._settings.llm_retry_base_delay,
+        max_concurrency=_h._settings.llm_max_concurrency,
+        request_timeout=_h._settings.llm_request_timeout,
+        extra_params=_h._settings.llm_extra_params,
+        skill_extensions=skill_extensions,
     )
 
-    prompt = render_prompt(
-        PLAN_REVISER_USER,
-        original_plan=plan_md,
-        feedback=feedback,
-        requirement_analysis=str(analysis),
-        api_summary=str(api_summary),
-    )
-
-    # 渲染 PLAN_REVISER_SYSTEM (修复 {{language}} 遗漏)
-    system_rendered = render_prompt(
-        PLAN_REVISER_SYSTEM,
-        language=get_language_name(),
-    )
-    return agent.call_llm(prompt, system_rendered)
-
-
-# ============================================================================
-# 精准分块重生成 / Targeted Chunk Regeneration
-# ============================================================================
+    result = agent.call_llm_json_object(prompt, system_msg, "actions")
+    actions = result.get("actions", [])
+    if len(actions) != 1:
+        logger.warning(
+            _("review.intent_validation_retry",
+              batch=0, attempt=1,
+              errors=f"Expected 1 action for global, got {len(actions)}")
+        )
+        actions = []
+    for a in actions:
+        a["section_key"] = chunk_id
+        a.setdefault("annotation", {"review_comment": feedback})
+    return actions
 
 
-def _targeted_regenerate(
-    state: GraphState,
-    outline: dict,
-    plan_md: str,
-    analysis: dict,
-    api_summary: list,
-    affected_groups: list,
-    affected_flows: list,
-    feedback: str = "",
-    feedback_type: str = "text",
-) -> str:
-    """精准重生成受影响的 chunk / Regenerate only affected chunks.
+def _chunk_intent_for_section(
+    chunks: List[dict], section_type: str, feedback: str, token_counter,
+    skill_extensions: List[str] | None = None,
+) -> List[dict]:
+    """对某个 section 的所有 chunk 做意图分析 / Intent analysis for all chunks in a section.
 
-    修复: {{flows_list}} 参数名不匹配。
-    复用 _parse_plan_to_sections 解析现有 plan.md, 消除与 review.py 的重复。
+    输入: chunk 列表 (name + description) + 用户文本反馈
+    LLM 输出: JSON object {"actions": [...]}
     """
-    agent = PlanGenerator(_h._settings, _h._knowledge)
-    interfaces = state.get("interfaces", [])
-    user_guidance = state.get("user_guidance", "")
-    augmented_guidance = _augment_guidance(user_guidance, feedback, feedback_type)
-    iface_dicts = _serialize_interfaces(interfaces)
-    iface_by_id = {d["test_id"]: d for d in iface_dicts if d.get("test_id")}
+    # 构建 chunks 描述列表 / Build chunk descriptions
+    chunks_desc_parts = []
+    for c in chunks:
+        cid = c.get("chunk_id", c.get("key", "?"))
+        cname = c.get("name", "?")
+        cdesc = f"Chunk `{cid}`: {cname}"
+        chunks_desc_parts.append(f"- {cdesc}")
+    chunks_list = "\n".join(chunks_desc_parts)
 
-    # 复用 _parse_plan_to_sections 解析现有 plan.md / Reuse section parser (dedup)
-    parsed = _parse_plan_to_sections(plan_md, outline)
-
-    # 从解析结果构建已有映射 / Build existing section maps from parsed result
-    api_sections_map = {}
-    biz_sections_map = {}
-    for sec in parsed.get("sections", []):
-        if sec["type"] == "api_group":
-            api_sections_map[sec["name"]] = sec["content"]
-        elif sec["type"] == "biz_flow":
-            biz_sections_map[sec["name"]] = sec["content"]
-
-    # Regenerate global context / always regenerated for updated context
-    from prompts.plan_generation import (
-        PLAN_CHUNK_GLOBAL_SYSTEM,
-        PLAN_CHUNK_GLOBAL_USER,
+    system_msg = render_prompt(PLAN_TEXT_CHUNK_INTENT_SYSTEM)
+    prompt = render_prompt(
+        PLAN_TEXT_CHUNK_INTENT_USER,
+        feedback=feedback,
+        chunks_list=chunks_list,
     )
 
-    outline_json_new = json.dumps(outline, ensure_ascii=False, indent=2)
-    analysis_json = json.dumps(analysis, ensure_ascii=False, indent=2)
-    api_summary_json = json.dumps(api_summary or [], ensure_ascii=False, indent=2)
-
-    global_prompt = render_prompt(
-        PLAN_CHUNK_GLOBAL_USER,
-        outline=outline_json_new,
-        requirement_analysis=analysis_json,
-        api_summary=api_summary_json,
-        user_guidance=augmented_guidance,
-        reference_summary="(none)",
-        language=get_language_name(),
+    agent = BaseAgent(
+        api_key=_h._settings.llm_api_key,
+        model=_h._settings.llm_model,
+        temperature=0.1,
+        max_retries=_h._settings.max_retries,
+        max_steps=_h._settings.max_steps,
+        base_url=_h._settings.llm_base_url,
+        context_window=_h._settings.llm_context_window,
+        max_output_tokens=_h._settings.llm_max_output_tokens,
+        compression_threshold=_h._settings.llm_context_compression_threshold,
+        rate_limit_delay=_h._settings.llm_rate_limit_delay,
+        retry_base_delay=_h._settings.llm_retry_base_delay,
+        max_concurrency=_h._settings.llm_max_concurrency,
+        request_timeout=_h._settings.llm_request_timeout,
+        extra_params=_h._settings.llm_extra_params,
+        skill_extensions=skill_extensions,
     )
-    global_context = agent.call_llm(
-        global_prompt,
-        render_prompt(PLAN_CHUNK_GLOBAL_SYSTEM, outline=outline_json_new,
-                      language=get_language_name()),
-    )
 
-    # Regenerate affected API groups / with feedback injected
-    from prompts.plan_generation import (
-        PLAN_CHUNK_API_SECTION_SYSTEM,
-        PLAN_CHUNK_API_SECTION_USER,
-    )
-    for group_name in affected_groups:
-        group = next(
-            (g for g in outline.get("api_groups", []) if g.get("group_name") == group_name),
-            None,
+    result = agent.call_llm_json_object(prompt, system_msg, "actions")
+    actions = result.get("actions", [])
+    # 数量校验 / Count validation: verify actions count matches chunk count
+    expected_count = len(chunks)
+    if len(actions) != expected_count:
+        logger.warning(
+            _("review.intent_validation_retry",
+              batch=0, attempt=1,
+              errors=f"Expected {expected_count} action(s), got {len(actions)}")
         )
-        if not group:
-            continue
-        api_ids = group.get("api_ids", [])
-        group_ifaces = [iface_by_id[aid] for aid in api_ids if aid in iface_by_id]
-
-        prompt = render_prompt(
-            PLAN_CHUNK_API_SECTION_USER,
-            interface_defs=json.dumps(group_ifaces, ensure_ascii=False, indent=2),
-            user_guidance=augmented_guidance,
-            language=get_language_name(),
-        )
-        system_with_context = render_prompt(
-            PLAN_CHUNK_API_SECTION_SYSTEM,
-            outline=outline_json_new,
-            global_context=global_context,
-            group_name=group_name,
-            test_focus=group.get("test_focus", ""),
-            group_api_ids=json.dumps(api_ids),
-            language=get_language_name(),
-        )
-        api_sections_map[group_name] = agent.call_llm(prompt, system_with_context)
-
-    # Regenerate affected biz flows / Fix: use flows_list format
-    from prompts.plan_generation import (
-        PLAN_CHUNK_BIZ_SECTION_SYSTEM,
-        PLAN_CHUNK_BIZ_SECTION_USER,
-    )
-    for flow_name in affected_flows:
-        flow = next(
-            (f for f in outline.get("biz_flows", []) if f.get("name") == flow_name),
-            None,
-        )
-        if not flow:
-            continue
-        api_ids = flow.get("involved_apis", [])
-        flow_ifaces = [iface_by_id[aid] for aid in api_ids if aid in iface_by_id]
-
-        prompt = render_prompt(
-            PLAN_CHUNK_BIZ_SECTION_USER,
-            interface_defs=json.dumps(flow_ifaces, ensure_ascii=False, indent=2),
-            user_guidance=augmented_guidance,
-            language=get_language_name(),
-        )
-
-        # Fix (Root Cause 2): 构造 flows_list 字符串, 匹配模板 {{flows_list}} 占位符
-        flows_desc_parts = [
-            f"- Name: {flow.get('name', '?')}\n"
-            f"  Description: {flow.get('description', '')}\n"
-            f"  APIs: {', '.join(flow.get('involved_apis', []))}"
-        ]
-        flows_list = "\n\n".join(flows_desc_parts)
-
-        system_with_context = render_prompt(
-            PLAN_CHUNK_BIZ_SECTION_SYSTEM,
-            outline=outline_json_new,
-            global_context=global_context,
-            flows_list=flows_list,
-            language=get_language_name(),
-        )
-        biz_sections_map[flow_name] = agent.call_llm(prompt, system_with_context)
-
-    # ---- 拼接 / Re-assemble ----
-    parts = [global_context]
-
-    for group in outline.get("api_groups", []):
-        group_name = group.get("group_name", "")
-        if group_name in api_sections_map:
-            parts.append(api_sections_map[group_name])
-
-    for flow in outline.get("biz_flows", []):
-        flow_name = flow.get("name", "")
-        if flow_name in biz_sections_map:
-            parts.append(biz_sections_map[flow_name])
-
-    return "\n\n".join(parts)
+        # fallback 为 noop / Fallback to noop for all chunks
+        actions = []
+    # 回填 section_key 和 annotation / Backfill section_key and annotation
+    for a in actions:
+        a["section_key"] = a.get("chunk_id", a.get("section_key", ""))
+        a.setdefault("annotation", {"review_comment": feedback})
+    return actions

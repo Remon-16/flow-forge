@@ -1,0 +1,31 @@
+case_type: single
+test_id: TC_ORDER_CREATE_004
+relevance_id: IF_ORDER_CREATE
+api_name: 创建订单-商品不存在
+app_name: foliMail
+method: POST
+url: /api/orders
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body:
+  receiverName: 张三
+  receiverPhone: "13800001111"
+  receiverAddress: 北京市朝阳区
+status_code: 200
+preprocessors:
+  - name: cart-fixture
+    config:
+      mode: clear
+  - name: balance-fixture
+    config:
+      balance: 10000
+  - name: cart-fixture
+    config:
+      mode: add
+      product_id: 1000000000000003999
+      quantity: 1
+assert_dict:
+  $.code: "203001"
+tag: P1
+remark: 购物车中存在不存在的商品，下单应返回 203001

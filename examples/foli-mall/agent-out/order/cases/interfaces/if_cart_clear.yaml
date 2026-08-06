@@ -1,0 +1,6 @@
+case_type: interfaces
+test_id: IF_CART_CLEAR
+api_name: 清空购物车
+app_name: foliMail
+method: DELETE
+url: /api/cart

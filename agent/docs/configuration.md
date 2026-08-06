@@ -68,16 +68,12 @@ pipeline:
   max_retries: 3                     # LLM 调用最大重试次数
   max_steps_no_progress: 5           # 进度无变化最大步数
   consecutive_batch_failure_limit: 3 # 连续批次失败上限（-1=永不停止）
-  url_correction_max_retries: 3      # URL 纠错重试上限
   skeleton_batch_size: 30            # 骨架生成分批大小（每批测试点数）
   plan_single_batch_size: 8          # 单接口测试点分组大小（-1=不拆分，强模型建议 -1）
-  plan_biz_flow_batch_size: 3        # 业务链路每批合并数（-1=不拆分，强模型建议 -1）
   case_type: both                    # 用例生成类型：both | single | biz
   plugin_batch_size: 10              # 插件处理批次大小（-1=不分批）
   auto: false                        # 自动模式：跳过人工审核（夜间批量生成建议开启）
 ```
-
-> **已废弃项**：旧配置 `plan_chunk_size` 已废弃，由 `plan_single_batch_size` + `plan_biz_flow_batch_size` 取代。仅为向后兼容保留自动迁移，请勿在新配置中使用。
 
 #### 用例类型选择（case_type）
 
@@ -89,60 +85,74 @@ pipeline:
 
 跳过逻辑在代码级别执行，不影响轮廓生成——轮廓仍包含完整的 `api_groups` 和 `biz_flows`。也可用 `--case-type` CLI 参数覆盖。
 
-### knowledge — 知识库
-
-> 目前知识库属于Beta内容
-
-```yaml
-knowledge:
-  enabled: false     # 启用知识库（基于 grep 的纯文本检索）
-  dir: ./knowledge   # 知识库目录
-```
-
-详见 [how-it-works.md 的知识库章节](./how-it-works.md#知识库)。
-
-### validation — 用例校验
+### validation — 校验与纠错
 
 ```yaml
 validation:
-  enabled: true
-  max_retries: 3
-  rules:
-    - check: skeleton_count
-      strategy: warn
-    - check: url_check
-      strategy: warn
-      failure_action: keep   # 仅 url_check：discard（丢弃到 failures.yaml）| keep（保留继续插件处理）
-    - check: data_fill_count
-      strategy: warn
-    - check: assertion_count
-      strategy: warn
+  # ··· URL 文档匹配校验 / URL doc-match validation ···
+  url_doc_match_validation:
+    enable: true                        # 启用 URL 文档匹配校验
+    max_retries: 3                      # URL 纠错重试次数
+    rules:
+      - check: url_check                # URL 存在性校验
+        strategy: warn                  # 纠错耗尽后策略: fail | warn | skip
+
+  # ··· 用例生成阶段校验 / Case generation validation ···
+  case_gen_validation:
+    enable: true                        # 启用用例格式校验（原 case_format_enabled）
+    max_retries: 3                      # 用例格式校验重试次数（原 case_format_max_retries）
+    rules:
+      - check: skeleton_count
+        strategy: warn
+      - check: url_check
+        strategy: warn
+        failure_action: keep   # 仅 url_check：discard（丢弃到 failures.yaml）| keep（保留继续插件处理）
+      - check: data_fill_count
+        strategy: warn
+      - check: assertion_count
+        strategy: warn
+
+  # ··· 计划解析校验 / Parse plan validation ···
+  parse_plan_validation:
+    enable: true
+    max_retries: 3
+    rules:
+      - check: flow_match               # 流程关联校验
+        strategy: warn
+        failure_action: discard         # 仅 flow_match：discard（丢弃）| keep（保留）
 ```
 
 **策略值**：`fail`（终止并重试）| `warn`（警告继续）| `skip`（跳过）。
+
+**parse_plan_validation 说明**：`flow_match` 校验在计划解析阶段执行，将 LLM 输出的 Mermaid 流程图与需求文档中定义的业务场景进行关联匹配。失配的流程按 `strategy` 处理——`fail` 抛出异常、`skip` 跳过校验。当 `strategy: warn` 时，`failure_action` 决定重试耗尽后的行为：`discard`（丢弃孤立的流程，默认）| `keep`（保留并添加警告标记）。
+
+**向后兼容**：旧格式（`case_format_enabled`、`case_format_max_retries`、`url_doc_match_rules`、`case_gen_rules` 等平铺 key）仍然生效，系统会自动识别新旧格式。
 
 **两种 YAML 写法均支持**（`config/settings.py` 的 `_parse_validation_rules`）：
 
 ```yaml
 # 列表格式
-rules:
-  - check: url_check
-    strategy: warn
-    failure_action: keep
+case_gen_validation:
+  rules:
+    - check: url_check
+      strategy: warn
+      failure_action: keep
 
 # 字典格式（简写）
-rules:
-  skeleton_count: fail
-  url_check: warn
+case_gen_validation:
+  rules:
+    skeleton_count: fail
+    url_check: warn
 
 # 字典格式（嵌套，可带 failure_action）
-rules:
-  url_check:
-    strategy: warn
-    failure_action: keep
+case_gen_validation:
+  rules:
+    url_check:
+      strategy: warn
+      failure_action: keep
 ```
 
-> **代码默认值 vs 示例**：不配置 `rules` 时，代码默认 `skeleton_count` / `data_fill_count` / `assertion_count` 为 `fail`、`url_check` 为 `warn`（`settings.py`）。`env.example.yaml` 中演示为全部 `warn`，仅作演示，实际以你配置或代码默认为准。
+> **代码默认值 vs 示例**：不配置 `case_gen_validation` 时，代码默认 `skeleton_count` / `data_fill_count` / `assertion_count` 为 `fail`、`url_check` 为 `warn`（`settings.py`）。`env.example.yaml` 中演示为全部 `warn`，仅作演示，实际以你配置或代码默认为准。
 
 关于各校验项与 URL 纠错的详细行为，见 [anti-hallucination.md](./anti-hallucination.md)。
 
@@ -196,7 +206,7 @@ logging:
 | `--api PATH` | 接口文档路径（OpenAPI `.yaml`/`.json` 或 Markdown `.md`） |
 | `--output PATH` | 输出根目录（默认 `./output_<timestamp>`） |
 | `--output-format {yaml,excel,both}` | 输出格式（默认 `both`，留空时取自 `env.yaml`） |
-| `--parse-mode {raw,rule,llm}`, `-m` | API 文档解析模式（默认 `raw`）：`raw`=LLM 分析原文，`rule`=规则解析器，`llm`=LLM 预提取 |
+| `--parse-mode {llm,rule}`, `-m` | API 文档解析模式（默认 `llm`）：`llm`=LLM 预提取接口，`rule`=规则解析器(OpenAPI/Markdown) |
 | `--parser-path PATH` | 自定义解析器 `.py` 路径（仅 `--parse-mode rule` 生效） |
 | `--reference-dir PATH` | 增量更新参考目录 |
 | `--prompt TEXT`, `-p` | 用户补充指导，注入到计划和用例生成提示词中 |
@@ -204,7 +214,24 @@ logging:
 | `--resume-overwrite` | 恢复时覆盖已有输出 |
 | `--auto` | 自动模式：跳过所有人工审核 |
 | `--case-type {single,biz,both}` | 用例生成类型（默认 `both`） |
-| `--batch-size N` | 覆盖 `pipeline.plugin_batch_size`（插件处理批次大小）；默认取自 `env.yaml`。注意：这是**插件批次**，非计划分块 |
+| `--plugin-batch-size N` | 覆盖 `pipeline.plugin_batch_size`（插件处理批次大小）；默认取自 `env.yaml`。注意：这是**插件批次**，非计划分块 |
+| `--max-steps N` | 覆盖 `pipeline.max_steps`（最大智能体步数） |
+| `--max-retries N` | 覆盖 `pipeline.max_retries`（LLM 调用最大重试次数） |
+| `--consecutive-batch-failure-limit N` | 覆盖 `pipeline.consecutive_batch_failure_limit`（连续批次失败上限） |
+| `--skeleton-batch-size N` | 覆盖 `pipeline.skeleton_batch_size`（骨架生成分批大小） |
+| `--plan-single-batch-size N` | 覆盖 `pipeline.plan_single_batch_size`（单接口测试点分组大小） |
+| `--url-doc-match-max-retries N` | 覆盖 `validation.url_doc_match_validation.max_retries`（URL 与文档原文匹配重试上限，0 = 不重试） |
+| `--url-doc-match-strategy {fail,warn,skip}` | 覆盖 URL 纠错耗尽后策略（默认取自 `env.yaml`） |
+| `--case-gen-validation-rule RULE` | 覆盖用例生成校验规则，格式 `check:strategy[:failure_action]`（如 `url_check:skip:keep`），可多次指定 |
+| `--case-gen-validation-max-retries N` | 覆盖 `validation.case_gen_validation.max_retries`（用例生成校验重试次数，0 = 不重试） |
+| `--url-doc-match-enabled` / `--no-url-doc-match-enabled` | 启用/禁用 URL 文档匹配校验（覆盖 `validation.url_doc_match_validation.enable`） |
+| `--parse-plan-validation-rule RULE` | 覆盖计划解析校验规则，格式 `check:strategy[:failure_action]`（如 `flow_match:warn:discard`），可多次指定 |
+| `--parse-plan-validation-max-retries N` | 覆盖 `validation.parse_plan_validation.max_retries`（计划解析校验重试次数，0 = 不重试） |
+| `--plugins` / `--no-plugins` | 启用/禁用插件（覆盖 `plugins.enabled`） |
+| `--plugin-module PATH` | 插件模块路径（可重复，覆盖 `plugins.modules`） |
+| `--skills` / `--no-skills` | 启用/禁用技能（覆盖 `skills.enabled`） |
+| `--skill-agent MAPPING` | Skill 代理映射（可重复，格式 `agent_name:skill1,skill2`，如 `data_filler:foli_mall_data_filling`） |
+| `--lang LANG` | 覆盖 `agent.lang`（界面语言：`zh_CN` / `en_US`，默认取自 `env.yaml`） |
 | `--debug-snapshots` | 保存调试快照（`interfaces.json` + `extracted_texts.json`） |
 | `--debug` | 启用调试日志（完整 LLM I/O 写入 session `debug.log`） |
 | `--env PATH` | 配置文件路径（默认 `env.yaml`） |
@@ -212,6 +239,35 @@ logging:
 | `--log-to-output` | 将日志持久化到输出目录（`{output_dir}/logs/agent.log`） |
 
 命令示例见 [agent/README.md 快速开始](../README.md)；自动模式与断点续写见 [how-it-works.md](./how-it-works.md#自动模式auto-mode)。
+
+### 断点续写时的配置行为 / Config Behavior on Resume
+
+首次运行时，所有 CLI 参数和配置会自动保存到 `{output_dir}/memory/run_config.json`。恢复时：
+
+- **默认行为**：使用已保存的配置作为默认值（对已完成的阶段保持不变）
+- **CLI 覆盖**：`--resume` 时提供的 CLI 参数会覆盖已保存的配置，但仅对**尚未执行**的阶段生效
+- **过期覆盖警告**：如果 CLI 覆盖影响到的阶段已经执行完毕，系统会发出 `[Resume] 警告` 日志提示用户当前覆盖可能无效
+
+示例：计划已生成完毕后，`--resume` 时添加 `-p "新指导"` 不会影响已生成的计划，系统会提示该覆盖可能无效。
+
+> 向后兼容：对于没有 `run_config.json` 的旧流水线，恢复时完全使用 CLI 参数（与之前行为一致）。
+
+**配置保存范围**：`case_type`、`user_guidance`（对应 `-p`）、`output_format`、`plugin_batch_size`、`auto_mode`、`parse_mode`、`output_dir`、`api_path`、`requirement_paths`、`debug_snapshots`、`parser_path`、`reference_dir`。
+
+### 手动编辑检查点 / Manual Checkpoint Editing
+
+Resume 时，系统从 `memory/` 目录读取多个文件恢复运行状态。用户可以直接编辑其中某些 JSON 文件来控制 resume 行为：
+
+- **`checkpoint.json`**（可编辑）：包含 `phase`（当前阶段）、`phase_status`（完成状态）、`phase_progress`（各子步骤进度）、`settings`（运行参数如 `batch_size`、`skeleton_batch_size`）
+- **`checkpoint_data.json`**（不可编辑）：包含实际用例数据，由机器维护
+- **`pipeline_state.json`**（可编辑）：包含 `completed_stage` 和 `stages` 列表
+
+**常见场景**：
+- 调整 `batch_size`：编辑 `checkpoint.json` → `settings.batch_size` 或 `settings.skeleton_batch_size`
+- 强制重跑某阶段：编辑 `phase_progress` 中对应条目的 `status` 为 `"in_progress"` 并重置 `completed_count`
+- 跳过一个子步骤：设置子步骤 `status` 为 `"completed"` 且 `completed_count = total_items`
+
+详细示例和注意事项见 [how-it-works.md § 检查点系统与手动编辑](./how-it-works.md#检查点系统与手动编辑)。
 
 ---
 

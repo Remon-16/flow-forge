@@ -2,3 +2,22 @@ requests>=2.28.0
 openpyxl>=3.1.0
 pyyaml>=6.0
 pytest>=8.0.0
+# 数据库处理器支持 / DB processor support
+SQLAlchemy>=2.0
+PyMySQL>=1.1.0
+# H2 数据库处理器支持（JDBC 桥接；H2 SQLAlchemy 方言内置在 processors/h2_dialect.py）
+# H2 DB processor support (JDBC bridge; H2 dialect built into processors/h2_dialect.py)
+JPype1>=1.4.1
+JayDeBeApi>=1.2.3
+# Redis 处理器支持 / Redis processor support
+redis>=5.0.0
+# MQ 处理器支持（Kombu 多 MQ 抽象：RabbitMQ/Redis/SQS/MongoDB）/ MQ processor support
+kombu>=5.3.0
+# RocketMQ 处理器支持 / RocketMQ processor support
+# 使用内置纯 Python 客户端（跨平台，无需原生依赖，官方 rocketmq-client-python 不支持 Windows）
+# Uses the built-in pure-Python client (cross-platform, no native dependency; the
+# official rocketmq-client-python does not support Windows)
+# Kafka 处理器支持（confluent-kafka 官方客户端）/ Kafka processor support
+confluent-kafka>=2.0.0
+# Pulsar 处理器支持（Apache Pulsar 官方客户端）/ Pulsar processor support
+pulsar-client>=3.0.0

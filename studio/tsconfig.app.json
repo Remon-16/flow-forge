@@ -13,8 +13,8 @@
     /* 共享 schema 包路径别名 / Shared schema package path alias */
     "resolveJsonModule": true,
     "paths": {
-      "@flow-forge-schemas": ["./src/schemas-index.ts"]
+      "@flow-forge-schemas": ["../shared/ts/index.ts"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "../shared/ts/**/*.ts"]
 }

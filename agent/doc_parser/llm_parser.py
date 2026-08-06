@@ -40,7 +40,6 @@ class DocParserAgent:
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             temperature=0.1,
-            max_tokens=settings.llm_max_tokens,
             max_retries=2,
             max_steps=1,
             base_url=settings.llm_base_url,
@@ -167,22 +166,27 @@ class DocParserAgent:
             try:
                 method = str(item.get("method", "GET")).upper()
                 url = str(item.get("url", ""))
-                test_id = str(item.get("test_id", ""))
-
-                if not test_id:
-                    clean = (
-                        url.strip("/")
-                        .replace("/", "_")
-                        .replace("-", "_")
-                        .replace("{", "")
-                        .replace("}", "")
-                        .lower()
-                    )
-                    test_id = (
-                        f"api_{clean}_{method.lower()}"
-                        if clean
-                        else f"api_extracted_{idx}_{method.lower()}"
-                    )
+                # test_id 始终从 URL 生成，不依赖 LLM 输出。
+                # 多个 API 文档独立解析时，LLM 可能各自生成顺序编号
+                # （API_001, API_002...），导致跨批次 test_id 碰撞。
+                # URL-based 的 test_id 天然保证跨批次唯一性。
+                # test_id is ALWAYS derived from URL — never from LLM output.
+                # When parsing multiple API docs independently, the LLM may
+                # produce sequential IDs per batch, causing cross-batch collisions.
+                # URL-based test_id naturally ensures cross-batch uniqueness.
+                clean = (
+                    url.strip("/")
+                    .replace("/", "_")
+                    .replace("-", "_")
+                    .replace("{", "")
+                    .replace("}", "")
+                    .lower()
+                )
+                test_id = (
+                    f"api_{clean}_{method.lower()}"
+                    if clean
+                    else f"api_extracted_{idx}_{method.lower()}"
+                )
 
                 if not url and not test_id:
                     continue

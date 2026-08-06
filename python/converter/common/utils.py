@@ -10,6 +10,8 @@ from typing import Any, Callable
 
 import yaml
 
+from i18n import _
+
 logger = logging.getLogger(__name__)
 
 # ============================================================================
@@ -32,7 +34,7 @@ def read_yaml_dir(
         return []
     p = Path(dir_path)
     if not p.is_dir():
-        logger.warning("Directory not found, skipping: %s", dir_path)
+        logger.warning(_("converter.dir_not_found", path=str(dir_path)))
         return []
     results: list[dict[str, object]] = []
     for f in sorted(p.glob("*.yaml")):
@@ -44,7 +46,9 @@ def read_yaml_dir(
                 if validator is None or validator(data):
                     results.append(data)
         except Exception:
-            logger.warning("Failed to read YAML file: %s", f, exc_info=True)
+            logger.warning(
+                _("converter.yaml_read_error", path=str(f)), exc_info=True
+            )
     return results
 
 

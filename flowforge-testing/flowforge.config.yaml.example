@@ -1,0 +1,34 @@
+# Flow Forge skill 配置文件 / Flow Forge skill configuration
+# 复制为 flowforge.config.yaml 后按需修改 / Copy to flowforge.config.yaml and edit as needed
+
+# 输出语言 / Output language: zh_CN | en_US
+language: zh_CN
+
+# 默认工作模式 / Default work mode: plan | auto
+# plan: 先输出测试计划给用户确认 / show the test plan for approval first
+# auto: 跳过计划确认，直接生成并执行 / skip plan approval, generate and run directly
+mode: plan
+
+# flow-forge 仓库根目录；留空则取本 skill 目录的上一级
+# flow-forge repository root; empty = the parent directory of this skill
+flowforge_root: ""
+
+# Python 环境 / Python environment
+python:
+  # 解析方式 / Resolution mode: auto | conda | venv | system
+  mode: auto
+  # conda 环境名，如 api_test / conda environment name, e.g. api_test
+  conda_env: ""
+  # venv 解释器路径（Windows 示例）/ venv interpreter path (Windows example)
+  venv_path: ""
+  # 显式解释器路径，优先级最高 / explicit interpreter path (highest priority)
+  python_path: ""
+
+# 执行器默认参数 / Executor defaults
+executor:
+  env_name: local
+  # 执行范围 / Execution scope: single | biz | all
+  api_mode: all
+  max_thread: 5
+  # 执行器子进程超时（秒）/ executor subprocess timeout (seconds)
+  timeout_seconds: 1800

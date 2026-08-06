@@ -12,6 +12,7 @@ This directory contains the shared schema definitions for Flow Forge, stored as 
 | `constants.json` | HTTP 方法 / Tag 等级 / 必填字段规则 / HTTP methods, tag levels, required field rules |
 | `operators.json` | 断言规则运算符模式 / 合法函数 / 合法类型 / Assertion rule operator patterns, valid functions, valid types |
 | `types.json` | 实体字段定义 — 名称/类型/描述/示例 / Entity field definitions — name/type/description/example |
+| `plan_sections.json` | 测试计划章节结构（JSON Schema draft 2020-12）— 定义 business_understanding / single_api / biz_flows 三键结构，用于 AI agent 生成和 Studio 批注器渲染 / Test plan section structure (JSON Schema draft 2020-12) — defines the three-key structure used by AI agent generation and Studio annotator rendering |
 
 ## 修改规则 / Modification Rules
 

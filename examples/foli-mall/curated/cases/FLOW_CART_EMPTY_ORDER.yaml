@@ -1,0 +1,57 @@
+case_type: biz
+sheet_name: 购物车为空下单失败验证
+api_name: 空购物车下单失败（期望 207001）
+steps:
+  - step_id: Step_LoginBuyer
+    relevance_id: IF_AUTH_LOGIN
+    api_name: 买家登录
+    app_name: foliMail
+    method: POST
+    url: /api/auth/login
+    request_head:
+      Content-Type: application/json
+    request_body:
+      username: buyer01
+      password: buyer123
+    status_code: 200
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.token is_not_null
+
+  - step_id: Step_ClearCart
+    relevance_id: IF_CART_LIST
+    api_name: 清空购物车
+    app_name: foliMail
+    method: GET
+    url: /api/cart
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body: {}
+    status_code: 200
+    preprocessors:
+      - name: cart-fixture
+        config:
+          mode: clear
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.length() == 0
+
+  - step_id: Step_CreateOrder
+    relevance_id: IF_ORDER_CREATE
+    api_name: 空购物车创建订单（负向）
+    app_name: foliMail
+    method: POST
+    url: /api/orders
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body:
+      receiverName: 张三
+      receiverPhone: "13800001111"
+      receiverAddress: 北京市朝阳区
+    status_code: 200
+    assert_dict:
+      code: '207001'

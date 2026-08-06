@@ -1,0 +1,14 @@
+case_type: single
+test_id: TC_CART_DELETE_NEG_002
+relevance_id: api_api_cart_delete
+tag: P1
+api_name: 清空购物车（未登录，负向，期望 401 + 200001）
+app_name: foliMail
+method: DELETE
+url: /api/cart
+request_head:
+  Content-Type: application/json
+request_body: {}
+status_code: 401
+assert_dict:
+  code: '200001'

@@ -1,8 +1,11 @@
 import re
 from typing import Callable, Optional
 
-_VAR_PATTERN = re.compile(r"#\{([^}]+)\}")
-_CURLY_PATTERN = re.compile(r"\{([^}]+)\}")
+# 仅匹配单词字符（字母、数字、下划线），避免误匹配 JSON 花括号和模板语法
+# Only match word characters (letters, digits, underscores) to avoid
+# false matches against JSON curly braces and template syntax
+_VAR_PATTERN = re.compile(r"#\{(\w+)\}")
+_CURLY_PATTERN = re.compile(r"\{(\w+)\}")
 
 
 def resolve_placeholders(

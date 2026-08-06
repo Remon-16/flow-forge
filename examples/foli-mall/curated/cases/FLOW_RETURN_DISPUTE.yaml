@@ -1,0 +1,104 @@
+case_type: biz
+sheet_name: 退货争议仲裁流程测试
+api_name: 退货争议（卖家拒绝→买家申诉→管理员仲裁退款）
+steps:
+  - step_id: Step_LoginBuyer
+    relevance_id: IF_AUTH_LOGIN
+    api_name: 买家登录
+    app_name: foliMail
+    method: POST
+    url: /api/auth/login
+    request_head:
+      Content-Type: application/json
+    request_body:
+      username: buyer01
+      password: buyer123
+    status_code: 200
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.token is_not_null
+
+  - step_id: Step_PrepareRejectedReturn
+    relevance_id: IF_AUTH_ME
+    api_name: 造一条已拒绝的退货记录
+    app_name: foliMail
+    method: GET
+    url: /api/auth/me
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body: {}
+    status_code: 200
+    preprocessors:
+      - name: return-fixture
+        config:
+          return_status: 2
+          return_id: 9000000000000000011
+          order_id: 9000000000000000006
+    assert_dict:
+      code: '100000'
+
+  - step_id: Step_Dispute
+    relevance_id: IF_RETURNS_DISPUTE
+    api_name: 买家发起争议申诉
+    app_name: foliMail
+    method: PUT
+    url: /api/returns/9000000000000000011/dispute
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body:
+      reason: not satisfied with rejection
+    status_code: 200
+    assert_dict:
+      code: '100000'
+
+  - step_id: Step_LoginAdmin
+    relevance_id: IF_AUTH_LOGIN
+    api_name: 管理员登录
+    app_name: foliMail
+    method: POST
+    url: /api/auth/login
+    request_head:
+      Content-Type: application/json
+    request_body:
+      username: admin
+      password: admin123
+    status_code: 200
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.token is_not_null
+
+  - step_id: Step_Arbitrate
+    relevance_id: IF_ADMIN_RETURNS_HANDLE_DISPUTE
+    api_name: 管理员仲裁同意退款
+    app_name: foliMail
+    method: PUT
+    url: /api/admin/returns/9000000000000000011/handle-dispute
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{admin}"
+    request_body:
+      decision: refund
+      result: approved-by-admin
+    status_code: 200
+    assert_dict:
+      code: '100000'
+
+  - step_id: Step_Verify
+    relevance_id: IF_RETURNS_DETAIL
+    api_name: 校验退货已退款
+    app_name: foliMail
+    method: GET
+    url: /api/returns/9000000000000000011
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body: {}
+    status_code: 200
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.status == 6

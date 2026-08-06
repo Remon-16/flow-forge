@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Studio Stderr Log Protocol",
+  "description_zh": "Flow Forge Studio 子进程 stderr 日志协议 — 每行一条 JSON",
+  "description_en": "Flow Forge Studio subprocess stderr log protocol — one JSON object per line",
+  "type": "object",
+  "required": ["type", "level", "message"],
+  "properties": {
+    "type": {
+      "const": "log",
+      "description_zh": "固定值 \"log\"，标识本条为日志事件",
+      "description_en": "Fixed value \"log\", identifies this as a log event"
+    },
+    "level": {
+      "type": "string",
+      "enum": ["info", "warn", "error"],
+      "description_zh": "日志级别：info=信息, warn=警告, error=错误",
+      "description_en": "Log level: info, warn, error"
+    },
+    "message": {
+      "type": "string",
+      "description_zh": "已格式化的日志文本，含时间戳（HH:MM:SS）、级别标记和模块名",
+      "description_en": "Pre-formatted log text with timestamp (HH:MM:SS), level marker and module name"
+    }
+  }
+}

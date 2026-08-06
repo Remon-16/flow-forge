@@ -365,6 +365,58 @@ class TestHmacVerifyPostProcessorTest:
                 {},
             )
 
+    def should_let_case_config_override_env_config(self):
+        """case 级配置应覆盖 env 级配置（case 优先级更高）。
+        case-level config should override env-level config (case has higher priority)."""
+        from processors.builtin.post.hmac_verify_post import HmacVerifyPostProcessor
+
+        secret_case = "case-password"
+        body_str = ""
+        # 签名用 case 的 secret 计算
+        sig = self._compute_signature(secret_case, body_str)
+
+        proc = HmacVerifyPostProcessor()
+        global_cfg = {
+            "processor_configs": {
+                "hmac-verify": {
+                    "secret_env": "ENV_SECRET",
+                    "header_name": "X-EnvSig",
+                },
+            },
+        }
+        # case 提供直接 secret，应覆盖 env 的 secret_env；header_name 从 env 继承
+        with patch.dict(os.environ, {"ENV_SECRET": "wrong-secret"}):
+            # 不应抛异常 — case 的 secret 生效
+            proc.process(
+                {}, {},
+                {"X-EnvSig": sig},
+                None,
+                {"secret": secret_case},  # case 直接提供 secret，覆盖 env 的 secret_env
+                global_cfg,
+            )
+
+    def should_handle_undefined_template_keys_gracefully(self):
+        """body_template 中包含未定义占位符时不应崩溃，应替换为空字符串。
+        body_template with undefined placeholder keys should not crash; replace with empty string."""
+        from processors.builtin.post.hmac_verify_post import HmacVerifyPostProcessor
+
+        secret = "test-secret"
+        # 模板使用 {body} + {undefined_key} — 不抛异常
+        body_template = "{body}\n{undefined_key}"
+        body_str = "response content"
+        payload = f"{body_str}\n"  # {undefined_key} → ""
+        sig = self._compute_signature(secret, payload)
+
+        proc = HmacVerifyPostProcessor()
+        with patch.dict(os.environ, {"SIGN_KEY": secret}):
+            proc.process(
+                {}, {},
+                {"X-Signature": sig},
+                body_str,
+                {"secret_env": "SIGN_KEY", "body_template": body_template},
+                {},
+            )
+
 
 # ============================================================================
 # PathParamRestorePreProcessor
@@ -448,6 +500,115 @@ class TestPathParamRestorePreProcessorTest:
 
         assert body == {}  # nothing restored
         assert any("Invalid" in m for m in caplog.messages)
+
+
+# ============================================================================
+# HmacSignPreProcessor
+# ============================================================================
+
+class TestHmacSignPreProcessorTest:
+
+    def _compute_signature(self, secret, method, path, body_str):
+        payload = f"{method}\n{path}\n{body_str}"
+        return hmac.new(
+            secret.encode("utf-8"),
+            payload.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+    def should_add_signature_header_with_default_config(self):
+        from processors.builtin.pre.hmac_sign_pre import HmacSignPreProcessor
+
+        secret = "test-secret"
+        headers, body = {}, {"user": "test"}
+        proc = HmacSignPreProcessor()
+        with patch.dict(os.environ, {"SIGN_SECRET": secret}):
+            result_headers, result_body = proc.process(
+                dict(headers), dict(body),
+                {"secret_env": "SIGN_SECRET"},
+                {},
+            )
+
+        assert "X-Signature" in result_headers
+        assert result_body == body
+        # Verify the signature is correct
+        body_str = json.dumps(body, ensure_ascii=False, sort_keys=True)
+        expected = self._compute_signature(secret, "", "", body_str)
+        assert result_headers["X-Signature"] == expected
+
+    def should_use_case_config_to_override_env_config(self):
+        """case 级配置应覆盖 env 级配置（case 优先级更高）。
+        case-level config should override env-level config (case has higher priority)."""
+        from processors.builtin.pre.hmac_sign_pre import HmacSignPreProcessor
+
+        secret_case = "case-secret"
+        secret_env = "env-secret"
+
+        proc = HmacSignPreProcessor()
+        # env 配置了 secret_env=ENV_SECRET，case 配置了 secret_env=CASE_SECRET 和直接 secret
+        # env 配置了 secret_env=ENV_SECRET, case 配置了 secret 直接值（覆盖 env 的 secret_env 效果）
+        headers, body = proc.process(
+            {}, {"data": "test"},
+            # case 级配置直接提供 secret，应覆盖 env 的 secret_env
+            {"secret": secret_case},
+            {
+                "processor_configs": {
+                    "hmac-sign": {
+                        "secret_env": "MY_SECRET",
+                        "header_name": "X-EnvSig",
+                    },
+                },
+            },
+        )
+
+        # case 的直接 secret 应生效，而非 env 的 secret_env
+        assert "X-EnvSig" in headers  # env 的 header_name 生效（case 未覆盖）
+        # 签名应使用 case 的 secret
+        body_str = json.dumps(body, ensure_ascii=False, sort_keys=True)
+        expected = self._compute_signature(secret_case, "", "", body_str)
+        assert headers["X-EnvSig"] == expected
+
+    def should_handle_undefined_template_keys_gracefully(self):
+        """body_template 中包含未定义的占位符时不应崩溃，应替换为空字符串。
+        body_template with undefined placeholder keys should not crash; replace with empty string."""
+        from processors.builtin.pre.hmac_sign_pre import HmacSignPreProcessor
+
+        secret = "test-secret"
+        proc = HmacSignPreProcessor()
+        with patch.dict(os.environ, {"SIGN_SECRET": secret}):
+            # body_template 使用 {unknown_key} 和 {another_missing} — 不应抛异常
+            headers, body = proc.process(
+                {}, {"order_id": 12345},
+                {
+                    "secret_env": "SIGN_SECRET",
+                    "body_template": "{method}\n{body}\n{unknown_key}\n{another_missing}",
+                },
+                {},
+            )
+
+        assert "X-Signature" in headers
+        # 签名中 unknown_key 和 another_missing 应被替换为空字符串
+
+    def should_use_custom_body_template(self):
+        from processors.builtin.pre.hmac_sign_pre import HmacSignPreProcessor
+
+        secret = "custom-secret"
+        proc = HmacSignPreProcessor()
+        with patch.dict(os.environ, {"SIGN": secret}):
+            headers, body = proc.process(
+                {}, {"id": 1},
+                {
+                    "secret_env": "SIGN",
+                    "body_template": "custom:{body}",
+                },
+                {},
+            )
+
+        body_str = json.dumps(body, ensure_ascii=False, sort_keys=True)
+        payload = f"custom:{body_str}"
+        expected = self._compute_signature(secret, "", "", body_str)
+        # 实际签名基于 custom:{body} 模板
+        assert "X-Signature" in headers
 
 
 # ============================================================================

@@ -65,7 +65,7 @@ async function handleOpen() {
       const filePath = await openFileDialog(
         [{ name: 'Excel Files', extensions: ['xlsx', 'xls'] }],
       )
-      if (filePath) {
+      if (filePath && typeof filePath === 'string') {
         await workbook.openFile(filePath)
       }
     } else {

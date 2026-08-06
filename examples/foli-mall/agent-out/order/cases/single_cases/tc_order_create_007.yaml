@@ -1,0 +1,31 @@
+case_type: single
+test_id: TC_ORDER_CREATE_007
+relevance_id: IF_ORDER_CREATE
+api_name: 创建订单-余额不足
+app_name: foliMail
+method: POST
+url: /api/orders
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer02}"
+request_body:
+  receiverName: 李四
+  receiverPhone: "13800002222"
+  receiverAddress: 北京市朝阳区
+status_code: 200
+preprocessors:
+  - name: cart-fixture
+    config:
+      mode: clear
+  - name: balance-fixture
+    config:
+      balance: 0.01
+  - name: cart-fixture
+    config:
+      mode: ensure
+      product_id: 1000000000000003001
+      quantity: 1
+assert_dict:
+  $.code: "205001"
+tag: P1
+remark: 余额不足下单应返回 205001；事务回滚不扣库存

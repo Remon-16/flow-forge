@@ -28,7 +28,6 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
 
     interfaces = state.get("interfaces", [])
     api_raw_text = state.get("api_raw_text", "")
-    parse_mode = state.get("parse_mode", "raw")
 
     if not interfaces or not api_raw_text:
         logger.info("Skipping URL validation: no interfaces or api_raw_text")
@@ -38,7 +37,20 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
     if _sl():
         _sl().log_node_start("validate_interface_urls", "url_check")
 
-    max_retries = _h._settings.url_correction_max_retries
+    max_retries = _h._settings.url_doc_match_max_retries
+    url_strategy = getattr(_h._settings, "url_doc_match_strategy", "warn")
+    url_enabled = getattr(_h._settings, "url_doc_match_enabled", True)
+
+    # 未启用 URL 文档匹配校验：跳过 / Not enabled: skip entirely
+    if not url_enabled:
+        logger.info(_("url_check.disabled"))
+        return state
+
+    # skip 策略：完全跳过 URL 校验 / Skip strategy: bypass entirely
+    if url_strategy == "skip":
+        logger.info(_("url_check.skipped"))
+        return state
+
     bad_interfaces = []
     url_errors = []
 
@@ -79,17 +91,17 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
                     http_method=http_method,
                     snippets=snippets,
                 )
-                result = api_analyzer.call_llm_json(
-                    correction_prompt, IFACE_URL_CORRECTION_SYSTEM
+                result = api_analyzer.call_llm_json_object(
+                    correction_prompt, IFACE_URL_CORRECTION_SYSTEM, "corrected_url"
                 )
-                new_url = result.get("corrected_url", "").strip() if isinstance(result, dict) else ""
+                new_url = result.get("corrected_url", "").strip()
                 if new_url and new_url in api_raw_text:
                     if isinstance(iface, dict):
                         iface["url"] = new_url
-                        iface["remark"] = (iface.get("remark") or "") + " [URL corrected by LLM]"
+                        iface["remark"] = (iface.get("remark") or "") + f" [URL corrected by LLM: {bad_url} → {new_url}]"
                     else:
                         iface.url = new_url
-                        iface.remark = (getattr(iface, "remark", "") or "") + " [URL corrected by LLM]"
+                        iface.remark = (getattr(iface, "remark", "") or "") + f" [URL corrected by LLM: {bad_url} → {new_url}]"
                     corrected_count += 1
                     corrected = True
                     logger.info("Corrected URL for %s: %s → %s", interface_id, bad_url, new_url)
@@ -116,6 +128,12 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
         for err in url_errors:
             logger.info(_("url_check.cannot_correct_item", test_id=err["test_id"], method=err["method"], url=err["url"]))
         state["url_validation_errors"] = url_errors
+        # fail 策略：纠错耗尽后终止流水线 / Fail strategy: abort pipeline
+        if url_strategy == "fail":
+            raise ValueError(
+                f"URL correction failed for {len(url_errors)} interface(s) "
+                f"after {max_retries} retries"
+            )
     else:
         logger.info(_("url_check.corrected_count", count=corrected_count))
 
@@ -134,6 +152,6 @@ def validate_interface_urls_node(state: GraphState) -> GraphState:
             "url_errors": url_errors,
             "corrected_count": corrected_count,
         })
-        save_pipeline_state(memory_dir, "validate_urls")
+        save_pipeline_state(memory_dir, "validate_interface_urls")
 
     return state

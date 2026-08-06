@@ -1,0 +1,26 @@
+case_type: single
+test_id: TC_ORDER_DETAIL_001
+relevance_id: IF_ORDER_DETAIL
+api_name: 获取订单详情-正常
+app_name: foliMail
+method: GET
+url: /api/orders/9000000000000000203
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: order-fixture
+    config:
+      order_status: 1
+      order_id: 9000000000000000203
+assert_dict:
+  $.code: "100000"
+assert_rules:
+  - "$.data.orderNo is_not_null"
+  - "$.data.status == 1"
+  - "$.data.totalAmount > 0"
+  - "$.data.items[0].productId is_not_null"
+tag: P0
+remark: 详情包含订单项快照

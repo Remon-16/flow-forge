@@ -882,9 +882,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "flow-forge-studio"
-version = "0.1.0"
+name = "flow-forge-studio-beta"
+version = "0.3.2-beta"
 dependencies = [
+ "libc",
  "log",
  "serde",
  "serde_json",

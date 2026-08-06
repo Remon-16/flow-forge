@@ -1,0 +1,62 @@
+case_type: biz
+sheet_name: 禁用账号登录验证
+api_name: 禁用账号登录（user-fixture 造禁用用户 → 登录返回 201003）
+steps:
+  - step_id: Step_CreateUser
+    relevance_id: IF_CATEGORY_LIST
+    api_name: 创建测试用户（user-fixture）
+    app_name: foliMail
+    method: GET
+    url: /api/categories
+    request_head:
+      Content-Type: application/json
+    request_body: {}
+    status_code: 200
+    preprocessors:
+      - name: user-fixture
+        config:
+          mode: create
+          username: e2e_disabled
+          user_id: 9000000000000000101
+          status: 1
+    assert_dict:
+      code: '100000'
+
+  - step_id: Step_DisableUser
+    relevance_id: IF_CATEGORY_LIST
+    api_name: 禁用测试用户（user-fixture set_status=0）
+    app_name: foliMail
+    method: GET
+    url: /api/categories
+    request_head:
+      Content-Type: application/json
+    request_body: {}
+    status_code: 200
+    preprocessors:
+      - name: user-fixture
+        config:
+          mode: set_status
+          username: e2e_disabled
+          status: 0
+    assert_dict:
+      code: '100000'
+
+  - step_id: Step_LoginDisabled
+    relevance_id: IF_AUTH_LOGIN
+    api_name: 禁用账号登录（负向，期望 201003）
+    app_name: foliMail
+    method: POST
+    url: /api/auth/login
+    request_head:
+      Content-Type: application/json
+    request_body:
+      username: e2e_disabled
+      password: e2e123
+    status_code: 200
+    postprocessors:
+      - name: user-fixture
+        config:
+          cleanup: true
+    assert_dict:
+      code: '201003'
+    remark: 对应 raw 用例 TC_LOGIN_BUS_001 的禁用账号场景。

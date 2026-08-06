@@ -47,6 +47,8 @@ export const useYamlStore = defineStore('yaml', () => {
   const currentFilePath = ref<string | null>(null)
   const currentCase = ref<YamlCase | null>(null)
   const modified = ref(false)
+  /** 状态版本号，每次 mutation 或 save 后递增，供 YamlRawView 等组件监听同步 */
+  const _version = ref(0)
   const loading = ref(false)
 
   const openTabs = ref<OpenTab[]>([])
@@ -163,9 +165,12 @@ export const useYamlStore = defineStore('yaml', () => {
     let targetPath: string | null | undefined = filePath
     if (!targetPath) {
       if (isDesktop) {
-        targetPath = await openFileDialog(
+        const picked = await openFileDialog(
           [{ name: 'YAML Files', extensions: ['yaml', 'yml'] }],
         )
+        if (picked && !Array.isArray(picked)) {
+          targetPath = picked
+        }
       } else {
         // Browser fallback
         targetPath = await new Promise<string | null>((resolve) => {
@@ -265,6 +270,7 @@ export const useYamlStore = defineStore('yaml', () => {
       modified.value = false
       // Sync tab state
       saveCurrentTabState()
+      _version.value++
     } catch (err) {
       console.error('Save failed:', err)
       throw err
@@ -461,6 +467,7 @@ export const useYamlStore = defineStore('yaml', () => {
 
   function markModified() {
     modified.value = true
+    _version.value++
     const idx = activeTabIndex.value
     if (idx >= 0 && idx < openTabs.value.length) {
       openTabs.value[idx].modified = true
@@ -577,6 +584,7 @@ export const useYamlStore = defineStore('yaml', () => {
     currentFilePath,
     currentCase,
     modified,
+    _version,
     loading,
     openTabs,
     activeTabIndex,

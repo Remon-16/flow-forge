@@ -25,7 +25,7 @@ def _make_settings(**kwargs):
     """创建测试用 Settings / Create a minimal Settings object for testing."""
     s = Settings(llm_api_key="test")
     s.skeleton_batch_size = kwargs.get("skeleton_batch_size", 30)
-    s.validation_rules = kwargs.get("validation_rules", [
+    s.case_gen_validation = kwargs.get("case_gen_validation", [
         {"check": "skeleton_count", "strategy": "fail"},
     ])
     return s
@@ -384,3 +384,169 @@ class TestSerializePartialSingle:
 
         result = _serialize_partial_single({}, plan)
         assert "Summary" in result
+
+
+# ---------------------------------------------------------------------------
+# TestIterBatches — SingleSkeletonGenerator.iter_batches() 测试
+# ---------------------------------------------------------------------------
+
+class TestIterBatches:
+    """Tests for SingleSkeletonGenerator.iter_batches()."""
+
+    def should_return_correct_batch_count(self):
+        """25 测试点 batch_size=10 → 3 批 / 25 points batch_size=10 → 3 batches."""
+        settings = _make_settings(skeleton_batch_size=10)
+        agent = _make_agent(settings=settings)
+        plan = _mock_plan_single({"api_a": 15, "api_b": 10})  # 25 total
+
+        batches = list(agent.iter_batches(plan))
+        assert len(batches) == 3
+        # 批次1: 10, 批次2: 10, 批次3: 5 / Batch 1: 10, Batch 2: 10, Batch 3: 5
+        assert batches[0][1] == 10  # batch_expected
+        assert batches[1][1] == 10
+        assert batches[2][1] == 5
+        assert batches[0][3] == 3  # total_batches
+        assert batches[0][2] == 1  # batch_idx (1-based)
+        assert batches[2][2] == 3
+
+    def should_handle_empty_test_points(self):
+        """无测试点时不 yield / No test points → nothing yielded."""
+        settings = _make_settings(skeleton_batch_size=10)
+        agent = _make_agent(settings=settings)
+        plan = MagicMock()
+        plan.single_test_points = {}
+
+        batches = list(agent.iter_batches(plan))
+        assert len(batches) == 0
+
+    def should_handle_batch_size_negative_one(self):
+        """batch_size=-1 → 一整批 / batch_size=-1 → one big batch."""
+        settings = _make_settings(skeleton_batch_size=-1)
+        agent = _make_agent(settings=settings)
+        plan = _mock_plan_single({"api_a": 25})
+
+        batches = list(agent.iter_batches(plan))
+        assert len(batches) == 1
+        assert batches[0][1] == 25  # all 25 points in one batch
+        assert batches[0][3] == 1   # total_batches=1
+
+    def should_group_by_api_within_batch(self):
+        """同一批内按 API 分组 / Points grouped by API within a batch."""
+        settings = _make_settings(skeleton_batch_size=10)
+        agent = _make_agent(settings=settings)
+        plan = _mock_plan_single({"api_a": 5, "api_b": 5})  # 10 total, 1 batch
+
+        batches = list(agent.iter_batches(plan))
+        assert len(batches) == 1
+        batch_grouped = batches[0][0]
+        assert "api_a" in batch_grouped
+        assert "api_b" in batch_grouped
+        assert len(batch_grouped["api_a"]) == 5
+        assert len(batch_grouped["api_b"]) == 5
+
+    def should_split_single_api_across_batches(self):
+        """单 API 25 点 batch_size=10 → 跨 3 批 / Single API 25 points → 3 batches."""
+        settings = _make_settings(skeleton_batch_size=10)
+        agent = _make_agent(settings=settings)
+        plan = _mock_plan_single({"api_large": 25})
+
+        batches = list(agent.iter_batches(plan))
+        assert len(batches) == 3
+        # 每批只含一个 API key / Each batch has only one API key
+        for batch_grouped, _, _, _ in batches:
+            assert list(batch_grouped.keys()) == ["api_large"]
+
+    def should_yield_correct_batch_expected_count(self):
+        """batch_expected 等于该批测试点数 / batch_expected matches point count."""
+        settings = _make_settings(skeleton_batch_size=7)
+        agent = _make_agent(settings=settings)
+        plan = _mock_plan_single({"api_a": 10, "api_b": 5})  # 15 total
+
+        for batch_grouped, batch_expected, _, _ in agent.iter_batches(plan):
+            total_in_group = sum(len(pts) for pts in batch_grouped.values())
+            assert batch_expected == total_in_group
+
+
+# ---------------------------------------------------------------------------
+# TestIterBatchesBiz — BizSkeletonGenerator.iter_batches() 测试
+# ---------------------------------------------------------------------------
+
+class TestIterBatchesBiz:
+    """Tests for BizSkeletonGenerator.iter_batches()."""
+
+    def should_return_correct_biz_batch_count(self):
+        """7 个 scenario batch_size=3 → 3 批 / 7 scenarios batch_size=3 → 3 batches."""
+        settings = _make_settings(skeleton_batch_size=3)
+        agent = _make_agent(BizSkeletonGenerator, settings=settings)
+        plan = _mock_plan_biz(7)
+
+        batches = list(agent.iter_batches(plan))
+        assert len(batches) == 3
+        assert batches[0][1] == 3  # batch 1: 3 scenarios
+        assert batches[1][1] == 3  # batch 2: 3 scenarios
+        assert batches[2][1] == 1  # batch 3: 1 scenario
+        assert batches[0][3] == 3  # total_batches
+
+    def should_handle_empty_scenarios(self):
+        """空 scenarios 时不 yield / Empty scenarios → nothing yielded."""
+        settings = _make_settings(skeleton_batch_size=3)
+        agent = _make_agent(BizSkeletonGenerator, settings=settings)
+        plan = MagicMock()
+        plan.biz_flow_scenarios = []
+
+        batches = list(agent.iter_batches(plan))
+        assert len(batches) == 0
+
+
+# ---------------------------------------------------------------------------
+# TestGenerateBatch — SingleSkeletonGenerator.generate_batch() 测试
+# ---------------------------------------------------------------------------
+
+class TestGenerateBatch:
+    """Tests for SingleSkeletonGenerator.generate_batch()."""
+
+    def should_call_llm_with_batch_notice(self):
+        """_build_prompt 收到 batch_notice / _build_prompt receives batch_notice."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            settings = _make_settings(skeleton_batch_size=3)
+            agent = _make_agent(settings=settings)
+            plan = _mock_plan_single({"api_a": 5})
+            iface_dicts = [{"test_id": "api_a", "method": "GET", "url": "/a"}]
+
+            notices = []
+            real_build = agent._build_prompt
+
+            def track_build(*args, **kwargs):
+                notices.append(kwargs.get("batch_notice", ""))
+                return real_build(*args, **kwargs)
+
+            agent._build_prompt = track_build
+            agent.call_llm_json = MagicMock(return_value=_valid_single_skeletons(3))
+
+            # Use iter_batches to get first batch
+            for batch_grouped, batch_expected, batch_idx, total_batches in agent.iter_batches(plan):
+                agent.generate_batch(
+                    batch_grouped, plan, iface_dicts, None, "",
+                    batch_idx, total_batches,
+                )
+                break
+
+            assert "[Batch 1/" in notices[0]
+
+    def should_return_correct_skeleton_list(self):
+        """返回正确的骨架列表 / Returns correct skeleton list."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            plan = _mock_plan_single({"api_a": 3})
+            iface_dicts = []
+
+            agent.call_llm_json = MagicMock(return_value=_valid_single_skeletons(3))
+
+            for batch_grouped, batch_expected, batch_idx, total_batches in agent.iter_batches(plan):
+                result = agent.generate_batch(
+                    batch_grouped, plan, iface_dicts, None, "",
+                    batch_idx, total_batches,
+                )
+                assert len(result) == 3
+                assert result[0]["test_id"] == "sk_0"
+                break

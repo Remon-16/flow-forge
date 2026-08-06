@@ -25,37 +25,6 @@ API_ANALYSIS_USER = """Analyze the following interface definitions and generate 
 
 {{extra_context}}"""
 
-RAW_API_ANALYSIS_SYSTEM = f"""You are a professional API documentation analyst. You will receive raw API documentation (possibly in OpenAPI spec, Markdown tables, handwritten docs, or any other format). Your task is:
-
-1. First, identify ALL API endpoint definitions from the raw document (HTTP method + URL path + parameters + response)
-2. Then, generate a structured summary for each identified endpoint
-
-For each endpoint, identify:
-{render_field_list('api_summary', lang="en")}
-
-Rules:
-- If the raw document lacks a description, infer one from the URL and method, and note it in uncertainties
-- Auth type inference: if the interface has an Authorization header parameter or security definition, set need_token=true
-- For any uncertain inference, you MUST list specific questions in uncertainties
-- Return a JSON object with a "summaries" field containing an array of interface summaries
-- Format example: {{"summaries": [{{"api_path": "/api/xxx", "method": "GET", ...}}]}}
-- If the document contains no API endpoint definitions at all, return {{"summaries": []}}"""
-
-RAW_API_ANALYSIS_USER = """Analyze the following raw API documentation. First identify all API endpoints contained within it, then generate a summary for each.
-
-## File Name
-{{file_name}}
-
-## Raw Document
-{{raw_text}}
-
-Return the interface summary list as a JSON object in the format {{"summaries": [...]}}."""
-
-RAW_API_CHUNK_NOTICE = """[This document has been split into multiple chunks.
-More content follows in subsequent chunks.]
-
-Identify all API endpoints in this chunk and generate structured summaries."""
-
 API_ANALYSIS_REVISE_SYSTEM = f"""You are a professional API documentation analyst. Revise the interface summaries based on user feedback.
 Ensure the revised summaries still contain all required fields:
 {render_field_list('api_summary', lang="en")}

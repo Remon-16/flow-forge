@@ -1,0 +1,47 @@
+name: mq_processors
+description: "MQ-backed pre/post-processors for message publish/consume (Kombu: RabbitMQ/Redis/SQS/MongoDB). MQ 前后置处理器，用于消息发布与消费。"
+version: "1.0"
+target_agents:
+  - processor_selector
+prompt_extension: |
+  ## Available MQ Processors (Kombu)
+
+  You can assign MQ-backed processors to test cases.
+  Add them to `preprocessors` and/or `postprocessors` arrays.
+
+  ⚠️ RULES:
+  1. ONLY use processor names listed below. NEVER invent or guess names.
+  2. Processors are OPTIONAL. Only assign when a case needs message publish/consume.
+  3. `config` can be `{}` when defaults are acceptable.
+
+  ---
+
+  ### Processor: order-publish                                ← COPY this block to add a new processor
+
+  - **Applies to**: Pre (before request) + Post (after response)
+  - **Pre — before_request**: Publishes a JSON message to an MQ queue
+    (e.g., "order.create") with order details from the request body.
+    Simulates an upstream event that the API should handle.
+  - **Post — after_response**: Consumes a message from the same queue
+    and prints it (demo mode). In production, use this to verify
+    the message was properly processed.
+  - **Use when**: The test case calls an API that either consumes from
+    or publishes to MQ (order creation, status notifications, etc.).
+  - **Config fields** (all optional, in `case_config`):
+    | Field | Type | Default | Description |
+    |-------|------|---------|-------------|
+    | queue_name | str | "order.create" | Queue name |
+    | exchange_name | str | "" | Exchange name (empty = default) |
+    | routing_key | str | "order.create" | Routing key |
+  - **YAML example**:
+    ```yaml
+    preprocessors:
+      - name: order-publish
+        config: {}
+    postprocessors:
+      - name: order-publish
+        config: {}
+    ```
+
+  ---
+tools: []

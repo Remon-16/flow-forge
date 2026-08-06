@@ -233,7 +233,7 @@ const relevanceOptions = computed(() => workbook.validTestIdOptions)
 function getRowClassName(record: BizStep) {
   if ((record as any)._searchActive) return 'row-search-active'
   if ((record as any)._searchMatch) return 'row-search-match'
-  if (record._stepIdDuplicate || record._relevanceValid === false
+  if (record._stepIdDuplicate
       || record._inheritError || (record as any)._urlWarning) {
     return 'row-error'
   }
@@ -302,7 +302,6 @@ function getRowClassName(record: BizStep) {
                 :options="relevanceOptions"
                 size="small"
                 style="width: 100%;"
-                :status="record._relevanceValid === false ? 'error' : ''"
                 :dropdown-match-select-width="false"
                 :dropdown-style="{ minWidth: '400px' }"
                 :filter-option="(inputValue: string, option: any) => {
@@ -314,11 +313,6 @@ function getRowClassName(record: BizStep) {
                 @change="(v: string) => onCellChange(stepIdx, col, v)"
                 @select="(v: string) => onCellChange(stepIdx, col, v)"
               >
-                <template v-if="record._relevanceValid === false" #suffix>
-                  <a-tooltip :title="t('validator.relevanceInvalid')">
-                    <span style="color: #ff4d4f;">!</span>
-                  </a-tooltip>
-                </template>
               </a-auto-complete>
             </template>
 

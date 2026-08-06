@@ -1,0 +1,48 @@
+name: utility_processors
+description: "Reference skill for built-in utility processors (HMAC signing, timestamp, debug). These are typically configured manually, not assigned by LLM. 内置工具类处理器参考（签名、时间戳、调试），通常手动配置而非 LLM 分配。"
+version: "1.0"
+target_agents:
+  - processor_selector
+prompt_extension: |
+  ## Utility Processors (Reference)
+
+  The following utility processors are available in the system.
+  These are typically configured **manually** in test case YAML — the LLM
+  should NOT assign them unless explicitly instructed by the user.
+
+  ⚠️ IMPORTANT: Do NOT add these processors to any case unless the user
+  guidance explicitly asks for them. They are listed here for reference only.
+
+  ---
+
+  ### Processor: hmac-sign (Pre) + hmac-verify (Post)
+
+  - **HMAC-SHA256 request signing + response verification**.
+    Adds `X-Signature` header to requests and verifies it on responses.
+  - **Config**: `secret` (signing key), `algorithm` (default sha256)
+  - Typical use: testing APIs that require HMAC authentication.
+
+  ### Processor: timestamp (Pre)
+
+  - **Injects `X-Timestamp` (ISO 8601 UTC) and `X-Request-Id` (UUIDv4)**.
+    Useful for APIs that require timestamp headers or request tracing.
+  - **Config**: none required.
+
+  ### Processor: path-param-restore (Pre)
+
+  - **Restores fields cleared during URL path parameter substitution**.
+    When a URL like `/api/stores/{id}` extracts `id` from the body,
+    this processor puts it back for backends that need both.
+  - **Config**: `fields` — "all" or a list of field names.
+
+  ### Processor: print-demo (Pre) + print-demo-post (Post)
+
+  - **Debug helpers**. Log request/response summaries at INFO level.
+  - **Config**: none required.
+
+  ### Processor: response-time (Post)
+
+  - **Logs response status code and content length**.
+    Warns when response time exceeds a threshold.
+  - **Config**: `max_response_time` (default 5.0 seconds).
+tools: []

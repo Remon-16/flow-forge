@@ -7,6 +7,8 @@ Usage:
     python main.py --config /path/to/env.yml
 """
 
+from __future__ import annotations
+
 import argparse
 import logging
 import os
@@ -29,34 +31,19 @@ from reporter.html_writer import HTMLReportWriter
 logger = logging.getLogger(__name__)
 
 
-def _setup_logging(verbose: bool = False) -> None:
-    """Configure logging with consistent format."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+# 委托给 shared/py/flow_forge_logging 模块，确保与 agent/converter 格式统一
+# Delegate to shared/py/flow_forge_logging for consistent format across all subprocesses
+from flow_forge_logging import setup_studio_logging as _setup_logging
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """解析命令行参数 — 参数定义来自 shared/schemas/cli/executor.json。
+    Parse CLI args — arg definitions from shared/schemas/cli/executor.json."""
+    # 从 shared schema 自动生成 parser / Auto-generate parser from shared schema
+    from flow_forge_schemas.cli import load_cli_schema, add_args_to_parser
+    schema = load_cli_schema("executor")
     parser = argparse.ArgumentParser(description="Flow Forge API Test Executor")
-    parser.add_argument(
-        "--config", type=str, default=None,
-        help="Path to env.yml (default: env.yml next to this script)",
-    )
-    parser.add_argument("--scriptType", type=str, default=None, help="Script type")
-    parser.add_argument("--envName", type=str, default=None, help="Environment name")
-    parser.add_argument("--caseFilePath", type=str, default=None, help="Path to Excel test case file")
-    parser.add_argument("--maxThread", type=int, default=None, help="Maximum number of threads")
-    parser.add_argument("--reportName", type=str, default=None, help="Report name")
-    parser.add_argument("--apiMode", type=str, default=None,
-                        help="Test mode: single, biz, or all")
-    parser.add_argument("--yamlDir", type=str, default=None,
-                        help="Directory containing YAML test case files")
-    parser.add_argument("--yamlFiles", type=str, default=None,
-                        help="Comma-separated YAML file paths")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
+    add_args_to_parser(parser, schema)
     return parser.parse_args(argv)
 
 
@@ -66,13 +53,29 @@ def _args_to_overrides(args: argparse.Namespace) -> dict:
         value = getattr(args, key, None)
         if value is not None:
             overrides[key] = value
+    # yamlDir/yamlFiles 仅参与配置校验（提供时 caseFilePath 不再必填），不写入最终配置。
+    # yamlDir/yamlFiles participate in config validation only (caseFilePath becomes optional
+    # when either is provided) and are not written into the final config.
+    for key in ("yamlDir", "yamlFiles"):
+        value = getattr(args, key, None)
+        if value is not None:
+            overrides[key] = value
     return overrides
 
 
 def _load_config(args: argparse.Namespace) -> dict:
     """Load configuration from YAML file. Returns config dict or raises SystemExit."""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    yml_path = args.config or os.path.join(script_dir, "env.yml")
+    # 查找优先级 / Lookup priority:
+    #   1. --config 显式指定 / --config explicit path
+    #   2. CWD 下的 env.yml（Studio 通过 current_dir 设置）/ env.yml in CWD (set by Studio)
+    #   3. script_dir 下的 env.yml（命令行直接运行时）/ env.yml in script dir (direct CLI)
+    if args.config:
+        yml_path = args.config
+    else:
+        cwd_yml = os.path.join(os.getcwd(), "env.yml")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_yml = os.path.join(script_dir, "env.yml")
+        yml_path = cwd_yml if os.path.exists(cwd_yml) else script_yml
 
     try:
         initialize(yml_path, _args_to_overrides(args))
@@ -185,6 +188,18 @@ def main(argv: list[str] | None = None) -> int:
     all_passed = _print_summary(single_results, biz_results)
 
     logger.info("Report: %s", report_path)
+
+    # 输出 JSON 完成行供 Studio 解析 / Output JSON completion line for Studio parsing
+    import json as _json
+    _result = {
+        "output": str(report_path),
+        "single_cases": len(single_results),
+        "biz_flows": len(biz_results),
+        "single_passed": sum(1 for r in single_results if r.get("passed")),
+        "biz_passed": sum(1 for r in biz_results if r.get("passed")),
+        "all_passed": all_passed,
+    }
+    print(_json.dumps(_result, ensure_ascii=False))
 
     return 0 if all_passed else 1
 

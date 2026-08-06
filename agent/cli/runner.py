@@ -5,11 +5,13 @@ CLI runner: main pipeline orchestration for all modes.
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from config.settings import load_settings
+from graph.nodes.helpers import load_run_config, save_run_config
 from graph.state import GraphState
 from graph.workflow import build_workflow
 from i18n import _
@@ -22,11 +24,106 @@ from .parser import build_parser
 logger = logging.getLogger(__name__)
 
 
-def _load_pipeline_state(memory_dir: str) -> dict:
+def _first(*values):
+    """返回第一个非 None 值 / Return the first non-None value.
+
+    用于 CLI > saved_config > env.yaml 优先级链。
+    Used for CLI > saved_config > env.yaml priority chain.
+    """
+    for v in values:
+        if v is not None:
+            return v
+    return None
+
+
+# 配置项与受影响阶段的映射 / Config key to affected stage mapping
+_CONFIG_STAGE_DEPENDENCIES: dict = {
+    "parse_mode": ["parse_docs"],
+    "parser_path": ["parse_docs"],
+    "case_type": ["generate_outline", "generate_plan", "parse_plan", "batch_controller"],
+    "user_guidance": ["generate_outline", "generate_plan"],
+    "plugin_batch_size": ["batch_controller"],
+    "output_format": ["write_output"],
+    "auto_mode": ["analyze_api", "human_confirm"],
+    "reference_dir": ["generate_outline", "generate_plan"],
+}
+
+# CLI 参数名到配置键的映射 / CLI arg name to config key mapping
+_CLI_ARG_TO_CONFIG_KEY: dict = {
+    "case_type": "case_type",
+    "prompt": "user_guidance",
+    "output_format": "output_format",
+    "plugin_batch_size": "plugin_batch_size",
+    "auto": "auto_mode",
+    "parse_mode": "parse_mode",
+    "parser_path": "parser_path",
+    "reference_dir": "reference_dir",
+    "max_steps": "max_steps",
+    "max_retries": "max_retries",
+    "skeleton_batch_size": "skeleton_batch_size",
+    "plan_single_batch_size": "plan_single_batch_size",
+    "url_doc_match_max_retries": "url_doc_match_max_retries",
+    "url_doc_match_strategy": "url_doc_match_strategy",
+    "consecutive_batch_failure_limit": "consecutive_batch_failure_limit",
+    "url_doc_match_enabled": "url_doc_match_enabled",
+    "case_gen_validation_max_retries": "case_gen_validation_max_retries",
+    "case_gen_validation_rule": "case_gen_validation_rule",
+    "parse_plan_validation_rule": "parse_plan_validation_rule",
+    "parse_plan_validation_max_retries": "parse_plan_validation_max_retries",
+    "plugin_module": "plugin_module",
+    "skill_agent": "skill_agent",
+    "lang": "lang",
+}
+
+
+def _check_config_overrides(args, saved_config: dict, ps_path: Path) -> None:
+    """检查 CLI 参数覆盖是否影响已完成的阶段并发出警告。
+
+    Check if CLI overrides affect already-completed stages and warn.
+    When the user provides different CLI args during --resume, some of them
+    may target stages that have already finished. This function logs clear
+    warnings so the user knows why an override might have no effect.
+    """
+    if not saved_config or not ps_path.exists():
+        return
+
+    try:
+        with open(ps_path, "r", encoding="utf-8") as f:
+            ps = json.load(f)
+    except Exception:
+        return
+
+    completed_stages = set(ps.get("stages", []))
+
+    for cli_arg, config_key in _CLI_ARG_TO_CONFIG_KEY.items():
+        cli_value = getattr(args, cli_arg, None)
+        if cli_value is None or (isinstance(cli_value, str) and not cli_value):
+            continue
+        saved_value = saved_config.get(config_key)
+        if saved_value is not None and str(cli_value) != str(saved_value):
+            logger.info(_("resume.cli_override_warning",
+                          config_key=config_key,
+                          new_value=cli_value,
+                          old_value=saved_value))
+            affected_stages = _CONFIG_STAGE_DEPENDENCIES.get(config_key, [])
+            for stage in affected_stages:
+                if stage in completed_stages:
+                    logger.info(_("resume.config_override_stale",
+                                  config_key=config_key,
+                                  stage=stage))
+
+
+def _load_pipeline_state(memory_dir: str, cases_dir: str = "") -> dict:
     """从 memory/ 目录加载已保存的流水线中间结果。
 
     Load saved pipeline artifacts from memory/ directory to reconstruct GraphState.
     Returns a dict of state fields that can be merged into the initial state.
+
+    Args:
+        memory_dir: 保存了流水线工件的 memory 目录路径。
+                    Path to the memory directory with pipeline artifacts.
+        cases_dir:  用例输出目录路径（用于从 YAML 重建接口定义）。
+                    Path to the cases directory (for YAML interface reconstruction).
     """
     state: dict = {}
     if not memory_dir:
@@ -45,6 +142,12 @@ def _load_pipeline_state(memory_dir: str) -> dict:
         except Exception:
             pass
 
+    # 加载运行配置（第一次运行时保存的 CLI 参数）
+    # Load run configuration (CLI args saved during first run)
+    run_config = load_run_config(memory_dir)
+    if run_config:
+        state["_run_config"] = run_config
+
     # 加载各阶段保存的工件 / Load saved artifacts
     def _load_json(filename: str) -> Optional[dict]:
         path = memory_path / filename
@@ -59,18 +162,30 @@ def _load_pipeline_state(memory_dir: str) -> dict:
     if "parse_docs" in completed_stages:
         data = _load_json("parsed_docs.json")
         if data:
-            state["requirement_text"] = data.get("requirement_text", "")
+            state["requirement_texts"] = data.get("requirement_texts", [])
             state["api_raw_text"] = data.get("api_raw_text", "")
             state["interfaces"] = data.get("interfaces", [])
-            state["parse_mode"] = data.get("parse_mode", "raw")
+            state["parse_mode"] = data.get("parse_mode", "llm")
+            state["interface_extraction_method"] = data.get("interface_extraction_method", "")
+
+    # 无条件加载 API 分析反馈 / Load API analysis feedback unconditionally
+    # （崩溃时 api_analysis_feedback.json 已写入但 pipeline_state 未更新，需无条件恢复）
+    # (on crash, api_analysis_feedback.json exists but pipeline_state wasn't updated)
+    api_fb = _load_json("api_analysis_feedback.json")
+    if api_fb:
+        state["api_summary"] = api_fb.get("api_summary", state.get("api_summary", []))
+        state["api_summary_feedback"] = api_fb.get("feedback", "")
+        state["api_summary_confirmed"] = False
 
     if "analyze_api" in completed_stages:
-        data = _load_json("api_summary.json")
-        if data:
-            state["api_summary"] = data
-            state["api_summary_confirmed"] = True
+        if not api_fb:
+            data = _load_json("api_summary.json")
+            if data:
+                state["api_summary"] = data
+                state["api_summary_confirmed"] = True
 
-    if "validate_urls" in completed_stages:
+
+    if "validate_interface_urls" in completed_stages:
         _load_json("url_validation.json")  # Just validate existence; errors stored in state
 
     if "analyze_requirement" in completed_stages:
@@ -83,11 +198,14 @@ def _load_pipeline_state(memory_dir: str) -> dict:
         if data:
             state["plan_outline"] = data
 
-    # plan.md is read by generate_plan_node itself; we set plan_md path
-    plan_path = memory_path / "plan.md"
-    if plan_path.exists() and "generate_plan" in completed_stages:
+    # plan.md 为只写文件，不再读取；从 plan_sections.json 恢复 state["plan_md"]
+    # plan.md is write-only; restore state["plan_md"] from plan_sections.json
+    sections_path = memory_path / "plan_sections.json"
+    if sections_path.exists() and "generate_plan" in completed_stages:
         try:
-            state["plan_md"] = plan_path.read_text(encoding="utf-8")
+            sections_data = json.loads(sections_path.read_text(encoding="utf-8"))
+            from flow_forge_schemas.plan_sections import assemble_plan_md
+            state["plan_md"] = assemble_plan_md(sections_data)
         except Exception:
             pass
 
@@ -96,25 +214,39 @@ def _load_pipeline_state(memory_dir: str) -> dict:
         if data:
             state["plan_confirmed"] = data.get("plan_confirmed", True)
 
+    # 加载未处理的计划审核反馈（无论 human_confirm 是否完成都检查）
+    # Load pending plan review feedback regardless of human_confirm completion status
+    pending_fb = _load_json("pending_feedback.json")
+    if pending_fb:
+        state["plan_feedback"] = pending_fb.get("plan_feedback", "")
+        state["plan_feedback_type"] = pending_fb.get("plan_feedback_type", "text")
+        state["plan_annotations"] = pending_fb.get("plan_annotations", [])
+        state["plan_confirmed"] = False
+
     if "parse_plan" in completed_stages:
         data = _load_json("plan_parsed.json")
         if data:
-            from models.schema import PlanStep, TestPlan
+            from models.schema import InterfaceDef as _InterfaceDef, PlanStep, TestPlan
             # 重建 single_test_points 中的 PlanStep 对象，因为下游通过属性访问
             # Reconstruct PlanStep objects — downstream accesses them via attributes
             single_tps: dict = {}
             for tid, steps in data.get("single_test_points", {}).items():
                 single_tps[tid] = [PlanStep(**s) for s in steps]
+            # 重建 api_definitions 中的 InterfaceDef 对象 / Reconstruct InterfaceDef objects
+            api_defs = [_InterfaceDef(**ad) for ad in data.get("api_definitions", [])]
             state["plan_parsed"] = TestPlan(
                 business_summary=data.get("business_summary", ""),
-                api_definitions=data.get("api_definitions", []),
+                api_definitions=api_defs,
                 single_test_points=single_tps,
                 mermaid_flows=data.get("mermaid_flows", {}),
                 biz_flow_scenarios=data.get("biz_flow_scenarios", []),
             )
 
-    # Reconstruct interfaces from YAML if available
-    cases_dir = state.get("cases_dir", "")
+    # 从 YAML 文件重建接口定义（优先于 parsed_docs.json 中的原始接口）
+    # 这样用户在审核阶段手动编辑 YAML 后，resume 时能加载到最新版本
+    # Reconstruct interfaces from YAML files (takes priority over original
+    # interfaces from parsed_docs.json). This ensures user YAML edits made
+    # during the review phase are loaded on resume.
     if cases_dir and "save_interfaces" in completed_stages:
         ifaces_dir = Path(cases_dir) / "interfaces"
         if ifaces_dir.is_dir() and list(ifaces_dir.glob("*.yaml")):
@@ -123,6 +255,17 @@ def _load_pipeline_state(memory_dir: str) -> dict:
                 state["interfaces"] = YamlWriter.read_interfaces(str(cases_dir))
             except Exception:
                 pass
+
+    # 检测 plan_parsed 与 plan_sections 是否不同步 / Check plan_parsed vs plan_sections consistency
+    if state.get("plan_parsed") and sections_path.exists():
+        try:
+            sections_data = json.loads(sections_path.read_text(encoding="utf-8"))
+            parsed_apis = len(state["plan_parsed"].api_definitions)
+            sections_api_count = len(sections_data.get("single_api", []))
+            if parsed_apis > 0 and sections_api_count > 0 and abs(parsed_apis - sections_api_count) > 0:
+                logger.warning(_("resume.plan_mismatch", parsed=parsed_apis))
+        except Exception:
+            pass
 
     return state
 
@@ -134,7 +277,7 @@ def main() -> int:
     """
     parser = build_parser()
     args = parser.parse_args()
-    setup_logging(args.verbose)
+    setup_logging(args.verbose, use_stderr=getattr(args, 'studio', False))
 
     settings = load_settings(args.env)
     if not settings.llm_api_key:
@@ -164,7 +307,41 @@ def main() -> int:
         logger.info(_("resume.loading_state", dir=str(_memory_dir)))
 
         # Load saved pipeline state
-        loaded = _load_pipeline_state(str(_memory_dir))
+        loaded = _load_pipeline_state(str(_memory_dir), str(_cases_dir))
+
+        # 加载已保存的运行配置，与 CLI 参数合并
+        # Load saved run config, merge with CLI args
+        # 已保存的配置作为默认值，CLI 参数作为覆盖值
+        # Saved config as defaults, CLI args as overrides
+        saved_config = loaded.pop("_run_config", {})
+        if not saved_config:
+            logger.info(_("resume.config_missing"))
+
+        # 从已保存配置中提取默认值 / Extract defaults from saved config
+        # 使用 _first() 确保 0 和空字符串等合法值不被覆盖
+        # Use _first() so legitimate 0/empty values aren't overridden
+        _case_type = _first(args.case_type, saved_config.get("case_type"), settings.case_type)
+        _output_format = _first(args.output_format, saved_config.get("output_format"), settings.output_format)
+        _plugin_batch_size = _first(args.plugin_batch_size, saved_config.get("plugin_batch_size"), settings.plugin_batch_size)
+        _auto_mode = _first(args.auto, saved_config.get("auto_mode"), settings.auto_mode)
+        _parse_mode = _first(args.parse_mode, saved_config.get("parse_mode"), "llm")
+        _user_guidance = _first(args.prompt, saved_config.get("user_guidance"), "")
+        _parser_path = _first(args.parser_path, saved_config.get("parser_path"), "")
+        _reference_dir = _first(args.reference_dir, saved_config.get("reference_dir"), "")
+        _debug_snapshots = _first(args.debug_snapshots, saved_config.get("debug_snapshots"), False)
+        _api_paths = list(args.api) if args.api else saved_config.get("api_paths", [])
+
+        # 从已保存配置中提取分批设置 / Extract batching settings from saved config
+        _skeleton_batch_size = _first(
+            args.skeleton_batch_size,
+            saved_config.get("skeleton_batch_size"),
+            settings.skeleton_batch_size,
+        )
+        _plan_single_batch_size = _first(
+            args.plan_single_batch_size,
+            saved_config.get("plan_single_batch_size"),
+            settings.plan_single_batch_size,
+        )
 
         # If no pipeline_state.json, fall back to legacy resume (batch_controller only)
         ps_path = Path(str(_memory_dir)) / "pipeline_state.json"
@@ -212,40 +389,173 @@ def main() -> int:
                 pass
         logger.info(_("resume.from_stage", stage=next_stage))
 
+        # 检查 CLI 参数覆盖是否影响已完成的阶段 / Warn if overrides affect completed stages
+        _check_config_overrides(args, saved_config, ps_path)
+
+        # === CLI 参数覆盖 Settings / Override settings with CLI args ===
+        settings.max_steps = _first(args.max_steps, saved_config.get("max_steps"), settings.max_steps)
+        settings.max_retries = _first(args.max_retries, saved_config.get("max_retries"), settings.max_retries)
+        settings.skeleton_batch_size = _first(args.skeleton_batch_size, saved_config.get("skeleton_batch_size"), settings.skeleton_batch_size)
+        settings.plan_single_batch_size = _first(args.plan_single_batch_size, saved_config.get("plan_single_batch_size"), settings.plan_single_batch_size)
+        settings.url_doc_match_max_retries = _first(args.url_doc_match_max_retries, saved_config.get("url_doc_match_max_retries"), settings.url_doc_match_max_retries)
+        settings.url_doc_match_strategy = _first(args.url_doc_match_strategy, saved_config.get("url_doc_match_strategy"), settings.url_doc_match_strategy)
+        settings.consecutive_batch_failure_limit = _first(args.consecutive_batch_failure_limit, saved_config.get("consecutive_batch_failure_limit"), settings.consecutive_batch_failure_limit)
+        settings.plugin_batch_size = _first(args.plugin_batch_size, saved_config.get("plugin_batch_size"), settings.plugin_batch_size)
+        # plan_biz_flow_batch_size 无 CLI 参数，仅从 saved_config 恢复 / No CLI arg, restore from saved config only
+        settings.plan_biz_flow_batch_size = saved_config.get("plan_biz_flow_batch_size", settings.plan_biz_flow_batch_size)
+
+        if args.no_url_doc_match_enabled:
+            settings.url_doc_match_enabled = False
+        elif args.url_doc_match_enabled is not None:
+            settings.url_doc_match_enabled = True
+
+        if args.no_plugins:
+            settings.enable_plugins = False
+        elif args.plugins:
+            settings.enable_plugins = True
+
+        if args.no_skills:
+            settings.enable_skills = False
+        elif args.skills:
+            settings.enable_skills = True
+
+        if args.lang is not None:
+            settings.agent_lang = args.lang
+            os.environ["AGENT_LANG"] = args.lang
+
+        # --plugin-module：覆盖 plugins.modules / Override plugins.modules
+        if args.plugin_module is not None:
+            settings.plugin_modules = list(args.plugin_module)
+
+        # --case-gen-validation-max-retries / Override case_gen max retries
+        settings.case_format_max_retries = _first(args.case_gen_validation_max_retries, settings.case_format_max_retries)
+
+        # --case-gen-validation-rule：覆盖 case_gen_validation rules / Override case_gen validation rules
+        if args.case_gen_validation_rule is not None:
+            parsed_rules = []
+            for rule_str in args.case_gen_validation_rule:
+                parts = rule_str.split(":")
+                rule = {"check": parts[0], "strategy": parts[1] if len(parts) > 1 else "warn"}
+                if len(parts) > 2:
+                    rule["failure_action"] = parts[2]
+                parsed_rules.append(rule)
+            settings.case_gen_validation = parsed_rules
+
+        # --parse-plan-validation-max-retries / Override parse plan max retries
+        settings.parse_plan_validation_max_retries = _first(
+            args.parse_plan_validation_max_retries,
+            settings.parse_plan_validation_max_retries,
+        )
+
+        # --parse-plan-validation-rule：覆盖 parse_plan_validation rules
+        # Override parse plan validation rules
+        if args.parse_plan_validation_rule is not None:
+            parsed_rules = []
+            for rule_str in args.parse_plan_validation_rule:
+                parts = rule_str.split(":")
+                rule = {"check": parts[0],
+                        "strategy": parts[1] if len(parts) > 1 else "warn"}
+                if len(parts) > 2:
+                    rule["failure_action"] = parts[2]
+                parsed_rules.append(rule)
+            settings.parse_plan_validation_rules = parsed_rules
+
+        # --skill-agent：覆盖 skills.agents / Override skill agents
+        if args.skill_agent is not None:
+            agents: dict[str, list[str]] = {}
+            for agent_str in args.skill_agent:
+                agent_name, _ignored, skills_str = agent_str.partition(":")
+                agents[agent_name] = [s.strip() for s in skills_str.split(",") if s.strip()]
+            settings.skill_agents = agents
+
         graph = build_workflow(settings, session_logger=session_logger)
         config = {"configurable": {"thread_id": f"resume_{datetime.now().strftime('%Y%m%d%H%M%S')}"}}
 
+        # 保存合并后的运行配置供后续 resume 使用
+        # Save merged run config for future resumes
+        _merged_config = {
+            "case_type": _case_type,
+            "user_guidance": _user_guidance,
+            "output_format": _output_format,
+            "plugin_batch_size": _plugin_batch_size,
+            "auto_mode": _auto_mode,
+            "parse_mode": _parse_mode,
+            "output_dir": output_dir,
+            "api_paths": _api_paths,
+            "debug_snapshots": _debug_snapshots,
+            "parser_path": _parser_path,
+            "reference_dir": _reference_dir,
+            "skeleton_batch_size": _skeleton_batch_size,
+            "plan_single_batch_size": _plan_single_batch_size,
+            "plan_biz_flow_batch_size": settings.plan_biz_flow_batch_size,
+            "max_steps": settings.max_steps,
+            "max_retries": settings.max_retries,
+            "url_doc_match_max_retries": settings.url_doc_match_max_retries,
+            "url_doc_match_strategy": settings.url_doc_match_strategy,
+            "consecutive_batch_failure_limit": settings.consecutive_batch_failure_limit,
+            "case_gen_validation_max_retries": settings.case_format_max_retries,
+            "parse_plan_validation_max_retries": settings.parse_plan_validation_max_retries,
+        }
+        save_run_config(str(_memory_dir), _merged_config)
+
         initial: GraphState = {
             "requirement_paths": [],
-            "api_path": args.api or "",
+            "api_paths": _api_paths,
             "output_path": str(_cases_dir / "test_cases.xlsx"),
             "output_dir": output_dir,
             "cases_dir": str(_cases_dir),
             "memory_dir": str(_memory_dir),
-            "debug_snapshots": args.debug_snapshots,
-            "output_format": args.output_format or settings.output_format,
-            "batch_size": args.batch_size or settings.plugin_batch_size,
-            "enable_validation": settings.enable_validation,
-            "max_validation_retries": settings.max_validation_retries,
-            "plan_only": False,
-            "requirement_text": loaded.get("requirement_text", ""),
+            "debug_snapshots": _debug_snapshots,
+            "output_format": _output_format,
+            "batch_size": _plugin_batch_size,
+            "requirement_texts": loaded.get("requirement_texts", []),
             "interfaces": loaded.get("interfaces", []),
+            "api_raw_text": loaded.get("api_raw_text", ""),  # 恢复拼接文本供 URL 校验 / Restore merged text for URL validation
             "plan_md": loaded.get("plan_md", ""),
             "plan_confirmed": loaded.get("plan_confirmed", True),
             "api_summary_confirmed": loaded.get("api_summary_confirmed", True),
             "api_summary": loaded.get("api_summary", []),
+            "api_summary_feedback": loaded.get("api_summary_feedback", ""),
+            "plan_feedback": loaded.get("plan_feedback", ""),
+            "plan_feedback_type": loaded.get("plan_feedback_type", "text"),
+            "plan_annotations": loaded.get("plan_annotations", []),
             "requirement_analysis": loaded.get("requirement_analysis", {}),
             "plan_parsed": loaded.get("plan_parsed"),
-            "user_guidance": args.prompt or "",
-            "parse_mode": args.parse_mode or "raw",
-            "parser_path": args.parser_path or "",
-            "reference_dir": args.reference_dir or "",
+            # Resume 时从 plan_outline.json 恢复测试计划轮廓
+            # Restore test plan outline from plan_outline.json on resume
+            "plan_outline": loaded.get("plan_outline"),
+            "user_guidance": _user_guidance,
+            "parse_mode": _parse_mode,
+            "parser_path": _parser_path,
+            "reference_dir": _reference_dir,
             "resume": True,
             "resume_overwrite": resume_overwrite,
-            "auto_mode": args.auto or settings.auto_mode,
+            "auto_mode": _auto_mode,
+            "case_type": _case_type,  # Bug 3 修复: 之前缺失此字段 / Was missing before
         }
 
-        result = graph.invoke(initial, config)
+        # Bug 1 修复: 如果恢复起始阶段在 human_confirm 之前（含），且非自动模式，
+        # 则需要使用 run_interactive() 处理 human_confirm_node 中的 interrupt()
+        # Fix: If resuming to a stage at/before human_confirm and not auto mode,
+        # use run_interactive() to handle the interrupt() in human_confirm_node
+        _PRE_CONFIRM_STAGES = {
+            "parse_docs", "analyze_api", "validate_interface_urls",
+            "save_interfaces", "analyze_requirement", "generate_outline",
+            "generate_plan", "human_confirm",
+        }
+        # --studio 优先：Studio 模式下始终使用 JSON 协议输出。
+        # --studio takes priority: always emit JSON progress in Studio mode.
+        if getattr(args, 'studio', False):
+            from cli.studio_bridge import run_studio_protocol
+            logger.info(_("resume.interactive_mode", stage=next_stage))
+            result = run_studio_protocol(graph, initial, config, session_logger)
+        elif next_stage in _PRE_CONFIRM_STAGES and not _auto_mode:
+            logger.info(_("resume.interactive_mode", stage=next_stage))
+            result = run_interactive(graph, initial, config, session_logger)
+        else:
+            from graph.nodes.helpers import ensure_memory_dir
+            ensure_memory_dir(initial.get("memory_dir", ""))
+            result = graph.invoke(initial, config)
 
         if result.get("errors"):
             for err in result["errors"]:
@@ -266,9 +576,85 @@ def main() -> int:
         logger.info(_("cli.requirement_required"))
         return 2
 
-    auto_mode = args.auto or settings.auto_mode
+    auto_mode = _first(args.auto, settings.auto_mode)
     if auto_mode:
         logger.info(_("auto.pipeline_start"))
+
+    # === CLI 参数覆盖 Settings / Override settings with CLI args ===
+    settings.max_steps = _first(args.max_steps, settings.max_steps)
+    settings.max_retries = _first(args.max_retries, settings.max_retries)
+    settings.skeleton_batch_size = _first(args.skeleton_batch_size, settings.skeleton_batch_size)
+    settings.plan_single_batch_size = _first(args.plan_single_batch_size, settings.plan_single_batch_size)
+    settings.url_doc_match_max_retries = _first(args.url_doc_match_max_retries, settings.url_doc_match_max_retries)
+    settings.url_doc_match_strategy = _first(args.url_doc_match_strategy, settings.url_doc_match_strategy)
+    settings.consecutive_batch_failure_limit = _first(args.consecutive_batch_failure_limit, settings.consecutive_batch_failure_limit)
+    settings.plugin_batch_size = _first(args.plugin_batch_size, settings.plugin_batch_size)
+
+    # 布尔标志解析（--no-* 优先于 --*）/ Boolean flag resolution (--no-* wins over --*)
+    if args.no_url_doc_match_enabled:
+        settings.url_doc_match_enabled = False
+    elif args.url_doc_match_enabled is not None:
+        settings.url_doc_match_enabled = True
+
+    if args.no_plugins:
+        settings.enable_plugins = False
+    elif args.plugins:
+        settings.enable_plugins = True
+
+    if args.no_skills:
+        settings.enable_skills = False
+    elif args.skills:
+        settings.enable_skills = True
+
+    # 语言 / Language
+    if args.lang is not None:
+        settings.agent_lang = args.lang
+        os.environ["AGENT_LANG"] = args.lang
+
+    # --plugin-module：覆盖 plugins.modules / Override plugins.modules
+    if args.plugin_module is not None:
+        settings.plugin_modules = list(args.plugin_module)
+
+    # --case-gen-validation-max-retries / Override case_gen max retries
+    settings.case_format_max_retries = _first(args.case_gen_validation_max_retries, settings.case_format_max_retries)
+
+    # --case-gen-validation-rule：覆盖 case_gen_validation rules / Override case_gen validation rules
+    if args.case_gen_validation_rule is not None:
+        parsed_rules = []
+        for rule_str in args.case_gen_validation_rule:
+            parts = rule_str.split(":")
+            rule = {"check": parts[0], "strategy": parts[1] if len(parts) > 1 else "warn"}
+            if len(parts) > 2:
+                rule["failure_action"] = parts[2]
+            parsed_rules.append(rule)
+        settings.case_gen_validation = parsed_rules
+
+    # --parse-plan-validation-max-retries / Override parse plan max retries
+    settings.parse_plan_validation_max_retries = _first(
+        args.parse_plan_validation_max_retries,
+        settings.parse_plan_validation_max_retries,
+    )
+
+    # --parse-plan-validation-rule：覆盖 parse_plan_validation rules
+    # Override parse plan validation rules
+    if args.parse_plan_validation_rule is not None:
+        parsed_rules = []
+        for rule_str in args.parse_plan_validation_rule:
+            parts = rule_str.split(":")
+            rule = {"check": parts[0],
+                    "strategy": parts[1] if len(parts) > 1 else "warn"}
+            if len(parts) > 2:
+                rule["failure_action"] = parts[2]
+            parsed_rules.append(rule)
+        settings.parse_plan_validation_rules = parsed_rules
+
+    # --skill-agent：覆盖 skills.agents / Override skill agents
+    if args.skill_agent is not None:
+        agents: dict[str, list[str]] = {}
+        for agent_str in args.skill_agent:
+            agent_name, _ignored, skills_str = agent_str.partition(":")
+            agents[agent_name] = [s.strip() for s in skills_str.split(",") if s.strip()]
+        settings.skill_agents = agents
 
     graph = build_workflow(settings, session_logger=session_logger)
     thread_id = f"flow_{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -289,27 +675,62 @@ def main() -> int:
 
     initial: GraphState = {
         "requirement_paths": list(args.requirement),
-        "api_path": args.api,
+        "api_paths": list(args.api) if args.api else [],
         "output_path": str(cases_dir / "test_cases.xlsx"),
         "output_dir": output_dir,
         "cases_dir": str(cases_dir),
         "memory_dir": str(memory_dir),
         "debug_snapshots": args.debug_snapshots,
-        "output_format": args.output_format or settings.output_format,
-        "batch_size": args.batch_size or settings.plugin_batch_size,
-        "enable_validation": settings.enable_validation,
-        "max_validation_retries": settings.max_validation_retries,
-        "plan_only": False,
-        "user_guidance": args.prompt or "",
-        "reference_dir": args.reference_dir or "",
+        "output_format": _first(args.output_format, settings.output_format),
+        "batch_size": _first(args.plugin_batch_size, settings.plugin_batch_size),
+        "user_guidance": _first(args.prompt, ""),
+        "reference_dir": _first(args.reference_dir, ""),
         "parse_mode": args.parse_mode,
-        "parser_path": args.parser_path or "",
+        "parser_path": _first(args.parser_path, ""),
         "auto_mode": auto_mode,
-        "case_type": args.case_type or settings.case_type,
+        "case_type": _first(args.case_type, settings.case_type),
     }
     config = {"configurable": {"thread_id": thread_id}}
 
-    if auto_mode:
+    # 保存运行配置供后续 resume 使用
+    # Save run config for future resume
+    _run_config = {
+        "case_type": _first(args.case_type, settings.case_type),
+        "user_guidance": _first(args.prompt, ""),
+        "output_format": _first(args.output_format, settings.output_format),
+        "plugin_batch_size": _first(args.plugin_batch_size, settings.plugin_batch_size),
+        "auto_mode": auto_mode,
+        "parse_mode": args.parse_mode,
+        "output_dir": output_dir,
+        "api_paths": list(args.api) if args.api else [],
+        "requirement_paths": list(args.requirement),
+        "debug_snapshots": args.debug_snapshots,
+        "parser_path": _first(args.parser_path, ""),
+        "reference_dir": _first(args.reference_dir, ""),
+        "skeleton_batch_size": _first(args.skeleton_batch_size, settings.skeleton_batch_size),
+        "plan_single_batch_size": _first(args.plan_single_batch_size, settings.plan_single_batch_size),
+        "plan_biz_flow_batch_size": settings.plan_biz_flow_batch_size,
+        "max_steps": _first(args.max_steps, settings.max_steps),
+        "max_retries": _first(args.max_retries, settings.max_retries),
+        "url_doc_match_max_retries": _first(args.url_doc_match_max_retries, settings.url_doc_match_max_retries),
+        "url_doc_match_strategy": _first(args.url_doc_match_strategy, settings.url_doc_match_strategy),
+        "consecutive_batch_failure_limit": _first(args.consecutive_batch_failure_limit, settings.consecutive_batch_failure_limit),
+        "case_gen_validation_max_retries": _first(args.case_gen_validation_max_retries, settings.case_format_max_retries),
+        "parse_plan_validation_max_retries": _first(
+            args.parse_plan_validation_max_retries,
+            settings.parse_plan_validation_max_retries,
+        ),
+    }
+    from graph.nodes.helpers import ensure_memory_dir
+    ensure_memory_dir(str(memory_dir))
+    save_run_config(str(memory_dir), _run_config)
+
+    # --studio 优先于 auto_mode：Studio 模式下始终使用 JSON 协议输出进度事件。
+    # --studio takes priority over auto_mode: always emit JSON progress events in Studio mode.
+    if getattr(args, 'studio', False):
+        from cli.studio_bridge import run_studio_protocol
+        result = run_studio_protocol(graph, initial, config, session_logger)
+    elif auto_mode:
         result = graph.invoke(initial, config)
     else:
         result = run_interactive(graph, initial, config, session_logger)

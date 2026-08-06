@@ -4,6 +4,8 @@ from typing import Any, Dict, Optional
 
 import yaml
 
+from i18n import _, set_lang
+
 logger = logging.getLogger(__name__)
 
 _config: Dict[str, Any] = {}
@@ -11,6 +13,8 @@ _apps: Dict[str, Dict[str, Any]] = {}
 _initialized: bool = False
 
 _REQUIRED_KEYS = ("envName", "caseFilePath")
+# 仅用于校验的 CLI 覆盖键（不写入最终配置）/ Validation-only CLI override keys (not stored into final config)
+_VALIDATION_ONLY_KEYS = {"yamlDir", "yamlFiles"}
 _TOP_LEVEL_KEYS = {
     "scriptType", "envName", "caseFilePath", "maxThread",
     "reportName", "apiMode", "processor_configs",
@@ -71,12 +75,21 @@ def initialize(yml_path: str, cli_overrides: Optional[Dict[str, Any]] = None) ->
                 _config[key] = value
 
     for key, value in cli_overrides.items():
-        if value is not None:
+        if value is not None and key not in _VALIDATION_ONLY_KEYS:
             _config[key] = value
 
-    missing = [k for k in _REQUIRED_KEYS if not _config.get(k)]
+    # 提供 --yamlDir/--yamlFiles 时，caseFilePath 不再是必填键（YAML 输入不依赖 Excel 路径）。
+    # When --yamlDir/--yamlFiles is provided, caseFilePath is not required (YAML input doesn't use it).
+    yaml_input_given = bool(cli_overrides.get("yamlDir") or cli_overrides.get("yamlFiles"))
+    missing = [
+        key for key in _REQUIRED_KEYS
+        if (key != "caseFilePath" or not yaml_input_given) and not _config.get(key)
+    ]
     if missing:
-        raise ConfigError(f"Missing required configuration keys: {missing}")
+        # 确保翻译已加载（默认 zh_CN），避免 _() 返回 key 本身。
+        # Ensure translations are loaded (default zh_CN) so _() returns text, not the key.
+        set_lang(os.environ.get("AGENT_LANG", "").strip() or "zh_CN")
+        raise ConfigError(_("config.missing_required_keys", keys=", ".join(missing)))
 
     _initialized = True
     logger.info(

@@ -127,7 +127,6 @@ function formatRules(val: string[] | null): string {
 function getRowClassName(record: Record<string, unknown>) {
   if ((record as any)._searchActive) return 'row-search-active'
   if ((record as any)._searchMatch) return 'row-search-match'
-  if ((record as any)._relevanceValid === false) return 'row-error'
   if (String(record.URL ?? '').includes('<URL not exist>')) return 'cell-error'
   return ''
 }
@@ -168,7 +167,6 @@ const relevanceOptions = computed(() => workbook.validTestIdOptions)
                 :options="relevanceOptions"
                 size="small"
                 style="width: 100%;"
-                :status="record._relevanceValid === false ? 'error' : ''"
                 :dropdown-match-select-width="false"
                 :dropdown-style="{ minWidth: '400px' }"
                 :filter-option="(inputValue: string, option: any) => {
@@ -180,11 +178,6 @@ const relevanceOptions = computed(() => workbook.validTestIdOptions)
                 @change="(v: string) => onCellChange(index, col, v)"
                 @select="(v: string) => onCellChange(index, col, v)"
               >
-                <template v-if="record._relevanceValid === false" #suffix>
-                  <a-tooltip :title="t('validator.relevanceInvalid')">
-                    <span style="color: #ff4d4f;">!</span>
-                  </a-tooltip>
-                </template>
               </a-auto-complete>
             </template>
 

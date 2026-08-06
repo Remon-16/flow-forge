@@ -1,0 +1,30 @@
+case_type: single
+test_id: TC_REGISTER_POS_001
+relevance_id: api_api_auth_register_post
+tag: P1
+api_name: 用户注册（合法信息，正向）
+app_name: foliMail
+method: POST
+url: /api/auth/register
+request_head:
+  Content-Type: application/json
+request_body:
+  username: newuser1
+  password: Test@123
+  nickname: New User
+status_code: 200
+preprocessors:
+  - name: user-fixture
+    config:
+      mode: predelete
+      username: newuser1
+postprocessors:
+  - name: user-fixture
+    config:
+      cleanup: true
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.id is_not_null
+  - $.data.username == newuser1
+  - $.data.role == 0

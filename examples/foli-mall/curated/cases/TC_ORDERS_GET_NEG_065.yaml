@@ -1,0 +1,18 @@
+case_type: single
+test_id: TC_ORDERS_GET_NEG_065
+relevance_id: api_api_orders_get
+tag: P1
+api_name: 买家订单列表（页码为负数，负向）
+app_name: foliMail
+method: GET
+url: /api/orders?page=-1&pageSize=10
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.total >= 0
+remark: 待实测确认：MyBatis-Plus 分页对负数页码的处理（可能钳制为 1），以端到端实测结果为准。

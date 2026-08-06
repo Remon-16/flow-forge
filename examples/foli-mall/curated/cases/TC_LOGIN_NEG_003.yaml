@@ -1,0 +1,17 @@
+case_type: single
+test_id: TC_LOGIN_NEG_003
+relevance_id: api_api_auth_login_post
+tag: P1
+api_name: 用户登录（空用户名，负向，期望 400 + 200001）
+app_name: foliMail
+method: POST
+url: /api/auth/login
+request_head:
+  Content-Type: application/json
+request_body:
+  username: ""
+  password: Test@123
+status_code: 400
+assert_dict:
+  code: '200001'
+remark: 修正：@NotBlank 参数校验失败返回 HTTP 400 + 200001。

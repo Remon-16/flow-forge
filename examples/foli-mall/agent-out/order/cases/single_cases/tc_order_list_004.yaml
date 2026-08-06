@@ -1,0 +1,18 @@
+case_type: single
+test_id: TC_ORDER_LIST_004
+relevance_id: IF_ORDER_LIST
+api_name: 买家订单列表-负数页码
+app_name: foliMail
+method: GET
+url: /api/orders?page=-1&pageSize=10
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+assert_dict:
+  $.code: "100000"
+assert_rules:
+  - "$.data.total >= 0"
+tag: P2
+remark: 负数页码行为以实测为准（MyBatis-Plus 可能钳制为 1），仅断言接口可用

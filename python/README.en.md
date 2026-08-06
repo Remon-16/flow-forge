@@ -9,8 +9,8 @@ A Python 3-based HTTP API test automation executor: YAML/Excel-driven case manag
 - **Two case types**: single-API test cases + multi-step business-flow test cases (data such as tokens can be passed between steps via `inherit`).
 - **Multi-threaded execution**: a thread pool runs cases concurrently (controlled by `maxThread`); this is not load testing.
 - **Two-level assertions**: simple equality assertions (`assert_dict`) + advanced multi-operator assertion rules (`assert_rules`: numeric comparison, regex, list aggregation, etc.).
-- **Automatic login/session**: manages tokens per application/user, with fine-grained locks + cache + failure blacklist.
-- **Extensible processors**: pre-/post-processor extension points (HMAC signing, timestamps, path parameters, SQL cleanup, etc.).
+- **Automatic login/session**: manages tokens per application/user, with fine-grained locks + cache + failure blacklist. Provides `get_current_user()` / `get_user()` / `get_app_user()` utilities so plugins can directly access the logged-in user's configuration.
+- **Extensible processors**: pre-/post-processor extension points (HMAC signing, timestamps, path parameters, SQL cleanup, etc.). `BaseExternalPlugin` provides a shared base class for DB/Redis/MQ/Kafka/Pulsar/RocketMQ plugins.
 - **Self-contained reports**: HTML reports embed all styles and scripts, so they open directly in a browser.
 - **Format conversion**: `excel2yaml` / `yaml2excel` / `yaml2pytest` / `excel2pytest`.
 - **CI/CD friendly**: pure CLI, reports results via exit codes, and integrates directly with Jenkins.
@@ -44,12 +44,31 @@ pip install -r requirements.txt
 
 # 1) Configure the environment: edit env-local.yml with the target app's baseURL / login info / user credentials
 #    (env.yml is the base configuration; env-{envName}.yml is the environment-specific configuration)
+#    (Tip: quote long integer IDs as strings, e.g., id: "1000000000000000001", to ensure correct display in Studio)
 
 # 2) Run YAML cases (recommended; the agent's default output format)
 python main.py --yamlDir ../agent/output --envName local --apiMode all
 
 # 3) View the report: generated at python/report/{fileName}_{timestamp}.html
 ```
+
+## H2 Database Integration
+
+When using H2 database processors such as `return-order-db`, the H2 JDBC jar is not distributed with the repo. Run the bootstrap CLI first (it downloads to `~/.flow-forge/h2/` by default):
+
+```bash
+python tools/h2/init_h2.py
+```
+
+Then start the foli-mall backend (it starts an H2 TCP Server on port 9092 on boot) before running flow-forge cases. See [Processors, Assertions & Report](./docs/processors-and-report.en.md).
+
+Besides `return-order-db`, six test-data fixture plugins — `order-fixture`, `cart-fixture`, `return-fixture`, `balance-fixture`, `user-fixture`, and `product-fixture` — are bundled to set up prerequisite data (orders/cart items/returns/balance/users/products in a specific state) in one step. See the Database Processors section of the document above for usage.
+
+> Note: H2 processors start a JPype JVM through JayDeBeApi. The built-in H2
+> dialect sets `jpype.config.destroy_jvm = False` when the engine is created, so
+> the process no longer waits for JVM destruction on exit and the executor does
+> not hang after writing the report — callers do not need extra timeouts or
+> forced kills.
 
 ## Common Commands
 
@@ -69,6 +88,8 @@ python converter_main.py yaml2excel --single-cases ./cases/single_cases/ --outpu
 python converter_main.py yaml2pytest --single-cases ./cases/single_cases/ --output ./tests/generated/
 python converter_main.py excel2pytest --input cases.xlsx --output ./tests/generated/
 ```
+
+`yaml2pytest` / `excel2pytest` bundle the whole `python/processors/` package (including all built-in processors) and its framework dependencies (`auth/`, `resolvers/`) into the generated directory, so future processors need no converter changes. Middleware processors require their third-party libraries in the target environment at runtime; see [Case Format Conversion](./docs/converters.en.md) for details.
 
 `apiMode` values: `single` (single-API only) / `biz` (business-flow only) / `all` (everything).
 

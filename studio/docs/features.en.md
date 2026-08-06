@@ -2,13 +2,13 @@
 
 [← Back to studio/README](../README.en.md)
 
-Flow Forge Studio offers three workspaces: the Excel editor, the YAML editor, and the Markdown plan annotator. This document details the features of each workspace, along with find and replace and keyboard shortcuts.
+Flow Forge Studio offers six feature entries grouped into three workflow stages (Generate → Edit → Execute & Convert): AI Case Generator, Plan Annotator, Excel Editor, YAML Editor, Case Executor, and Case Converter. This document details the features of each workspace, along with find and replace and keyboard shortcuts.
 
 ---
 
 ## General Features
 
-- Home-page editor selection (Excel / YAML / Markdown plan annotator)
+- Home page with six feature entries grouped by workflow stage: Generate (AI Case Generator / Plan Annotator), Edit (Excel / YAML Editor), Execute & Convert (Case Executor / Case Converter)
 - Tauri desktop app that saves local files back to their original path
 - Bilingual Chinese/English interface, switchable at any time
 - Save (Ctrl+S) and Save As (Ctrl+Alt+S)
@@ -19,6 +19,111 @@ Flow Forge Studio offers three workspaces: the Excel editor, the YAML editor, an
 
 ---
 
+## AI Case Generator
+
+Configure and launch the AI agent directly in Studio — no CLI flags to memorize.
+
+### New Task
+
+Click the "AI Case Generator" card on the home page, then fill in the task configuration:
+- Requirement doc paths (supports multiple files)
+- API doc paths (supports multiple files)
+- Output directory
+- Parse mode (raw / rule / llm)
+- Case type (single / biz / both)
+- Output format (YAML / Excel / both)
+- Optional: enable auto mode to skip human review
+
+![Agent workflow task configuration](./images/studio_agent_workflow_setting.png)
+
+### Running & Logs
+
+- After clicking "Launch", the Agent runs as a subprocess, outputting logs to the right-side log panel in real time
+- Logs are color-coded by stage (document parsing, API analysis, plan generation, etc.)
+- Support pause, resume, and terminate
+- Configurations are saved automatically after completion for easy reuse
+
+### Interactive Prompts & Plan Review
+
+- When the Agent encounters critical uncertainties (e.g., unknown auth type), a prompt pops up in Studio
+- After the test plan is generated, a plan review drawer opens automatically, allowing you to approve the plan or provide text feedback directly on the rendered plan
+- All interaction uses a JSON protocol over the Agent subprocess
+
+![Resumed at the plan-review node (annotator sidebars closed)](./images/studio_agent_workflow_resume_plan_confirm_node_example.png)
+
+![Resumed at the plan-review node (both annotator sidebars open)](./images/studio_agent_workflow_resume_plan_confirm_node_example2.png)
+
+![Resumed at the plan-review node (annotator closed, entering feedback with n)](./images/studio_agent_workflow_resume_plan_confirm_node_example3_hide_plan.png)
+
+> **Note**: these three screenshots show the "resume from the plan-review node" interaction. The plan data shown comes from an earlier run generated with Qwen3-8B-Q4_K_M and resumed from the review node. 
+
+### Settings Panel
+
+- Configure LLM (API Key, Model, Base URL)
+- Adjust batch sizes and retry limits for each stage
+- Toggle plugins and Skills
+
+---
+
+## Case Executor
+
+Run test cases and view HTML reports in Studio.
+
+### Session Management
+
+- Use the top dropdown to select an existing execution session or create a new one
+- Each session independently saves its configuration (environment, input path, thread count, etc.)
+
+### Run Configuration
+
+- **Input type**: YAML directory / Excel file
+- **Environment**: select from the `env-{name}.yml` list
+
+> **Large integer precision:** JavaScript Number can only safely represent integers in the range -9,007,199,254,740,991 ~ 9,007,199,254,740,991 (about 9×10¹⁵). If you need to configure integers exceeding this range in `env-*.yml` (e.g., 64-bit user IDs), use YAML string syntax (quoted): `id: "1000000000000000001"`. The Python executor and converter have no such limitation and correctly handle arbitrarily large integers.
+
+- **Case mode**: single-API / business-flow / all
+- **Thread count**: control concurrent execution
+
+### Execution & Report
+
+- Click "Run" to launch the executor subprocess with real-time execution logs
+- After completion, an HTML report is auto-generated; the "Open Test Report" button is temporarily hidden (see Known Issues in the README) — use "Show in Folder" and open the HTML manually
+- Reports embed styles and scripts inline — no web server required
+
+---
+
+## Case Converter
+
+Convert between case formats in Studio, with batch support.
+
+### Session Management
+
+- Use the top dropdown to select an existing conversion session or create a new one
+- Each session independently saves its configuration
+
+### Conversion Directions
+
+- **Excel → YAML**: read .xlsx, output YAML files by sheet type (output is a directory)
+- **YAML → Excel**: read YAML directories, merge into .xlsx (output is an Excel file path)
+- **YAML → pytest**: generate pytest test code (output is a directory; requires third-party libraries already installed, e.g., the api_test environment)
+- **Excel → pytest**: generate pytest code directly from Excel (output is a directory)
+
+### Batch Conversion
+
+- Select multiple input directories/files for batch processing
+- Real-time progress shown in the execution log
+
+---
+
+## Quick Editor Toolbar Actions
+
+In the Excel / YAML Editor, the top-right toolbar provides quick-action buttons:
+
+- **▶ Run**: execute the current file directly without switching to the Executor view — ideal for single-file debugging
+- **⟳ Convert**: convert the current file (Excel ↔ YAML) directly without switching to the Converter view
+
+---
+
 ## Excel Editor
 
 ### Opening and Saving
@@ -26,6 +131,8 @@ Flow Forge Studio offers three workspaces: the Excel editor, the YAML editor, an
 - Open: the toolbar "Open" button or Ctrl+O, then select a `.xlsx` file (in desktop mode the local file is read directly and its path recorded)
 - Save (Ctrl+S): writes back to the original file path
 - Save As (Ctrl+Alt+S): opens a save dialog to choose a new path
+
+![Excel editor example](./images/excel_edit_example.png)
 
 ### Editing Features
 
@@ -60,6 +167,8 @@ Turns JSON fields such as RequestHead, RequestBody, and AssertDict into an inter
 - **Open Directory**: header "Open" → "Open Directory", select a directory containing `.yaml` files, and a file tree (VS Code style) appears on the left
 - **Open File**: header "Open" → "Open File", select a single `.yaml` file directly
 - **File tabs**: open multiple files at once, switch between them via tabs, and click × to close
+
+![YAML editor example](./images/yaml_edit_example.png)
 
 ### Form Editing
 
@@ -98,6 +207,8 @@ Used to add structured annotations to an AI-generated test plan (`plan.md`) for 
 3. Right-click and choose "Add Annotation", then enter your review comment
 4. Annotation record format: line number, selected text, review comment
 5. Annotated text is shown with a yellow highlight and a light-blue numbered badge at the bottom-right corner
+
+![Plan annotator example](./images/studio_plan_example.png)
 
 ### Managing Annotations
 

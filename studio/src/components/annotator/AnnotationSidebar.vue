@@ -29,6 +29,11 @@ function previewText(comment: string): string {
 
 <template>
   <div class="annotation-sidebar">
+    <!-- 侧边栏面板标题 / Sidebar panel title -->
+    <div class="sidebar-panel-header">
+      {{ t('annotator.sidebarTitle') }}
+    </div>
+
     <!-- Current Annotations -->
     <div class="sidebar-section">
       <div class="sidebar-section-header">
@@ -50,6 +55,9 @@ function previewText(comment: string): string {
           <div class="annotation-item-header">
             <span class="annotation-index">#{{ idx + 1 }}</span>
             <span class="annotation-line">L{{ ann.line_number }}</span>
+            <span v-if="ann.chunk_id" class="annotation-chunk-id" :title="ann.chunk_id">
+              {{ ann.chunk_id }}
+            </span>
           </div>
           <div class="annotation-item-body">
             {{ previewText(ann.review_comment) }}
@@ -99,6 +107,17 @@ function previewText(comment: string): string {
   background: #fafafa;
   display: flex;
   flex-direction: column;
+}
+
+/* 面板标题 / Panel header */
+.sidebar-panel-header {
+  padding: 10px 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #222;
+  border-bottom: 1px solid #e8e8e8;
+  background: #f5f5f5;
+  flex-shrink: 0;
 }
 
 .sidebar-section {
@@ -158,6 +177,20 @@ function previewText(comment: string): string {
 .annotation-line {
   font-size: 11px;
   color: #aaa;
+}
+
+.annotation-chunk-id {
+  font-size: 10px;
+  color: #1677ff;
+  background: #e6f4ff;
+  padding: 0 4px;
+  border-radius: 2px;
+  margin-left: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .annotation-item-body {

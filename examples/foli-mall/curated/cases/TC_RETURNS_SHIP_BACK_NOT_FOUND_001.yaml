@@ -1,0 +1,16 @@
+case_type: single
+test_id: TC_RETURNS_SHIP_BACK_NOT_FOUND_001
+relevance_id: api_api_returns_id_ship_back_put
+tag: P1
+api_name: 买家退回商品（退货不存在，负向，期望 208001）
+app_name: foliMail
+method: PUT
+url: /api/returns/999999999999999999/ship-back
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+assert_dict:
+  code: '208001'
+remark: 合并 raw 用例 TC_RETURNS_BOUND_007 / NEG_006 / SHIP_NEG_002。

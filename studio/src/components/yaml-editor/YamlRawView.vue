@@ -28,7 +28,7 @@ const yamlText = computed(() => {
 })
 
 watch(
-  () => yamlStore.currentCase,
+  () => yamlStore._version,
   () => {
     if (editMode.value) {
       suppressSync = true

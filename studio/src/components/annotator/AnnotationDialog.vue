@@ -12,6 +12,8 @@ const props = defineProps<{
   visible: boolean
   selectedText: string
   lineNumber: number
+  /** 所属 chunk_id，用于在行号旁显示 / Chunk identifier, displayed next to line number */
+  chunkId?: string
   existingComment?: string
 }>()
 
@@ -62,6 +64,14 @@ function handleCancel() {
       </div>
     </div>
 
+    <!-- 所属区块（有值时显示，排在行号前更重要）/ Owning chunk (shown when present, before line number as it's more important) -->
+    <div v-if="chunkId" style="margin-bottom: 12px;">
+      <div style="color: #888; font-size: 12px; margin-bottom: 4px;">{{ t('annotator.chunkId') }}</div>
+      <div style="font-size: 13px;">
+        <span class="dialog-chunk-id">{{ chunkId }}</span>
+      </div>
+    </div>
+
     <div style="margin-bottom: 12px;">
       <div style="color: #888; font-size: 12px; margin-bottom: 4px;">{{ t('annotator.lineNumber') }}</div>
       <div style="font-size: 13px;">{{ lineNumber }}</div>
@@ -77,3 +87,15 @@ function handleCancel() {
     </div>
   </a-modal>
 </template>
+
+<style scoped>
+/* chunk_id 标签样式 — 与 AnnotationSidebar 中保持一致 / chunk_id badge style — consistent with AnnotationSidebar */
+.dialog-chunk-id {
+  font-size: 10px;
+  color: #1677ff;
+  background: #e6f4ff;
+  padding: 0 4px;
+  border-radius: 2px;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+</style>

@@ -1,0 +1,105 @@
+# Flow Forge — 弱模型配置示例（脱敏版）
+# Weak-model configuration example (sanitized)
+# 复制为 agent/env.yaml 并填写你的 api_key / base_url
+# Copy to agent/env.yaml and fill in your api_key / base_url
+
+llm:
+  provider: openai
+  api_key: "<your-api-key>"
+  model: Qwen3-8B-Q4_K_M
+  temperature: 0.3
+  max_output_tokens: 12000
+  context_window: 64000
+  context_compression_threshold: 0.95
+  # 替换为你的 llama.cpp / Ollama 等 OpenAI 兼容端点
+  # Replace with your llama.cpp / Ollama or other OpenAI-compatible endpoint
+  base_url: "http://127.0.0.1:8210/v1"
+  max_concurrency: 1
+  rate_limit_delay: "0"
+  retry_base_delay: 3.0
+  request_timeout: 1800.0
+
+  # 额外参数（直接传递给 chat.completions.create）
+  # Extra params passed directly to chat.completions.create
+  extra_params:
+    reasoning_effort: high
+
+pipeline:
+  max_steps: 10
+  max_retries: 3
+  consecutive_batch_failure_limit: 2
+
+  # 骨架生成分批大小（每个批次包含的测试点数量）
+  # Skeleton batch size (test points per batch)
+  skeleton_batch_size: 10
+
+  # 单接口测试点分组大小（-1=不拆分，强模型建议 -1）
+  # Single API batch size (-1=no split)
+  plan_single_batch_size: 10
+
+  # 用例生成类型: both (默认) | single (仅单接口) | biz (仅业务链路)
+  # Case generation type: both (default) | single | biz
+  case_type: both
+
+  # 插件处理批次大小（-1=不分批）
+  # Plugin batch size (-1=no split)
+  plugin_batch_size: 5
+
+validation:
+  url_doc_match_validation:
+    enable: true
+    max_retries: 3
+    rules:
+      - check: url_check
+        strategy: warn
+        failure_action: keep
+  case_gen_validation:
+    enable: true
+    max_retries: 3
+    rules:
+      - check: skeleton_count
+        strategy: warn
+      - check: url_check
+        strategy: warn
+        failure_action: keep
+      - check: data_fill_count
+        strategy: warn
+      - check: assertion_count
+        strategy: warn
+      - check: processor_count
+        strategy: warn
+  # 计划解析校验：LLM 输出的测试流程是否与需求文档中的流程正确关联
+  # Parse-plan validation: whether LLM test flows are correctly associated with requirements
+  parse_plan_validation:
+    enable: true
+    max_retries: 3
+    rules:
+      - check: flow_match
+        strategy: warn
+        failure_action: discard
+
+output:
+  dir: ./output
+  format: both
+
+plugins:
+  enabled: true
+  modules:
+    - plugins.official.data_filling.DataFillingPlugin
+    - plugins.official.assertion_generation.AssertionGenerationPlugin
+
+skills:
+  enabled: true
+  agents:
+    data_filler:
+      - <your_skill_name>     # 例如 foli_mall_data_filling
+    assertion_generator:
+      - <your_skill_name>     # 例如 foli_mall_assertion
+    processor_selector:
+      - db_processors
+
+logging:
+  log_to_output: false
+
+agent:
+  lang: zh_CN

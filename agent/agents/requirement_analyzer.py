@@ -26,7 +26,6 @@ class RequirementAnalyzer(BaseAgent):
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
@@ -93,7 +92,7 @@ class RequirementAnalyzer(BaseAgent):
                 prompt += f"\n\n{KNOWLEDGE_SECTION_HEADER}{knowledge_context}"
 
         logger.info("Analyzing requirement document (%d chars)...", len(requirement_text))
-        result = self.call_llm_json(prompt, REQUIREMENT_ANALYSIS_SYSTEM)
+        result = self.call_llm_json_object(prompt, REQUIREMENT_ANALYSIS_SYSTEM, "business_flows")
         return self._normalize_result(result)
 
     def _analyze_chunk(self, chunk: str, _accumulated: str) -> Dict[str, Any]:
@@ -103,7 +102,7 @@ class RequirementAnalyzer(BaseAgent):
             requirement_text=chunk,
             language=get_language_name(),
         )
-        return self.call_llm_json(prompt, REQUIREMENT_ANALYSIS_SYSTEM)
+        return self.call_llm_json_object(prompt, REQUIREMENT_ANALYSIS_SYSTEM, "business_flows")
 
     @staticmethod
     def _merge_analyses(results: list, _system_msg: str) -> Dict[str, Any]:
@@ -133,8 +132,13 @@ class RequirementAnalyzer(BaseAgent):
         return merged
 
     @staticmethod
-    def _normalize_result(result: Dict[str, Any]) -> Dict[str, Any]:
-        """Ensure expected keys exist."""
+    def _normalize_result(result: Any) -> Dict[str, Any]:
+        """Ensure expected keys exist. Handles bare-list LLM output as fallback."""
+        # 防护：若 LLM 返回裸数组，包装为 dict / Guard: wrap bare array in dict
+        if isinstance(result, list):
+            result = {"business_flows": result}
+        if not isinstance(result, dict):
+            return {"business_flows": [], "roles": [], "constraints": [], "exceptions": []}
         for key in ("business_flows", "roles", "constraints", "exceptions"):
             if key not in result:
                 result[key] = []

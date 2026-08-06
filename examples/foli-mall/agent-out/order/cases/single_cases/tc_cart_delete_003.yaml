@@ -1,0 +1,33 @@
+case_type: single
+test_id: TC_CART_DELETE_003
+relevance_id: IF_CART_DELETE
+api_name: 删除购物车项-商品已下架
+app_name: foliMail
+method: DELETE
+url: /api/cart/9000000000000000107
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer02}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: cart-fixture
+    config:
+      mode: add
+      product_id: 1000000000000003001
+      quantity: 1
+      cart_item_id: 9000000000000000107
+  - name: product-fixture
+    config:
+      mode: set_status
+      status: 4
+      product_id: 1000000000000003001
+      cleanup: true
+postprocessors:
+  - name: product-fixture
+    config:
+      cleanup: true
+assert_dict:
+  $.code: "100000"
+tag: P2
+remark: 删除自身购物车项不受商品状态影响，下架商品也可正常删除

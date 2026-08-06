@@ -1,0 +1,29 @@
+case_type: single
+test_id: TC_CART_ADD_006
+relevance_id: IF_CART_ADD
+api_name: 添加商品到购物车-数量超库存
+app_name: foliMail
+method: POST
+url: /api/cart
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body:
+  productId: 1000000000000003001
+  quantity: 100
+status_code: 200
+preprocessors:
+  - name: product-fixture
+    config:
+      mode: set_stock
+      stock: 50
+      product_id: 1000000000000003001
+      cleanup: true
+postprocessors:
+  - name: product-fixture
+    config:
+      cleanup: true
+assert_dict:
+  $.code: "203002"
+tag: P1
+remark: "BugEvidence：期望 203002（库存不足）；foli-mall 加购仅校验 stock>0，不校验数量≤库存，实测预期失败返回 100000"

@@ -359,8 +359,14 @@ class TestExcelToPytest:
 
 
 class TestCompatModule:
-    def should_contain_minimal_stubs(self):
+    def should_re_export_base_classes_and_helpers(self):
+        """_ff_compat 模板应再导出真实基类，并提供 i18n/app 配置兼容。
+           The _ff_compat template must re-export real base classes and provide
+           i18n/app-config compatibility helpers."""
         from converter.common.export_utils import FF_COMPAT_TEMPLATE
-        assert "class PreProcessor" in FF_COMPAT_TEMPLATE
-        assert "class PostProcessor" in FF_COMPAT_TEMPLATE
-        assert "class ProcessorError" in FF_COMPAT_TEMPLATE
+        assert "from _processors.base import" in FF_COMPAT_TEMPLATE
+        assert "PreProcessor" in FF_COMPAT_TEMPLATE
+        assert "PostProcessor" in FF_COMPAT_TEMPLATE
+        assert "ProcessorError" in FF_COMPAT_TEMPLATE
+        assert "def _(" in FF_COMPAT_TEMPLATE
+        assert "def get_app" in FF_COMPAT_TEMPLATE

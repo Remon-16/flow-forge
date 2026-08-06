@@ -1,0 +1,22 @@
+case_type: single
+test_id: TC_RETURNS_DISPUTE_NEG_001
+relevance_id: api_api_returns_id_dispute_put
+tag: P1
+api_name: 已通过退货发起争议（负向，期望 208002）
+app_name: foliMail
+method: PUT
+url: /api/returns/9000000000000000010/dispute
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body:
+  reason: not satisfied
+status_code: 200
+preprocessors:
+  - name: return-fixture
+    config:
+      return_status: 1
+      return_id: 9000000000000000010
+      order_id: 9000000000000000005
+assert_dict:
+  code: '208002'

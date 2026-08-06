@@ -1,0 +1,20 @@
+case_type: single
+test_id: TC_GET_USERINFO_BOUND_005
+relevance_id: api_api_auth_me_get
+tag: P2
+api_name: 获取当前用户信息（角色/状态边界）
+app_name: foliMail
+method: GET
+url: /api/auth/me
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.role >= 0
+  - $.data.role <= 2
+  - $.data.status >= 0
+  - $.data.status <= 1

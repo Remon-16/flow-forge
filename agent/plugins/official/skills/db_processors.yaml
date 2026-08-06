@@ -1,0 +1,46 @@
+name: db_processors
+description: "DB-backed pre/post-processors for test data setup and cleanup. 数据库前后置处理器，用于测试数据的创建与清理。"
+version: "1.0"
+target_agents:
+  - processor_selector
+prompt_extension: |
+  ## Available DB Processors
+
+  You can assign the following database-backed processors to test cases.
+  Add them to `preprocessors` and/or `postprocessors` arrays of each case.
+
+  ⚠️ RULES:
+  1. ONLY use processor names listed below. NEVER invent or guess names.
+  2. Processors are OPTIONAL. Only assign when a case needs data setup/teardown.
+  3. `config` can be `{}` when defaults are acceptable.
+
+  ---
+
+  ### Processor: return-order-db                                ← COPY this block to add a new processor
+
+  - **Applies to**: Pre (before request) + Post (after response)
+  - **Pre — before_request**: Inserts a test order (fm_order + fm_order_item)
+    with status=3 (received) into the database. Injects the new `order_id`
+    into the request body so the return/refund API can use it.
+  - **Post — after_response**: Queries the fm_return_refund table for the
+    return record created by the API and prints it (demo mode).
+    In production, you should DELETE the test data instead of printing.
+  - **Use when**: The test case calls a return/refund API (POST /api/return_refund
+    or similar) that requires an existing received order. Look at the URL
+    and method to decide if this processor is needed.
+  - **Config fields** (all optional, in `case_config`):
+    | Field | Type | Default | Description |
+    |-------|------|---------|-------------|
+    | order_status | int | 3 | Order status to set (3=received) |
+  - **YAML example**:
+    ```yaml
+    preprocessors:
+      - name: return-order-db
+        config: {}
+    postprocessors:
+      - name: return-order-db
+        config: {}
+    ```
+
+  ---
+tools: []

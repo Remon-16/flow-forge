@@ -17,7 +17,13 @@ from openai import OpenAI
 import httpx
 
 from prompts.compression import COMPRESSION_SYSTEM, DEFAULT_CHUNK_NOTICE
-from prompts.json_fix import JSON_FIX_PROMPT
+# JSON_FIX_PROMPT 已注释 — 新 retry 逻辑不再使用 fix prompt。
+# 当 LLM 输出 JSON 损坏时，问题通常是服务端异常（API 过载、输出截断等），
+# 修复 JSON 本身没有意义 —— 直接重试原始完整请求更可靠。
+# JSON_FIX_PROMPT import commented out — new retry logic no longer uses fix prompt.
+# JSON corruption is usually a server-side anomaly (API overload, truncation, etc.);
+# fixing the JSON itself is meaningless — retrying the original full request is safer.
+# from prompts.json_fix import JSON_FIX_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +72,6 @@ class BaseAgent:
         api_key: str,
         model: str = "gpt-4o",
         temperature: float = 0.3,
-        max_tokens: int = 4096,
         max_retries: int = 3,
         max_steps: int = 10,
         base_url: str = "",
@@ -102,7 +107,6 @@ class BaseAgent:
         self._client = BaseAgent._shared_client
         self._model = model
         self._temperature = temperature
-        self._max_tokens = max_tokens
         self._max_retries = max_retries
         self._max_steps = max_steps
         self._rate_limit_delay = (
@@ -642,28 +646,65 @@ class BaseAgent:
         prompt: str,
         system_msg: str = "You are a helpful assistant.",
     ) -> Any:
-        """Call LLM and parse response as JSON.
+        """调用 LLM 并解析 JSON 响应，失败时用原始完整 prompt 重试。
+        Call LLM and parse JSON response; on failure retry with original full prompt.
 
-        On parse failure, retries once with a fix-prompt asking the
-        model to output valid JSON only.
+        JSON 解析失败通常是 LLM 服务端异常（API 过载、输出截断等），
+        而非模型不理解指令。直接重试原始请求比使用 fix prompt 更可靠。
+        JSON parse failures are usually server-side anomalies (API overload,
+        output truncation, etc.), not model misunderstanding. Retrying the
+        original request is more reliable than using a fix prompt.
         """
         text = self.call_llm(prompt, system_msg, response_format="json_object")
         try:
             return self._extract_json(text)
         except ValueError:
             logger.warning(
-                "JSON parse failed (len=%d), retrying with fix prompt",
+                "JSON parse failed (len=%d), retrying with original full prompt",
                 len(text),
             )
-            fix_prompt = (
-                f"{JSON_FIX_PROMPT}\n\n"
-                f"Original task:\n{prompt[:2000]}\n\n"
-                f"The invalid JSON (may be truncated):\n{text[:3000]}"
-            )
+            # 旧逻辑使用 fix_prompt 截断 prompt[:2000] + text[:3000]，
+            # 但这在 LLM 输出被 max_output_tokens 截断时会产生有效但
+            # 不完整的 JSON。直接使用原始完整 prompt 重试更可靠。
+            # Old logic used a fix_prompt with truncated prompt[:2000] +
+            # text[:3000], but when LLM output is truncated by
+            # max_output_tokens, this produces valid-but-incomplete JSON.
+            # Retrying with the original full prompt is more reliable.
+            # fix_prompt = (
+            #     f"{JSON_FIX_PROMPT}\n\n"
+            #     f"Original task:\n{prompt[:2000]}\n\n"
+            #     f"The invalid JSON (may be truncated):\n{text[:3000]}"
+            # )
             retry_text = self.call_llm(
-                fix_prompt, system_msg, response_format="json_object"
+                prompt, system_msg, response_format="json_object"
             )
             return self._extract_json(retry_text)
+
+    def call_llm_json_object(
+        self,
+        prompt: str,
+        system_msg: str = "You are a helpful assistant.",
+        json_key: str = "result",
+    ) -> dict:
+        """调用 LLM 并解析 JSON 响应，确保返回 dict。
+        Call LLM and parse JSON response, ensuring the result is a dict.
+
+        非 OpenAI 兼容 API 可能返回裸数组，此方法自动包装为 {json_key: array}。
+        Non-OpenAI APIs may return bare arrays; wraps them as {json_key: array}.
+
+        Args:
+            prompt: 用户提示词 / User prompt.
+            system_msg: 系统消息 / System message.
+            json_key: 包装裸数组时使用的 key / Key used when wrapping bare arrays.
+
+        Returns:
+            dict: 解析后的 JSON 对象 / Parsed JSON object.
+        """
+        result = self.call_llm_json(prompt, system_msg)
+        # 防护：非 OpenAI 兼容 API 可能返回裸数组 / Guard: bare array from non-OpenAI APIs
+        if isinstance(result, list):
+            result = {json_key: result}
+        return result
 
     @staticmethod
     def _extract_json_by_brace_count(text: str) -> str | None:

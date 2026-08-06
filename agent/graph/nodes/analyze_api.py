@@ -16,7 +16,7 @@ from models.schema import InterfaceDef
 
 from plugins.skill_loader import load_skill_extensions
 from . import helpers as _h
-from .helpers import _step, _sl, save_pipeline_artifact, save_pipeline_state, save_snapshot, summary_to_interfaces
+from .helpers import _step, _sl, save_pipeline_artifact, save_pipeline_state, save_snapshot
 from i18n import _
 
 logger = logging.getLogger(__name__)
@@ -52,24 +52,13 @@ def analyze_api_node(state: GraphState) -> GraphState:
         # Resume scenario: summary already generated, skip LLM call
         summary = api_summary
     else:
-        if api_raw_text and not interfaces:
-            logger.info(_("analyze_api.parsing_raw", model=_h._settings.llm_model))
-            if _sl():
-                _sl().log_node_start("analyze_api", "2/9")
-                _sl().log_event("llm_call", agent="ApiAnalyzer.analyze_raw_text",
-                                model=_h._settings.llm_model, text_length=len(api_raw_text))
-            if feedback:
-                summary = agent.revise([], api_summary, feedback)
-            else:
-                summary = agent.analyze_raw_text(api_raw_text, Path(state.get("api_path", "")).name)
+        logger.info(_("analyze_api.llm_calling", model=_h._settings.llm_model))
+        if _sl():
+            _sl().log_node_start("analyze_api", "2/9")
+        if feedback:
+            summary = agent.revise(interfaces, api_summary, feedback)
         else:
-            logger.info(_("analyze_api.llm_calling", model=_h._settings.llm_model))
-            if _sl():
-                _sl().log_node_start("analyze_api", "2/9")
-            if feedback:
-                summary = agent.revise(interfaces, api_summary, feedback)
-            else:
-                summary = agent.analyze(interfaces)
+            summary = agent.analyze(interfaces)
 
         logger.info(_("analyze_api.generated_summaries", count=len(summary)))
         if _sl():
@@ -77,15 +66,16 @@ def analyze_api_node(state: GraphState) -> GraphState:
 
         state["api_summary"] = summary
         state["api_summary_feedback"] = ""
+        # 删除已处理的 feedback 文件 / Remove consumed feedback artifact
+        if state.get("memory_dir"):
+            fb_path = Path(state["memory_dir"]) / "api_analysis_feedback.json"
+            if fb_path.exists():
+                fb_path.unlink()
 
     memory_dir = state.get("memory_dir", "")
     if memory_dir:
         save_snapshot(memory_dir, "api_summary.json", summary)
         save_pipeline_artifact(memory_dir, "api_summary.json", summary)
-
-    if api_raw_text and not interfaces:
-        state["interfaces"] = summary_to_interfaces(summary)
-        logger.info(_("analyze_api.rebuilt_interfaces", count=len(state["interfaces"])))
 
     critical = _has_critical_uncertainties(summary)
 
@@ -119,6 +109,12 @@ def analyze_api_node(state: GraphState) -> GraphState:
         state["api_summary_confirmed"] = True
     else:
         state["api_summary_feedback"] = choice
+        # 持久化 feedback 供 resume 恢复 / Persist feedback for resume recovery
+        if memory_dir:
+            save_pipeline_artifact(memory_dir, "api_analysis_feedback.json", {
+                "feedback": choice,
+                "api_summary": api_summary,
+            })
 
     if state["api_summary_confirmed"] and memory_dir:
         save_pipeline_state(memory_dir, "analyze_api")
@@ -149,16 +145,16 @@ def _dispatch_rule_parser(api_path: str, parser_path: str = "") -> List[Interfac
         interfaces = OpenApiParser.parse(api_path)
         if interfaces:
             return interfaces
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(_("analyze_api.parser_error", parser="OpenApiParser", error=str(e)))
 
     try:
         logger.info(_("analyze_api.trying_markdown"))
         interfaces = MarkdownParser.parse(api_path)
         if interfaces:
             return interfaces
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(_("analyze_api.parser_error", parser="MarkdownParser", error=str(e)))
 
     return []
 

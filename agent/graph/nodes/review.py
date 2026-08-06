@@ -11,11 +11,14 @@ Shared section management utilities used by both revision paths.
 import json
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
 from graph.state import GraphState
 from i18n import _
+from utils.plan_sections import classify_section, detect_section_level, scan_headings
+from flow_forge_schemas.plan_sections import assemble_plan_md, find_section_by_key
 
 from . import helpers as _h
 from .helpers import _, _step, _sl, save_pipeline_artifact, save_pipeline_state
@@ -32,6 +35,8 @@ def human_confirm_node(state: GraphState) -> GraphState:
     """中断点 — 暂停执行等待人工审核计划。
 
     Interrupt point — pauses execution for human review of the plan.
+    plan.md 仅用于展示，不再读取；数据以 plan_sections.json 为准。
+    plan.md is for display only; plan_sections.json is authoritative.
     """
     from langgraph.types import interrupt
 
@@ -63,20 +68,42 @@ def human_confirm_node(state: GraphState) -> GraphState:
             _sl().log_node_end("human_confirm")
         return state
 
+    memory_dir = state.get("memory_dir", "")
+
     decision = interrupt(_("review.interrupt_title"))
 
     if decision == "approved":
         state["plan_confirmed"] = True
         state["plan_feedback"] = ""
+        # plan_sections.json 是唯一数据源，审批通过时无需重新加载 plan.md
+        # plan_sections.json is the only data source; no need to reload plan.md on approve
     else:
         state["plan_confirmed"] = False
         state["plan_feedback"] = decision
+        # 持久化 reject 反馈供 resume 恢复 / Persist rejection feedback for resume recovery
+        if memory_dir:
+            save_pipeline_artifact(memory_dir, "pending_feedback.json", {
+                "plan_feedback": decision,
+                "plan_feedback_type": state.get("plan_feedback_type", "text"),
+                "plan_annotations": state.get("plan_annotations", []),
+            })
 
-    # Save review state for resume
+    # Save review state for resume — must happen BEFORE archiving feedback
+    # 先更新 pipeline 状态，再归档反馈文件（确保崩溃恢复时状态一致）
     memory_dir = state.get("memory_dir", "")
     if memory_dir and state["plan_confirmed"]:
         save_pipeline_artifact(memory_dir, "review_state.json", {"plan_confirmed": True, "plan_feedback": ""})
         save_pipeline_state(memory_dir, "human_confirm")
+        # 归档已处理的反馈文件供回溯 / Archive consumed feedback for traceability
+        fb_path = Path(memory_dir) / "pending_feedback.json"
+        if fb_path.exists():
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            history_dir = Path(memory_dir) / "history-feedback"
+            history_dir.mkdir(parents=True, exist_ok=True)
+            archive_name = f"pending_feedback_{ts}.json"
+            fb_path.rename(history_dir / archive_name)
+            logger.info(_("review.feedback_archived_on_approve",
+                          path=str(history_dir / archive_name)))
 
     if _sl():
         _sl().log_node_end("human_confirm")
@@ -99,8 +126,6 @@ def revise_plan_node(state: GraphState) -> GraphState:
     from .review_text import _text_revision
 
     feedback_type = state.get("plan_feedback_type", "text")
-    outline = state.get("plan_outline")
-    plan_md = state.get("plan_md", "")
     analysis = state.get("requirement_analysis", {})
     api_summary = state.get("api_summary", [])
 
@@ -108,7 +133,9 @@ def revise_plan_node(state: GraphState) -> GraphState:
     if feedback_type == "annotations":
         annotations = state.get("plan_annotations", [])
         if not annotations:
-            logger.warning("revise_plan called with annotations type but no annotations data")
+            logger.warning(_("review.annotations_empty_reprompt"))
+            state["plan_feedback"] = ""
+            state["plan_annotations"] = []
             return state
         feedback = json.dumps(annotations, ensure_ascii=False, indent=2)
         logger.info(
@@ -121,11 +148,11 @@ def revise_plan_node(state: GraphState) -> GraphState:
             return state
         logger.info(_("review.revising_text_progress", model=_h._settings.llm_model))
 
-    # ---- 路由 / Route ----
+    # ---- 路由 / Route (不再传递 plan_md) ----
     if feedback_type == "annotations":
-        revised = _annotation_chunked_revision(state, plan_md, feedback, analysis, api_summary)
+        revised = _annotation_chunked_revision(state, feedback, analysis, api_summary)
     else:
-        revised = _text_revision(state, plan_md, feedback, analysis, api_summary)
+        revised = _text_revision(state, feedback, analysis, api_summary)
 
     # ---- 保存状态 / Save state ----
     state["plan_md"] = revised
@@ -133,15 +160,21 @@ def revise_plan_node(state: GraphState) -> GraphState:
     state["plan_feedback_type"] = "text"
     state["plan_annotations"] = []
 
+    # 先更新 pipeline 状态 / Update pipeline state
+    memory_dir = state.get("memory_dir", "")
+    if memory_dir:
+        save_pipeline_state(memory_dir, "human_confirm")
+
     if _sl():
         _sl().save_plan(revised)
 
-    memory_dir = state.get("memory_dir", "")
     if memory_dir:
         try:
             plan_path = Path(memory_dir) / "plan.md"
             plan_path.parent.mkdir(parents=True, exist_ok=True)
             plan_path.write_text(revised, encoding="utf-8")
+            # plan_sections.json 已由 r/n 模式内部更新, 此处不再删除
+            # plan_sections.json is updated by r/n mode internally; never deleted
         except Exception as e:
             logger.warning(_("plan_gen.save_error", error=str(e)))
 
@@ -149,123 +182,39 @@ def revise_plan_node(state: GraphState) -> GraphState:
 
 
 # ============================================================================
-# 共享工具: Section 管理 / Shared Utilities: Section Management
+# 共享工具: Section 管理（委托到 utils/plan_sections）/ Shared Utilities: Section Management (delegated to utils/plan_sections)
+# _scan_headings / _detect_section_level / _classify_section now imported from utils.plan_sections
+# 内部使用脱字号别名保持兼容 / Underscore-prefixed aliases for internal compatibility
 # ============================================================================
 
+_scan_headings = scan_headings
+_detect_section_level = detect_section_level
+_classify_section = classify_section
 
-def _load_or_parse_sections(
-    memory_dir: str, plan_md: str, outline: Optional[dict],
-) -> dict:
-    """加载 plan_sections.json, 如不存在则解析 plan.md。
 
-    Load saved section structure, or parse plan.md if not available.
+def _load_or_parse_sections(memory_dir: str) -> dict:
+    """加载 plan_sections.json — 唯一数据源。
+
+    Load plan_sections.json — the single source of truth.
+    plan.md 不再被读取，数据始终从 plan_sections.json 加载。
+    plan.md is no longer read; data always comes from plan_sections.json.
     """
     if memory_dir:
-        path = Path(memory_dir) / "plan_sections.json"
-        if path.exists():
+        cache_path = Path(memory_dir) / "plan_sections.json"
+        if cache_path.exists():
             try:
-                return json.loads(path.read_text(encoding="utf-8"))
+                return json.loads(cache_path.read_text(encoding="utf-8"))
             except Exception:
                 pass
-    # 回退: 从 plan.md 解析 / Fallback: parse plan.md
-    return _parse_plan_to_sections(plan_md, outline)
-
-
-def _parse_plan_to_sections(plan_md: str, outline: Optional[dict]) -> dict:
-    """从 plan.md 文本解析为 sections 结构 / Parse plan.md into sections.
-
-    按 ## 标题分割为 global、api、biz 三部分, 并映射到 outline 中的 group/flow 名称。
-    """
-    sections: List[dict] = []
-    raw_sections = re.split(r"\n(?=##\s)", plan_md)
-
-    global_parts = []
-    api_parts = []
-    biz_parts = []
-
-    for sec in raw_sections:
-        stripped = sec.strip()
-        if not stripped:
-            continue
-        if stripped.startswith("## 1.") or stripped.startswith("## 4."):
-            global_parts.append(stripped)
-        elif stripped.startswith("## 2."):
-            # 按 ### 分割 / Split by ### subsections
-            subs = re.split(r"\n(?=###\s)", stripped)
-            for sub in subs:
-                sub = sub.strip()
-                # 跳过仅含 section 标题的部分 / Skip section header-only parts
-                if sub and sub.startswith("###"):
-                    api_parts.append(sub)
-        elif stripped.startswith("## 3."):
-            subs = re.split(r"\n(?=###\s)", stripped)
-            for sub in subs:
-                sub = sub.strip()
-                # 跳过仅含 section 标题的部分 / Skip section header-only parts
-                if sub and sub.startswith("###"):
-                    biz_parts.append(sub)
-
-    global_content = "\n\n".join(global_parts)
-
-    # 映射 API groups / Map to outline API groups
-    api_groups = outline.get("api_groups", []) if outline else []
-    group_names = [g.get("group_name", "") for g in api_groups]
-    for i, part in enumerate(api_parts):
-        # 匹配 outline group name / Match to outline group name
-        matched_name = ""
-        for name in group_names:
-            if name and name in part:
-                matched_name = name
-                break
-        if not matched_name:
-            matched_name = f"group_{i}"
-        sections.append({
-            "key": f"api_{matched_name}",
-            "type": "api_group",
-            "name": matched_name,
-            "content": part,
-        })
-
-    # 映射 biz flows / Map to outline biz flows
-    biz_flows = outline.get("biz_flows", []) if outline else []
-    flow_names = [f.get("name", "") for f in biz_flows]
-    for i, part in enumerate(biz_parts):
-        matched_name = ""
-        for name in flow_names:
-            if name and name in part:
-                matched_name = name
-                break
-        if not matched_name:
-            matched_name = f"flow_{i}"
-        sections.append({
-            "key": f"biz_{matched_name}",
-            "type": "biz_flow",
-            "name": matched_name,
-            "content": part,
-        })
-
-    return {"global": global_content, "sections": sections}
+    # plan_sections.json 不存在时应报错
+    # Should error if plan_sections.json doesn't exist
+    raise FileNotFoundError(
+        f"plan_sections.json not found in {memory_dir}. "
+        "The plan generation step must complete before revision."
+    )
 
 
 def _save_plan_sections(memory_dir: str, sections: dict):
     """保存更新后的分块结构 / Save updated section structure."""
     if memory_dir:
         save_pipeline_artifact(memory_dir, "plan_sections.json", sections)
-
-
-def _find_section_by_key(sections: dict, key: str) -> Optional[dict]:
-    """按 key 查找区块 / Find section by key."""
-    for sec in sections.get("sections", []):
-        if sec.get("key") == key:
-            return sec
-    return None
-
-
-def _assemble_plan(sections: dict) -> str:
-    """从分块结构拼接完整 plan.md / Assemble plan.md from section structure."""
-    parts = [sections.get("global", "")]
-    for sec in sections.get("sections", []):
-        content = sec.get("content", "")
-        if content.strip():
-            parts.append(content)
-    return "\n\n".join(filter(None, parts))

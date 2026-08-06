@@ -1,0 +1,18 @@
+case_type: single
+test_id: TC_AUTH_REGISTER_002
+relevance_id: IF_AUTH_REGISTER
+api_name: 用户注册-用户名已存在
+app_name: foliMail
+method: POST
+url: /api/auth/register
+request_head:
+  Content-Type: application/json
+request_body:
+  username: buyer01
+  password: admin123
+  nickname: 重复用户
+status_code: 200
+assert_dict:
+  $.code: "201001"
+tag: P2
+remark: 已存在的用户名注册应返回 201001

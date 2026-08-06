@@ -1,0 +1,35 @@
+case_type: biz
+sheet_name: 跨用户越权-取消他人订单
+steps:
+  - step_id: Step01
+    relevance_id: IF_AUTH_ME
+    api_name: 为 buyer01 造待支付订单
+    app_name: foliMail
+    method: GET
+    url: /api/auth/me
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body: {}
+    status_code: 200
+    preprocessors:
+      - name: order-fixture
+        config:
+          order_status: 0
+          order_id: 9000000000000000406
+    assert_dict:
+      $.code: "100000"
+  - step_id: Step02
+    relevance_id: IF_ORDER_CANCEL
+    api_name: buyer02 取消 buyer01 订单（期望拒绝）
+    app_name: foliMail
+    method: PUT
+    url: /api/orders/9000000000000000406/cancel
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer02}"
+    request_body: {}
+    status_code: 200
+    assert_dict:
+      $.code: "200003"
+    remark: "BugEvidence：非属主取消应返回 200003；若实测成功则为越权操作缺陷"

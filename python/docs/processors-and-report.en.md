@@ -85,6 +85,17 @@ processor_configs:
 | `hmac-verify` | Post | HMAC-SHA256 response signature verification; pairs with `hmac-sign` |
 | `response-time` | Post | Logs the response status code and content length; warns when a threshold is exceeded |
 | `print-demo-post` | Post | Debug helper; logs the response summary at INFO level |
+| `return-order-db` | Pre + Post | 🌟 DB processor example — pre-inserts an order, post-prints the return record (see Database Processors section) |
+| `mysql-demo` | Pre + Post | 🌟 MySQL database example — pre-writes test data, post-reads and cleans up (see Database Processors section) |
+| `order-fixture` | Pre + Post | 🌟 Order test-data fixture — creates an order in any state in one step, optional post cleanup (see Database Processors section) |
+| `cart-fixture` | Pre | 🌟 Cart test-data fixture — add/clear/ensure modes for cart data (see Database Processors section) |
+| `return-fixture` | Pre + Post | 🌟 Return test-data fixture — creates a completed order plus a return record in any state, optional post cleanup (see Database Processors section) |
+| `balance-fixture` | Pre | 🌟 Balance test-data fixture — sets a user's balance (see Database Processors section) |
+| `cache-handler` | Pre + Post | 🌟 Redis cache handler example — pre-set cache, post-delete (see Redis Processors section) |
+| `order-publish` | Pre + Post | 🌟 MQ order publish example (Kombu) — pre-publish message, post-consume verify (see MQ Processors section) |
+| `rocketmq-order` | Pre + Post | 🌟 RocketMQ order message example — pre-sends the order event, post-consume and verify (see RocketMQ Processors section) |
+| `kafka-order-event` | Pre | 🌟 Kafka order event example — pre-send message to Kafka topic (see Kafka Processors section) |
+| `pulsar-order-event` | Pre | 🌟 Pulsar order event example — pre-send message to Pulsar topic (see Pulsar Processors section) |
 
 ### URL Path Parameter Resolution
 
@@ -129,6 +140,187 @@ class MyPreProcessor(PreProcessor):
         return headers, body
 ```
 
+### Database Processors (BaseDBPlugin)
+
+For scenarios that need database operations before/after requests (e.g., "create test data before request, clean up after"), use the `BaseDBPlugin` base class (`processors/db.py`). Built on **SQLAlchemy**, it provides:
+
+- **Multi-database support**: MySQL, PostgreSQL, SQLite, Oracle, MSSQL, etc., switched via `db_url` connection string
+- **Connection pooling**: SQLAlchemy's built-in `QueuePool` — thread-safe, lazy-loaded, cached by `db_url`
+- **Auto-registration**: `__init_subclass__` auto-creates PreProcessor / PostProcessor wrapper classes
+- **Shared base**: `BaseExternalPlugin` (`processors/base.py`) provides default implementations for the three extension points — `can_process()` / `before_request()` / `after_response()` — from which all six resource plugin categories (DB/Redis/MQ/Kafka/Pulsar/RocketMQ) inherit
+
+Usage:
+
+1. Subclass `BaseDBPlugin`, set `name` class attribute
+2. Implement `before_request()` (pre) and/or `after_response()` (post)
+3. Place the `.py` file in `processors/builtin/db/`
+4. Configure `db_url` in `env-local.yml` under `processor_configs`
+
+```python
+from processors.db import BaseDBPlugin
+from sqlalchemy import text
+
+class MyDBPlugin(BaseDBPlugin):
+    name = "my-db-processor"
+
+    def before_request(self, headers, body, case_config, global_config):
+        with self._get_connection(global_config) as conn:
+            conn.execute(text("INSERT INTO ..."))
+            conn.commit()
+            body["new_id"] = ...
+        return headers, body
+
+    def after_response(self, req_h, req_b, resp_h, resp_b, cc, gc):
+        with self._get_connection(gc) as conn:
+            rows = conn.execute(text("SELECT ...")).fetchall()
+            print("Result:", rows)
+```
+
+Reference in test case YAML (same as regular processors):
+
+```yaml
+preprocessors:
+  - name: my-db-processor
+    config: {}
+postprocessors:
+  - name: my-db-processor
+    config: {}
+```
+
+**Built-in example**: `return-order-db` (`processors/builtin/db/return_order.py`) — return/refund scenario: pre-inserts order data, post-prints return record.
+
+> This example targets the foli-mall `POST /api/returns` API: the pre-processor creates a test order with `status=4` (completed) by default and injects `orderId` into the request body (matching the camelCase field of `ReturnCreateRequest`); the post-processor queries and prints the return record. Use the `order_status` option to override the order status.
+
+> **Configuration**: Database connection is configured via `processor_configs.<name>.db_url` in `env-local.yml` (SQLAlchemy connection URL format). No sensitive info in test case YAML.
+>
+> **Dependencies**: `pip install sqlalchemy pymysql` (MySQL); install the corresponding driver for other databases (e.g., `psycopg2`, `cx_Oracle`).
+>
+> **H2 support**: Install `pip install JPype1 JayDeBeApi` and set `db_url` to `h2://sa:@localhost:9092/mem:foli_mall;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false` (the H2 in-memory database used by foli-mall). The H2 SQLAlchemy dialect is bundled in `processors/h2_dialect.py` and loads the H2 JDBC jar automatically via JayDeBeApi (no manual CLASSPATH setup required). The jar is not distributed with the repo; download it with the bootstrap CLI first:
+>
+> ```bash
+> python tools/h2/init_h2.py                # downloads to the default directory ~/.flow-forge/h2/
+> python tools/h2/init_h2.py --dir D:/h2    # or download to a custom directory
+> python tools/h2/init_h2.py --check        # only check readiness
+> ```
+>
+> The dialect probes for the jar in this order: `H2_JAR_PATH` (full path) → `H2_JAR_DIR` (directory) → the default directory `~/.flow-forge/h2/` → the legacy location `tools/h2/` (backward compatible). If you use a custom directory, set the `H2_JAR_DIR` environment variable.
+>
+> The foli-mall backend starts an H2 TCP Server on boot (default port 9092, configurable via `app.h2.tcp.enabled` / `app.h2.tcp.port`), so no manual server startup is needed. H2 is an in-memory database and loses all data on restart; run the services in this order:
+>
+> 1. Start the foli-mall backend (e.g. `./mvnw spring-boot:run`);
+> 2. Run flow-forge cases in a Python environment with `JPype1`/`JayDeBeApi` installed.
+
+**Built-in example (MySQL)**: `mysql-demo` (`processors/builtin/db/mysql_demo.py`) — the pre-processor auto-creates the demo table `ff_plugin_demo` (if absent) and inserts one test row, then injects `mysql_demo_key` into the request body; the post-processor SELECTs the row to verify it is readable, prints it, DELETEs it, and verifies no residual rows remain. This plugin verifies that flow-forge DB processors can connect to MySQL and doubles as a template for custom DB plugins.
+
+> **Configuration**: configure the MySQL connection via `processor_configs.<name>.db_url` (SQLAlchemy URL format), e.g. `mysql+pymysql://root:password@localhost:3306/flow_forge_demo?charset=utf8mb4`. The demo table is created automatically — no manual DDL is needed.
+
+**Built-in examples (test-data fixtures)**: the following 4 plugins write test data directly into foli-mall's H2 in-memory database, so cases that require a specific "prerequisite state" get their data in one step. They are a generalized extension of `return-order-db`:
+
+| Plugin | Purpose | Key options |
+|--------|---------|-------------|
+| `order-fixture` | Creates an order in any state (0–5) and injects `orderId` | `order_status` (default 4), `quantity`, `total_amount`, `cleanup` |
+| `cart-fixture` | Cart modes `add`/`clear`/`ensure` | `mode` (default ensure), `product_id`, `quantity`, `selected` |
+| `return-fixture` | Creates a completed order plus a return record in any state (0–7), injects `returnId` | `return_status` (default 0), `return_type`, `create_order` |
+| `balance-fixture` | Sets a user's balance (e.g. for insufficient-balance cases) | `balance`, `test_buyer_id` |
+
+> The four plugins share the order/return creation and deletion helpers in `processors/builtin/db/_fixtures_common.py` to avoid duplication. SQL is written in a generic SQLAlchemy style and targets foli-mall's H2 in-memory database by default; switching `db_url` to MySQL or another database also works.
+>
+> Example (stacking fixtures in a business flow):
+>
+> ```yaml
+> preprocessors:
+>   - name: order-fixture          # create a completed order
+>     config:
+>       order_status: 4
+>   - name: cart-fixture           # ensure a selected cart item
+>     config:
+>       mode: ensure
+>   - name: balance-fixture        # set the buyer balance
+>     config:
+>       balance: 10000
+> postprocessors:
+>   - name: order-fixture          # clean up after run
+>     config:
+>       cleanup: true
+> ```
+
+### Redis Processors (BaseRedisPlugin)
+
+For scenarios requiring Redis cache operations before/after requests (e.g., "set cache before request, clean up after"), use the `BaseRedisPlugin` base class (`processors/redis.py`). Built on **redis-py**, it provides:
+
+- **Connection pooling**: redis-py's built-in `ConnectionPool` — thread-safe, lazy-loaded, cached by `redis_url`
+- **Auto-registration**: `__init_subclass__` auto-creates PreProcessor / PostProcessor wrapper classes
+
+Usage follows the same pattern as `BaseDBPlugin`: subclass → set `name` → implement `before_request()` / `after_response()`.
+
+**Built-in example**: `cache-handler` (`processors/builtin/redis/cache_handler.py`) — pre SET cache data, post DEL cleanup.
+
+> **Configuration**: Redis connection via `processor_configs.<name>.redis_url`.
+> **Dependencies**: `pip install redis`
+> **Protocol compatibility**: the client auto-probes protocol compatibility — recent redis-py defaults to RESP3; if the server does not support it (e.g. Redis 5.x has no `HELLO` command), it automatically falls back to RESP2, supporting both Redis 5.x and 6+/7.
+
+### MQ Processors — Kombu Multi-MQ Abstraction (BaseMQPlugin)
+
+For scenarios requiring message queue operations, use the `BaseMQPlugin` base class (`processors/mq.py`). Built on **Kombu** (Celery's transport layer), it provides multi-MQ abstraction — like SQLAlchemy for databases:
+
+- **Multi-MQ support**: One `mq_url` connection string for RabbitMQ / Redis / Amazon SQS / MongoDB
+- **Connection management**: Kombu `Connection` with built-in pooling — thread-safe, lazy-loaded, cached by `mq_url`
+- **Auto-registration**: `__init_subclass__` auto-creates PreProcessor / PostProcessor wrapper classes
+- **Convenience methods**: `_publish()` for message publishing, `_get_message()` for message consuming
+
+Supported protocols:
+
+| Protocol | `mq_url` example | MQ System |
+|------|-------------|--------|
+| `amqp://` | `amqp://guest:guest@localhost:5672//` | RabbitMQ |
+| `redis://` | `redis://localhost:6379/0` | Redis (as broker) |
+| `sqs://` | `sqs://AWS_KEY:AWS_SECRET@` | Amazon SQS |
+| `memory://` | `memory://` | Testing (no external service needed) |
+
+**Built-in example**: `order-publish` (`processors/builtin/mq/order_publish.py`) — pre publish order event, post consume verify.
+
+> **Dependencies**: `pip install kombu`
+
+### RocketMQ Processors (BaseRocketMQPlugin)
+
+Apache RocketMQ is widely used. Its protocol differs from AMQP/Redis (not supported by Kombu), so a separate `BaseRocketMQPlugin` is provided (`processors/rocketmq.py`). A pure-Python client built on the remoting protocol (`processors/rocketmq_client.py`, stdlib only) lets you send and receive messages on Windows, Linux and macOS without a C++ build environment:
+
+- **Connection management**: `_RocketMQManager` caches clients by `namesrv_addr`, thread-safe
+- **Convenience methods**: `_send_message()` sends a message (returning queueId/queueOffset metadata); `_receive_message()` consumes from a given offset using a dedicated `<group>-verify` consumer group
+- **Auto-registration**: Same pattern as DB/Redis/MQ
+
+**Built-in example**: `rocketmq-order` (`processors/builtin/rocketmq/order_message.py`) — pre-sends an `order_created` order event, then consumes and verifies the message from the same offset in the post-processor; a verification failure (timeout or content mismatch) fails the test case.
+
+> **Configuration**: Connection via `processor_configs.<name>.namesrv_addr`, `group_id`, `topic`.
+> `receive_timeout` (default 10 seconds) controls the post-consumption verification timeout.
+> **Dependencies**: none — the official `rocketmq-client-python` does not support Windows, so a pure-Python client is bundled instead.
+
+### Kafka Processors (BaseKafkaPlugin)
+
+For scenarios requiring Kafka message sending before/after requests, use the `BaseKafkaPlugin` base class (`processors/kafka.py`). Built on **confluent-kafka** (Confluent's official Python client), it provides:
+
+- **Connection management**: `_KafkaProducerManager` caches Producer by `(bootstrap_servers, client_id)`, thread-safe
+- **Convenience method**: `_send_message()` for synchronous message sending
+- **Auto-registration**: Same pattern as DB/Redis/MQ/RocketMQ
+
+**Built-in example**: `kafka-order-event` (`processors/builtin/kafka/order_event.py`) — pre send order event to Kafka topic.
+
+> **Configuration**: Connection via `processor_configs.<name>.bootstrap_servers`, `topic`.
+> **Dependencies**: `pip install confluent-kafka`
+
+### Pulsar Processors (BasePulsarPlugin)
+
+For scenarios requiring Pulsar message sending before/after requests, use the `BasePulsarPlugin` base class (`processors/pulsar.py`). Built on **pulsar-client** (Apache Pulsar's official Python client), it provides:
+
+- **Connection management**: `_PulsarClientManager` caches Client by `service_url`, thread-safe
+- **Convenience method**: `_send_message()` for synchronous message sending
+- **Auto-registration**: Same pattern as DB/Redis/MQ/RocketMQ/Kafka
+
+**Built-in example**: `pulsar-order-event` (`processors/builtin/pulsar/order_event.py`) — pre send order event to Pulsar topic.
+
+> **Configuration**: Connection via `processor_configs.<name>.service_url`, `topic`.
+> **Dependencies**: `pip install pulsar-client`
+
 ### Execution Flow
 
 ```
@@ -158,6 +350,10 @@ Embedded placeholders are supported (both `"#{normalUser}"` and `"Bearer #{norma
 - **Fine-grained locks**: locking at `appName:userParamName` granularity; different users can log in concurrently
 - **Failure blacklist**: records failed-login users by MD5 hash to avoid repeated invalid requests
 - **Token cache**: each user logs in only once; subsequent calls reuse the cached token
+- **User context tracking** (v2.5+): thread-local storage records the currently resolved `userParamName` and `appConfig`, exposing three utility methods for plugins:
+  - `LoginManager.get_current_user()` — no args; returns the full config of the currently logged-in user (including extra fields like `user_id` / `role`)
+  - `LoginManager.get_user(user_param_name)` — returns the config for a named user in the current app
+  - `LoginManager.get_app_user(app_name, user_param_name)` — full explicit lookup, independent of thread context
 
 ---
 

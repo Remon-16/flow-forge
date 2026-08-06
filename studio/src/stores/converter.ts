@@ -1,0 +1,356 @@
+// Converter Store — Pinia store for format converter session management.
+// 转换器存储 — 管理用例格式转换器会话和子进程通信的 Pinia store。
+
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import type { ConverterSession, ConverterDirection, EditorConverterParams } from '../types/converter'
+import { DEFAULT_EDITOR_CONVERTER_PARAMS } from '../types/converter'
+import type { LogEntry } from '../types/agent'
+import { spawnConverter, killConverter, checkConverterRunning, listenToConverterEvents } from '../utils/converter-bridge'
+import { resolvePythonCommand } from '../utils/resolve-python'
+import { loadSettingsFile, saveSettingsFile } from '../utils/settings-store'
+import { useAgentStore } from './agent'
+import { fixStaleRunningStatus, STALE_STATUS_ERROR_MSG } from '../utils/process-liveness'
+
+const SESSIONS_FILE = 'converter_sessions.json'
+
+// ============================================================================
+// Store / 存储
+// ============================================================================
+
+export const useConverterStore = defineStore('converter', () => {
+  // ---- State / 状态 ----
+
+  const sessions = ref<ConverterSession[]>([])
+  const activeSessionId = ref<string | null>(null)
+  const sessionsLoaded = ref(false)
+
+  const _listeners = new Map<string, () => void>()
+
+  // 每个运行中会话的健康检查 interval / Health check interval per running session
+  const _healthChecks = new Map<string, ReturnType<typeof setInterval>>()
+
+  // 编辑器转换参数（按编辑器文件路径持久化）/ Editor converter params (persisted per editor file path)
+  const editorConverterParams = ref<Record<string, EditorConverterParams>>({})
+
+  // ---- Getters / 计算属性 ----
+
+  const activeSession = computed(() =>
+    sessions.value.find((s) => s.id === activeSessionId.value) ?? null,
+  )
+
+  const sortedSessions = computed(() =>
+    [...sessions.value].sort((a, b) => b.updatedAt - a.updatedAt),
+  )
+
+  // ---- Editor converter params / 编辑器转换参数 ----
+
+  /** 获取指定编辑器路径的转换参数 / Get converter params for a specific editor path */
+  function getEditorConverterParams(editorPath: string): EditorConverterParams {
+    return editorConverterParams.value[editorPath] ?? { ...DEFAULT_EDITOR_CONVERTER_PARAMS }
+  }
+
+  /** 设置指定编辑器路径的转换参数 / Set converter params for a specific editor path */
+  function setEditorConverterParams(editorPath: string, params: EditorConverterParams): void {
+    editorConverterParams.value[editorPath] = { ...params }
+  }
+
+  // ---- Sessions / 会话管理 ----
+
+  async function loadSessions(): Promise<void> {
+    const saved = await loadSettingsFile<ConverterSession[]>(SESSIONS_FILE, [])
+    sessions.value = saved
+  }
+
+  async function saveSessions(): Promise<void> {
+    await saveSettingsFile(SESSIONS_FILE, sessions.value)
+  }
+
+  function createSession(params: {
+    direction: ConverterDirection
+    inputPath: string
+    outputPath: string
+    interfacesDir: string
+    singleCasesDir: string
+    bizFlowsDir: string
+    configDir: string
+    processorsDir: string
+  }): string {
+    const id = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const name = params.direction
+
+    const session: ConverterSession = {
+      id,
+      name,
+      direction: params.direction,
+      status: 'pending',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      inputPath: params.inputPath,
+      outputPath: params.outputPath,
+      interfacesDir: params.interfacesDir,
+      singleCasesDir: params.singleCasesDir,
+      bizFlowsDir: params.bizFlowsDir,
+      configDir: params.configDir,
+      processorsDir: params.processorsDir,
+      logLines: [],
+    }
+
+    sessions.value.unshift(session)
+    activeSessionId.value = id
+    saveSessions()
+    return id
+  }
+
+  function selectSession(sessionId: string | null): void {
+    activeSessionId.value = sessionId
+  }
+
+  async function removeSession(sessionId: string): Promise<void> {
+    // 1. 先终止子进程，确保进程已 kill 再从 UI 移除 / Kill subprocess first; remove from UI after
+    if (_listeners.has(sessionId)) {
+      try { await killConverter(sessionId); } catch { /* process may already be dead */ }
+      _listeners.get(sessionId)?.()
+      _listeners.delete(sessionId)
+      // 同步清理健康检查 / Clean up health check too
+      const hc = _healthChecks.get(sessionId)
+      if (hc) { clearInterval(hc); _healthChecks.delete(sessionId) }
+    }
+
+    // 2. 确认子进程已终止，从 UI 移除 / Confirm process is dead, then remove from UI
+    sessions.value = sessions.value.filter((s) => s.id !== sessionId)
+    if (activeSessionId.value === sessionId) {
+      activeSessionId.value = sessions.value[0]?.id ?? null
+    }
+    await saveSessions()
+  }
+
+  // ---- CLI args builder / CLI 参数构建 ----
+
+  // 参数定义来自 shared/schemas/cli/converter.json（与 Python converter_main.py parser 同步）
+  // Arg definitions from shared/schemas/cli/converter.json (synced with Python converter_main.py parser)
+  function buildCliArgs(session: ConverterSession): string[] {
+    const args: string[] = ['converter_main.py']
+
+    switch (session.direction) {
+      case 'excel2yaml':
+        args.push('excel2yaml')
+        if (session.inputPath) args.push('--input', session.inputPath)
+        if (session.outputPath) args.push('--output', session.outputPath)
+        break
+      case 'yaml2excel':
+        args.push('yaml2excel')
+        if (session.interfacesDir) args.push('--interfaces', session.interfacesDir)
+        if (session.singleCasesDir) args.push('--single-cases', session.singleCasesDir)
+        if (session.bizFlowsDir) args.push('--biz-flows', session.bizFlowsDir)
+        if (session.outputPath) args.push('--output', session.outputPath)
+        break
+      case 'yaml2pytest':
+        args.push('yaml2pytest')
+        if (session.interfacesDir) args.push('--interfaces', session.interfacesDir)
+        if (session.singleCasesDir) args.push('--single-cases', session.singleCasesDir)
+        if (session.bizFlowsDir) args.push('--biz-flows', session.bizFlowsDir)
+        if (session.configDir) args.push('--config-dir', session.configDir)
+        if (session.processorsDir) args.push('--processors-dir', session.processorsDir)
+        if (session.outputPath) args.push('--output', session.outputPath)
+        break
+      case 'excel2pytest':
+        args.push('excel2pytest')
+        if (session.inputPath) args.push('--input', session.inputPath)
+        if (session.configDir) args.push('--config-dir', session.configDir)
+        if (session.processorsDir) args.push('--processors-dir', session.processorsDir)
+        if (session.outputPath) args.push('--output', session.outputPath)
+        break
+    }
+
+    return args
+  }
+
+  // ---- Subprocess lifecycle / 子进程生命周期 ----
+
+  async function startSession(sessionId: string): Promise<void> {
+    const session = sessions.value.find((s) => s.id === sessionId)
+    if (!session) return
+
+    session.status = 'running'
+    session.logLines = []
+    session.outputLinkPath = undefined
+    session.error = undefined
+    session.updatedAt = Date.now()
+
+    const args = buildCliArgs(session)
+
+    // 注册事件监听（先 await 监听器就绪，再 spawn 进程，防止事件丢失）
+    // Register event listener (await listener readiness before spawn to prevent event loss)
+    const unlisten = await listenToConverterEvents(sessionId, (line, level) => {
+      appendLog(sessionId, level, line)
+      tryParseCompletion(sessionId, line)
+    })
+    _listeners.set(sessionId, unlisten)
+
+    // 启动子进程 / Spawn subprocess
+    try {
+      const agentStore = useAgentStore()
+      // 确保 agent config 已从磁盘加载 / Ensure agent config is loaded from disk
+      if (!agentStore.configLoaded) {
+        await agentStore.loadConfig()
+      }
+      const cmd = resolvePythonCommand(agentStore.config)
+      // 打印即将执行的完整命令，便于定位问题 / Log the full command for debugging
+      const fullCmd = [cmd.exe, ...cmd.preArgs, ...args].join(' ')
+      appendLog(sessionId, 'info', `[CMD] ${fullCmd}`)
+      await spawnConverter(
+        sessionId,
+        agentStore.config.executorRootDir, // converter_main.py 位于 python/ 目录（与 executor main.py 同级） / converter_main.py is in python/ dir (alongside executor main.py)
+        cmd.exe,
+        cmd.preArgs,
+        args,
+      )
+      appendLog(sessionId, 'info', 'Converter process started')
+      _startHealthCheck(sessionId)
+    } catch (e: unknown) {
+      const err = e as Error
+      session.status = 'error'
+      session.error = err?.message || String(e)
+      appendLog(sessionId, 'error', `Failed to start: ${session.error}`)
+      _listeners.get(sessionId)?.()
+      _listeners.delete(sessionId)
+    }
+
+    await saveSessions()
+  }
+
+  /**
+   * 启动进程健康检查 — 每 5 秒检查子进程是否存活。
+   * Start process health check — poll every 5s to see if subprocess is still alive.
+   */
+  function _startHealthCheck(sessionId: string): void {
+    const interval = setInterval(async () => {
+      const s = sessions.value.find(x => x.id === sessionId)
+      if (!s || s.status !== 'running') {
+        clearInterval(interval)
+        _healthChecks.delete(sessionId)
+        return
+      }
+      try {
+        const alive = await checkConverterRunning(sessionId)
+        if (!alive) {
+          s.status = 'error'
+          s.error = 'Process exited unexpectedly'
+          appendLog(sessionId, 'error', 'Process exited unexpectedly — 进程可能已崩溃 / may have crashed')
+          _listeners.get(sessionId)?.()
+          _listeners.delete(sessionId)
+          clearInterval(interval)
+          _healthChecks.delete(sessionId)
+          await saveSessions()
+        }
+      } catch { /* 忽略检查错误 / ignore check errors */ }
+    }, 5000)
+    _healthChecks.set(sessionId, interval)
+  }
+
+  async function terminateSession(sessionId: string): Promise<void> {
+    const session = sessions.value.find((s) => s.id === sessionId)
+    if (!session) return
+    session.status = 'error'
+    session.error = 'Terminated by user'
+    session.updatedAt = Date.now()
+    appendLog(sessionId, 'info', 'Session terminated by user')
+
+    try {
+      await killConverter(sessionId)
+    } catch { /* already dead */ }
+
+    _listeners.get(sessionId)?.()
+    _listeners.delete(sessionId)
+    // 清理健康检查 / Clean up health check
+    const hc = _healthChecks.get(sessionId)
+    if (hc) {
+      clearInterval(hc)
+      _healthChecks.delete(sessionId)
+    }
+    await saveSessions()
+  }
+
+  // ---- Logger / 日志 ----
+
+  function appendLog(sessionId: string, level: LogEntry['level'], message: string): void {
+    const session = sessions.value.find((s) => s.id === sessionId)
+    if (!session) return
+    session.logLines.push({
+      ts: new Date().toLocaleTimeString(),
+      level,
+      message,
+    })
+  }
+
+  // ---- Completion parser / 完成行解析 ----
+
+  function tryParseCompletion(sessionId: string, line: string): void {
+    const session = sessions.value.find((s) => s.id === sessionId)
+    if (!session || session.status !== 'running') return
+
+    try {
+      const parsed = JSON.parse(line.trim())
+      if (parsed && typeof parsed.output === 'string') {
+        session.status = 'completed'
+        session.outputLinkPath = parsed.output
+        session.updatedAt = Date.now()
+        _listeners.get(sessionId)?.()
+        _listeners.delete(sessionId)
+        const hc2 = _healthChecks.get(sessionId)
+        if (hc2) { clearInterval(hc2); _healthChecks.delete(sessionId) }
+        saveSessions()
+      }
+    } catch {
+      // 不是 JSON 行，继续 / Not a JSON line, continue
+    }
+  }
+
+  // ---- Init / 初始化 ----
+
+  async function initialize(): Promise<void> {
+    // 幂等保护：已初始化则跳过 / Idempotent guard: skip if already initialized
+    if (sessionsLoaded.value) return
+    await loadSessions()
+    sessionsLoaded.value = true
+    // 修复启动时卡在 running 状态的旧会话 / Fix stale running sessions on startup
+    if (await fixStaleRunningStatus(
+      sessions.value,
+      checkConverterRunning,
+      ['running'],
+      STALE_STATUS_ERROR_MSG,
+    )) {
+      // 为被修复的项添加日志 / Add log for fixed items
+      for (const s of sessions.value) {
+        if (s.error === STALE_STATUS_ERROR_MSG) {
+          appendLog(s.id, 'error', '会话状态已修正：进程已丢失（Studio 关闭或崩溃）/ Session status corrected: process lost (Studio was closed or crashed)')
+        }
+      }
+      await saveSessions()
+    }
+  }
+
+  return {
+    // State
+    sessions,
+    activeSessionId,
+    sessionsLoaded,
+    // Getters
+    activeSession,
+    sortedSessions,
+    // Editor converter params
+    editorConverterParams,
+    getEditorConverterParams,
+    setEditorConverterParams,
+    // Actions
+    loadSessions,
+    saveSessions,
+    createSession,
+    selectSession,
+    removeSession,
+    startSession,
+    terminateSession,
+    initialize,
+  }
+})

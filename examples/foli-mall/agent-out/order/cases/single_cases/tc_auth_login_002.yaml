@@ -1,0 +1,17 @@
+case_type: single
+test_id: TC_AUTH_LOGIN_002
+relevance_id: IF_AUTH_LOGIN
+api_name: 用户登录-密码错误
+app_name: foliMail
+method: POST
+url: /api/auth/login
+request_head:
+  Content-Type: application/json
+request_body:
+  username: buyer01
+  password: wrong-pass
+status_code: 200
+assert_dict:
+  $.code: "201002"
+tag: P1
+remark: 错误密码应返回 201002

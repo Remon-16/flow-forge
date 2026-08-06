@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agents.base import BaseAgent
-from agents.plan_generator import PlanGenerator
+from agents.plan_generator import PlanGenerator, _normalize_chunk_ids, _name_to_chunk_id
 from config.settings import Settings
 
 
@@ -126,3 +126,98 @@ class TestPlanOutlineGeneration:
                     requirement_analysis={"data": "x" * 10000},
                     interface_names=[{"test_id": "api_001", "api_name": "Test", "method": "GET", "url": "/test"}],
                 )
+
+
+# ---------------------------------------------------------------------------
+# Chunk ID Normalization / 分块 ID 规范化
+# ---------------------------------------------------------------------------
+
+class TestNameToChunkId:
+    """Tests for _name_to_chunk_id — name → safe ASCII chunk_id conversion."""
+
+    def should_convert_english_name(self):
+        result = _name_to_chunk_id("User Authentication", prefix="api_")
+        assert result == "api_user_authentication"
+
+    def should_handle_chinese_name_with_prefix(self):
+        # 纯中文无 ASCII 部分时用前缀 + 索引式兜底
+        # Pure Chinese with no ASCII → falls back to prefix
+        result = _name_to_chunk_id("认证与账户", prefix="api_")
+        # 应至少以 api_ 开头
+        assert result.startswith("api_")
+
+    def should_keep_existing_prefix(self):
+        result = _name_to_chunk_id("api_my_service", prefix="api_")
+        assert result == "api_my_service"
+
+    def should_collapse_multiple_underscores(self):
+        result = _name_to_chunk_id("User  &  Auth !! Service", prefix="biz_")
+        assert "__" not in result
+        assert result.startswith("biz_")
+
+
+class TestNormalizeChunkIds:
+    """Tests for _normalize_chunk_ids — outline post-processing."""
+
+    def should_preserve_provided_chunk_ids(self):
+        outline = {
+            "business_summary": "test",
+            "api_groups": [
+                {"chunk_id": "api_auth", "group_name": "Auth", "api_ids": ["api_001"]},
+            ],
+            "biz_flows": [
+                {"chunk_id": "biz_register", "name": "Register", "involved_apis": ["api_001"]},
+            ],
+        }
+        result = _normalize_chunk_ids(outline)
+        assert result["api_groups"][0]["chunk_id"] == "api_auth"
+        assert result["biz_flows"][0]["chunk_id"] == "biz_register"
+
+    def should_generate_missing_chunk_ids(self):
+        outline = {
+            "api_groups": [
+                {"group_name": "User APIs", "api_ids": ["api_001"]},
+            ],
+            "biz_flows": [
+                {"name": "User Purchase", "involved_apis": ["api_001"]},
+            ],
+        }
+        result = _normalize_chunk_ids(outline)
+        assert result["api_groups"][0]["chunk_id"].startswith("api_")
+        assert result["biz_flows"][0]["chunk_id"].startswith("biz_")
+
+    def should_deduplicate_colliding_ids(self):
+        outline = {
+            "api_groups": [
+                {"chunk_id": "api_same", "group_name": "A", "api_ids": ["api_001"]},
+                {"chunk_id": "api_same", "group_name": "B", "api_ids": ["api_002"]},
+            ],
+            "biz_flows": [],
+        }
+        result = _normalize_chunk_ids(outline)
+        ids = [g["chunk_id"] for g in result["api_groups"]]
+        assert len(ids) == len(set(ids)), f"Duplicate IDs found: {ids}"
+        assert ids[0] == "api_same"
+        assert ids[1] != "api_same"
+
+    def should_ensure_unique_across_api_and_biz(self):
+        # 同一个名称同时出现在 api 和 biz / Same name in both api and biz
+        outline = {
+            "api_groups": [
+                {"chunk_id": "auth", "group_name": "Auth", "api_ids": ["api_001"]},
+            ],
+            "biz_flows": [
+                {"chunk_id": "auth", "name": "Auth Flow", "involved_apis": ["api_001"]},
+            ],
+        }
+        result = _normalize_chunk_ids(outline)
+        api_id = result["api_groups"][0]["chunk_id"]
+        biz_id = result["biz_flows"][0]["chunk_id"]
+        assert api_id != biz_id, f"Cross-type collision: {api_id}"
+        assert api_id.startswith("api_") or biz_id.startswith("biz_")
+
+    def should_handle_empty_outline(self):
+        outline = {"api_groups": [], "biz_flows": []}
+        result = _normalize_chunk_ids(outline)
+        assert result["api_groups"] == []
+        assert result["biz_flows"] == []

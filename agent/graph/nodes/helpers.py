@@ -5,6 +5,7 @@ Shared helpers and module-level dependency injection for all nodes.
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -126,6 +127,60 @@ def save_pipeline_state(memory_dir: str, stage: str) -> None:
         logger.warning("Failed to save pipeline state: %s", e)
 
 
+def save_run_config(memory_dir: str, config: dict) -> None:
+    """保存运行配置到 memory/run_config.json 供 resume 恢复。
+
+    Save run configuration to memory/run_config.json for resume restoration.
+    Written at pipeline start so later --resume calls can restore original
+    CLI arguments and settings.
+    """
+    if not memory_dir:
+        return
+    try:
+        path = Path(memory_dir) / "run_config.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"version": 1, "timestamp": datetime.now().isoformat(), **config}
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        logger.info(_("resume.save_config", path=str(path)))
+    except Exception as e:
+        logger.warning("Failed to save run_config.json: %s", e)
+
+
+def load_run_config(memory_dir: str) -> dict:
+    """从 memory/run_config.json 加载已保存的运行配置。
+
+    Load saved run configuration. Returns empty dict if file missing or
+    corrupt — this ensures backward compatibility with older pipelines
+    that were created before run_config.json existed.
+    """
+    if not memory_dir:
+        return {}
+    path = Path(memory_dir) / "run_config.json"
+    if not path.exists():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        logger.info(_("resume.load_config", path=str(path)))
+        return data
+    except Exception:
+        return {}
+
+
+def ensure_memory_dir(memory_dir: str) -> None:
+    """确保 memory_dir 已设置，否则记录 warning。
+
+    Ensure memory_dir is set; log warning if not.
+    流水线启动时调用，确保 resume 功能可用。
+    Called at pipeline startup to ensure resume capability.
+    """
+    if not memory_dir:
+        logger.warning(_("resume.memory_dir_empty"))
+
+
 def fmt_size(path: str) -> str:
     """格式化文件大小以供显示。
 
@@ -156,15 +211,29 @@ def summarize_reference_dir(reference_dir: str) -> str:
     ref_memory = ref_path / "memory" if (ref_path / "memory").is_dir() else ref_path
 
     # 已有测试计划 / Existing plan
-    plan_path = ref_memory / "plan.md"
-    if not plan_path.exists():
-        plan_path = ref_path / "plan.md"
-    if plan_path.exists():
+    # 优先读 plan_sections.json，若无则回退到 plan.md / Prefer plan_sections.json, fallback to plan.md
+    sections_path = ref_memory / "plan_sections.json"
+    if not sections_path.exists():
+        sections_path = ref_path / "plan_sections.json"
+    if sections_path.exists():
         try:
-            plan_text = plan_path.read_text(encoding="utf-8")
+            import json
+            from flow_forge_schemas.plan_sections import assemble_plan_md
+            sections = json.loads(sections_path.read_text(encoding="utf-8"))
+            plan_text = assemble_plan_md(sections)
             parts.append(f"{REF_SECTION_EXISTING_PLAN}{plan_text[:5000]}")
         except Exception:
             pass
+    else:
+        plan_path = ref_memory / "plan.md"
+        if not plan_path.exists():
+            plan_path = ref_path / "plan.md"
+        if plan_path.exists():
+            try:
+                plan_text = plan_path.read_text(encoding="utf-8")
+                parts.append(f"{REF_SECTION_EXISTING_PLAN}{plan_text[:5000]}")
+            except Exception:
+                pass
 
     # 已有接口 / Existing interfaces
     try:
@@ -225,44 +294,6 @@ def iface_to_dict(i: InterfaceDef) -> Dict[str, Any]:
         "assert_dict": i.assert_dict,
         "remark": i.remark,
     }
-
-
-def summary_to_interfaces(summary: List[Dict]) -> List[Dict[str, Any]]:
-    """从 ApiAnalyzer 摘要重建接口定义字典。
-
-    Convert ApiAnalyzer summary dicts to InterfaceDef-like dicts.
-    """
-    result: List[Dict[str, Any]] = []
-    for item in summary:
-        url = str(item.get("api_path", ""))
-        method = str(item.get("method", "GET")).upper()
-        description = str(item.get("description", ""))
-
-        clean = (
-            url.strip("/").replace("/", "_").replace("-", "_")
-            .replace("{", "").replace("}", "").lower()
-        )
-        test_id = f"api_{clean}_{method.lower()}" if clean else ""
-
-        name = description or f"{method} {url}"
-        remark = description
-        notes = str(item.get("notes", ""))
-        if notes:
-            remark = f"{description} | {notes}" if description else notes
-
-        result.append({
-            "test_id": test_id,
-            "api_name": name,
-            "app_name": "default",
-            "method": method,
-            "url": url,
-            "request_head": {"Content-Type": "application/json"},
-            "request_body": {},
-            "status_code": 200,
-            "assert_dict": {"status_code": 200},
-            "remark": remark,
-        })
-    return result
 
 
 def dicts_to_interfaces(items: List[Any]) -> List[InterfaceDef]:

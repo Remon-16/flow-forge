@@ -96,7 +96,7 @@ def _make_mock_module(cls):
 # PluginLoaderTest
 # ---------------------------------------------------------------------------
 
-class PluginLoaderTest:
+class TestPluginLoader:
     """Tests for load_user_plugins() and load_all_plugins()."""
 
     def should_load_valid_plugin(self):
@@ -217,6 +217,30 @@ class PluginLoaderTest:
         assert len(plugins) == 2
         assert plugins[0].declaration.plugin_name == "test_valid"
         assert plugins[1].declaration.plugin_name == "plugin_b"
+
+    def should_format_partial_load_log_without_keyerror(self):
+        """load_all_plugins 部分加载失败时，日志格式化不应抛 KeyError。
+
+        验证 Bug 修复：loaded=actual → actual=actual。
+        之前传入 loaded=actual 导致 {actual} 占位符找不到对应参数。
+        Verify bug fix: loaded=actual → actual=actual.
+        Previously passing loaded=actual caused KeyError on {actual} placeholder.
+        """
+        mock_mod = _make_mock_module(_NotASubclass)
+
+        with patch("plugins.loader.importlib.import_module", return_value=mock_mod):
+            # 传入一个有效的插件路径（类存在但非 CaseAttributeGenerator 子类）
+            # 会导致 actual=0, expected=1，触发 partial_load 日志
+            # Pass a valid path (class exists but not a CaseAttributeGenerator subclass)
+            # This causes actual=0, expected=1, triggering partial_load log
+            plugins = load_all_plugins(
+                settings=MagicMock(),
+                user_module_paths=["pkg._NotASubclass"],
+            )
+
+        # 不应崩溃（之前会抛 KeyError: 'actual'）
+        # Should not crash (previously threw KeyError: 'actual')
+        assert plugins == []
 
     def should_set_user_guidance_on_plugins(self):
         """load_all_plugins should call set_user_guidance on each plugin."""

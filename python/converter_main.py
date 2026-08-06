@@ -28,19 +28,14 @@ if os.path.isdir(_SHARED) and _SHARED not in sys.path:
 
 from converter.converter import excel_to_yaml, yaml_to_excel
 from converter.pytest_writer import yaml_to_pytest, excel_to_pytest
-from i18n import _
+from i18n import _, set_lang
 
 logger = logging.getLogger("converter")
 
 
-def _setup_logging(verbose: bool = False) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-    root = logging.getLogger()
-    root.setLevel(level)
-    root.handlers = []
-    root.addHandler(handler)
+# 委托给 shared/py/flow_forge_logging 模块，确保与 agent/executor 格式统一
+# Delegate to shared/py/flow_forge_logging for consistent format across all subprocesses
+from flow_forge_logging import setup_studio_logging as _setup_logging
 
 
 def _cmd_excel2yaml(args: argparse.Namespace) -> int:
@@ -54,6 +49,9 @@ def _cmd_excel2yaml(args: argparse.Namespace) -> int:
              single=counts['single_cases'],
              biz=counts['biz_flows'],
              output=args.output))
+    # JSON 完成行供 Studio 解析 / JSON completion line for Studio parsing
+    import json as _json
+    print(_json.dumps({"output": str(args.output), "command": "excel2yaml"}, ensure_ascii=False))
     return 0
 
 
@@ -65,6 +63,8 @@ def _cmd_yaml2excel(args: argparse.Namespace) -> int:
         biz_flows_dir=args.biz_flows,
     )
     print(_("cli.excel_written", path=out))
+    import json as _json
+    print(_json.dumps({"output": str(out), "command": "yaml2excel"}, ensure_ascii=False))
     return 0
 
 
@@ -83,6 +83,8 @@ def _cmd_yaml2pytest(args: argparse.Namespace) -> int:
            biz=counts['biz_flows'],
            custom=counts['bundled_processors'],
            output=args.output))
+    import json as _json
+    print(_json.dumps({"output": str(args.output), "command": "yaml2pytest"}, ensure_ascii=False))
     return 0
 
 
@@ -99,50 +101,29 @@ def _cmd_excel2pytest(args: argparse.Namespace) -> int:
            biz=counts['biz_flows'],
            custom=counts['bundled_processors'],
            output=args.output))
+    import json as _json
+    print(_json.dumps({"output": str(args.output), "command": "excel2pytest"}, ensure_ascii=False))
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
+    """主入口 — 子命令和参数定义来自 shared/schemas/cli/converter.json。
+    Main entry — subcommands and arg definitions from shared schema."""
+    # 从 shared schema 自动生成 parser（含子命令）/ Auto-generate parser (with subcommands) from shared schema
+    from flow_forge_schemas.cli import load_cli_schema, add_subcommand_args
+    schema = load_cli_schema("converter")
     parser = argparse.ArgumentParser(
         prog="converter",
         description="Convert Flow Forge test cases between Excel and YAML formats.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
-
-    # excel2yaml
-    p_e2y = sub.add_parser("excel2yaml", help="Convert Excel (.xlsx) → YAML directory")
-    p_e2y.add_argument("--input", "-i", required=True, help="Input .xlsx file path")
-    p_e2y.add_argument("--output", "-o", required=True, help="Output directory for YAML files")
-    p_e2y.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
-
-    # yaml2excel
-    p_y2e = sub.add_parser("yaml2excel", help="Convert YAML directories → Excel (.xlsx)")
-    p_y2e.add_argument("--interfaces", help="Directory containing interface YAML files")
-    p_y2e.add_argument("--single-cases", help="Directory containing single case YAML files")
-    p_y2e.add_argument("--biz-flows", help="Directory containing biz flow YAML files")
-    p_y2e.add_argument("--output", "-o", required=True, help="Output .xlsx file path")
-    p_y2e.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
-
-    # yaml2pytest
-    p_y2p = sub.add_parser("yaml2pytest", help="Convert YAML directories → pytest test files")
-    p_y2p.add_argument("--interfaces", help="Directory containing interface YAML files")
-    p_y2p.add_argument("--single-cases", help="Directory containing single case YAML files")
-    p_y2p.add_argument("--biz-flows", help="Directory containing biz flow YAML files")
-    p_y2p.add_argument("--output", "-o", required=True, help="Output directory for pytest files")
-    p_y2p.add_argument("--config-dir", help="Directory containing env-*.yml files (default: python/)")
-    p_y2p.add_argument("--processors-dir", help="Directory containing custom processors")
-    p_y2p.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
-
-    # excel2pytest
-    p_e2p = sub.add_parser("excel2pytest", help="Convert Excel (.xlsx) → pytest test files")
-    p_e2p.add_argument("--input", "-i", required=True, help="Input .xlsx file path")
-    p_e2p.add_argument("--output", "-o", required=True, help="Output directory for pytest files")
-    p_e2p.add_argument("--config-dir", help="Directory containing env-*.yml files (default: python/)")
-    p_e2p.add_argument("--processors-dir", help="Directory containing custom processors")
-    p_e2p.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
+    add_subcommand_args(sub, schema)
 
     args = parser.parse_args(argv)
     _setup_logging(args.verbose)
+    # 未设置 AGENT_LANG 时默认中文，确保 i18n 日志/输出可用。
+    # Default to Chinese when AGENT_LANG is unset so i18n logs render.
+    set_lang(os.environ.get("AGENT_LANG", "").strip() or "zh_CN")
 
     try:
         if args.command == "excel2yaml":

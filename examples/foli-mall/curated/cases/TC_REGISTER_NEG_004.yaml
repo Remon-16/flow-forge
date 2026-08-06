@@ -1,0 +1,18 @@
+case_type: single
+test_id: TC_REGISTER_NEG_004
+relevance_id: api_api_auth_register_post
+tag: P1
+api_name: 用户注册（用户名已存在，负向，期望 201001）
+app_name: foliMail
+method: POST
+url: /api/auth/register
+request_head:
+  Content-Type: application/json
+request_body:
+  username: admin
+  password: admin123
+  nickname: AdminUser
+status_code: 200
+assert_dict:
+  code: '201001'
+remark: 修正：注册已存在用户名返回 201001（用户名已存在），而非 201002。

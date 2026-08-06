@@ -82,7 +82,7 @@ Return the populated business flow cases in JSON format:
         {{
           "step_id": "Step_Login",
           "relevance_id": "api_login_post",
-          "inherit": "",
+          "inherit": {{}},
           "api_name": "User Login",
           "app_name": "someApp",
           "method": "POST",

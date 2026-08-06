@@ -16,6 +16,7 @@ from typing import Any
 import yaml
 
 from .common.utils import safe_filename
+from i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +55,14 @@ def write_interfaces(
         d = dict(iface)
         d["case_type"] = "interfaces"
         test_id = str(d.get("test_id", "unknown"))
-        file_path = dir_path / f"{safe_filename(test_id)}.yaml"
+        file_path, new_id = _resolve_path_conflict(dir_path, test_id)
+        d["test_id"] = new_id
         with open(file_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(d, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
         count += 1
-    logger.info("Wrote %d interface YAML files to %s", count, dir_path)
+    logger.info(
+        _("converter.yaml_wrote_interfaces", count=count, dir=str(dir_path))
+    )
     return count
 
 
@@ -83,7 +87,9 @@ def write_single_cases(
         with open(file_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(d, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
         count += 1
-    logger.info("Wrote %d single case YAML files to %s", count, dir_path)
+    logger.info(
+        _("converter.yaml_wrote_single_cases", count=count, dir=str(dir_path))
+    )
     return count
 
 
@@ -108,5 +114,7 @@ def write_biz_flows(
         with open(file_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(d, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
         count += 1
-    logger.info("Wrote %d biz flow YAML files to %s", count, dir_path)
+    logger.info(
+        _("converter.yaml_wrote_biz_flows", count=count, dir=str(dir_path))
+    )
     return count

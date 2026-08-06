@@ -68,16 +68,12 @@ pipeline:
   max_retries: 3                     # Max retries for LLM calls
   max_steps_no_progress: 5           # Max steps with no progress
   consecutive_batch_failure_limit: 3 # Consecutive batch failure limit (-1 = never stop)
-  url_correction_max_retries: 3      # Max retries for URL correction
   skeleton_batch_size: 30            # Skeleton generation batch size (test points per batch)
   plan_single_batch_size: 8          # Single-API test point group size (-1 = no split, -1 recommended for strong models)
-  plan_biz_flow_batch_size: 3        # Business flow per-batch merge count (-1 = no split, -1 recommended for strong models)
   case_type: both                    # Case generation type: both | single | biz
   plugin_batch_size: 10              # Plugin processing batch size (-1 = no batching)
   auto: false                        # Auto mode: skip human review (recommended for nightly batch generation)
 ```
-
-> **Deprecated**: The old `plan_chunk_size` setting is deprecated and replaced by `plan_single_batch_size` + `plan_biz_flow_batch_size`. Automatic migration is retained only for backward compatibility — do not use it in new configurations.
 
 #### Case Type Selection (case_type)
 
@@ -89,60 +85,74 @@ pipeline:
 
 The skipping logic runs at the code level and does not affect outline generation — the outline still contains the complete `api_groups` and `biz_flows`. It can also be overridden with the `--case-type` CLI argument.
 
-### knowledge — Knowledge Base
-
-> The knowledge base is currently a Beta feature.
-
-```yaml
-knowledge:
-  enabled: false     # Enable the knowledge base (grep-based plain-text search)
-  dir: ./knowledge   # Knowledge base directory
-```
-
-See the [Knowledge Base section in how-it-works.md](./how-it-works.en.md#knowledge-base) for details.
-
-### validation — Case Validation
+### validation — Validation & Correction
 
 ```yaml
 validation:
-  enabled: true
-  max_retries: 3
-  rules:
-    - check: skeleton_count
-      strategy: warn
-    - check: url_check
-      strategy: warn
-      failure_action: keep   # url_check only: discard (send to failures.yaml) | keep (retain and continue plugin processing)
-    - check: data_fill_count
-      strategy: warn
-    - check: assertion_count
-      strategy: warn
+  # ··· URL doc-match validation ···
+  url_doc_match_validation:
+    enable: true                        # Enable URL doc-match validation
+    max_retries: 3                      # URL correction retry limit
+    rules:
+      - check: url_check                # URL existence check
+        strategy: warn                  # Strategy after correction exhausted: fail | warn | skip
+
+  # ··· Case generation validation ···
+  case_gen_validation:
+    enable: true                        # Enable case format validation (was case_format_enabled)
+    max_retries: 3                      # Case format validation retry limit (was case_format_max_retries)
+    rules:
+      - check: skeleton_count
+        strategy: warn
+      - check: url_check
+        strategy: warn
+        failure_action: keep   # url_check only: discard (send to failures.yaml) | keep (retain and continue plugin processing)
+      - check: data_fill_count
+        strategy: warn
+      - check: assertion_count
+        strategy: warn
+
+  # ··· Parse plan validation ···
+  parse_plan_validation:
+    enable: true
+    max_retries: 3
+    rules:
+      - check: flow_match               # Flow association check
+        strategy: warn
+        failure_action: discard         # flow_match only: discard (drop) | keep (retain)
 ```
 
 **Strategy values**: `fail` (abort and retry) | `warn` (warn and continue) | `skip` (bypass).
+
+**parse_plan_validation notes**: The `flow_match` check runs during the plan parsing stage, matching LLM-generated Mermaid flow diagrams against business scenarios defined in the requirement document. Mismatched flows are handled per `strategy` — `fail` raises an exception, `skip` bypasses the check. When `strategy: warn`, `failure_action` determines the behavior after retries are exhausted: `discard` (drop orphaned flows, default) | `keep` (retain with a warning marker).
+
+**Backward compatibility**: Old formats (`case_format_enabled`, `case_format_max_retries`, `url_doc_match_rules`, `case_gen_rules` as flat keys) still work — the system auto-detects both old and new formats.
 
 **Both YAML forms are supported** (via `_parse_validation_rules` in `config/settings.py`):
 
 ```yaml
 # List format
-rules:
-  - check: url_check
-    strategy: warn
-    failure_action: keep
+case_gen_validation:
+  rules:
+    - check: url_check
+      strategy: warn
+      failure_action: keep
 
 # Dict format (shorthand)
-rules:
-  skeleton_count: fail
-  url_check: warn
+case_gen_validation:
+  rules:
+    skeleton_count: fail
+    url_check: warn
 
 # Dict format (nested, can include failure_action)
-rules:
-  url_check:
-    strategy: warn
-    failure_action: keep
+case_gen_validation:
+  rules:
+    url_check:
+      strategy: warn
+      failure_action: keep
 ```
 
-> **Code defaults vs. example**: When `rules` is not configured, the code defaults `skeleton_count` / `data_fill_count` / `assertion_count` to `fail` and `url_check` to `warn` (`settings.py`). `env.example.yaml` shows all of them as `warn` for demonstration only — the effective values come from your configuration or the code defaults.
+> **Code defaults vs. example**: When `case_gen_validation` is not configured, the code defaults `skeleton_count` / `data_fill_count` / `assertion_count` to `fail` and `url_check` to `warn` (`settings.py`). `env.example.yaml` shows all of them as `warn` for demonstration only — the effective values come from your configuration or the code defaults.
 
 For the detailed behavior of each validation check and URL correction, see [anti-hallucination.md](./anti-hallucination.en.md).
 
@@ -196,7 +206,7 @@ Main entry point: `python main.py`. Full argument list (matching `cli/parser.py`
 | `--api PATH` | API documentation path (OpenAPI `.yaml`/`.json` or Markdown `.md`) |
 | `--output PATH` | Output root directory (default `./output_<timestamp>`) |
 | `--output-format {yaml,excel,both}` | Output format (default `both`; falls back to `env.yaml` when omitted) |
-| `--parse-mode {raw,rule,llm}`, `-m` | API doc parse mode (default `raw`): `raw` = LLM analyzes the raw text, `rule` = rule-based parser, `llm` = LLM pre-extraction |
+| `--parse-mode {llm,rule}`, `-m` | API doc parse mode (default `llm`): `llm` = LLM pre-extraction, `rule` = rule-based parser (OpenAPI/Markdown) |
 | `--parser-path PATH` | Custom parser `.py` path (only effective with `--parse-mode rule`) |
 | `--reference-dir PATH` | Reference directory for incremental updates |
 | `--prompt TEXT`, `-p` | Additional user guidance, injected into the plan and case generation prompts |
@@ -204,7 +214,24 @@ Main entry point: `python main.py`. Full argument list (matching `cli/parser.py`
 | `--resume-overwrite` | Overwrite existing output when resuming |
 | `--auto` | Auto mode: skip all human review |
 | `--case-type {single,biz,both}` | Case generation type (default `both`) |
-| `--batch-size N` | Overrides `pipeline.plugin_batch_size` (plugin processing batch size); defaults to `env.yaml`. Note: this is the **plugin batch**, not plan chunking |
+| `--plugin-batch-size N` | Overrides `pipeline.plugin_batch_size` (plugin processing batch size); defaults to `env.yaml`. Note: this is the **plugin batch**, not plan chunking |
+| `--max-steps N` | Overrides `pipeline.max_steps` (max agent steps) |
+| `--max-retries N` | Overrides `pipeline.max_retries` (max retries for LLM calls) |
+| `--consecutive-batch-failure-limit N` | Overrides `pipeline.consecutive_batch_failure_limit` (consecutive batch failure limit) |
+| `--skeleton-batch-size N` | Overrides `pipeline.skeleton_batch_size` (skeleton generation batch size) |
+| `--plan-single-batch-size N` | Overrides `pipeline.plan_single_batch_size` (single-API test point group size) |
+| `--url-doc-match-max-retries N` | Overrides `validation.url_doc_match_validation.max_retries` (URL-to-document match retry limit, 0 = no retries) |
+| `--url-doc-match-strategy {fail,warn,skip}` | URL correction exhaustion strategy (default from `env.yaml`) |
+| `--case-gen-validation-rule RULE` | Overrides case-generation validation rules, format `check:strategy[:failure_action]` (e.g. `url_check:skip:keep`), can be specified multiple times |
+| `--case-gen-validation-max-retries N` | Overrides `validation.case_gen_validation.max_retries` (case-generation validation retry limit, 0 = no retries) |
+| `--url-doc-match-enabled` / `--no-url-doc-match-enabled` | Enable/disable URL doc-match validation (overrides `validation.url_doc_match_validation.enable`) |
+| `--parse-plan-validation-rule RULE` | Overrides plan parse validation rules, format `check:strategy[:failure_action]` (e.g. `flow_match:warn:discard`), can be specified multiple times |
+| `--parse-plan-validation-max-retries N` | Overrides `validation.parse_plan_validation.max_retries` (plan parse validation retry limit, 0 = no retries) |
+| `--plugins` / `--no-plugins` | Enable/disable plugins (overrides `plugins.enabled`) |
+| `--plugin-module PATH` | Plugin module path (repeatable, overrides `plugins.modules`) |
+| `--skills` / `--no-skills` | Enable/disable skills (overrides `skills.enabled`) |
+| `--skill-agent MAPPING` | Skill-to-agent mapping (repeatable, format `agent_name:skill1,skill2`, e.g. `data_filler:foli_mall_data_filling`) |
+| `--lang LANG` | Overrides `agent.lang` (UI language: `zh_CN` / `en_US`, default from `env.yaml`) |
 | `--debug-snapshots` | Save debug snapshots (`interfaces.json` + `extracted_texts.json`) |
 | `--debug` | Enable debug logging (full LLM I/O written to the session `debug.log`) |
 | `--env PATH` | Configuration file path (default `env.yaml`) |
@@ -212,6 +239,35 @@ Main entry point: `python main.py`. Full argument list (matching `cli/parser.py`
 | `--log-to-output` | Persist logs to the output directory (`{output_dir}/logs/agent.log`) |
 
 For command examples, see the [agent/README Quick Start](../README.en.md); for auto mode and resume/checkpoint recovery, see [how-it-works.md](./how-it-works.en.md#auto-mode).
+
+### Config Behavior on Resume
+
+On the first run, all CLI arguments and settings are automatically saved to `{output_dir}/memory/run_config.json`. When resuming:
+
+- **Default behavior**: The saved configuration is used as defaults (completed stages are unaffected)
+- **CLI overrides**: CLI arguments provided during `--resume` override the saved config, but only apply to stages that **have not yet run**
+- **Stale override warnings**: If a CLI override would affect an already-completed stage, the system emits a `[Resume] Warning` log indicating the override may have no effect
+
+Example: if the plan has already been generated, adding `-p "new guidance"` during `--resume` will not affect the generated plan — the system will warn that the override is stale.
+
+> Backward compatibility: For older pipelines without `run_config.json`, resume falls back to CLI arguments entirely (same behavior as before).
+
+**Saved config scope**: `case_type`, `user_guidance` (CLI `-p`), `output_format`, `plugin_batch_size`, `auto_mode`, `parse_mode`, `output_dir`, `api_path`, `requirement_paths`, `debug_snapshots`, `parser_path`, `reference_dir`.
+
+### Manual Checkpoint Editing
+
+When resuming, the system reads multiple files from the `memory/` directory to restore state. Users can directly edit certain JSON files to control resume behavior:
+
+- **`checkpoint.json`** (editable): Contains `phase` (current phase), `phase_status` (completion status), `phase_progress` (per-sub-step progress), and `settings` (runtime parameters like `batch_size`, `skeleton_batch_size`)
+- **`checkpoint_data.json`** (not editable): Contains actual case data, machine-maintained
+- **`pipeline_state.json`** (editable): Contains `completed_stage` and `stages` list
+
+**Common scenarios**:
+- Adjust `batch_size`: Edit `checkpoint.json` → `settings.batch_size` or `settings.skeleton_batch_size`
+- Force re-run a phase: Edit the `status` of the corresponding entry in `phase_progress` to `"in_progress"` and reset `completed_count`
+- Skip a sub-step: Set the sub-step `status` to `"completed"` with `completed_count = total_items`
+
+See [how-it-works.en.md § Checkpoint System & Manual Editing](./how-it-works.en.md#checkpoint-system--manual-editing) for detailed examples and notes.
 
 ---
 

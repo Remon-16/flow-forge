@@ -6,7 +6,7 @@
 
 ## 能做什么
 
-- **多格式输入**：需求文档支持 Markdown / PDF / 纯文本；接口文档支持 OpenAPI 3.0（JSON/YAML）/ Markdown 表格。
+- **多格式输入**：需求文档支持 Markdown / PDF / 纯文本；接口文档支持 OpenAPI 3.0（JSON/YAML）/ Markdown 表格。支持多文档并行输入（每个文件独立解析，保证质量）。
 - **两类用例**：生成单接口用例和多步骤业务链路用例，支持简单等值断言（`assert_dict`）和高级多运算符断言（`assert_rules`）。
 - **人工审核可控**：AI 生成测试计划后需人工确认（`y`/`n`/`r` 三种方式），确保质量后再生成用例。
 - **反幻觉**：URL 纠错、输出数量校验、分批生成，把不可靠输出拦在生成阶段。
@@ -19,6 +19,9 @@
 ```bash
 cd agent
 pip install -r requirements.txt
+
+# 0) 安装共享数据模型（首次使用必须执行 / Required for first-time setup）
+pip install -e ../shared/py
 
 # 1) 配置 LLM：复制模板并填入 api_key / model / base_url
 cp env.example.yaml env.yaml
@@ -48,8 +51,11 @@ python main.py --requirement docs/req.md --api docs/api.yaml --case-type biz
 # 自动模式：跳过所有人工审核（适合调试完毕后夜间批量生成）
 python main.py --requirement docs/req.md --api docs/api.yaml --auto
 
-# 从已有输出目录断点恢复
+# 从已有输出目录断点恢复（自动加载首次运行时的配置）
 python main.py --resume --output output_20240101_120000
+
+# 恢复时覆盖部分配置（若覆盖影响已完成阶段，会输出警告）
+python main.py --resume --output output_20240101_120000 --case-type single -p "新的指导"
 
 # 用例字段翻译兜底工具（弱模型输出中英混杂时使用）
 python translate_cases.py output/cases/ --target-lang zh_CN
@@ -70,6 +76,6 @@ python -m pytest tests/ -v
 | 文档 | 内容 |
 |------|------|
 | [配置与命令行参考](./docs/configuration.md) | `env.yaml` 全字段、`translate_env.yaml`、全部 CLI 参数、翻译工具 |
-| [工作原理](./docs/how-it-works.md) | 11 步流水线架构、审核模式 y/n/r、自动模式、知识库、目录结构、设计理念 |
-| [插件与技能系统](./docs/plugins-and-skills.md) | 插件开发与配置、Skill 注入、官方插件与内置技能 |
+| [工作原理](./docs/how-it-works.md) | 11 步流水线架构、审核模式 y/n/r、自动模式、上下文窗口管理与文档切分策略、目录结构、设计理念 |
+| [插件与技能系统](./docs/plugins-and-skills.md) | 插件开发与配置、Skill 注入、内置插件与内置技能 |
 | [反幻觉与错误处理](./docs/anti-hallucination.md) | URL 纠错、数量校验、重试策略（warn/retry/keep） |

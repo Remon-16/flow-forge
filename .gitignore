@@ -45,8 +45,14 @@ env-local.yml
 .env
 env.yaml
 translate_env.yaml
+flowforge-testing/flowforge.config.yaml
 logs/
-report/
+python/report/
 node_modules/
 .claude/
 flow_forge_schemas.egg-info/
+package-lock.json
+
+# H2 JDBC jar 由 tools/h2/init_h2.py 下载到用户目录，不入库
+# H2 JDBC jar is downloaded by tools/h2/init_h2.py to a user directory, not committed
+tools/h2/*.jar

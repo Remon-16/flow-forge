@@ -46,6 +46,13 @@ class YamlWriter:
         test_id = d.get("test_id", "unknown")
         safe_name = test_id.replace("/", "_").replace("\\", "_").replace(":", "_")
         file_path = Path(output_dir) / "interfaces" / f"{safe_name}.yaml"
+        # 文件名冲突时追加版本后缀 / Append version suffix on collision
+        if file_path.exists():
+            i = 2
+            while file_path.exists():
+                file_path = Path(output_dir) / "interfaces" / f"{safe_name}_v{i}.yaml"
+                i += 1
+            d["test_id"] = f"{test_id}_v{i - 1}"
         YamlWriter._ensure_dir(file_path.parent)
         with open(file_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(d, f, allow_unicode=True, sort_keys=False, default_flow_style=False)

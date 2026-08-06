@@ -7,6 +7,7 @@ import importlib
 import logging
 from typing import List, Optional
 
+from i18n import _
 from plugins.base import CaseAttributeGenerator
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,15 @@ def load_all_plugins(
     Inject user_guidance into plugins that support it.
     """
     plugins = load_user_plugins(user_module_paths or [], settings, knowledge)
+
+    # 检测插件加载不完整 / Detect incomplete plugin loading
+    expected = len(user_module_paths or [])
+    actual = len(plugins)
+    if actual < expected:
+        logger.error(
+            _("batch_controller.plugins_partial_load",
+              expected=expected, actual=actual, missing=expected - actual)
+        )
 
     for p in plugins:
         if hasattr(p, "set_user_guidance"):

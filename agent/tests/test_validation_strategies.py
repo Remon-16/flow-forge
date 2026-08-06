@@ -9,7 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agents.base import BaseAgent
-from agents.skeleton_generator import SingleSkeletonGenerator, _count_validate
+from agents.skeleton_generator import SingleSkeletonGenerator
+from utils.count_validate import count_validate as _count_validate
 from config.settings import Settings, get_strategy, get_url_failure_action, _parse_validation_rules
 
 
@@ -20,7 +21,7 @@ from config.settings import Settings, get_strategy, get_url_failure_action, _par
 def _make_settings(**kwargs):
     """创建测试用 Settings / Create a minimal Settings object for testing."""
     s = Settings(llm_api_key="test")
-    s.validation_rules = kwargs.get("validation_rules", [
+    s.case_gen_validation = kwargs.get("case_gen_validation", [
         {"check": "skeleton_count", "strategy": "fail"},
     ])
     return s
@@ -234,33 +235,38 @@ class TestCountValidateStrategies:
 
 
 # ---------------------------------------------------------------------------
-# Settings default validation_rules / 默认校验规则测试
+# Settings default case_gen_validation / 默认校验规则测试
 # ---------------------------------------------------------------------------
 
 class TestDefaultValidationRules:
-    """Tests for default validation_rules in Settings."""
+    """Tests for default case_gen_validation in Settings."""
 
     def should_have_default_rules(self):
-        """Settings 创建后应有默认 4 条规则 / Default Settings has 4 rules."""
+        """Settings 创建后应有默认 5 条规则 / Default Settings has 5 rules."""
         s = Settings()
-        assert len(s.validation_rules) == 4
+        assert len(s.case_gen_validation) == 5
 
-    def should_default_skeleton_count_to_fail(self):
-        """骨架数量校验默认 fail / Skeleton count defaults to fail."""
+    def should_default_skeleton_count_to_warn(self):
+        """骨架数量校验默认 warn / Skeleton count defaults to warn."""
         s = Settings()
-        assert get_strategy(s.validation_rules, "skeleton_count") == "fail"
+        assert get_strategy(s.case_gen_validation, "skeleton_count") == "warn"
 
     def should_default_url_check_to_warn(self):
         """URL 校验默认 warn / URL check defaults to warn."""
         s = Settings()
-        assert get_strategy(s.validation_rules, "url_check") == "warn"
+        assert get_strategy(s.case_gen_validation, "url_check") == "warn"
 
-    def should_default_data_fill_count_to_fail(self):
-        """数据填充数量校验默认 fail / Data fill count defaults to fail."""
+    def should_default_data_fill_count_to_warn(self):
+        """数据填充数量校验默认 warn / Data fill count defaults to warn."""
         s = Settings()
-        assert get_strategy(s.validation_rules, "data_fill_count") == "fail"
+        assert get_strategy(s.case_gen_validation, "data_fill_count") == "warn"
 
-    def should_default_assertion_count_to_fail(self):
-        """断言数量校验默认 fail / Assertion count defaults to fail."""
+    def should_default_assertion_count_to_warn(self):
+        """断言数量校验默认 warn / Assertion count defaults to warn."""
         s = Settings()
-        assert get_strategy(s.validation_rules, "assertion_count") == "fail"
+        assert get_strategy(s.case_gen_validation, "assertion_count") == "warn"
+
+    def should_default_processor_count_to_warn(self):
+        """处理器数量校验默认 warn / Processor count defaults to warn."""
+        s = Settings()
+        assert get_strategy(s.case_gen_validation, "processor_count") == "warn"

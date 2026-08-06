@@ -6,7 +6,7 @@ A multi-agent system built on a LangGraph pipeline. It reads **requirement docum
 
 ## What It Does
 
-- **Multi-format input**: Requirement documents support Markdown / PDF / plain text; API documentation supports OpenAPI 3.0 (JSON/YAML) / Markdown tables.
+- **Multi-format input**: Requirement documents support Markdown / PDF / plain text; API documentation supports OpenAPI 3.0 (JSON/YAML) / Markdown tables. Supports multi-file input with per-file independent parsing for quality assurance.
 - **Two case types**: Generates single-API test cases and multi-step business-flow test cases, supporting simple equality assertions (`assert_dict`) and advanced multi-operator assertion rules (`assert_rules`).
 - **Controllable human review**: After the AI generates the test plan, a human confirms it (via `y` / `n` / `r`), ensuring quality before cases are generated.
 - **Anti-hallucination**: URL correction, output-count validation, and batched generation catch unreliable output at the generation stage.
@@ -19,6 +19,9 @@ A multi-agent system built on a LangGraph pipeline. It reads **requirement docum
 ```bash
 cd agent
 pip install -r requirements.txt
+
+# 0) Install shared data model (required for first-time setup)
+pip install -e ../shared/py
 
 # 1) Configure the LLM: copy the template and fill in api_key / model / base_url
 cp env.example.yaml env.yaml
@@ -48,8 +51,11 @@ python main.py --requirement docs/req.md --api docs/api.yaml --case-type biz
 # Auto mode: skip all human review (ideal for nightly batch generation after tuning)
 python main.py --requirement docs/req.md --api docs/api.yaml --auto
 
-# Resume from an existing output directory
+# Resume from an existing output directory (automatically loads the original run config)
 python main.py --resume --output output_20240101_120000
+
+# Resume with partial config overrides (warns if overrides affect already-completed stages)
+python main.py --resume --output output_20240101_120000 --case-type single -p "new guidance"
 
 # Case field translation safety-net tool (use when a weak model outputs mixed Chinese/English)
 python translate_cases.py output/cases/ --target-lang zh_CN
@@ -70,6 +76,6 @@ Tests incur no LLM API costs (all LLM calls are mocked).
 | Document | Contents |
 |------|------|
 | [Configuration & CLI Reference](./docs/configuration.en.md) | All `env.yaml` fields, `translate_env.yaml`, all CLI parameters, the translation tool |
-| [How It Works](./docs/how-it-works.en.md) | The 11-step pipeline architecture, review modes y/n/r, auto mode, knowledge base, directory structure, design philosophy |
-| [Plugin & Skill System](./docs/plugins-and-skills.en.md) | Plugin development and configuration, skill injection, official plugins and built-in skills |
+| [How It Works](./docs/how-it-works.en.md) | The 11-step pipeline architecture, review modes y/n/r, auto mode, context window management & document chunking strategy, directory structure, design philosophy |
+| [Plugin & Skill System](./docs/plugins-and-skills.en.md) | Plugin development and configuration, skill injection, built-in plugins and built-in skills |
 | [Anti-Hallucination & Error Handling](./docs/anti-hallucination.en.md) | URL correction, count validation, retry strategies (warn/retry/keep) |

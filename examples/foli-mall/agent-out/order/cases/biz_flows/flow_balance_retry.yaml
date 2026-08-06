@@ -1,0 +1,95 @@
+case_type: biz
+sheet_name: 余额不足下单失败并重试成功
+steps:
+  - step_id: Step01
+    relevance_id: IF_CART_LIST
+    api_name: 余额调低并确保购物车有选中项
+    app_name: foliMail
+    method: GET
+    url: /api/cart
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer02}"
+    request_body: {}
+    status_code: 200
+    preprocessors:
+      - name: cart-fixture
+        config:
+          mode: clear
+      - name: balance-fixture
+        config:
+          balance: 0.01
+      - name: cart-fixture
+        config:
+          mode: ensure
+          product_id: 1000000000000003001
+          quantity: 1
+    assert_dict:
+      $.code: "100000"
+  - step_id: Step02
+    relevance_id: IF_ORDER_CREATE
+    api_name: 余额不足下单失败
+    app_name: foliMail
+    method: POST
+    url: /api/orders
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer02}"
+    request_body:
+      receiverName: 李四
+      receiverPhone: "13800002222"
+      receiverAddress: 北京市朝阳区
+    status_code: 200
+    assert_dict:
+      $.code: "205001"
+  - step_id: Step03
+    relevance_id: IF_CART_LIST
+    api_name: 恢复余额
+    app_name: foliMail
+    method: GET
+    url: /api/cart
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer02}"
+    request_body: {}
+    status_code: 200
+    preprocessors:
+      - name: balance-fixture
+        config:
+          balance: 10000
+    assert_dict:
+      $.code: "100000"
+  - step_id: Step04
+    relevance_id: IF_ORDER_CREATE
+    api_name: 重试下单成功
+    app_name: foliMail
+    method: POST
+    url: /api/orders
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer02}"
+    request_body:
+      receiverName: 李四
+      receiverPhone: "13800002222"
+      receiverAddress: 北京市朝阳区
+    status_code: 200
+    assert_dict:
+      $.code: "100000"
+    assert_rules:
+      - "$.data[0].status == 1"
+  - step_id: Step05
+    relevance_id: IF_AUTH_ME
+    api_name: 校验余额已扣减
+    app_name: foliMail
+    method: GET
+    url: /api/auth/me
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer02}"
+    request_body: {}
+    status_code: 200
+    assert_dict:
+      $.code: "100000"
+    assert_rules:
+      - "$.data.balance >= 0"
+      - "$.data.balance < 10000"

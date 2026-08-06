@@ -18,9 +18,8 @@ class GraphState(TypedDict, total=False):
 
     # === 输入 / Input ===
     requirement_paths: List[str]
-    api_path: str
+    api_paths: List[str]
     output_path: str
-    plan_only: bool
 
     # === 输出配置 / Output config ===
     output_dir: str             # Output root directory
@@ -29,16 +28,15 @@ class GraphState(TypedDict, total=False):
     debug_snapshots: bool       # Save optional debug snapshots
     output_format: str          # "yaml" | "excel" | "both"
     batch_size: int             # Max cases per batch
-    enable_validation: bool     # Whether to run case validation
-    max_validation_retries: int # Max validation retries
     case_type: str              # "both" | "single" | "biz"
 
     # === 文档解析 / Document parsing ===
-    requirement_text: str
+    requirement_texts: List[str]
     interfaces: List[Dict[str, Any]]
-    api_raw_text: str          # Raw text of API doc (for --parse-mode raw)
-    parse_mode: str            # "raw" | "rule" | "llm"
+    api_raw_text: str          # 拼接后的 API 文档原文，供 URL 校验 / Merged API doc text for URL validation
+    parse_mode: str            # "llm" | "rule"
     parser_path: str           # Custom parser script path
+    interface_extraction_method: str  # "none" | "rule" | "llm"
 
     # === 需求分析 / Requirement analysis ===
     requirement_analysis: Dict[str, Any]
@@ -46,7 +44,6 @@ class GraphState(TypedDict, total=False):
     # === 计划生成 / Plan generation ===
     plan_outline: Dict[str, Any]   # 测试计划轮廓 JSON / Test plan outline JSON
     plan_md: str
-    plan_md_path: str
     plan_parsed: Any  # 从 plan.md 解析的结构化计划 / Structured TestPlan
     user_guidance: str  # 用户通过 --prompt 传入的指导 / User guidance from --prompt
 
@@ -70,8 +67,8 @@ class GraphState(TypedDict, total=False):
     biz_flows: List[Dict[str, Any]]
 
     # === 批次追踪 / Batch tracking ===
-    batch_state: Dict[str, Any]          # 批次生成进度 / Batch generation progress
     validation_failures: List[Dict]      # 校验失败的用例 / Cases that failed validation
+    _batch_failed: bool                  # 批次控制器异常标志 / Batch controller failure flag
 
     # === 断点续写 & 增量 / Resume & incremental ===
     resume: bool                         # 从已有 output_dir 跳到批次生成

@@ -28,6 +28,7 @@ import hmac
 import json
 import logging
 import os
+from collections import defaultdict
 from typing import Any, Dict
 
 from processors.base import PostProcessor, ProcessorError
@@ -49,12 +50,13 @@ class HmacVerifyPostProcessor(PostProcessor):
         case_config: Dict[str, Any],
         global_config: Dict[str, Any],
     ) -> None:
+        # 合并配置：case 级覆盖 env 默认值 / case-level config overrides env defaults
         proc_configs = global_config.get("processor_configs", {})
         if isinstance(proc_configs, dict):
             env_config = proc_configs.get(self.name, {})
         else:
             env_config = {}
-        cfg = {**case_config, **env_config}
+        cfg = {**env_config, **case_config}
 
         algorithm = cfg.get("algorithm", "sha256").lower()
         secret_env = cfg.get("secret_env", "")
@@ -84,7 +86,10 @@ class HmacVerifyPostProcessor(PostProcessor):
         else:
             body_str = json.dumps(response_body, ensure_ascii=False, sort_keys=True)
 
-        payload = body_template.format(body=body_str)
+        # 防御性格式化：用 defaultdict(str) 避免模板中未定义的键导致 KeyError 崩溃
+        # Defensive formatting: defaultdict(str) prevents KeyError crash from undefined template keys
+        safe_vars = defaultdict(str, {"body": body_str})
+        payload = body_template.format_map(safe_vars)
 
         if algorithm == "sha256":
             actual = hmac.new(

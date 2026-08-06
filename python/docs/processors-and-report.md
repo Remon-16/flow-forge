@@ -85,6 +85,17 @@ processor_configs:
 | `hmac-verify` | Post | HMAC-SHA256 响应签名校验，与 `hmac-sign` 配对 |
 | `response-time` | Post | 记录响应状态码和内容长度，超过阈值时 WARNING |
 | `print-demo-post` | Post | 调试用，INFO 级别打印响应摘要 |
+| `return-order-db` | Pre + Post | 🌟 数据库处理器示例 — 前置 INSERT 订单，后置 print 退货记录（详见数据库处理器章节） |
+| `mysql-demo` | Pre + Post | 🌟 MySQL 数据库示例 — 前置写入测试数据，后置读取并清理（详见数据库处理器章节） |
+| `order-fixture` | Pre + Post | 🌟 订单前置数据夹具 — 一步创建指定状态的测试订单，后置可选清理（详见数据库处理器章节） |
+| `cart-fixture` | Pre | 🌟 购物车前置数据夹具 — add/clear/ensure 三种模式准备购物车数据（详见数据库处理器章节） |
+| `return-fixture` | Pre + Post | 🌟 退货前置数据夹具 — 创建已完成订单 + 指定状态退货记录，后置可选清理（详见数据库处理器章节） |
+| `balance-fixture` | Pre | 🌟 余额前置数据夹具 — 设置用户余额（详见数据库处理器章节） |
+| `cache-handler` | Pre + Post | 🌟 Redis 缓存处理示例 — 前置写缓存，后置清缓存（详见 Redis 处理器章节） |
+| `order-publish` | Pre + Post | 🌟 MQ 订单发布示例（Kombu）— 前置发布消息，后置消费验证（详见 MQ 处理器章节） |
+| `rocketmq-order` | Pre + Post | 🌟 RocketMQ 订单消息示例 — 前置发送订单事件，后置消费校验（详见 RocketMQ 处理器章节） |
+| `kafka-order-event` | Pre | 🌟 Kafka 订单事件示例 — 前置发送消息到 Kafka topic（详见 Kafka 处理器章节） |
+| `pulsar-order-event` | Pre | 🌟 Pulsar 订单事件示例 — 前置发送消息到 Pulsar topic（详见 Pulsar 处理器章节） |
 
 ### URL 路径参数解析
 
@@ -129,6 +140,187 @@ class MyPreProcessor(PreProcessor):
         return headers, body
 ```
 
+### 数据库处理器（BaseDBPlugin）
+
+对于需要数据库操作的前置/后置场景（如"请求前造测试数据、请求后清理"），可使用 `BaseDBPlugin` 基类（`processors/db.py`）。它基于 **SQLAlchemy** 提供：
+
+- **多数据库支持**：MySQL、PostgreSQL、SQLite、Oracle、MSSQL 等，通过 `db_url` 连接字符串切换
+- **连接池管理**：SQLAlchemy 内置 `QueuePool`，线程安全、懒加载、按 `db_url` 缓存
+- **自动注册**：`__init_subclass__` 自动创建 PreProcessor / PostProcessor 包装类
+- **共享基类**：`BaseExternalPlugin`（`processors/base.py`）统一提供 `can_process()` / `before_request()` / `after_response()` 三个扩展点的默认实现，DB/Redis/MQ/Kafka/Pulsar/RocketMQ 六类资源插件均继承自此基类
+
+使用方式：
+
+1. 继承 `BaseDBPlugin`，设置 `name` 类属性
+2. 实现 `before_request()`（前置）和/或 `after_response()`（后置）
+3. 将 `.py` 文件放入 `processors/builtin/db/` 目录
+4. 在 `env-local.yml` 的 `processor_configs` 中配置 `db_url`
+
+```python
+from processors.db import BaseDBPlugin
+from sqlalchemy import text
+
+class MyDBPlugin(BaseDBPlugin):
+    name = "my-db-processor"
+
+    def before_request(self, headers, body, case_config, global_config):
+        with self._get_connection(global_config) as conn:
+            conn.execute(text("INSERT INTO ..."))
+            conn.commit()
+            body["new_id"] = ...
+        return headers, body
+
+    def after_response(self, req_h, req_b, resp_h, resp_b, cc, gc):
+        with self._get_connection(gc) as conn:
+            rows = conn.execute(text("SELECT ...")).fetchall()
+            print("Result:", rows)
+```
+
+用例 YAML 中引用（与普通处理器相同）：
+
+```yaml
+preprocessors:
+  - name: my-db-processor
+    config: {}
+postprocessors:
+  - name: my-db-processor
+    config: {}
+```
+
+**内置示例**：`return-order-db`（`processors/builtin/db/return_order.py`）— 退货单场景，前置 INSERT 订单数据，后置 print 退货记录。
+
+> 该示例对应 foli-mall 的 `POST /api/returns` 退货接口：前置处理器默认创建 `status=4`（已完成）的测试订单，并把 `orderId` 注入请求体（与 `ReturnCreateRequest` 的驼峰字段一致）；后置处理器查询并打印退货记录。可用 `order_status` 配置项覆盖订单状态。
+
+> **配置说明**：数据库连接通过 `env-local.yml` 的 `processor_configs.<name>.db_url` 配置（SQLAlchemy connection URL 格式）。不需要在用例 YAML 中暴露敏感信息。
+>
+> **依赖安装**：`pip install sqlalchemy pymysql`（MySQL）；其他数据库需安装对应驱动（如 `psycopg2`、`cx_Oracle`）。
+>
+> **H2 支持**：安装 `pip install JPype1 JayDeBeApi`，`db_url` 配置为 `h2://sa:@localhost:9092/mem:foli_mall;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false`（对应 foli-mall 的 H2 内存库）。H2 SQLAlchemy 方言内置在 `processors/h2_dialect.py`，通过 JayDeBeApi 自动加载 H2 JDBC jar（无需手工设置 CLASSPATH）。jar 不随仓库分发，请先用初始化脚本下载：
+>
+> ```bash
+> python tools/h2/init_h2.py                # 下载到默认目录 ~/.flow-forge/h2/
+> python tools/h2/init_h2.py --dir D:/h2    # 或下载到自定义目录
+> python tools/h2/init_h2.py --check        # 仅检查是否已就绪
+> ```
+>
+> 方言按以下顺序自动探测 jar：`H2_JAR_PATH`（完整路径）→ `H2_JAR_DIR`（目录）→ 默认目录 `~/.flow-forge/h2/` → 旧位置 `tools/h2/`（向后兼容）。使用自定义目录时请设置 `H2_JAR_DIR` 环境变量。
+>
+> foli-mall 后端启动时会自动开启 H2 TCP Server（默认端口 9092，配置项 `app.h2.tcp.enabled` / `app.h2.tcp.port`），无需手工启动。H2 为内存数据库，重启后数据清空，请按以下顺序运行：
+>
+> 1. 启动 foli-mall 后端（如 `./mvnw spring-boot:run`）；
+> 2. 在已安装 `JPype1`/`JayDeBeApi` 的 Python 环境中运行 flow-forge 用例。
+
+**内置示例（MySQL）**：`mysql-demo`（`processors/builtin/db/mysql_demo.py`）— 前置处理器自动创建示例表 `ff_plugin_demo`（如不存在）并写入一行测试数据，再把 `mysql_demo_key` 注入请求体；后置处理器 SELECT 校验数据可读并 print 展示，随后 DELETE 并再次校验无残留。该插件用于验证 flow-forge 数据库处理器可连接 MySQL，同时作为自定义 DB 插件的样板。
+
+> **配置说明**：通过 `processor_configs.<name>.db_url` 配置 MySQL 连接（SQLAlchemy URL 格式），例如 `mysql+pymysql://root:password@localhost:3306/flow_forge_demo?charset=utf8mb4`；示例表会自动创建，无需手工建表。
+
+**内置示例（前置数据夹具 / test-data fixtures）**：以下 4 个插件直接向 foli-mall 的 H2 内存库写入测试数据，为需要"前置状态"的用例一步补齐数据，是 `return-order-db` 的通用化扩展：
+
+| 插件 | 功能 | 主要配置 |
+|------|------|---------|
+| `order-fixture` | 创建任意状态（0–5）的测试订单并注入 `orderId` | `order_status`（默认 4）、`quantity`、`total_amount`、`cleanup` |
+| `cart-fixture` | 购物车 `add`/`clear`/`ensure` 三种模式 | `mode`（默认 ensure）、`product_id`、`quantity`、`selected` |
+| `return-fixture` | 创建已完成订单 + 指定状态（0–7）退货记录并注入 `returnId` | `return_status`（默认 0）、`return_type`、`create_order` |
+| `balance-fixture` | 设置用户余额（如余额不足场景） | `balance`、`test_buyer_id` |
+
+> 四个插件复用 `processors/builtin/db/_fixtures_common.py` 中的共享建单/删单函数，避免重复实现；SQL 使用 SQLAlchemy 通用写法，默认连接 foli-mall 的 H2 内存库，`db_url` 切换为 MySQL 等同样可用。
+>
+> 使用示例（业务链路中叠加前置数据）：
+>
+> ```yaml
+> preprocessors:
+>   - name: order-fixture          # 造一条已完成订单 / create a completed order
+>     config:
+>       order_status: 4
+>   - name: cart-fixture           # 确保购物车有选中项 / ensure a selected cart item
+>     config:
+>       mode: ensure
+>   - name: balance-fixture        # 设置买家余额 / set the buyer balance
+>     config:
+>       balance: 10000
+> postprocessors:
+>   - name: order-fixture          # 跑完清理测试订单 / clean up after run
+>     config:
+>       cleanup: true
+> ```
+
+### Redis 处理器（BaseRedisPlugin）
+
+对于需要 Redis 缓存操作的前置/后置场景（如"请求前写缓存、请求后清理"），可使用 `BaseRedisPlugin` 基类（`processors/redis.py`）。它基于 **redis-py** 提供：
+
+- **连接池管理**：redis-py 内置 `ConnectionPool`，线程安全、懒加载、按 `redis_url` 缓存客户端
+- **自动注册**：`__init_subclass__` 自动创建 PreProcessor / PostProcessor 包装类
+
+使用方式与 `BaseDBPlugin` 相同：继承 → 设置 `name` → 实现 `before_request()` / `after_response()`。
+
+**内置示例**：`cache-handler`（`processors/builtin/redis/cache_handler.py`）— 前置 SET 缓存数据，后置 DEL 清理。
+
+> **配置说明**：Redis 连接通过 `processor_configs.<name>.redis_url` 配置。
+> **依赖安装**：`pip install redis`
+> **协议兼容**：客户端会自动探测协议兼容性——新版 redis-py 默认 RESP3，若服务器不支持（如 Redis 5.x 无 `HELLO` 命令）则自动降级为 RESP2，兼容 Redis 5.x 与 6+/7。
+
+### MQ 处理器 — Kombu 多 MQ 抽象（BaseMQPlugin）
+
+对于需要消息队列操作的前置/后置场景，可使用 `BaseMQPlugin` 基类（`processors/mq.py`）。它基于 **Kombu**（Celery 的传输层）提供多 MQ 抽象——类似 SQLAlchemy 对数据库的作用：
+
+- **多 MQ 支持**：一个 `mq_url` 连接字符串切换 RabbitMQ / Redis / Amazon SQS / MongoDB 等
+- **连接管理**：Kombu `Connection` 自带连接池，线程安全、懒加载、按 `mq_url` 缓存
+- **自动注册**：`__init_subclass__` 自动创建 PreProcessor / PostProcessor 包装类
+- **便捷方法**：`_publish()` 发布消息、`_get_message()` 消费消息
+
+支持的协议：
+
+| 协议 | `mq_url` 示例 | MQ 系统 |
+|------|-------------|--------|
+| `amqp://` | `amqp://guest:guest@localhost:5672//` | RabbitMQ |
+| `redis://` | `redis://localhost:6379/0` | Redis (as broker) |
+| `sqs://` | `sqs://AWS_KEY:AWS_SECRET@` | Amazon SQS |
+| `memory://` | `memory://` | 测试用（无需外部服务） |
+
+**内置示例**：`order-publish`（`processors/builtin/mq/order_publish.py`）— 前置 publish 订单事件，后置 consume 验证。
+
+> **依赖安装**：`pip install kombu`
+
+### RocketMQ 处理器（BaseRocketMQPlugin）
+
+Apache RocketMQ 在国内是主流 MQ，因其协议特殊（Kombu 不支持），单独提供 `BaseRocketMQPlugin` 基类（`processors/rocketmq.py`）。内置基于 remoting 协议的纯 Python 客户端（`processors/rocketmq_client.py`，仅标准库），Windows/Linux/macOS 均可收发消息，无需 C++ 编译环境：
+
+- **连接管理**：`_RocketMQManager` 按 `namesrv_addr` 缓存客户端，线程安全
+- **便捷方法**：`_send_message()` 发送消息（返回 queueId/queueOffset 等元数据）、`_receive_message()` 从指定偏移消费消息（使用独立的 `<group>-verify` 消费组）
+- **自动注册**：与 DB/Redis/MQ 相同模式
+
+**内置示例**：`rocketmq-order`（`processors/builtin/rocketmq/order_message.py`）— 前置发送 `order_created` 订单事件，后置从同一偏移消费并校验消息内容；校验失败（超时或不匹配）会使用例失败。
+
+> **配置说明**：连接通过 `processor_configs.<name>.namesrv_addr`、`group_id`、`topic` 配置。
+> `receive_timeout`（默认 10 秒）控制后置消费校验超时。
+> **依赖说明**：无需安装额外依赖；官方 `rocketmq-client-python` 不支持 Windows，故内置纯 Python 客户端。
+
+### Kafka 处理器（BaseKafkaPlugin）
+
+对于需要 Kafka 消息发送的前置/后置场景，可使用 `BaseKafkaPlugin` 基类（`processors/kafka.py`）。它基于 **confluent-kafka**（Confluent 官方 Python 客户端）提供：
+
+- **连接管理**：`_KafkaProducerManager` 按 `(bootstrap_servers, client_id)` 缓存 Producer，线程安全
+- **便捷方法**：`_send_message()` 同步发送消息
+- **自动注册**：与 DB/Redis/MQ/RocketMQ 相同模式
+
+**内置示例**：`kafka-order-event`（`processors/builtin/kafka/order_event.py`）— 前置发送订单事件到 Kafka topic。
+
+> **配置说明**：连接通过 `processor_configs.<name>.bootstrap_servers`、`topic` 配置。
+> **依赖安装**：`pip install confluent-kafka`
+
+### Pulsar 处理器（BasePulsarPlugin）
+
+对于需要 Pulsar 消息发送的前置/后置场景，可使用 `BasePulsarPlugin` 基类（`processors/pulsar.py`）。它基于 **pulsar-client**（Apache Pulsar 官方 Python 客户端）提供：
+
+- **连接管理**：`_PulsarClientManager` 按 `service_url` 缓存 Client，线程安全
+- **便捷方法**：`_send_message()` 同步发送消息
+- **自动注册**：与 DB/Redis/MQ/RocketMQ/Kafka 相同模式
+
+**内置示例**：`pulsar-order-event`（`processors/builtin/pulsar/order_event.py`）— 前置发送订单事件到 Pulsar topic。
+
+> **配置说明**：连接通过 `processor_configs.<name>.service_url`、`topic` 配置。
+> **依赖安装**：`pip install pulsar-client`
+
 ### 执行流程
 
 ```
@@ -158,6 +350,10 @@ class MyPreProcessor(PreProcessor):
 - **细粒度锁**：按 `appName:userParamName` 粒度锁定，不同用户可并发登录
 - **失败黑名单**：MD5 哈希记录登录失败用户，避免重复无效请求
 - **Token 缓存**：同一用户只需登录一次，后续复用
+- **用户上下文追踪**（v2.5+）：线程局部存储记录当前解析的 `userParamName` 和 `appConfig`，提供三个工具方法供插件使用：
+  - `LoginManager.get_current_user()` — 无参，获取当前登录用户的完整配置（含 `user_id` / `role` 等冗余字段）
+  - `LoginManager.get_user(user_param_name)` — 获取当前 App 下指定用户的配置
+  - `LoginManager.get_app_user(app_name, user_param_name)` — 完整显式查找，不依赖线程上下文
 
 ---
 

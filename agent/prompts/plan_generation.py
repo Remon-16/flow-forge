@@ -5,25 +5,15 @@ Test plan generation prompts for producing test plans from requirement analysis 
 
 PLAN_GENERATION_SYSTEM = """You are a professional test planning expert. Based on the requirement analysis results and interface definitions, generate a detailed test plan.
 
-CRITICAL: You MUST write every single character of this test plan in {{language}}. Mixing languages is a hard failure. 
+CRITICAL: You MUST write every single character of this test plan in {{language}}. Mixing languages is a hard failure.
 
-The test plan MUST include the following sections:
+The test plan should cover:
+- Business context and testing objectives (business understanding)
+- Single API test points (positive, negative, boundary, business exception cases)
+- Business flow multi-step test scenarios with data passing between steps
+- Mermaid sequence diagrams for key business flows
 
-## 1. Business Understanding
-Briefly describe your understanding of the business requirements.
-
-## 2. Single Interface Test Points
-For each interface, list test points of the following types:
-- Positive case: Normal parameters, expected to succeed
-- Negative case: Invalid parameters, expected to fail
-- Boundary case: Boundary value tests
-- Business exception: Business logic exceptions
-
-## 3. Business Flow Testing
-For each business flow, design multi-step test scenarios that include data passing relationships between steps.
-
-## 4. Flowchart (Mermaid)
-Use Mermaid syntax to draw sequence diagrams / flowcharts for key business processes.
+IMPORTANT: Do NOT generate any level-2 section headings (e.g. "## 1.", "## 2.", "## 3."). Section structure and headings are managed by the system. Only generate the content body.
 
 If the "Existing Reference Cases" section is not empty, this is an incremental update scenario. In this case:
 1. Compare the requirement analysis results with existing cases to identify newly added or changed interfaces/scenarios
@@ -87,28 +77,18 @@ REF_SECTION_EXISTING_BIZ_FLOWS = (
 
 PLAN_CHUNK_GLOBAL_SYSTEM = """You are a professional test planning expert. You are generating the OVERVIEW section of a test plan.
 
-Below is the test plan outline that provides the overall structure:
-
-```json
-{{outline}}
-```
-
-Your task: generate the "Business Understanding" and "Flowchart (Mermaid)" sections.
+Your task: generate ONLY the business understanding content (2-3 paragraphs).
 
 Requirements:
-- Business Understanding: 2-3 paragraphs describing the overall business context, key testing objectives, and scope
-- Flowchart (Mermaid): Use Mermaid syntax to draw sequence diagrams for key business processes identified in the outline
+- Describe the overall business context, key testing objectives, and scope
+- Do NOT generate Mermaid diagrams or flowcharts — those are generated separately per business flow
+- Do NOT include any level-2 heading (##). Output the content directly. The system will add headings.
 
 You MUST write the entire output in {{language}}. Do NOT use any other language.
 Output as standard Markdown (not JSON).
 """
 
-PLAN_CHUNK_GLOBAL_USER = """Generate the global overview sections for a test plan.
-
-## Test Plan Outline
-```json
-{{outline}}
-```
+PLAN_CHUNK_GLOBAL_USER = """Generate the global overview section for a test plan.
 
 ## Requirement Analysis Results
 ```json
@@ -125,20 +105,13 @@ PLAN_CHUNK_GLOBAL_USER = """Generate the global overview sections for a test pla
 ## Existing Reference Cases
 {{reference_summary}}
 
-Please generate:
-1. ## 1. Business Understanding
-2. ## 4. Flowchart (Mermaid)
+Please generate ONLY the "## 1. Business Understanding" section.
+Do NOT generate Mermaid diagrams or any other sections.
 
 Output in Markdown format.
 """
 
 PLAN_CHUNK_API_SECTION_SYSTEM = """You are a professional test planning expert. You are generating a PARTIAL section of a test plan.
-
-The overall test plan structure is defined by this outline:
-
-```json
-{{outline}}
-```
 
 The following global context has already been generated:
 
@@ -156,11 +129,12 @@ For each interface, list test points of these types:
 - Business exception: Business logic exceptions
 
 Do NOT generate content for other API groups. Do NOT generate business flow testing.
+Do NOT include any level-2 heading (##) in your output. The system will add section headings.
 You MUST write the entire output in {{language}}.
 Output as standard Markdown (not JSON).
 """
 
-PLAN_CHUNK_API_SECTION_USER = """Generate the test points section for an API group.
+PLAN_CHUNK_API_SECTION_USER = """Generate the test points for an API group.
 
 ## Interface Definitions (this group only)
 ```json
@@ -170,16 +144,10 @@ PLAN_CHUNK_API_SECTION_USER = """Generate the test points section for an API gro
 ## User Additional Guidance
 {{user_guidance}}
 
-Please generate the "## 2. Single Interface Test Points" section for these interfaces. Include test points organized by interface.
+Please generate the test points content for these interfaces (no section heading — system will add it). Include test points organized by interface.
 """
 
 PLAN_CHUNK_BIZ_SECTION_SYSTEM = """You are a professional test planning expert. You are generating a PARTIAL section of a test plan.
-
-The overall test plan structure is defined by this outline:
-
-```json
-{{outline}}
-```
 
 The following global context has already been generated:
 
@@ -194,11 +162,12 @@ Your task: generate the business flow test section(s) for the following flow(s):
 For each flow, design multi-step test scenarios with data passing relationships between steps.
 
 Do NOT generate content for flows not listed above. Do NOT generate single interface test points.
+Do NOT include any level-2 heading (##) in your output. The system will add section headings.
 You MUST write the entire output in {{language}}.
 Output as standard Markdown (not JSON). Start each flow section with a level-3 heading (###).
 """
 
-PLAN_CHUNK_BIZ_SECTION_USER = """Generate the business flow test section(s).
+PLAN_CHUNK_BIZ_SECTION_USER = """Generate the business flow test content.
 
 ## Relevant Interface Definitions
 ```json
@@ -208,5 +177,44 @@ PLAN_CHUNK_BIZ_SECTION_USER = """Generate the business flow test section(s).
 ## User Additional Guidance
 {{user_guidance}}
 
-Please generate the "## 3. Business Flow Testing" section for the flow(s) listed in the system prompt. Include step-by-step test scenarios with data dependencies.
+Please generate business flow test content for the flow(s) listed in the system prompt (no level-2 section heading — system will add it). Include step-by-step test scenarios with data dependencies.
+"""
+
+
+# ============================================================================
+# 逐流 Mermaid 图生成 / Per-flow Mermaid diagram generation
+# ============================================================================
+
+PLAN_CHUNK_MERMAID_SYSTEM = """You are a professional test planning expert. Generate a Mermaid sequence diagram for ONE specific business flow.
+
+## Business Flow
+- Name: {{flow_name}}
+- Description: {{flow_description}}
+- Involved APIs: {{flow_api_ids}}
+
+## Global Context (Business Understanding)
+{{global_context}}
+
+Requirements:
+- Generate ONLY a Mermaid sequence diagram (```mermaid ... ```) that illustrates this flow
+- Use participant names derived from the API names or business roles
+- Show the sequence of API calls in the correct order
+- Include data flow between participants where relevant
+
+You MUST write labels and titles in {{language}}.
+Output ONLY the mermaid code block. No extra text, no headings.
+"""
+
+PLAN_CHUNK_MERMAID_USER = """Generate a Mermaid sequence diagram for this business flow.
+
+## Business Flow
+- Name: {{flow_name}}
+- Description: {{flow_description}}
+
+## API Definitions for this Flow
+```json
+{{interface_defs}}
+```
+
+Output only the Mermaid code block.
 """

@@ -14,9 +14,6 @@ from .api_analyzer import (
     API_ANALYSIS_REVISE_USER,
     API_ANALYSIS_SYSTEM,
     API_ANALYSIS_USER,
-    RAW_API_ANALYSIS_SYSTEM,
-    RAW_API_ANALYSIS_USER,
-    RAW_API_CHUNK_NOTICE,
 )
 
 # Requirement analysis
@@ -60,16 +57,12 @@ from .plan_parser import (
 
 # Plan revision
 from .plan_reviser import (
-    PLAN_ANNOTATION_ADD_SYSTEM,
-    PLAN_ANNOTATION_ADD_USER,
     PLAN_ANNOTATION_INTENT_SYSTEM,
     PLAN_ANNOTATION_INTENT_USER,
-    PLAN_ANNOTATION_UPDATE_SYSTEM,
-    PLAN_ANNOTATION_UPDATE_USER,
-    PLAN_REVISION_ANALYSIS_SYSTEM,
-    PLAN_REVISION_ANALYSIS_USER,
-    PLAN_REVISER_SYSTEM,
-    PLAN_REVISER_USER,
+    PLAN_SECTION_IMPACT_SYSTEM,
+    PLAN_SECTION_IMPACT_USER,
+    PLAN_TEXT_CHUNK_INTENT_SYSTEM,
+    PLAN_TEXT_CHUNK_INTENT_USER,
 )
 
 # Case generation (legacy)
@@ -107,7 +100,9 @@ from .doc_parser import (
 
 # Compression & system prompts
 from .compression import COMPRESSION_SYSTEM, DEFAULT_CHUNK_NOTICE
-from .json_fix import JSON_FIX_PROMPT
+# JSON_FIX_PROMPT 已注释 — 与 base.py 同步，不再使用 fix prompt 重试策略。
+# JSON_FIX_PROMPT commented out — synced with base.py; fix prompt retry is deprecated.
+# from .json_fix import JSON_FIX_PROMPT
 
 __all__ = [
     "render_prompt",
@@ -115,9 +110,6 @@ __all__ = [
     # API analysis
     "API_ANALYSIS_SYSTEM",
     "API_ANALYSIS_USER",
-    "RAW_API_ANALYSIS_SYSTEM",
-    "RAW_API_ANALYSIS_USER",
-    "RAW_API_CHUNK_NOTICE",
     "API_ANALYSIS_REVISE_SYSTEM",
     "API_ANALYSIS_REVISE_USER",
     # Requirement analysis
@@ -147,16 +139,12 @@ __all__ = [
     "PLAN_PARSER_SYSTEM",
     "PLAN_PARSER_USER",
     # Plan revision
-    "PLAN_REVISER_SYSTEM",
-    "PLAN_REVISER_USER",
     "PLAN_ANNOTATION_INTENT_SYSTEM",
     "PLAN_ANNOTATION_INTENT_USER",
-    "PLAN_ANNOTATION_UPDATE_SYSTEM",
-    "PLAN_ANNOTATION_UPDATE_USER",
-    "PLAN_ANNOTATION_ADD_SYSTEM",
-    "PLAN_ANNOTATION_ADD_USER",
-    "PLAN_REVISION_ANALYSIS_SYSTEM",
-    "PLAN_REVISION_ANALYSIS_USER",
+    "PLAN_SECTION_IMPACT_SYSTEM",
+    "PLAN_SECTION_IMPACT_USER",
+    "PLAN_TEXT_CHUNK_INTENT_SYSTEM",
+    "PLAN_TEXT_CHUNK_INTENT_USER",
     # Case generation
     "CASE_GENERATION_SYSTEM",
     "CASE_GENERATION_USER",
@@ -181,5 +169,5 @@ __all__ = [
     # Compression & system
     "COMPRESSION_SYSTEM",
     "DEFAULT_CHUNK_NOTICE",
-    "JSON_FIX_PROMPT",
+    # "JSON_FIX_PROMPT",  # 已注释 — 与 base.py 同步 / Commented out — synced with base.py
 ]

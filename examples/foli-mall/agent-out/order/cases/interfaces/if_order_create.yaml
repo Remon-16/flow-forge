@@ -1,0 +1,6 @@
+case_type: interfaces
+test_id: IF_ORDER_CREATE
+api_name: 创建订单（按店铺拆分）
+app_name: foliMail
+method: POST
+url: /api/orders

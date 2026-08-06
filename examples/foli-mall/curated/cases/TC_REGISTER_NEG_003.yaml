@@ -1,0 +1,17 @@
+case_type: single
+test_id: TC_REGISTER_NEG_003
+relevance_id: api_api_auth_register_post
+tag: P1
+api_name: 用户注册（空用户名，负向，期望 400 + 200001）
+app_name: foliMail
+method: POST
+url: /api/auth/register
+request_head:
+  Content-Type: application/json
+request_body:
+  username: ""
+  password: Test@123
+  nickname: TestNickname
+status_code: 400
+assert_dict:
+  code: '200001'

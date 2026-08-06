@@ -4,6 +4,7 @@ All LLM calls are mocked — NO real API calls.
 """
 
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -149,11 +150,14 @@ class TestPlanChunking:
                 {"test_id": "api_2", "api_name": "API2", "method": "POST", "url": "/2", "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200, "assert_dict": {}, "remark": ""},
             ]
 
+            # Phase A + Phase B(2 groups) + Phase C(Mermaid + Biz, 1 flow) = 5 calls
+            # Phase C 内部先生成 Mermaid 再生成 Biz 内容 / Phase C generates Mermaid then Biz content
             outputs = [
-                "GLOBAL_CONTEXT",
-                "FIRST_GROUP_SECTION",
-                "SECOND_GROUP_SECTION",
-                "BIZ_FLOW_SECTION",
+                "GLOBAL_CONTEXT",          # Call 1: Phase A
+                "FIRST_GROUP_SECTION",     # Call 2: Phase B group 1
+                "SECOND_GROUP_SECTION",    # Call 3: Phase B group 2
+                "MERMAID_FLOW",            # Call 4: Phase C Mermaid for My Flow
+                "BIZ_FLOW_SECTION",        # Call 5: Phase C biz content
             ]
             agent.call_llm = MagicMock(side_effect=outputs)
 
@@ -166,6 +170,8 @@ class TestPlanChunking:
             # 验证拼接顺序 / Verify assembly order
             assert plan_md.index("GLOBAL_CONTEXT") < plan_md.index("FIRST_GROUP_SECTION")
             assert plan_md.index("FIRST_GROUP_SECTION") < plan_md.index("SECOND_GROUP_SECTION")
+            # 验证文本在前、Mermaid 在后 / Verify content first, Mermaid at end
+            assert plan_md.index("BIZ_FLOW_SECTION") < plan_md.index("MERMAID_FLOW")
 
     def should_raise_error_when_outline_missing(self):
         """outline 缺失时 generate_plan_node 报错 / Error when outline is None."""
@@ -209,8 +215,8 @@ class TestPlanChunking:
             interfaces = [
                 {"test_id": "api_a", "api_name": "A", "method": "GET", "url": "/a", "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200, "assert_dict": {}, "remark": ""},
             ]
-            # Phase A (global) + Phase C (1 biz batch) = 2 calls
-            agent.call_llm = MagicMock(side_effect=["GLOBAL_CONTEXT", "BIZ_FLOW_SECTION"])
+            # Phase A (global) + Mermaid(1 flow) + Phase C (1 biz batch) = 3 calls
+            agent.call_llm = MagicMock(side_effect=["GLOBAL_CONTEXT", "MERMAID_FLOW", "BIZ_FLOW_SECTION"])
 
             plan_md = agent.generate_from_outline(
                 outline=outline,
@@ -221,8 +227,11 @@ class TestPlanChunking:
             )
 
             assert "BIZ_FLOW_SECTION" in plan_md
-            # 已真正触达保存逻辑 (memory_dir 非空) / Save logic was actually reached
-            mock_save.assert_called_once()
+            # 验证文本在前、Mermaid 在后 / Verify content first, Mermaid at end
+            assert plan_md.index("BIZ_FLOW_SECTION") < plan_md.index("MERMAID_FLOW")
+            # v2 格式增量保存 plan_sections.json（Phase A + Phase C batch + 最终）→ 3 次
+            # v2 format saves plan_sections.json incrementally (Phase A + Phase C batch + final) → 3 times
+            assert mock_save.call_count >= 2
 
     def should_generate_single_only_without_crash(self, tmp_path):
         """回归: case_type=single 保存分块时不崩 / Regression: single-only save must not crash.
@@ -261,4 +270,463 @@ class TestPlanChunking:
             )
 
             assert "API_SECTION" in plan_md
-            mock_save.assert_called_once()
+            # v2 格式增量保存 / v2 format saves incrementally
+            assert mock_save.call_count >= 2
+
+
+# ---------------------------------------------------------------------------
+# TestPlanChunkResumeProgress — PlanGenerator 逐 chunk 保存 + resume 跳过测试
+# ---------------------------------------------------------------------------
+
+class TestPlanChunkResumeProgress:
+    """Tests for incremental plan_chunks_progress.json save and resume skip."""
+
+    def should_save_chunk_progress_after_phase_a(self, tmp_path):
+        """Phase A 后 plan_chunks_progress.json 存在且含轻量进度信息（v2 格式）。
+        After Phase A, plan_chunks_progress.json exists with lightweight progress (v2 format)."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            outline = _sample_outline()
+            interfaces = _sample_interfaces()
+
+            agent.call_llm = MagicMock(return_value="GLOBAL_CONTEXT")
+
+            memory_dir = str(tmp_path / "memory")
+            agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=interfaces,
+                memory_dir=memory_dir,
+            )
+
+            progress_path = Path(memory_dir) / "plan_chunks_progress.json"
+            assert progress_path.exists()
+            progress = json.loads(progress_path.read_text(encoding="utf-8"))
+            # v2 轻量格式：只存进度位置，不存内容 / v2 lightweight: position only, no content
+            assert progress["version"] == 2
+            assert progress["phase_a_done"] is True
+
+    def should_save_chunk_progress_after_each_api_group(self, tmp_path):
+        """2 个 API groups → api_sections 含 2 个 key。
+        2 API groups → api_sections has 2 keys."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [
+                    {"group_name": "Group A", "api_ids": ["api_a"], "test_focus": "Focus A", "chunk_id": "api_group_a"},
+                    {"group_name": "Group B", "api_ids": ["api_b"], "test_focus": "Focus B", "chunk_id": "api_group_b"},
+                ],
+                "biz_flows": [],
+            }
+            interfaces = [
+                {"test_id": "api_a", "api_name": "A", "method": "GET", "url": "/a",
+                 "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200,
+                 "assert_dict": {}, "remark": ""},
+                {"test_id": "api_b", "api_name": "B", "method": "POST", "url": "/b",
+                 "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200,
+                 "assert_dict": {}, "remark": ""},
+            ]
+
+            agent.call_llm = MagicMock(side_effect=["GLOBAL", "SECTION_A", "SECTION_B"])
+            memory_dir = str(tmp_path / "memory")
+
+            agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=interfaces,
+                memory_dir=memory_dir,
+            )
+
+            progress_path = Path(memory_dir) / "plan_chunks_progress.json"
+            progress = json.loads(progress_path.read_text(encoding="utf-8"))
+            # v2 轻量格式：api_group_completed_ids 记录已完成的 section key
+            # v2 lightweight: api_group_completed_ids tracks completed section keys
+            assert progress["version"] == 2
+            completed_ids = progress["api_group_completed_ids"]
+            # chunk_id 为规范化 ASCII 格式（如 api_group_a）/ chunk_id is normalized ASCII format (e.g. api_group_a)
+            assert any("group_a" in cid for cid in completed_ids)
+
+    def should_save_chunk_progress_after_each_biz_batch(self, tmp_path):
+        """3 scenarios plan_biz_flow_batch_size=2 → biz_sections 含 2 个 batch key。
+        3 scenarios plan_biz_flow_batch_size=2 → biz_sections with 2 batch keys."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            settings = _make_settings(plan_biz_flow_batch_size=2)
+            agent = _make_agent(settings=settings)
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [],
+                "biz_flows": [
+                    {"name": "Flow 1", "description": "d1", "involved_apis": []},
+                    {"name": "Flow 2", "description": "d2", "involved_apis": []},
+                    {"name": "Flow 3", "description": "d3", "involved_apis": []},
+                ],
+            }
+
+            # Phase A + 2 batches (Mermaid per-flow inside Phase C + biz content)
+            # Batch 0: MERMAID_1, MERMAID_2 (2 flows) + BIZ_BATCH_0
+            # Batch 1: MERMAID_3 (1 flow) + BIZ_BATCH_1
+            agent.call_llm = MagicMock(side_effect=[
+                "GLOBAL",
+                "MERMAID_1", "MERMAID_2", "BIZ_BATCH_0",
+                "MERMAID_3", "BIZ_BATCH_1",
+            ])
+            memory_dir = str(tmp_path / "memory")
+
+            agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=[],
+                memory_dir=memory_dir,
+            )
+
+            progress_path = Path(memory_dir) / "plan_chunks_progress.json"
+            progress = json.loads(progress_path.read_text(encoding="utf-8"))
+            # v2 轻量格式：biz_batch_completed_keys 记录已完成的 batch key
+            # v2 lightweight: biz_batch_completed_keys tracks completed batch keys
+            assert progress["version"] == 2
+            completed_keys = progress["biz_batch_completed_keys"]
+            assert len(completed_keys) == 2  # batch_size=2 packs 3 flows into 2 batches
+
+    def should_skip_phase_a_when_global_context_present(self, tmp_path):
+        """预置 global_context (v2 格式) → Phase A 不调 LLM。
+        Pre-set global_context (v2 format) → Phase A doesn't call LLM."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            memory_dir = str(tmp_path / "memory")
+
+            # 预置 v2 进度文件 + plan_sections.json / Pre-populate v2 progress + plan_sections.json
+            progress_path = Path(memory_dir)
+            progress_path.mkdir(parents=True, exist_ok=True)
+            (progress_path / "plan_chunks_progress.json").write_text(
+                json.dumps({
+                    "version": 2,
+                    "phase_a_done": True,
+                    "api_group_completed_ids": [],
+                    "biz_batch_completed_keys": [],
+                }),
+                encoding="utf-8",
+            )
+            # v2 需要 plan_sections.json 提供内容 / v2 needs plan_sections.json for content
+            (progress_path / "plan_sections.json").write_text(
+                json.dumps({
+                    "business_understanding": "PRE_EXISTING_GLOBAL",
+                    "single_api": [],
+                    "biz_flows": [],
+                }),
+                encoding="utf-8",
+            )
+
+            outline = _sample_outline()
+            interfaces = _sample_interfaces()
+
+            # Phase B 一次调用 / One call for Phase B
+            agent.call_llm = MagicMock(return_value="API_SECTION")
+
+            agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=interfaces,
+                chunk_progress=json.loads(
+                    (progress_path / "plan_chunks_progress.json").read_text(encoding="utf-8")
+                ),
+                memory_dir=memory_dir,
+            )
+
+            # Phase A 被跳过，只调用了 Phase B / Phase A skipped, only Phase B called
+            assert agent.call_llm.call_count == 1
+
+    def should_skip_completed_mermaid_flows_on_resume(self, tmp_path):
+        """预置 biz_sections (v2 格式) → 已完成 batch 跳过，不调 LLM。
+
+        Pre-set biz_sections (v2 format) → completed batches skip LLM calls.
+        v2 格式：进度文件存 batch key，plan_sections.json 存内容。
+        v2 format: progress file stores batch key, plan_sections.json stores content.
+        """
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            settings = _make_settings(plan_biz_flow_batch_size=1)
+            agent = _make_agent(settings=settings)
+            memory_dir = str(tmp_path / "memory")
+
+            progress_path = Path(memory_dir)
+            progress_path.mkdir(parents=True, exist_ok=True)
+            # v2 轻量进度文件 / v2 lightweight progress file
+            (progress_path / "plan_chunks_progress.json").write_text(
+                json.dumps({
+                    "version": 2,
+                    "phase_a_done": False,
+                    "api_group_completed_ids": [],
+                    "biz_batch_completed_keys": ["biz_Flow 1"],
+                }),
+                encoding="utf-8",
+            )
+            # plan_sections.json 提供已完成 chunk 的内容 / plan_sections.json provides content for completed chunks
+            (progress_path / "plan_sections.json").write_text(
+                json.dumps({
+                    "business_understanding": "",
+                    "single_api": [],
+                    "biz_flows": [
+                        {
+                            "chunk_id": "biz_flow_1",
+                            "key": "biz_flow_1",
+                            "type": "biz",
+                            "name": "Flow 1",
+                            "section": "biz_flows",
+                            "content": "BIZ_DONE",
+                            "mermaid": "MERMAID_DONE",
+                            "involved_apis": [],
+                            "description": "d1",
+                        },
+                    ],
+                }),
+                encoding="utf-8",
+            )
+
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [],
+                "biz_flows": [
+                    {"name": "Flow 1", "description": "d1", "involved_apis": [], "chunk_id": "biz_flow_1"},
+                    {"name": "Flow 2", "description": "d2", "involved_apis": [], "chunk_id": "biz_flow_2"},
+                ],
+            }
+
+            # Phase A + Flow 2 Mermaid + Flow 2 biz content = 3 calls
+            # Flow 1 batch already completed → skipped
+            agent.call_llm = MagicMock(side_effect=["GLOBAL", "MERMAID_2", "BIZ_FLOW_2"])
+
+            agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=[],
+                chunk_progress=json.loads(
+                    (progress_path / "plan_chunks_progress.json").read_text(encoding="utf-8")
+                ),
+                memory_dir=memory_dir,
+            )
+
+            # Flow 1 被跳过，只调用了 Flow 2 的 Mermaid + biz content
+            # Flow 1 skipped; only Flow 2 Mermaid + biz content called
+            assert agent.call_llm.call_count == 3
+
+    def should_handle_memory_dir_empty_string(self):
+        """memory_dir="" 时不写盘不崩溃 / No crash with empty memory_dir."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            agent.call_llm = MagicMock(return_value="GLOBAL")
+
+            # 不应崩溃 / Should not crash
+            plan_md = agent.generate_from_outline(
+                outline=_sample_outline(),
+                requirement_analysis={"flows": 1},
+                interfaces=_sample_interfaces(),
+                memory_dir="",
+            )
+            assert "GLOBAL" in plan_md
+
+    def should_generate_complete_plan_from_partial_resume(self, tmp_path):
+        """Phase B 部分完成 (v2 格式) → resume → 最终 plan.md 包含所有 group。
+        Partial Phase B (v2 format) → resume → final plan.md has all groups.
+        section_key 使用 chunk_id（规范化 ASCII）确保与 _save_sections_artifact 一致。
+        section_key uses chunk_id (normalized ASCII) for consistency with _save_sections_artifact."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            memory_dir = str(tmp_path / "memory")
+
+            # 预置 v2 进度 + plan_sections.json，使用 chunk_id 作为 section key
+            # Pre-set v2 progress + plan_sections.json, with chunk_id as section key
+            progress_path = Path(memory_dir)
+            progress_path.mkdir(parents=True, exist_ok=True)
+            (progress_path / "plan_chunks_progress.json").write_text(
+                json.dumps({
+                    "version": 2,
+                    "phase_a_done": True,
+                    "api_group_completed_ids": ["api_group_a"],
+                    "biz_batch_completed_keys": [],
+                }),
+                encoding="utf-8",
+            )
+            (progress_path / "plan_sections.json").write_text(
+                json.dumps({
+                    "business_understanding": {
+                        "chunk_id": "business_understanding",
+                        "key": "business_understanding",
+                        "type": "global",
+                        "name": "Business Understanding",
+                        "content": "DONE_GLOBAL",
+                    },
+                    "single_api": [
+                        {
+                            "chunk_id": "api_group_a",
+                            "key": "api_group_a",
+                            "type": "api",
+                            "name": "Group A",
+                            "section": "single_api",
+                            "content": "DONE_GROUP_A",
+                            "api_ids": ["api_a"],
+                            "test_focus": "Focus A",
+                        },
+                    ],
+                    "biz_flows": [],
+                }),
+                encoding="utf-8",
+            )
+
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [
+                    {"group_name": "Group A", "api_ids": ["api_a"], "test_focus": "Focus A", "chunk_id": "api_group_a"},
+                    {"group_name": "Group B", "api_ids": ["api_b"], "test_focus": "Focus B", "chunk_id": "api_group_b"},
+                ],
+                "biz_flows": [],
+            }
+            interfaces = [
+                {"test_id": "api_a", "api_name": "A", "method": "GET", "url": "/a",
+                 "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200,
+                 "assert_dict": {}, "remark": ""},
+                {"test_id": "api_b", "api_name": "B", "method": "POST", "url": "/b",
+                 "app_name": "x", "request_head": {}, "request_body": {}, "status_code": 200,
+                 "assert_dict": {}, "remark": ""},
+            ]
+
+            # Phase B group B only (A skipped via chunk_id match) = 1 call
+            # 组 A 通过 chunk_id 匹配跳过 / Group A skipped via chunk_id match
+            agent.call_llm = MagicMock(return_value="DONE_GROUP_B")
+
+            plan_md = agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=interfaces,
+                chunk_progress=json.loads(
+                    (progress_path / "plan_chunks_progress.json").read_text(encoding="utf-8")
+                ),
+                memory_dir=memory_dir,
+            )
+
+            assert agent.call_llm.call_count == 1
+            assert "DONE_GLOBAL" in plan_md
+            assert "DONE_GROUP_A" in plan_md
+            assert "DONE_GROUP_B" in plan_md
+
+    def test_name_to_chunk_id_pure_chinese(self):
+        """纯中文 group_name → _name_to_chunk_id 返回合法非空 chunk_id。
+        Pure Chinese group_name → _name_to_chunk_id returns valid non-empty chunk_id.
+        防止因空 chunk_id 导致 section key mismatch 从而内容丢失。
+        Prevents empty chunk_id causing section key mismatch and content loss."""
+        from agents.plan_generator import _name_to_chunk_id
+
+        # 纯中文名 / Pure Chinese name
+        cid = _name_to_chunk_id("用户认证管理", prefix="api_")
+        assert cid, "chunk_id must not be empty"
+        assert cid.startswith("api_"), f"chunk_id should start with api_: {cid}"
+        assert len(cid) > len("api_"), f"chunk_id should have content after prefix: {cid}"
+
+        # 混合中英文 / Mixed Chinese-English
+        cid2 = _name_to_chunk_id("账户Balance管理", prefix="api_")
+        assert cid2, "chunk_id must not be empty"
+        assert cid2.startswith("api_"), f"chunk_id should start with api_: {cid2}"
+        # 应包含 ASCII 部分 / Should contain ASCII part
+        assert "balance" in cid2.lower(), f"chunk_id should preserve ASCII: {cid2}"
+
+    def test_save_sections_artifact_key_consistency(self, tmp_path):
+        """chunk_id 作为 section key 时 _save_sections_artifact 能正确保存内容。
+        _save_sections_artifact correctly saves content when chunk_id is section key.
+        验证修复：Phase B 用 chunk_id 存储后，save 用 chunk_id 查找能命中。
+        Verifies fix: after Phase B stores with chunk_id, save finds content with chunk_id."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            agent = _make_agent()
+            memory_dir = str(tmp_path / "memory")
+
+            # 中文 group_name 模拟真实场景 / Chinese group_name simulates real scenario
+            outline = {
+                "business_summary": "测试系统",
+                "api_groups": [
+                    {"group_name": "用户认证管理", "api_ids": ["api_auth"], "test_focus": "认证测试"},
+                    {"group_name": "账户余额管理", "api_ids": ["api_balance"], "test_focus": "余额测试"},
+                ],
+                "biz_flows": [],
+            }
+            interfaces = [
+                {"test_id": "api_auth", "api_name": "Auth", "method": "POST", "url": "/auth",
+                 "app_name": "user", "request_head": {}, "request_body": {}, "status_code": 200,
+                 "assert_dict": {}, "remark": ""},
+                {"test_id": "api_balance", "api_name": "Balance", "method": "GET", "url": "/balance",
+                 "app_name": "user", "request_head": {}, "request_body": {}, "status_code": 200,
+                 "assert_dict": {}, "remark": ""},
+            ]
+
+            # Phase A + 2 API groups = 3 calls
+            agent.call_llm = MagicMock(side_effect=[
+                "GLOBAL_CONTEXT",
+                "AUTH_TEST_POINTS",
+                "BALANCE_TEST_POINTS",
+            ])
+
+            agent.generate_from_outline(
+                outline=outline,
+                requirement_analysis={"flows": 1},
+                interfaces=interfaces,
+                memory_dir=memory_dir,
+                case_type="single",
+            )
+
+            # 检查 plan_sections.json 包含所有 API group
+            # Verify plan_sections.json contains all API groups
+            sections_path = Path(memory_dir) / "plan_sections.json"
+            assert sections_path.exists(), "plan_sections.json should exist"
+
+            sections = json.loads(sections_path.read_text(encoding="utf-8"))
+            single_api = sections.get("single_api", [])
+            assert len(single_api) == 2, f"Expected 2 API sections, got {len(single_api)}"
+
+            # 内容不应为空 / Content should not be empty
+            for sec in single_api:
+                assert sec.get("content", "").strip(), \
+                    f"Section {sec.get('name')} content is empty — key mismatch bug not fixed"
+                assert sec.get("chunk_id", ""), \
+                    f"Section {sec.get('name')} missing chunk_id"
+
+    def test_mermaid_log_not_duplicated(self, tmp_path):
+        """每个业务流只打印一次 Mermaid 日志 / Mermaid log emitted only once per flow。
+        验证 Issue 2 修复：_phase_c_biz_sections 不再重复打印。
+        Verifies Issue 2 fix: _phase_c_biz_sections no longer duplicates log."""
+        with patch.object(BaseAgent, "_estimate_input_tokens", return_value=100):
+            settings = _make_settings(plan_biz_flow_batch_size=1)
+            agent = _make_agent(settings=settings)
+            memory_dir = str(tmp_path / "memory")
+
+            outline = {
+                "business_summary": "Test",
+                "api_groups": [],
+                "biz_flows": [
+                    {"name": "用户注册与登录完整流程", "description": "注册后登录", "involved_apis": [], "chunk_id": "biz_flow_1"},
+                    {"name": "账户充值并查询余额", "description": "充值后查询", "involved_apis": [], "chunk_id": "biz_flow_2"},
+                ],
+            }
+
+            # Phase A + Flow1 Mermaid + Flow1 Biz + Flow2 Mermaid + Flow2 Biz = 5 calls
+            agent.call_llm = MagicMock(side_effect=[
+                "GLOBAL",
+                "MERMAID_1", "BIZ_1",
+                "MERMAID_2", "BIZ_2",
+            ])
+
+            import logging
+            from agents.plan_generator import logger as gen_logger
+
+            with patch.object(gen_logger, 'info') as mock_log:
+                agent.generate_from_outline(
+                    outline=outline,
+                    requirement_analysis={"flows": 1},
+                    interfaces=[],
+                    memory_dir=memory_dir,
+                )
+
+                # 统计包含 "Mermaid" 的日志 / Count log lines containing "Mermaid"
+                mermaid_calls = [
+                    c for c in mock_log.call_args_list
+                    if c.args and "mermaid" in str(c.args[0]).lower()
+                ]
+                # 两个 flow → 各 1 条日志 = 2 条 / 2 flows → 1 log each = 2 total
+                assert len(mermaid_calls) == 2, \
+                    f"Expected 2 mermaid log calls (1 per flow), got {len(mermaid_calls)}"

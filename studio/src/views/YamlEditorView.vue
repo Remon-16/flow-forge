@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { message } from 'ant-design-vue'
 import { useYamlStore } from '../stores/yaml-store'
 import { useEditorStore } from '../stores/editor'
+import { useExecutorStore } from '../stores/executor'
+// 转换入口已关闭，下版本修复后恢复；以下转换器导入随入口一并停用。
+// Converter entry disabled; restore in the next version. The converter import
+// below is disabled together with the entry.
+// import { useConverterStore } from '../stores/converter'
 import YamlFileTree from '../components/yaml-editor/YamlFileTree.vue'
 import YamlTabBar from '../components/yaml-editor/YamlTabBar.vue'
 import SingleCaseForm from '../components/yaml-editor/SingleCaseForm.vue'
@@ -11,15 +17,258 @@ import InterfaceForm from '../components/yaml-editor/InterfaceForm.vue'
 import YamlRawView from '../components/yaml-editor/YamlRawView.vue'
 import SearchBar from '../components/search/SearchBar.vue'
 import SearchResultsPanel from '../components/search/SearchResultsPanel.vue'
+import EditorToolbar from '../components/editor/EditorToolbar.vue'
+import LogPanel from '../components/editor/LogPanel.vue'
+import ParamEditModal from '../components/editor/ParamEditModal.vue'
+import YamlCaseSelectModal, { type YamlCaseFile } from '../components/editor/YamlCaseSelectModal.vue'
 import type { SearchResultItem } from '../components/search/SearchResultsPanel.vue'
 import type { SearchOptions } from '../components/search/SearchBar.vue'
 import { stringifyYaml, parseYaml } from '../utils/yaml-parser'
-import { readFile, writeFile } from '../utils/desktop-bridge'
+import { readFile, writeFile, readDirectory } from '../utils/desktop-bridge'
 import type { FileEntry } from '../utils/desktop-bridge'
 
 const { t } = useI18n()
 const yamlStore = useYamlStore()
 const editorStore = useEditorStore()
+const executor = useExecutorStore()
+// const converter = useConverterStore()
+
+// ============================================================================
+// Editor toolbar state / 编辑器工具栏状态
+// ============================================================================
+
+const paramEditVisible = ref(false)
+const paramEditMode = ref<'executor' | 'converter'>('executor')
+
+// YAML 文件选择模态框状态 / YAML file selection modal state
+const yamlCaseSelectVisible = ref(false)
+const yamlCaseSelectFiles = ref<YamlCaseFile[]>([])
+const yamlCaseSelectMode = ref<'executor' | 'converter'>('executor')
+
+// 当前激活文件的路径 / Current active file path
+const currentFilePath = computed(() => {
+  const tab = yamlStore.openTabs[yamlStore.activeTabIndex]
+  return tab?.path || ''
+})
+
+// 当前激活文件的目录 / Current active file directory
+const currentDir = computed(() => {
+  const tab = yamlStore.openTabs[yamlStore.activeTabIndex]
+  return tab?.path ? tab.path.replace(/[/\\][^/\\]+$/, '') : ''
+})
+
+// ============================================================================
+// Toolbar handlers for YAML editor
+// ============================================================================
+
+/**
+ * 按动作运行 YAML 目录 — 递归扫描打开目录下的全部用例，按 apiMode 过滤。
+ * Run a YAML directory per action — recursively scan the opened directory,
+ * filtering cases by the given apiMode.
+ */
+async function runYamlDirectory(apiMode: 'all' | 'single' | 'biz') {
+  try {
+    const dir = yamlStore.rootPath || currentDir.value
+    if (!dir) { message.warning(t('yaml.noDirectorySelected')); return }
+    const fp = currentFilePath.value
+    const sessionId = executor.createSession({
+      envSuffix: executor.getEditorEnvSuffix(fp),
+      caseFilePath: '',
+      yamlDir: dir,
+      yamlFiles: '',
+      envOnlyParams: {},
+      cliParams: { ...executor.getEditorCliParams(fp), apiMode },
+    })
+    await executor.startSession(sessionId)
+  } catch (e: unknown) { message.error(String(e)) }
+}
+
+// “运行全部”= 全部 single + biz；“单接口/业务链路”分别只跑对应类型。
+// "Run All" = all single + biz; "Single API" / "Biz Flow" run only the matching type.
+async function handleRunAll() { await runYamlDirectory('all') }
+
+async function handleRunSingle() { await runYamlDirectory('single') }
+
+async function handleRunBiz() { await runYamlDirectory('biz') }
+
+// ============================================================================
+// YAML 文件扫描 — 递归扫描根目录中所有 .yaml/.yml 文件并解析 case_type。
+// YAML file scanner — recursively scans root directory for .yaml/.yml files and parses case_type.
+// ============================================================================
+
+async function scanYamlFiles(): Promise<YamlCaseFile[]> {
+  const root = yamlStore.rootPath
+  if (!root) return []
+
+  const entries = await readDirectory(root)
+  const result: YamlCaseFile[] = []
+
+  // 递归遍历目录树 / Recursively walk the directory tree
+  async function walk(items: FileEntry[]) {
+    for (const entry of items) {
+      if (entry.isDirectory && entry.children) {
+        await walk(entry.children)
+      } else if (/\.ya?ml$/i.test(entry.name)) {
+        try {
+          const content = await readFile(entry.path)
+          const parsed = parseYaml(content)
+          const caseType = ((parsed as unknown as Record<string, unknown>).case_type as string) || 'single'
+          // 仅接受合法的 case_type / Only accept valid case_type values
+          if (caseType === 'single' || caseType === 'biz' || caseType === 'interfaces') {
+            result.push({
+              path: entry.path,
+              // root 已在函数入口处确保非 null / root is guaranteed non-null by early return at function entry
+              name: entry.path.replace(root!, '').replace(/^[/\\]/, ''),
+              caseType,
+            })
+          }
+        } catch {
+          // 跳过无法解析或非用例 YAML 文件 / Skip unparseable or non-case YAML files
+        }
+      }
+    }
+  }
+
+  await walk(entries)
+  return result
+}
+
+// ============================================================================
+// Toolbar handlers for YAML editor (continued)
+// ============================================================================
+
+async function handleRunSelect() {
+  // 扫描根目录中所有 YAML 文件并让用户选择要执行的文件。
+  // Scan all YAML files in the root directory and let user choose which to execute.
+  try {
+    const files = await scanYamlFiles()
+    if (files.length === 0) {
+      message.warning(t('editor.yamlCaseSelect.noFiles'))
+      return
+    }
+    yamlCaseSelectFiles.value = files
+    yamlCaseSelectMode.value = 'executor'
+    yamlCaseSelectVisible.value = true
+  } catch (e: unknown) {
+    message.error(String(e))
+  }
+}
+
+// 转换入口已关闭，下版本修复后恢复；以下转换处理函数全部停用。
+// Converter entry disabled; restore in the next version. All converter handlers
+// below are disabled together with the entry.
+// /**
+//  * 构建 YAML 编辑器转换会话 — 使用参数编辑中保存的方向与输出路径。
+//  * Build a YAML editor converter session — honors the saved direction and output path.
+//  *
+//  * YAML 编辑器只接受 YAML 输入方向（yaml2excel / yaml2pytest），其余回退到 yaml2excel；
+//  * pytest 方向显式传入执行器根目录作为 config-dir，与执行器使用同一套 env-*.yml。
+//  * The YAML editor only supports YAML-input directions (yaml2excel / yaml2pytest),
+//  * falling back to yaml2excel otherwise; pytest directions pass the executor root
+//  * as config-dir so they share the same env-*.yml as the executor.
+//  */
+// async function createYamlConvertSession(dir: string): Promise<string> {
+//   const saved = converter.getEditorConverterParams(currentFilePath.value || '__default__')
+//   const direction: 'yaml2excel' | 'yaml2pytest' =
+//     saved.direction === 'yaml2pytest' ? 'yaml2pytest' : 'yaml2excel'
+//   const effectiveOutput = saved.outputPath ||
+//     (direction === 'yaml2pytest' ? `${dir}/_pytest` : `${dir}/_converted.xlsx`)
+//   const configDir = direction === 'yaml2pytest' ? await executor.getExecutorRootDir() : ''
+//
+//   return converter.createSession({
+//     direction,
+//     inputPath: '',
+//     outputPath: effectiveOutput,
+//     interfacesDir: dir,
+//     singleCasesDir: dir,
+//     bizFlowsDir: dir,
+//     configDir,
+//     processorsDir: '',
+//   })
+// }
+//
+// async function handleConvertAll() {
+//   try {
+//     const dir = currentDir.value
+//     if (!dir) { message.warning(t('yaml.noFileSelected')); return }
+//     const sessionId = await createYamlConvertSession(dir)
+//     await converter.startSession(sessionId)
+//   } catch (e: unknown) { message.error(String(e)) }
+// }
+//
+// async function handleConvertSingle() {
+//   await handleConvertAll()
+// }
+//
+// async function handleConvertBiz() {
+//   await handleConvertAll()
+// }
+//
+// async function handleConvertSelect() {
+//   // 扫描根目录中所有 YAML 文件并让用户选择要转换的文件。
+//   // Scan all YAML files in the root directory and let user choose which to convert.
+//   try {
+//     const files = await scanYamlFiles()
+//     if (files.length === 0) {
+//       message.warning(t('editor.yamlCaseSelect.noFiles'))
+//       return
+//     }
+//     yamlCaseSelectFiles.value = files
+//     yamlCaseSelectMode.value = 'converter'
+//     yamlCaseSelectVisible.value = true
+//   } catch (e: unknown) {
+//     message.error(String(e))
+//   }
+// }
+
+// ============================================================================
+// YAML case select confirm handler / YAML 文件选择确认处理
+// ============================================================================
+
+async function handleYamlCaseSelectConfirm(selectedPaths: string[]) {
+  if (selectedPaths.length === 0) return
+
+  if (yamlCaseSelectMode.value === 'executor') {
+    // 将选中文件路径用逗号拼接，传递给执行器 / Join selected file paths for executor
+    try {
+      const yamlFiles = selectedPaths.join(',')
+      const fp = currentFilePath.value
+      const savedCli = executor.getEditorCliParams(fp)
+      const sessionId = executor.createSession({
+        envSuffix: executor.getEditorEnvSuffix(fp),
+        caseFilePath: '',
+        yamlDir: '',
+        yamlFiles,
+        envOnlyParams: {},
+        // apiMode 未显式设置时默认 all，保证选中文件中的 single + biz 都会执行。
+        // Default apiMode to "all" when unset so both single and biz selections run.
+        cliParams: { ...savedCli, apiMode: savedCli.apiMode || 'all' },
+      })
+      await executor.startSession(sessionId)
+    } catch (e: unknown) { message.error(String(e)) }
+  }
+  // 转换模式分支已停用（转换入口关闭，下版本恢复）/
+  // Converter mode branch disabled (converter entry closed; restore in next version)
+  // else {
+  //   // 转换模式：使用选中文件所在的目录 / Converter mode: use directories from selected files
+  //   try {
+  //     const dir = currentDir.value
+  //     if (!dir) { message.warning(t('yaml.noFileSelected')); return }
+  //     const sessionId = await createYamlConvertSession(dir)
+  //     await converter.startSession(sessionId)
+  //   } catch (e: unknown) { message.error(String(e)) }
+  // }
+}
+
+function handleEditRunParams() {
+  paramEditMode.value = 'executor'
+  paramEditVisible.value = true
+}
+
+// function handleEditConvertParams() {
+//   paramEditMode.value = 'converter'
+//   paramEditVisible.value = true
+// }
 const rawViewRef = ref<InstanceType<typeof YamlRawView> | null>(null)
 
 function onSelectFile(filePath: string) {
@@ -377,6 +626,29 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 <template>
   <div class="yaml-editor-view">
+    <!-- Editor toolbar -->
+    <div style="display: flex; justify-content: flex-end; border-bottom: 1px solid #f0f0f0; background: #fff;">
+      <!--
+        转换入口已关闭，下版本修复后恢复；恢复时重新绑定以下事件即可：
+        Converter entry disabled; restore in the next version. Re-add these
+        bindings to restore:
+        @convert-all="handleConvertAll"
+        @convert-single="handleConvertSingle"
+        @convert-biz="handleConvertBiz"
+        @convert-select="handleConvertSelect"
+        @edit-convert-params="handleEditConvertParams"
+      -->
+      <EditorToolbar
+        editor-type="yaml"
+        :file-path="currentFilePath"
+        @run-all="handleRunAll"
+        @run-single="handleRunSingle"
+        @run-biz="handleRunBiz"
+        @run-select="handleRunSelect"
+        @edit-run-params="handleEditRunParams"
+      />
+    </div>
+
     <!-- Global search -->
     <div v-if="globalSearchVisible" class="yaml-global-search">
       <SearchBar
@@ -468,6 +740,23 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         <a-button type="primary" @click="handleSaveAndClose">{{ t('yaml.saveAndClose') }}</a-button>
       </template>
     </a-modal>
+
+    <!-- Log panel -->
+    <LogPanel />
+
+    <!-- Param edit modal -->
+    <ParamEditModal
+      v-model:visible="paramEditVisible"
+      :mode="paramEditMode"
+      :file-path="currentFilePath"
+    />
+
+    <!-- YAML case select modal — 扫描根目录 YAML 文件后选择执行/转换 -->
+    <YamlCaseSelectModal
+      v-model:visible="yamlCaseSelectVisible"
+      :files="yamlCaseSelectFiles"
+      @confirm="handleYamlCaseSelectConfirm"
+    />
   </div>
 </template>
 
@@ -477,6 +766,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  background: #f5f5f5;
 }
 
 .yaml-global-search {

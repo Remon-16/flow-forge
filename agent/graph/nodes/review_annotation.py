@@ -1,343 +1,169 @@
-"""批注模式三阶段精准修订 / Three-phase chunked annotation revision.
+"""批注模式 Chunk 级精准修订 / Annotation-based chunk-level revision.
 
-Phase 1: 意图分析 (greedy-batched LLM → JSON)
-Phase 2: 执行删除 (code only, zero LLM)
-Phase 3: 内容生成 (per-chunk LLM with output window estimation)
+新设计（替代旧三阶段管线）/ New design (replaces old 3-phase pipeline):
+  1. 批注 → chunk 映射 (代码级) / Map annotations to chunks (code-level)
+  2. 意图分析 (LLM → noop/fix/delete_chunk/add_chunk) / Intent analysis (LLM)
+  3. 执行 chunk 级操作 / Execute chunk-level actions
+  4. assemble_plan_md() 拼接 / Re-assemble plan
 """
 
 import json
 import logging
-import re
-from typing import Any, Dict, List
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from agents.base import BaseAgent
+from agents.plan_generator import PlanGenerator, _serialize_interfaces
 from graph.state import GraphState
 from i18n import get_language_name, _
+from plugins.skill_loader import load_skill_extensions
+from prompts.plan_generation import (
+    PLAN_CHUNK_API_SECTION_SYSTEM,
+    PLAN_CHUNK_API_SECTION_USER,
+    PLAN_CHUNK_BIZ_SECTION_SYSTEM,
+    PLAN_CHUNK_BIZ_SECTION_USER,
+    PLAN_CHUNK_GLOBAL_SYSTEM,
+    PLAN_CHUNK_GLOBAL_USER,
+    PLAN_CHUNK_MERMAID_SYSTEM,
+    PLAN_CHUNK_MERMAID_USER,
+)
 from prompts.plan_reviser import (
-    PLAN_ANNOTATION_ADD_SYSTEM,
-    PLAN_ANNOTATION_ADD_USER,
     PLAN_ANNOTATION_INTENT_SYSTEM,
     PLAN_ANNOTATION_INTENT_USER,
-    PLAN_ANNOTATION_UPDATE_SYSTEM,
-    PLAN_ANNOTATION_UPDATE_USER,
 )
 from prompts.render import render_prompt
 
 from . import helpers as _h
 from .helpers import _
 from .review import (
-    _assemble_plan,
-    _find_section_by_key,
     _load_or_parse_sections,
     _save_plan_sections,
+    _scan_headings,
 )
+from flow_forge_schemas.plan_sections import assemble_plan_md, find_section_by_key
 
 logger = logging.getLogger(__name__)
 
 # 合法的意图分析 action 值 / Valid intent analysis action values
-_VALID_ACTIONS = {"delete", "update", "add", "noop"}
+_VALID_ACTIONS = {"noop", "fix", "delete_chunk", "add_chunk"}
 
 
 # ============================================================================
-# 三阶段编排器 / Three-Phase Orchestrator
+# Chunk 级修订编排器 / Chunk-level Revision Orchestrator
 # ============================================================================
 
 
 def _annotation_chunked_revision(
-    state: GraphState, plan_md: str, annotations_json: str,
+    state: GraphState, annotations_json: str,
     analysis: dict, api_summary: list,
 ) -> str:
-    """三阶段分块精准修订 / Three-phase chunked annotation revision.
+    """Chunk 级精准批注修订 / Chunk-level annotation revision.
 
-    Phase 1: grep map + intent analysis (batched LLM, JSON output)
-    Phase 2: execute deletions (code only, zero LLM)
-    Phase 3: content generation for update/add (per-chunk LLM with output estimation)
+    1. 加载 chunk 注册表 + 批注 → chunk 映射（优先 chunk_id）
+    2. LLM 意图分析: 每条批注 → {action: noop|fix|delete_chunk|add_chunk}
+    3. 执行 chunk 级操作
+    4. 保存并拼接
     """
     annotations = json.loads(annotations_json)
     memory_dir = state.get("memory_dir", "")
 
-    # 加载分块结构 / Load section structure
-    sections = _load_or_parse_sections(memory_dir, plan_md, state.get("plan_outline"))
+    # 加载 skill 扩展 / Load skill extensions
+    _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
+    _exts = load_skill_extensions('plan_generator', _h._settings, _skills_dir)
 
-    # 定位: 批注 → 区块 (selected_text + line_number) / Map annotations to sections
-    section_annotations = _map_annotations_to_sections(sections, annotations, plan_md)
+    # 加载 chunk 注册表 / Load chunk registry
+    sections = _load_or_parse_sections(memory_dir)
 
+    # 批注 → chunk 映射 (优先 chunk_id) / Map annotations to chunks (prefer chunk_id)
+    section_annotations = _map_annotations_to_sections(sections, annotations)
     if not section_annotations:
         logger.warning(_("review.no_sections_matched"))
-        return plan_md
+        return assemble_plan_md(sections)
 
-    # Phase 1: 意图分析 + 代码级绑定批注 / Intent analysis + bind annotations
-    token_counter = _get_token_counter(state)
-    all_actions = _phase1_intent_analysis(
-        sections, section_annotations, token_counter, state
-    )
+    # 意图分析 / Intent analysis (LLM)
+    all_actions = _run_intent_analysis(sections, section_annotations, state, skill_extensions=_exts)
+    if not all_actions:
+        return assemble_plan_md(sections)
 
-    # Phase 2: 精确删除 / Precise deletions
-    _phase2_execute_deletions(sections, all_actions, plan_md)
+    # 执行 chunk 级操作 / Execute chunk-level actions
+    _execute_chunk_actions(sections, all_actions, state, analysis, api_summary,
+                           skill_extensions=_exts)
 
-    # Phase 3: 块级内容生成 / Block-level content generation
-    _phase3_content_generation(sections, all_actions, token_counter, state, plan_md)
-
-    # 拼接 / Re-assemble
-    revised = _assemble_plan(sections)
-    if revised == plan_md:
-        # 无实质修改: 给出明确信号, 而非误导性的「计划已修改」
-        # No effective change — emit a clear signal instead of a misleading "plan revised"
-        logger.warning(_("review.no_effective_change"))
+    # 保存 + 拼接 / Save + assemble
     if memory_dir:
         _save_plan_sections(memory_dir, sections)
-    return revised
+        # 修订后清除旧的 chunk 进度缓存，避免 resume 时使用过时进度
+        # Delete stale chunk progress cache after revision to avoid outdated resume
+        progress_path = Path(memory_dir) / "plan_chunks_progress.json"
+        if progress_path.exists():
+            progress_path.unlink()
+            logger.debug("Deleted stale plan_chunks_progress.json after revision")
+    return assemble_plan_md(sections)
 
 
-# ---------------------------------------------------------------------------
-# Phase 1: 意图分析 / Intent Analysis
-# ---------------------------------------------------------------------------
+# ============================================================================
+# 批注 → Chunk 映射 / Annotation → Chunk Mapping
+# ============================================================================
+
+
+def _iter_all_sections(sections: dict):
+    """遍历所有 section（business_understanding + single_api + biz_flows）。
+    Iterate all sections including business_understanding, single_api, and biz_flows."""
+    bu = sections.get("business_understanding")
+    if isinstance(bu, dict):
+        yield bu
+    for sec in sections.get("single_api", []):
+        yield sec
+    for sec in sections.get("biz_flows", []):
+        yield sec
 
 
 def _map_annotations_to_sections(
-    sections: dict, annotations: List[dict], plan_md: str = "",
+    sections: dict, annotations: List[dict],
 ) -> Dict[str, List[dict]]:
-    """将每条批注映射到其所属区块 / Map each annotation to its section.
+    """将每条批注映射到其所属 chunk / Map each annotation to its chunk.
 
-    优先用 selected_text 子串匹配; 失败时用 line_number 落点兜底 (需 plan_md),
-    避免批注被静默丢弃。Returns {section_key: [annotations]}.
+    优先用 chunk_id 直接匹配（find_section_by_key 现在支持所有 section 类型）。
+    Priority: chunk_id direct match via find_section_by_key (now supports all section types).
+    Returns {section_key: [annotations]}.
     """
     mapping: Dict[str, List[dict]] = {}
     for ann in annotations:
+        # chunk_id 直接匹配 / chunk_id direct match (from Studio annotator DOM traversal)
+        chunk_id = ann.get("chunk_id", "")
+        if chunk_id:
+            found = find_section_by_key(sections, chunk_id)
+            if found:
+                mapping.setdefault(found["key"], []).append(ann)
+                continue
+        # 无 chunk_id 则静默跳过（前端 findChunkId 返回 undefined 的情况）
+        # No chunk_id: silently skip (when frontend findChunkId returns undefined)
         selected = ann.get("selected_text", "")
-        # 1) selected_text 子串匹配 / substring match
-        if selected:
-            if selected in sections.get("global", ""):
-                mapping.setdefault("__global__", []).append(ann)
-                continue
-            placed = False
-            for sec in sections.get("sections", []):
-                if selected in sec.get("content", ""):
-                    mapping.setdefault(sec["key"], []).append(ann)
-                    placed = True
-                    break
-            if placed:
-                continue
-        # 2) line_number 落点兜底 / line_number fallback
-        if plan_md:
-            key = _section_key_for_line(sections, plan_md, ann.get("line_number"))
-            if key:
-                mapping.setdefault(key, []).append(ann)
-                continue
         logger.debug("Annotation not mapped to any section: %s", (selected or "")[:80])
     return mapping
 
 
-def _section_key_for_line(sections: dict, plan_md: str, line_number) -> Any:
-    """按 line_number 落点找所属区块 key / Find section key by line_number range."""
-    if not isinstance(line_number, int):
-        return None
-    global_content = sections.get("global", "")
-    g_base = _section_base_line(plan_md, global_content)
-    if g_base is not None and global_content:
-        if g_base <= line_number < g_base + global_content.count("\n") + 1:
-            return "__global__"
-    for sec in sections.get("sections", []):
-        content = sec.get("content", "")
-        base = _section_base_line(plan_md, content)
-        if base is None:
-            continue
-        if base <= line_number < base + content.count("\n") + 1:
-            return sec["key"]
-    return None
+
+# ============================================================================
+# 意图分析 / Intent Analysis
+# ============================================================================
 
 
-# ---------------------------------------------------------------------------
-# 动态定位辅助 / Dynamic block-location helpers (no hard-coded heading levels)
-# ---------------------------------------------------------------------------
-
-_HEADING_RE = re.compile(r"(?m)^(#{1,6})[ \t]+\S")
-
-
-def _scan_headings(content: str) -> List[tuple]:
-    """扫描所有 Markdown 标题 / Scan all markdown headings.
-
-    Returns [(offset, level, line_text), ...] — 级别由 # 数量决定, 不写死。
-    """
-    headings = []
-    for m in _HEADING_RE.finditer(content):
-        offset = m.start()
-        level = len(m.group(1))
-        line_end = content.find("\n", offset)
-        if line_end == -1:
-            line_end = len(content)
-        headings.append((offset, level, content[offset:line_end]))
-    return headings
-
-
-def _line_start_offset(text: str, line_number: int) -> int:
-    """1-based 行号 → 字符偏移 (clamp) / 1-based line number to char offset."""
-    lines = text.split("\n")
-    line_number = max(1, min(line_number, len(lines)))
-    return sum(len(lines[i]) + 1 for i in range(line_number - 1))
-
-
-def _section_base_line(plan_md: str, content: str):
-    """区块在整篇中的起始行 (1-based) / Section start line in plan_md, or None."""
-    if not plan_md or not content:
-        return None
-    first_line = content.lstrip().split("\n", 1)[0]
-    if not first_line:
-        return None
-    idx = plan_md.find(first_line)
-    if idx == -1:
-        return None
-    return plan_md[:idx].count("\n") + 1
-
-
-def _locate_anchor(content: str, annotation: dict, base_line) -> int:
-    """定位批注锚点在 content 中的字符偏移 / Locate annotation anchor offset.
-
-    优先 line_number (经 base_line 换算为本地行), 无效回退 selected_text。
-    Returns -1 if not locatable.
-    """
-    selected = annotation.get("selected_text", "")
-    line_number = annotation.get("line_number")
-    if base_line is not None and isinstance(line_number, int):
-        local_line = line_number - base_line + 1
-        if local_line >= 1:
-            off = max(0, min(_line_start_offset(content, local_line), len(content)))
-            if selected:
-                # 从锚点向后就近匹配, 消除重复文本歧义 / Nearest match at/after anchor
-                near = content.find(selected, off)
-                if near != -1 and near - off <= 2000:
-                    return near
-                # 锚点上方少量范围 / small window above anchor
-                back = content.rfind(selected, max(0, off - 500), off + len(selected))
-                if back != -1:
-                    return back
-            return off
-    if selected:
-        idx = content.find(selected)
-        if idx != -1:
-            return idx
-    return -1
-
-
-def _enclosing_block(content: str, anchor: int) -> tuple:
-    """anchor 所在的动态标题块 span / Enclosing heading block span.
-
-    取最近上方标题 (级别 L), 延伸到下一个级别 <= L 的标题为止。
-    anchor 在首标题前则返回 (0, 首标题); 无标题则返回整块。
-    """
-    headings = _scan_headings(content)
-    if not headings:
-        return (0, len(content))
-    cur_idx = -1
-    for i, (off, _level, _text) in enumerate(headings):
-        if off <= anchor:
-            cur_idx = i
-        else:
-            break
-    if cur_idx == -1:
-        return (0, headings[0][0])
-    start, level, _ = headings[cur_idx]
-    end = len(content)
-    for off, lvl, _text in headings[cur_idx + 1:]:
-        if lvl <= level:
-            end = off
-            break
-    return (start, end)
-
-
-def _trunc(text: str, n: int = 80) -> str:
-    """截断日志文本 / Truncate text for logs."""
-    text = text.strip()
-    return text[:n] + ("..." if len(text) > n else "")
-
-
-def _validate_intent_actions(actions: List[dict], expected_count: int = -1) -> List[str]:
-    """校验 LLM 返回的意图分析结果 / Validate LLM intent analysis output.
-
-    expected_count >= 0 时额外要求动作条数与批注条数一致 (防截断/漏返/合并条目),
-    不一致则触发重试。Returns a list of error messages (empty = valid).
-    """
-    errors = []
-    if not isinstance(actions, list):
-        return ["Expected JSON array, got %s" % type(actions).__name__]
-    if expected_count >= 0 and len(actions) != expected_count:
-        errors.append(
-            f"Expected {expected_count} action(s), got {len(actions)}"
-        )
-    for i, item in enumerate(actions):
-        if not isinstance(item, dict):
-            errors.append(f"Item {i}: expected object, got {type(item).__name__}")
-            continue
-        action = item.get("action", "")
-        if action not in _VALID_ACTIONS:
-            errors.append(
-                f"Item {i}: invalid action '{action}', must be one of {_VALID_ACTIONS}"
-            )
-        if not item.get("section_key"):
-            errors.append(f"Item {i}: missing section_key")
-    return errors
-
-
-def _get_token_counter(state: GraphState):
-    """获取 TokenCounter 实例 / Get TokenCounter for estimation."""
-    from utils.token_counter import TokenCounter
-    return TokenCounter(model=_h._settings.llm_model)
-
-
-def _make_intent_agent(state: GraphState) -> BaseAgent:
-    """创建意图分析用的 LLM agent (温度极低) / Agent for intent analysis (very low temp)."""
-    return BaseAgent(
-        api_key=_h._settings.llm_api_key,
-        model=_h._settings.llm_model,
-        temperature=0.1,
-        # 用真实输出预算, 防截断靠输入分块而非人为限制输出
-        # Use the real output budget; prevent truncation via input chunking, not by capping output
-        max_tokens=_h._settings.llm_max_output_tokens,
-        base_url=_h._settings.llm_base_url,
-        max_steps=_h._settings.max_steps,
-        context_window=_h._settings.llm_context_window,
-    )
-
-
-def _build_intent_user_prompt(batch: List[dict]) -> str:
-    """构建意图分析 USER prompt / Build intent analysis user prompt.
-
-    batch: [{section, annotations}, ...]
-    """
-    parts = []
-    for item in batch:
-        sec = item["section"]
-        anns = item["annotations"]
-        ann_lines = []
-        for a in anns:
-            ann_lines.append(
-                f"- [Line ~{a.get('line_number', '?')}] "
-                f'Selected: "{a.get("selected_text", "")}"\n'
-                f'  Comment: "{a.get("review_comment", "")}"'
-            )
-        parts.append(
-            f"### Section: {sec['key']} ({sec['type']}, \"{sec['name']}\")\n\n"
-            f"{sec['content']}\n\n"
-            f"Annotations for this section:\n"
-            + "\n".join(ann_lines)
-        )
-    return "\n\n---\n\n".join(parts)
-
-
-def _phase1_intent_analysis(
+def _run_intent_analysis(
     sections: dict,
     section_annotations: Dict[str, List[dict]],
-    token_counter,
     state: GraphState,
+    skill_extensions: List[str] = None,
 ) -> List[dict]:
-    """贪心分批意图分析 + 校验重试 / Greedy-batched intent analysis with validation.
+    """LLM 意图分析: 每条批注 → {section_key, action, reasoning} / Classify each annotation.
 
-    不断加区块到当前批次, 直到 token 预算用尽, 然后起新批次。
-    每个批次独立重置步数计数器, 拥有完整的 max_retries 预算。
+    使用全英文 prompt; JSON 输出必须包装为对象 {"actions": [...]}。
+    Uses all-English prompt; JSON output must be an object (not bare array).
     """
-    # 构建待处理列表 / Build pending list
+    # 构建待分析列表 / Build pending list
     pending = []
-    for sec in sections.get("sections", []):
+    for sec in _iter_all_sections(sections):
         key = sec.get("key", "")
         if key in section_annotations:
             pending.append({
@@ -345,36 +171,20 @@ def _phase1_intent_analysis(
                 "annotations": section_annotations[key],
             })
 
-    # 处理映射到 global 的批注 / Handle annotations mapped to global section
-    if "__global__" in section_annotations:
-        pending.insert(0, {
-            "section": {
-                "key": "__global__",
-                "type": "global",
-                "name": "Global",
-                "content": sections.get("global", ""),
-            },
-            "annotations": section_annotations["__global__"],
-        })
-
     if not pending:
         return []
 
     # 贪心分批 / Greedy batching
-    # 渲染 system prompt 以计算准确 token 数 / Render system prompt for accurate token count
-    system_rendered = render_prompt(
-        PLAN_ANNOTATION_INTENT_SYSTEM,
-        language=get_language_name(),
-    )
+    from utils.token_counter import TokenCounter
+    token_counter = TokenCounter(model=_h._settings.llm_model)
+
+    system_rendered = render_prompt(PLAN_ANNOTATION_INTENT_SYSTEM)
     system_tokens = token_counter.count(system_rendered)
-    user_skeleton_tokens = 200  # USER prompt 骨架 (不含 section content)
-    # 为完整输出预留真实预算, 使输入分块保证「输入 + 满额输出」不超上下文窗口
-    # Reserve the real output budget so chunking keeps input + full output within the context window
     output_reserve = _h._settings.llm_max_output_tokens
     max_batch_input = (
         _h._settings.llm_context_window
         - system_tokens
-        - user_skeleton_tokens
+        - 200  # USER prompt skeleton
         - output_reserve
     )
 
@@ -404,7 +214,24 @@ def _phase1_intent_analysis(
     # 逐批调用 LLM + 校验重试 / Call LLM per batch with validation + retry
     all_actions = []
     max_retries = _h._settings.max_retries
-    agent = _make_intent_agent(state)
+
+    agent = BaseAgent(
+        api_key=_h._settings.llm_api_key,
+        model=_h._settings.llm_model,
+        temperature=0.1,
+        max_retries=_h._settings.max_retries,
+        max_steps=_h._settings.max_steps,
+        base_url=_h._settings.llm_base_url,
+        context_window=_h._settings.llm_context_window,
+        max_output_tokens=_h._settings.llm_max_output_tokens,
+        compression_threshold=_h._settings.llm_context_compression_threshold,
+        rate_limit_delay=_h._settings.llm_rate_limit_delay,
+        retry_base_delay=_h._settings.llm_retry_base_delay,
+        max_concurrency=_h._settings.llm_max_concurrency,
+        request_timeout=_h._settings.llm_request_timeout,
+        extra_params=_h._settings.llm_extra_params,
+        skill_extensions=skill_extensions,
+    )
 
     for batch_idx, batch in enumerate(batches):
         prompt = _build_intent_user_prompt(batch)
@@ -412,11 +239,10 @@ def _phase1_intent_analysis(
         attempts = 0
 
         while attempts <= max_retries:
-            # 每个批次独立重置步数 / Reset steps for each batch
             agent.reset_steps()
-
             try:
-                actions = agent.call_llm_json(prompt, system_rendered)
+                result = agent.call_llm_json_object(prompt, system_rendered, "actions")
+                actions = result.get("actions", [])
             except Exception as e:
                 attempts += 1
                 if attempts > max_retries:
@@ -430,7 +256,6 @@ def _phase1_intent_analysis(
             # 校验 / Validate
             errors = _validate_intent_actions(actions, expected_count)
             if not errors:
-                # 代码级绑定: 动作 ↔ 批注 (按批次顺序, 权威回填) / Bind by batch order
                 _bind_actions_to_batch(actions, batch)
                 all_actions.extend(actions)
                 logger.info(
@@ -445,7 +270,6 @@ def _phase1_intent_analysis(
                     _("review.intent_validation_exhausted",
                       batch=batch_idx + 1, errors="; ".join(errors))
                 )
-                # 重试耗尽, 标记为 noop / Exhausted, mark all as noop
                 for item in batch:
                     for ann in item["annotations"]:
                         all_actions.append({
@@ -462,28 +286,68 @@ def _phase1_intent_analysis(
                   errors="; ".join(errors))
             )
 
-    # 意图分布诊断: 让 noop 误判 / 零动作在日志里现形
-    # Intent distribution diagnostics: surface noop-misclassification / zero-action runs
+    # 意图分布诊断 / Intent distribution diagnostics
     logger.info(_(
         "review.intent_distribution",
         total=len(all_actions),
-        update=sum(1 for a in all_actions if a.get("action") == "update"),
-        delete=sum(1 for a in all_actions if a.get("action") == "delete"),
-        add=sum(1 for a in all_actions if a.get("action") == "add"),
+        fix=sum(1 for a in all_actions if a.get("action") == "fix"),
+        delete_chunk=sum(1 for a in all_actions if a.get("action") == "delete_chunk"),
+        add=sum(1 for a in all_actions if a.get("action") == "add_chunk"),
         noop=sum(1 for a in all_actions if a.get("action") == "noop"),
     ))
     return all_actions
 
 
-def _bind_actions_to_batch(actions: List[dict], batch: List[dict]):
-    """按批次内批注顺序绑定动作 → (权威 section_key, 批注)，忽略 LLM 回传的 section_key。
+def _build_intent_user_prompt(batch: List[dict]) -> str:
+    """构建意图分析 USER prompt / Build intent analysis user prompt."""
+    parts = []
+    for item in batch:
+        sec = item["section"]
+        anns = item["annotations"]
+        ann_lines = []
+        for a in anns:
+            ann_lines.append(
+                f"- [Line ~{a.get('line_number', '?')}] "
+                f'Selected: "{a.get("selected_text", "")}"\n'
+                f'  Comment: "{a.get("review_comment", "")}"'
+            )
+        parts.append(
+            f"### Section: {sec['key']} ({sec.get('type', '?')}, \"{sec.get('name', '?')}\")\n\n"
+            f"{sec['content']}\n\n"
+            f"Annotations for this section:\n"
+            + "\n".join(ann_lines)
+        )
+    return "\n\n---\n\n".join(parts)
 
-    调 LLM 前我方已知每条批注属于哪个分块及其在 prompt 中的排列顺序
-    (_build_intent_user_prompt 即按此顺序展开)，故按位置回填权威 section_key 与批注，
-    彻底规避 LLM 未能一字不差复现 section_key (如带空格的 "api_All Interfaces") 造成的错配。
-    Bind actions to the batch's (section_key, annotation) sequence positionally;
-    ignore the LLM-returned section_key (it may not reproduce keys with spaces).
-    """
+
+def _validate_intent_actions(actions: List[dict], expected_count: int = -1) -> List[str]:
+    """校验 LLM 返回的意图分析结果 / Validate LLM intent analysis output."""
+    errors = []
+    if not isinstance(actions, list):
+        return ["Expected JSON array in 'actions', got %s" % type(actions).__name__]
+    if expected_count >= 0 and len(actions) != expected_count:
+        errors.append(f"Expected {expected_count} action(s), got {len(actions)}")
+    for i, item in enumerate(actions):
+        if not isinstance(item, dict):
+            errors.append(f"Item {i}: expected object, got {type(item).__name__}")
+            continue
+        action = item.get("action", "")
+        if action not in _VALID_ACTIONS:
+            errors.append(
+                f"Item {i}: invalid action '{action}', must be one of {_VALID_ACTIONS}"
+            )
+        if not item.get("section_key"):
+            errors.append(f"Item {i}: missing section_key")
+        # add_chunk 必须有 section 字段 / add_chunk must specify section
+        if action == "add_chunk" and not item.get("section"):
+            errors.append(
+                f"Item {i}: add_chunk requires 'section' field (single_api or biz_flows)"
+            )
+    return errors
+
+
+def _bind_actions_to_batch(actions: List[dict], batch: List[dict]):
+    """按批次内批注顺序绑定动作 / Bind actions to batch (section_key, annotation) positionally."""
     expected = [
         (item["section"]["key"], ann)
         for item in batch
@@ -496,274 +360,380 @@ def _bind_actions_to_batch(actions: List[dict], batch: List[dict]):
             act["annotation"] = None
 
 
-# ---------------------------------------------------------------------------
-# Phase 2: 代码删除 / Code Deletion
-# ---------------------------------------------------------------------------
+# ============================================================================
+# Chunk 级操作执行器 / Chunk-level Action Executor
+# 所有操作只读写 plan_sections.json，不再依赖 outline
+# All operations only read/write plan_sections.json; outline is no longer used
+# ============================================================================
 
 
-def _phase2_execute_deletions(
-    sections: dict, actions: List[dict], plan_md: str = "",
-):
-    """执行所有 delete 动作 — 代码直接操作, 零 LLM。
-
-    每个 delete 动作只处理其绑定的那条批注, 用 line_number + selected_text 精确定位:
-    命中表格数据行则只删该行, 否则删除所在的动态标题块。
-    """
-    delete_actions = [a for a in actions if a.get("action") == "delete"]
-    if not delete_actions:
-        return
-
-    deleted = 0
-    for action in delete_actions:
-        ann = action.get("annotation")
-        if not ann:
-            continue
-        section_key = action.get("section_key", "")
-        if section_key == "__global__":
-            content = sections.get("global", "")
-            base_line = _section_base_line(plan_md, content)
-            new_content = _remove_annotation_target(content, ann, base_line)
-            if new_content is not None:
-                sections["global"] = new_content
-                deleted += 1
-            continue
-        target = _find_section_by_key(sections, section_key)
-        if target is None:
-            continue
-        base_line = _section_base_line(plan_md, target["content"])
-        new_content = _remove_annotation_target(target["content"], ann, base_line)
-        if new_content is not None:
-            target["content"] = new_content
-            deleted += 1
-
-    if deleted > 0:
-        logger.info(_("review.phase2_deleted", count=deleted))
-
-
-def _remove_annotation_target(content: str, annotation: dict, base_line):
-    """精确删除批注目标 / Precisely remove the annotation's target.
-
-    优先删除命中的表格数据行, 否则删除所在的动态标题块。
-    Returns modified content, or None if nothing was removed.
-    """
-    anchor = _locate_anchor(content, annotation, base_line)
-    if anchor == -1:
-        return None
-
-    # 1) 表格数据行删除 / Table-row deletion
-    row_result = _remove_table_rows(content, annotation, anchor)
-    if row_result is not None:
-        return row_result
-
-    # 2) 动态标题块删除 / Dynamic heading-block deletion
-    start, end = _enclosing_block(content, anchor)
-    if start == 0 and end == len(content):
-        # 无标题边界, 不安全整体删除 / No heading boundary — unsafe to delete
-        return None
-    removed = content[start:end]
-    new_content = (content[:start].rstrip() + "\n\n" + content[end:].lstrip())
-    new_content = re.sub(r"\n{3,}", "\n\n", new_content).strip()
-    logger.info(_("review.delete_block", text=_trunc(removed)))
-    return new_content
-
-
-def _is_table_data_row(line: str) -> bool:
-    """是否为表格数据行 (非分隔行) / Is a table data row (not a separator)."""
-    s = line.strip()
-    if not s.startswith("|"):
-        return False
-    # 排除 |---|:--:| 之类的分隔行 / Exclude separator rows
-    return re.match(r"^\|[\s:|\-]+\|?\s*$", s) is None
-
-
-def _remove_table_rows(content: str, annotation: dict, anchor: int):
-    """若 selected_text 命中表格数据行, 仅删这些行 / Remove matched table rows only.
-
-    Returns modified content, or None if this is not a table-row deletion.
-    """
-    selected = annotation.get("selected_text", "")
-    if not selected:
-        return None
-    idx = content.find(selected, anchor)
-    if idx == -1:
-        idx = content.find(selected)
-    if idx == -1:
-        return None
-
-    # 命中文本覆盖的整行范围 / Full-line span covered by the match
-    seg_start = content.rfind("\n", 0, idx) + 1
-    seg_end = content.find("\n", idx + len(selected))
-    if seg_end == -1:
-        seg_end = len(content)
-
-    span_lines = [ln for ln in content[seg_start:seg_end].split("\n") if ln.strip()]
-    if not span_lines or not all(_is_table_data_row(ln) for ln in span_lines):
-        return None
-
-    new_content = content[:seg_start].rstrip("\n") + "\n" + content[seg_end:].lstrip("\n")
-    logger.info(_("review.delete_row", text=_trunc(selected)))
-    return new_content.strip()
-
-
-# ---------------------------------------------------------------------------
-# Phase 3: 块级内容生成 (update / add) / Block-level Content Generation
-# ---------------------------------------------------------------------------
-
-
-def _make_apply_agent(state: GraphState) -> BaseAgent:
-    """创建内容生成用的 LLM agent / Agent for content generation."""
-    return BaseAgent(
-        api_key=_h._settings.llm_api_key,
-        model=_h._settings.llm_model,
-        temperature=0.3,
-        max_tokens=_h._settings.llm_max_output_tokens,
-        base_url=_h._settings.llm_base_url,
-        max_steps=_h._settings.max_steps,
-        context_window=_h._settings.llm_context_window,
-    )
-
-
-def _phase3_content_generation(
+def _execute_chunk_actions(
     sections: dict,
     actions: List[dict],
-    token_counter,
     state: GraphState,
-    plan_md: str = "",
+    analysis: dict,
+    api_summary: list,
+    skill_extensions: List[str] | None = None,
 ):
-    """为 update/add 生成修订内容 — 块级精确 splice / Block-level revision.
+    """执行 chunk 级操作 / Execute chunk-level actions.
 
-    每个动作用 line_number + selected_text 定位其所属动态标题块,
-    只把该块发给 LLM 并原地替换, 其余字节不动。
+    - noop → 跳过 / skip
+    - fix → 重生成 chunk / regenerate chunk
+    - delete_chunk → 从 sections 移除 / remove from sections
+    - add_chunk → 新增 chunk 到 sections / add new chunk to sections
     """
-    gen_actions = [
-        a for a in actions
-        if a.get("action") in ("update", "add") and a.get("annotation")
-    ]
-    if not gen_actions:
+    interfaces = state.get("interfaces", [])
+    user_guidance = state.get("user_guidance", "")
+
+    # 按 chunk_id 分组（一个 chunk 可能有多条批注） / Group by chunk_id
+    by_chunk: Dict[str, List[dict]] = {}
+    for a in actions:
+        if a.get("action") == "noop":
+            continue
+        by_chunk.setdefault(a.get("section_key", ""), []).append(a)
+
+    if not by_chunk:
+        logger.info(_("review.noop_chunk"))
         return
 
-    agent = _make_apply_agent(state)
+    # 生成 agent / Create agent for chunk regeneration
+    agent = PlanGenerator(_h._settings, _h._knowledge, skill_extensions=skill_extensions)
+    iface_dicts = _serialize_interfaces(interfaces)
+    iface_by_id = {d["test_id"]: d for d in iface_dicts if d.get("test_id")}
 
-    # 按 section 分组 / Group by section
-    by_section: Dict[str, List[dict]] = {}
-    for a in gen_actions:
-        by_section.setdefault(a.get("section_key", ""), []).append(a)
+    for chunk_id, chunk_actions in by_chunk.items():
+        # 合并该 chunk 的所有批注为一条 fix instruction / Consolidate annotations
+        fix_text = _consolidate_annotations(
+            [a["annotation"] for a in chunk_actions if a.get("annotation")]
+        )
 
-    for section_key, acts in by_section.items():
-        if section_key == "__global__":
-            target = {"key": "__global__", "name": "Global",
-                      "content": sections.get("global", "")}
-        else:
-            target = _find_section_by_key(sections, section_key)
-        if target is None:
+        action_types = {a.get("action") for a in chunk_actions}
+
+        if "delete_chunk" in action_types:
+            # 删除整个 chunk / Delete entire chunk
+            _execute_delete_chunk(sections, chunk_id)
+            logger.info(_("review.deleted_chunk", key=chunk_id))
             continue
 
-        base_line = _section_base_line(plan_md, target["content"])
-        _apply_actions_to_section(target, acts, base_line, token_counter, agent)
-
-        if section_key == "__global__":
-            sections["global"] = target["content"]
-
-
-def _apply_actions_to_section(
-    target: dict, acts: List[dict], base_line, token_counter, agent: BaseAgent,
-):
-    """在单个 section 内按动态标题块逐块修订 / Revise per dynamic block within a section."""
-    content = target["content"]
-    section_name = target.get("name", target.get("key", "?"))
-
-    # 定位每个动作所属块; 任一定位失败则回退整块处理 / Locate blocks; fallback whole section
-    located = []
-    for a in acts:
-        anchor = _locate_anchor(content, a["annotation"], base_line)
-        if anchor == -1:
-            revised = _revise_block(
-                content, [x["annotation"] for x in acts],
-                "add" if any(x.get("action") == "add" for x in acts) else "update",
-                section_name, token_counter, agent,
+        if "add_chunk" in action_types:
+            # 新增 chunk / Add new chunk
+            add_action = next(a for a in chunk_actions if a.get("action") == "add_chunk")
+            section_type = add_action.get("section", "")
+            _execute_add_chunk(
+                sections, chunk_id, section_type, fix_text,
+                agent, iface_by_id, analysis, api_summary, user_guidance,
             )
-            if revised and revised.strip():
-                target["content"] = revised.strip()
-            return
-        start, end = _enclosing_block(content, anchor)
-        located.append((start, end, a.get("action"), a["annotation"]))
+            continue
 
-    # 合并同一块的动作 / Merge actions sharing the same block span
-    merged: Dict[tuple, dict] = {}
-    for start, end, atype, ann in located:
-        m = merged.setdefault((start, end), {"has_add": False, "anns": []})
-        m["anns"].append(ann)
-        if atype == "add":
-            m["has_add"] = True
+        if "fix" in action_types:
+            # 重生成现有 chunk / Regenerate existing chunk
+            chunk = find_section_by_key(sections, chunk_id)
+            if not chunk:
+                logger.warning(_("review.chunk_not_found", key=chunk_id))
+                continue
 
-    # 按起点降序 splice, 避免前面的替换使后面偏移失效 / Splice bottom-up
-    for (start, end) in sorted(merged, key=lambda s: s[0], reverse=True):
-        info = merged[(start, end)]
-        block_text = content[start:end]
-        atype = "add" if info["has_add"] else "update"
-        revised = _revise_block(
-            block_text, info["anns"], atype, section_name, token_counter, agent,
-        )
-        if revised and revised.strip():
-            content = (content[:start].rstrip() + "\n\n"
-                       + revised.strip() + "\n\n" + content[end:].lstrip())
-            content = re.sub(r"\n{3,}", "\n\n", content)
-    target["content"] = content.strip()
+            chunk_type = chunk.get("type", "")
+            if chunk_type == "global":
+                _fix_global_chunk(sections, chunk, fix_text, analysis, api_summary,
+                                  agent, user_guidance)
+                logger.info(_("review.fixed_global"))
+            elif chunk_type == "api":
+                _fix_api_chunk(chunk, fix_text, analysis,
+                               api_summary, iface_by_id, agent, user_guidance)
+                logger.info(_("review.fixed_chunk", key=chunk_id))
+            elif chunk_type == "biz":
+                # 先重画 Mermaid / Regenerate Mermaid first
+                _regenerate_mermaid_for_flow(chunk, iface_by_id, sections, agent)
+                # 再生成计划文本 / Then regenerate plan text
+                _fix_biz_chunk(chunk, fix_text, analysis,
+                               api_summary, iface_by_id, agent, user_guidance)
+                logger.info(_("review.fixed_chunk", key=chunk_id))
 
 
-def _revise_block(
-    block_text: str, annotations: List[dict], action_type: str,
-    section_name: str, token_counter, agent: BaseAgent,
+# ============================================================================
+# Chunk 操作: fix / Fix Chunk Operations
+# ============================================================================
+
+
+def _fix_global_chunk(
+    sections: dict, chunk: dict, fix_text: str,
+    analysis: dict, api_summary: list,
+    agent: PlanGenerator, user_guidance: str,
 ):
-    """把单个块 + 批注发给 LLM 生成修订块 / LLM-revise a single block.
+    """重新生成 global (Business Understanding) chunk / Regenerate global chunk.
 
-    Returns the revised block text, or None if there is nothing to do.
+    与 _fix_api_chunk / _fix_biz_chunk 统一模式：接收 chunk dict，更新其 content。
+    Unified pattern with _fix_api_chunk / _fix_biz_chunk: receives chunk dict, updates its content.
     """
-    if action_type == "add":
-        system_prompt, user_template = PLAN_ANNOTATION_ADD_SYSTEM, PLAN_ANNOTATION_ADD_USER
-    else:
-        system_prompt, user_template = PLAN_ANNOTATION_UPDATE_SYSTEM, PLAN_ANNOTATION_UPDATE_USER
+    augmented = _augment_guidance(user_guidance, fix_text)
+    analysis_json = json.dumps(analysis, ensure_ascii=False, indent=2)
+    api_summary_json = json.dumps(api_summary or [], ensure_ascii=False, indent=2)
 
-    annotations_text = _build_apply_user_prompt({"content": block_text}, annotations)
-    if not annotations_text.strip():
-        # 绑定已保证相关性, 无过滤兜底 / Binding guarantees relevance — unfiltered fallback
-        annotations_text = _format_annotation_lines(annotations)
-    if not annotations_text.strip():
-        return None
-
-    logger.info(
-        _("review.phase3_block",
-          name=section_name, type=action_type, tokens=token_counter.count(block_text))
-    )
-    system_rendered = render_prompt(system_prompt, language=get_language_name())
     prompt = render_prompt(
-        user_template, section_content=block_text, annotations_list=annotations_text,
+        PLAN_CHUNK_GLOBAL_USER,
+        requirement_analysis=analysis_json,
+        api_summary=api_summary_json,
+        user_guidance=augmented,
+        reference_summary="(none)",
+        language=get_language_name(),
     )
-    return agent.call_llm(prompt, system_rendered)
+    system_msg = render_prompt(
+        PLAN_CHUNK_GLOBAL_SYSTEM,
+        language=get_language_name(),
+    )
+    agent.reset_steps()
+    chunk["content"] = agent.call_llm(prompt, system_msg)
+    # 同步更新顶层 sections dict / Sync to top-level sections dict
+    sections["business_understanding"] = chunk
 
 
-def _format_annotation_lines(annotations: List[dict]) -> str:
-    """格式化批注列表为 prompt 文本 / Format annotations as prompt text."""
-    lines = []
-    for a in annotations:
-        lines.append(
-            f"- [Line ~{a.get('line_number', '?')}] "
-            f'Selected: "{a.get("selected_text", "")}"\n'
-            f'  Comment: "{a.get("review_comment", "")}"'
-        )
-    return "\n".join(lines)
+def _fix_api_chunk(
+    chunk: dict, fix_text: str,
+    analysis: dict, api_summary: list,
+    iface_by_id: dict, agent: PlanGenerator, user_guidance: str,
+):
+    """重新生成 API group chunk / Regenerate API group chunk from section data.
 
-
-def _build_apply_user_prompt(target: dict, annotations: List[dict]) -> str:
-    """构建内容生成 USER prompt / Build content generation user prompt.
-
-    从批注中提取 selected_text 和 review_comment，
-    只保留 selected_text 出现在 content 中的批注。
-    Filters annotations to those whose selected_text appears in the content.
+    不再依赖 outline group，所有数据直接从 chunk 自身获取。
+    No longer depends on outline group; all data taken directly from chunk.
     """
-    content = target.get("content", "")
-    matched = [
-        a for a in annotations
-        if a.get("selected_text", "") and a.get("selected_text", "") in content
+    augmented = _augment_guidance(user_guidance, fix_text)
+    global_context = sections_get_global_for_fix(analysis, api_summary)
+    # 从 chunk 自身获取 / Get from chunk directly
+    group_name = chunk.get("name", "")
+    api_ids = chunk.get("api_ids", [])
+    test_focus = chunk.get("test_focus", "")
+    group_ifaces = [iface_by_id[aid] for aid in api_ids if aid in iface_by_id]
+
+    prompt = render_prompt(
+        PLAN_CHUNK_API_SECTION_USER,
+        interface_defs=json.dumps(group_ifaces, ensure_ascii=False, indent=2),
+        user_guidance=augmented,
+        language=get_language_name(),
+    )
+    system_msg = render_prompt(
+        PLAN_CHUNK_API_SECTION_SYSTEM,
+        global_context=global_context,
+        group_name=group_name,
+        test_focus=test_focus,
+        group_api_ids=json.dumps(api_ids),
+        language=get_language_name(),
+    )
+    agent.reset_steps()
+    chunk["content"] = agent.call_llm(prompt, system_msg)
+
+
+def _regenerate_mermaid_for_flow(
+    chunk: dict, iface_by_id: dict,
+    sections: dict, agent: PlanGenerator,
+):
+    """重新绘制单个业务流的 Mermaid 图 / Re-draw Mermaid for a biz flow.
+
+    只更新 chunk["mermaid"] 字段，不修改 chunk["content"]。
+    Only updates chunk["mermaid"]; does NOT modify chunk["content"].
+    所有数据从 chunk 自身获取（不再需要 outline flow 参数）。
+    All data taken from chunk directly (no outline flow parameter needed).
+    """
+    api_ids = chunk.get("involved_apis", [])
+    flow_ifaces = [iface_by_id[aid] for aid in api_ids if aid in iface_by_id]
+    bu = sections.get("business_understanding", "")
+    # 兼容新旧格式 / Compatible with old (str) and new (dict) format
+    global_context = bu.get("content", "") if isinstance(bu, dict) else bu
+    flow_name = chunk.get("name", "")
+    flow_description = chunk.get("description", "")
+
+    prompt = render_prompt(
+        PLAN_CHUNK_MERMAID_USER,
+        flow_name=flow_name,
+        flow_description=flow_description,
+        interface_defs=json.dumps(flow_ifaces, ensure_ascii=False, indent=2),
+    )
+    system_msg = render_prompt(
+        PLAN_CHUNK_MERMAID_SYSTEM,
+        flow_name=flow_name,
+        flow_description=flow_description,
+        flow_api_ids=", ".join(api_ids),
+        global_context=global_context,
+        language=get_language_name(),
+    )
+    agent.reset_steps()
+    mermaid_content = agent.call_llm(prompt, system_msg)
+    chunk["mermaid"] = mermaid_content
+
+
+def _fix_biz_chunk(
+    chunk: dict, fix_text: str,
+    analysis: dict, api_summary: list,
+    iface_by_id: dict, agent: PlanGenerator, user_guidance: str,
+):
+    """重新生成 biz flow chunk（Mermaid 已重画）/ Regenerate biz flow chunk (Mermaid done).
+
+    所有数据从 chunk 自身获取（不再需要 outline flow 参数）。
+    All data taken from chunk directly (no outline flow parameter needed).
+    """
+    augmented = _augment_guidance(user_guidance, fix_text)
+    global_context = sections_get_global_for_fix(analysis, api_summary)
+    # 从 chunk 自身获取 / Get from chunk directly
+    api_ids = chunk.get("involved_apis", [])
+    flow_ifaces = [iface_by_id[aid] for aid in api_ids if aid in iface_by_id]
+    flow_name = chunk.get("name", "?")
+    flow_description = chunk.get("description", "")
+    involved_apis = chunk.get("involved_apis", [])
+
+    flows_desc = [
+        f"- Name: {flow_name}\n"
+        f"  Description: {flow_description}\n"
+        f"  APIs: {', '.join(involved_apis)}"
     ]
-    return _format_annotation_lines(matched)
+    flows_list = "\n\n".join(flows_desc)
+
+    prompt = render_prompt(
+        PLAN_CHUNK_BIZ_SECTION_USER,
+        interface_defs=json.dumps(flow_ifaces, ensure_ascii=False, indent=2),
+        user_guidance=augmented,
+        language=get_language_name(),
+    )
+    system_msg = render_prompt(
+        PLAN_CHUNK_BIZ_SECTION_SYSTEM,
+        global_context=global_context,
+        flows_list=flows_list,
+        language=get_language_name(),
+    )
+    agent.reset_steps()
+    new_content = agent.call_llm(prompt, system_msg)
+    # content 只存纯文本，mermaid 留在 chunk["mermaid"] 中
+    # content stores plain text only; mermaid stays in chunk["mermaid"]
+    # assemble_plan_md() 负责合并 / assemble_plan_md() handles merging
+    chunk["content"] = new_content
+
+
+# ============================================================================
+# Chunk 操作: delete_chunk / add_chunk
+# ============================================================================
+
+
+def _execute_delete_chunk(sections: dict, chunk_id: str):
+    """从 sections 中移除 chunk / Remove chunk from sections only.
+
+    outline 不再维护 — plan_sections.json 是唯一数据源。
+    outline is no longer maintained — plan_sections.json is the single source of truth.
+    """
+    for arr_name in ("single_api", "biz_flows"):
+        arr = sections.get(arr_name, [])
+        sections[arr_name] = [
+            s for s in arr
+            if s.get("key") != chunk_id and s.get("chunk_id") != chunk_id
+        ]
+
+
+def _execute_add_chunk(
+    sections: dict, chunk_id: str,
+    section_type: str, fix_text: str,
+    agent: PlanGenerator, iface_by_id: dict,
+    analysis: dict, api_summary: list,
+    user_guidance: str,
+):
+    """新增 chunk 到 sections / Add new chunk to sections.
+
+    outline 不再维护 — plan_sections.json 是唯一数据源。
+    outline is no longer maintained — plan_sections.json is the single source of truth.
+
+    若 chunk_id 已存在则自动追加后缀去重 / Auto-append suffix if chunk_id already exists.
+    """
+    # chunk_id 去重 / Dedup: avoid overwriting existing chunks
+    original = chunk_id
+    suffix = 1
+    while find_section_by_key(sections, chunk_id):
+        suffix += 1
+        chunk_id = f"{original}_{suffix}"
+    if chunk_id != original:
+        logger.info(_("review.chunk_id_dedup", original=original, assigned=chunk_id))
+
+    # 确定 section 类型 (代码级路由兜底) / Determine section type (code-level fallback)
+    if section_type not in ("single_api", "biz_flows"):
+        section_type = "single_api" if chunk_id.startswith("api_") else "biz_flows"
+
+    if section_type == "single_api":
+        new_chunk = {
+            "chunk_id": chunk_id,
+            "key": chunk_id,
+            "type": "api",
+            "name": chunk_id.replace("api_", "").replace("_", " ").title(),
+            "section": "single_api",
+            "content": "",
+            "api_ids": [],
+            "test_focus": "",
+        }
+        sections.setdefault("single_api", []).append(new_chunk)
+        if fix_text:
+            _fix_api_chunk(new_chunk, fix_text, analysis,
+                          api_summary, iface_by_id, agent, user_guidance)
+    else:
+        new_chunk = {
+            "chunk_id": chunk_id,
+            "key": chunk_id,
+            "type": "biz",
+            "name": chunk_id.replace("biz_", "").replace("_", " ").title(),
+            "section": "biz_flows",
+            "content": "",
+            "mermaid": "",
+            "involved_apis": [],
+            "description": "",
+        }
+        sections.setdefault("biz_flows", []).append(new_chunk)
+        if fix_text:
+            _regenerate_mermaid_for_flow(new_chunk, iface_by_id, sections, agent)
+            _fix_biz_chunk(new_chunk, fix_text, analysis,
+                          api_summary, iface_by_id, agent, user_guidance)
+
+
+# ============================================================================
+# 辅助函数 / Helpers
+# ============================================================================
+
+
+def _consolidate_annotations(annots: List[dict]) -> str:
+    """合并多条批注为单个 fix instruction / Consolidate annotations into one instruction."""
+    parts = []
+    for a in annots:
+        if not a:
+            continue
+        sel = a.get("selected_text", "")
+        comment = a.get("review_comment", "")
+        if comment:
+            parts.append(f"- User comment: {comment}")
+            if sel:
+                parts.append(f"  Regarding: \"{sel}\"")
+    return "\n".join(parts)
+
+
+def _augment_guidance(user_guidance: str, fix_text: str) -> str:
+    """将修订批注追加到用户指导中 / Append revision instructions to user guidance."""
+    base = user_guidance or "(none)"
+    if not fix_text:
+        return base
+    return (
+        f"{base}\n\n"
+        f"## Revision Instructions (from User Feedback)\n"
+        f"The user reviewed the previous plan and provided this feedback. "
+        f"Apply ONLY the changes that are relevant to the content you are "
+        f"generating. Keep everything else identical to the previous version."
+        f"\n\n{fix_text}"
+    )
+
+
+def sections_get_global_for_fix(analysis: dict, api_summary: list) -> str:
+    """获取 global context 用于 fix prompt（简化版）/ Get global context for fix prompts.
+
+    从 section 对象的 content 字段读取（兼容新旧格式）。
+    Reads from section object's content field (compatible with old and new formats).
+    """
+    parts = []
+    biz_summary = ""
+    if isinstance(analysis, dict):
+        biz_summary = analysis.get("business_summary", "")
+    if biz_summary:
+        parts.append(f"## Business Understanding\n{biz_summary}")
+    if api_summary:
+        parts.append(f"## API Summaries\n{json.dumps(api_summary, ensure_ascii=False, indent=2)}")
+    return "\n\n".join(parts)

@@ -1,0 +1,29 @@
+case_type: single
+test_id: TC_REGISTER_BOUNDARY_006
+relevance_id: api_api_auth_register_post
+tag: P2
+api_name: 用户注册（用户名最小长度边界，正向）
+app_name: foliMail
+method: POST
+url: /api/auth/register
+request_head:
+  Content-Type: application/json
+request_body:
+  username: user1234
+  password: Pass1234
+  nickname: ""
+status_code: 200
+preprocessors:
+  - name: user-fixture
+    config:
+      mode: predelete
+      username: user1234
+postprocessors:
+  - name: user-fixture
+    config:
+      cleanup: true
+assert_dict:
+  code: '100000'
+assert_rules:
+  - $.data.id is_not_null
+  - $.data.username == user1234

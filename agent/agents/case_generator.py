@@ -66,7 +66,6 @@ class CaseGenerator(BaseAgent):
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
             max_retries=settings.max_retries,
             max_steps=settings.max_steps,
             base_url=settings.llm_base_url,
@@ -121,7 +120,7 @@ class CaseGenerator(BaseAgent):
 
         logger.info("Generating test cases from plan (~%d tokens)...", input_tokens)
         system_msg = render_prompt(CASE_GENERATION_SYSTEM, language=get_language_name())
-        result = self.call_llm_json(prompt, system_msg)
+        result = self.call_llm_json_object(prompt, system_msg, "single_cases")
 
         single_cases = self._parse_single_cases(result.get("single_cases", []))
         biz_flows = self._parse_biz_flows(result.get("biz_flows", []))
@@ -234,7 +233,7 @@ class CaseGenerator(BaseAgent):
                 f"Please generate single API test cases for the above interfaces. Output only one JSON object containing the single_cases field."
             )
 
-            result = self.call_llm_json(prompt, system)
+            result = self.call_llm_json_object(prompt, system, "single_cases")
             single_cases = self._parse_single_cases(result.get("single_cases", []))
             return {"single_cases": single_cases}
         else:
@@ -255,7 +254,7 @@ class CaseGenerator(BaseAgent):
                 f"Output only one JSON object containing the biz_flows field."
             )
 
-            result = self.call_llm_json(prompt, system)
+            result = self.call_llm_json_object(prompt, system, "biz_flows")
             biz_flows = self._parse_biz_flows(result.get("biz_flows", []))
             return {"biz_flows": biz_flows}
 
@@ -286,7 +285,8 @@ class CaseGenerator(BaseAgent):
         if plan.mermaid_flows:
             parts.append("\n## Business Flow Diagrams")
             for name, diagram in plan.mermaid_flows.items():
-                parts.append(f"\n### {name}\n```mermaid\n{diagram}\n```")
+                # diagram 已含 ```mermaid 包裹，不再重复添加 / diagram already wrapped; no double-wrap
+                parts.append(f"\n### {name}\n{diagram}")
 
         if plan.biz_flow_scenarios:
             parts.append("\n## Business Flow Scenarios")

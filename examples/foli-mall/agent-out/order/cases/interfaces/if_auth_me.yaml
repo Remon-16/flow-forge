@@ -1,0 +1,6 @@
+case_type: interfaces
+test_id: IF_AUTH_ME
+api_name: 获取当前用户信息
+app_name: foliMail
+method: GET
+url: /api/auth/me

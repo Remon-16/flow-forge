@@ -1,0 +1,62 @@
+case_type: biz
+sheet_name: 无效订单ID操作验证
+api_name: 无效订单ID操作（详情/取消/收货均返回 204001）
+steps:
+  - step_id: Step_LoginBuyer
+    relevance_id: IF_AUTH_LOGIN
+    api_name: 买家登录
+    app_name: foliMail
+    method: POST
+    url: /api/auth/login
+    request_head:
+      Content-Type: application/json
+    request_body:
+      username: buyer01
+      password: buyer123
+    status_code: 200
+    assert_dict:
+      code: '100000'
+    assert_rules:
+      - $.data.token is_not_null
+
+  - step_id: Step_GetInvalidOrder
+    relevance_id: IF_ORDER_DETAIL
+    api_name: 查询不存在的订单详情
+    app_name: foliMail
+    method: GET
+    url: /api/orders/999999999999999999
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body: {}
+    status_code: 200
+    assert_dict:
+      code: '204001'
+
+  - step_id: Step_CancelInvalidOrder
+    relevance_id: IF_ORDER_CANCEL
+    api_name: 取消不存在的订单
+    app_name: foliMail
+    method: PUT
+    url: /api/orders/999999999999999999/cancel
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body: {}
+    status_code: 200
+    assert_dict:
+      code: '204001'
+
+  - step_id: Step_ReceiveInvalidOrder
+    relevance_id: IF_ORDER_RECEIVE
+    api_name: 对不存在的订单确认收货
+    app_name: foliMail
+    method: PUT
+    url: /api/orders/999999999999999999/receive
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body: {}
+    status_code: 200
+    assert_dict:
+      code: '204001'

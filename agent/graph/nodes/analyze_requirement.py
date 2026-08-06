@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 def analyze_requirement_node(state: GraphState) -> GraphState:
-    """运行需求分析器（单次 LLM 调用）。
+    """运行需求分析器，支持多文档独立分析后合并。
 
-    Run the requirement analyzer (single-shot LLM call).
+    Run the requirement analyzer, with per-document independent analysis and merge.
     """
     state.setdefault("errors", [])
 
-    text = state.get("requirement_text", "")
-    if not text.strip():
+    texts = state.get("requirement_texts", [])
+    if not texts:
         state["requirement_analysis"] = {
             "business_flows": [], "roles": [], "constraints": [], "exceptions": [],
         }
@@ -38,7 +38,21 @@ def analyze_requirement_node(state: GraphState) -> GraphState:
     _skills_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'skills', 'builtin')
     _exts = load_skill_extensions('requirement_analyzer', _h._settings, _skills_dir)
     agent = RequirementAnalyzer(_h._settings, _h._knowledge, skill_extensions=_exts)
-    result = agent.analyze(text)
+
+    if len(texts) == 1:
+        # 单文档：直接分析 / Single doc: direct analysis
+        result = agent.analyze(texts[0])
+    else:
+        # 多文档：逐文件独立分析后合并 / Multi-doc: per-file analysis then merge
+        all_results = []
+        for i, text in enumerate(texts):
+            if not text.strip():
+                continue
+            logger.info(f"Analyzing requirement doc {i+1}/{len(texts)} ({len(text)} chars)")
+            result = agent.analyze(text)
+            all_results.append(result)
+        result = agent._merge_analyses(all_results, "")
+
     state["requirement_analysis"] = result
 
     memory_dir = state.get("memory_dir", "")

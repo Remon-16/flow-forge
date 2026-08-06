@@ -1,0 +1,22 @@
+case_type: single
+test_id: TC_CART_LIST_002
+relevance_id: IF_CART_LIST
+api_name: 获取购物车列表-空购物车
+app_name: foliMail
+method: GET
+url: /api/cart
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+preprocessors:
+  - name: cart-fixture
+    config:
+      mode: clear
+assert_dict:
+  $.code: "100000"
+assert_rules:
+  - "$.data.length() == 0"
+tag: P1
+remark: 空购物车返回空数组

@@ -3,23 +3,32 @@ import { computed, ref, onMounted, onUpdated, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownIt from 'markdown-it'
 import mermaid from 'mermaid'
+import type { PlanSections } from '@flow-forge-schemas'
+import { SECTION_HEADINGS } from '@flow-forge-schemas'
 
 export interface AnnotationData {
   line_number: number
   selected_text: string
   review_comment: string
+  chunk_id?: string  // 所属 chunk_id / owning chunk identifier
 }
 
 const props = defineProps<{
   planContent: string
   annotations: AnnotationData[]
   showLineNumbers?: boolean
+  /** plan_sections.json 数据，用于 chunk_id 关联 / plan_sections.json data for chunk_id association */
+  sections?: PlanSections | null
+  /** 语言代码，用于章节标题 / Language code for section headings */
+  language?: string
 }>()
 
 const emit = defineEmits<{
-  'add-annotation': [selectedText: string, lineNumber: number]
+  'add-annotation': [selectedText: string, lineNumber: number, chunkId?: string]
   'edit-annotation': [index: number]
   'delete-annotation': [index: number]
+  /** 用户点击某个 chunk block 时发射 / Emitted when user clicks a chunk block */
+  'chunk-click': [chunkId: string]
 }>()
 
 const { t } = useI18n()
@@ -29,6 +38,7 @@ const contextMenuX = ref(0)
 const contextMenuY = ref(0)
 const selectedText = ref('')
 const selectedLineNumber = ref(0)
+const selectedChunkId = ref<string | undefined>(undefined)  // 在 onContextMenu 中提前捕获，避免 selection 失效 / captured early in onContextMenu to avoid stale selection
 
 // Annotation popover state
 const annotationPopoverVisible = ref(false)
@@ -40,7 +50,9 @@ const activeAnnotation = computed(() => {
   return props.annotations[activeAnnotationIdx.value]
 })
 
-const md = new MarkdownIt({ html: true, breaks: true })
+// html: false 防止内容中的 HTML 标签（如 <script>）被浏览器解释导致截断
+// html: false prevents HTML tags in content (e.g. <script>) from being interpreted by the browser
+const md = new MarkdownIt({ html: false, breaks: true })
 
 // --- Mermaid initialization ---
 mermaid.initialize({ startOnLoad: false, theme: 'default' })
@@ -166,17 +178,144 @@ function applyAnnotationHighlights(html: string, annotations: AnnotationData[]):
   return doc.body.innerHTML
 }
 
-const renderedHtml = computed(() => {
-  const blocks = splitIntoBlocks(props.planContent)
+/** 从 PlanSections 数据直接构建 block 列表并渲染。
+ *  Build block list directly from PlanSections data and render.
+ *  不再依赖 markdown 中的 <!-- chunk:XXX --> 标记和行号匹配，
+ *  从根本上消除行号偏移导致的 chunk_id 错配问题。
+ *  No longer depends on <!-- chunk:XXX --> markers and line-number matching,
+ *  eliminating chunk_id misattribution caused by line offset. */
+function renderFromSections(sections: PlanSections): string {
+  interface ChunkBlock extends MarkdownBlock {
+    chunkId: string
+  }
+
+  const allBlocks: ChunkBlock[] = []
+
+  // 按顺序收集各 section 的 (文本, chunkId) 对 / Collect (text, chunkId) pairs per section in order
+  // 使用配对方式替代计数器，避免空 section 导致索引错位
+  // Using paired approach instead of counters to avoid index misalignment from empty sections
+  interface SectionText {
+    text: string
+    chunkId: string
+  }
+  const sectionTexts: SectionText[] = []
+  const lang = props.language || 'zh-CN'
+  const h = SECTION_HEADINGS
+
+  // 业务理解 / Business understanding
+  const buSection = sections.business_understanding
+  const buText = buSection?.content?.trim() || ''
+  if (buText) {
+    const heading = h.business_understanding?.[lang] || ''
+    const fullText = heading ? heading + '\n\n' + buText : buText
+    sectionTexts.push({ text: fullText, chunkId: buSection?.chunk_id || 'business_understanding' })
+  }
+
+  // 单接口测试（仅首个 section 前加标题）/ Single API (heading only before first section)
+  let isFirstApi = true
+  for (const sec of sections.single_api) {
+    const c = sec.content?.trim()
+    if (c) {
+      let fullText = c
+      if (isFirstApi) {
+        const heading = h.single_api?.[lang] || ''
+        if (heading) fullText = heading + '\n\n' + c
+        isFirstApi = false
+      }
+      // 添加 fallback：优先 chunk_id，其次 key / Fallback: chunk_id first, then key
+      sectionTexts.push({ text: fullText, chunkId: sec.chunk_id || sec.key || '' })
+    }
+  }
+
+  // 业务链路测试（仅首个 section 前加标题，文本在前流程图在后）/ Biz flows (heading only before first, content before mermaid)
+  let isFirstBiz = true
+  for (const sec of sections.biz_flows) {
+    const parts: string[] = []
+    if (isFirstBiz) {
+      const heading = h.biz_flows?.[lang] || ''
+      if (heading) parts.push(heading)
+      isFirstBiz = false
+    }
+    if (sec.content?.trim()) parts.push(sec.content.trim())
+    if (sec.mermaid?.trim()) parts.push(sec.mermaid.trim())
+    if (parts.length) {
+      sectionTexts.push({ text: parts.join('\n\n'), chunkId: sec.chunk_id || sec.key || '' })
+    }
+  }
+
+  // 对每个 section 文本独立 splitIntoBlocks，标记 chunk_id
+  // Split each section independently, tag with chunk_id
+  let cumulativeLine = 1
+
+  for (const { text, chunkId } of sectionTexts) {
+    const secBlocks = splitIntoBlocks(text)
+    for (const b of secBlocks) {
+      allBlocks.push({
+        ...b,
+        startLine: cumulativeLine + b.startLine - 1,
+        chunkId,
+      })
+    }
+    // 更新累积行号（包含 section 间分隔的 \n\n）/ Update cumulative line count (includes \n\n separator)
+    cumulativeLine += text.split('\n').length + 2
+  }
+
+  // 渲染 blocks / Render blocks
+  let prevChunkId = ''
+  let html = allBlocks.map(block => {
+    if (!block.content) return ''
+    const rendered = md.render(block.content)
+    const isFirst = block.chunkId !== prevChunkId
+    prevChunkId = block.chunkId
+    const chunkAttr = block.chunkId ? ` data-chunk-id="${block.chunkId}"` : ''
+    const firstAttr = isFirst ? ' data-first-of-chunk="true"' : ''
+    return `<div data-source-line="${block.startLine}"${chunkAttr}${firstAttr} class="md-block">${rendered}</div>`
+  }).join('\n')
+
+  return applyAnnotationHighlights(html, props.annotations)
+}
+
+/** 旧的 marker 解析方式，作为 sections 不可用时的兜底。
+ *  Old marker-based parsing as fallback when sections is unavailable. */
+function renderFromMarkers(markdown: string): string {
+  const chunkMarkers: { line: number; chunkId: string }[] = []
+  const markerRegex = /<!--\s*chunk:(\S+)\s*-->/g
+  let m: RegExpExecArray | null
+  while ((m = markerRegex.exec(markdown)) !== null) {
+    const lineNum = markdown.substring(0, m.index).split('\n').length
+    chunkMarkers.push({ line: lineNum, chunkId: m[1] })
+  }
+  markdown = markdown.replace(markerRegex, '')
+
+  const blocks = splitIntoBlocks(markdown)
+  let currentChunkId = ''
+  const sortedMarkers = chunkMarkers.sort((a, b) => a.line - b.line)
+  let prevChunkId = ''
 
   let html = blocks.map(block => {
     if (!block.content) return ''
+    for (const mk of sortedMarkers) {
+      if (mk.line <= block.startLine) {
+        currentChunkId = mk.chunkId
+      }
+    }
     const rendered = md.render(block.content)
-    return `<div data-source-line="${block.startLine}" class="md-block">${rendered}</div>`
+    const chunkAttr = currentChunkId ? ` data-chunk-id="${currentChunkId}"` : ''
+    const isFirst = currentChunkId !== prevChunkId
+    prevChunkId = currentChunkId
+    const firstAttr = isFirst ? ' data-first-of-chunk="true"' : ''
+    return `<div data-source-line="${block.startLine}"${chunkAttr}${firstAttr} class="md-block">${rendered}</div>`
   }).join('\n')
 
-  html = applyAnnotationHighlights(html, props.annotations)
-  return html
+  return applyAnnotationHighlights(html, props.annotations)
+}
+
+const renderedHtml = computed(() => {
+  if (props.sections) {
+    return renderFromSections(props.sections)
+  }
+  // 兜底：使用旧的 marker 方式 / Fallback: old marker-based approach
+  return renderFromMarkers(props.planContent)
 })
 
 // Mermaid rendering
@@ -223,6 +362,26 @@ function findLineNumber(): number {
   return 0
 }
 
+/** 从 DOM 树中查找选中文本所属的 chunk_id。
+ *  Find chunk_id from DOM tree by traversing from selection anchor.
+ *  不再使用文本子串匹配，直接从渲染后的 block 元素获取 data-chunk-id。
+ *  No longer uses substring matching; gets data-chunk-id directly from rendered blocks.
+ *  与 findLineNumber() 使用相同的 DOM 遍历模式。
+ *  Uses the same DOM traversal pattern as findLineNumber(). */
+function findChunkId(): string | undefined {
+  const selection = window.getSelection()
+  if (!selection || !selection.anchorNode) return undefined
+  let node: Node | null = selection.anchorNode
+  while (node && node !== previewRef.value) {
+    if (node instanceof Element) {      /* Element 同时兼容 HTMLElement 和 SVGElement / Element covers both HTMLElement and SVGElement */
+      const chunkId = (node as HTMLElement).dataset?.chunkId
+      if (chunkId) return chunkId  /* 跳过空字符串和 未设置属性 / skip empty string and unset */
+    }
+    node = node.parentNode
+  }
+  return undefined
+}
+
 // --- Context menu ---
 function onContextMenu(e: MouseEvent) {
   const selection = window.getSelection()
@@ -240,6 +399,8 @@ function onContextMenu(e: MouseEvent) {
   e.preventDefault()
   selectedText.value = text
   selectedLineNumber.value = findLineNumber()
+  // 在 selection 有效时立即捕获 chunk_id / Capture chunk_id immediately while selection is valid
+  selectedChunkId.value = findChunkId()
   contextMenuX.value = e.clientX
   contextMenuY.value = e.clientY
   contextMenuVisible.value = true
@@ -247,7 +408,10 @@ function onContextMenu(e: MouseEvent) {
 
 function handleAddAnnotation() {
   contextMenuVisible.value = false
-  emit('add-annotation', selectedText.value, selectedLineNumber.value)
+  // 使用 onContextMenu 中存储的 chunk_id，避免重新读取已失效的 selection
+  // Use stored chunk_id from onContextMenu to avoid re-reading a stale selection
+  emit('add-annotation', selectedText.value, selectedLineNumber.value, selectedChunkId.value)
+  selectedChunkId.value = undefined  // 重置 / reset
 }
 
 function onMarkdownClick(e: MouseEvent) {
@@ -266,6 +430,20 @@ function onMarkdownClick(e: MouseEvent) {
   }
   annotationPopoverVisible.value = false
   contextMenuVisible.value = false
+}
+
+/** 双击 md-block 打开右侧 chunk 编辑器。
+ *  Double-click md-block to open right chunk editor.
+ *  与单击不同，双击是更明确的 "编辑" 意图，避免浏览时误触发。
+ *  Unlike single-click, double-click is a clearer "edit" intent, preventing accidental triggers. */
+function onMarkdownDblClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  // 双击批注标记时不触发 chunk 编辑 / Don't trigger chunk edit on annotation double-click
+  if (target.closest('mark.annotated')) return
+  const block = target.closest('.md-block') as HTMLElement | null
+  if (block?.dataset?.chunkId) {
+    emit('chunk-click', block.dataset.chunkId)
+  }
 }
 
 function openAnnotationPopover(idx: number, markEl: HTMLElement) {
@@ -322,6 +500,7 @@ defineExpose({ scrollToAnnotation })
       v-html="renderedHtml"
       @contextmenu="onContextMenu"
       @click="onMarkdownClick"
+      @dblclick="onMarkdownDblClick"
     />
 
     <!-- Annotation click popover -->
@@ -374,6 +553,11 @@ defineExpose({ scrollToAnnotation })
   user-select: text;
   cursor: text;
 }
+/* 开启行号时确保最小宽度，使绝对定位的 ::before/::after 溢出时触发外层水平滚动条
+   Ensure minimum width when line numbers on, so absolute ::before/::after overflow triggers outer horizontal scrollbar */
+.markdown-preview.show-line-numbers {
+  min-width: 1500px;         /* 行号 + chunk_id 标签 左侧空间 + 正文 */
+}
 
 .md-block {
   /* display: contents would break data-source-line traversal for some children */
@@ -399,6 +583,29 @@ defineExpose({ scrollToAnnotation })
   line-height: inherit;
   user-select: none;
   pointer-events: none;
+}
+
+/* chunk_id 标签 — 贴纸风格，显示在行号右侧、正文左侧，仅每个 chunk 首块显示
+   chunk_id label — sticker-style between line numbers and content, only on first block of each chunk */
+.markdown-preview.show-line-numbers :deep(.md-block[data-first-of-chunk])::after {
+  content: attr(data-chunk-id);
+  position: absolute;
+  left: -130px;        /* 行号栏左侧，不遮挡正文 / left of line-number gutter, no text overlap */
+  text-align: right;   /* 右对齐，贴近行号栏 / right-align toward line numbers */
+  top: 0;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 10px;
+  color: #1677ff;
+  background: #e6f4ff;
+  padding: 0 6px;
+  border-radius: 2px;
+  line-height: 18px;
+  user-select: none;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Markdown rendered content styles */

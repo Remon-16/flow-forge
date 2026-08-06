@@ -1,10 +1,10 @@
 // 读取 shared/schemas/ 下的 JSON 数据文件，构造 TypeScript 常量。
 // Load JSON data files from shared/schemas/ and construct TypeScript constants.
 
-import columns from '../../schemas/columns.json'
-import fieldMapping from '../../schemas/field-mapping.json'
-import constants from '../../schemas/constants.json'
-import operators from '../../schemas/operators.json'
+import columns from '../schemas/columns.json'
+import fieldMapping from '../schemas/field-mapping.json'
+import constants from '../schemas/constants.json'
+import operators from '../schemas/operators.json'
 
 // ============================================================================
 // Excel 列头定义 / Excel column definitions
@@ -32,7 +32,11 @@ export const PASCAL_TO_SNAKE: Record<string, string> =
 
 // JSON 列字段 — 在 Excel 中存为 JSON 字符串，在内存中为 dict/list
 // JSON column fields — stored as JSON strings in Excel, dict/list in memory
-export const JSON_FIELDS: readonly string[] = fieldMapping.json_fields
+// 转为 PascalCase（studio 端使用 PascalCase 字段名）
+// Mapped to PascalCase for studio consumption
+export const JSON_FIELDS: readonly string[] = fieldMapping.json_fields.map(
+  (f: string) => SNAKE_TO_PASCAL[f] || f
+)
 
 // ============================================================================
 // 校验常量 / Validation constants
@@ -76,3 +80,28 @@ export const VALID_FUNCTIONS: readonly string[] = operators.valid_functions
 
 // typeof 合法类型 / Valid types for typeof operator
 export const VALID_TYPES: readonly string[] = operators.valid_types
+
+// ============================================================================
+// plan_sections 类型与 helper / plan_sections types and helpers
+// ============================================================================
+
+export type { ApiSection, BizSection, PlanSections } from './plan_sections'
+export { assemblePlanMd, SECTION_HEADINGS } from './plan_sections'
+
+// ============================================================================
+// CLI 参数 schema / CLI argument schemas
+// ============================================================================
+
+export {
+  CLI_SCHEMAS,
+  type CliArgDef,
+  type SubcommandDef,
+  type CliSchema,
+  getCliSchema,
+  getEditableDestSet,
+  getEditableArgs,
+  getFlagMap,
+  getInternalDestSet,
+  keyToFlag,
+  shouldPushCliArg,
+} from './cli'

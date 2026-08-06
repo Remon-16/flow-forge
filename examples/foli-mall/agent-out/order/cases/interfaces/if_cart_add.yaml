@@ -1,0 +1,6 @@
+case_type: interfaces
+test_id: IF_CART_ADD
+api_name: 添加商品到购物车
+app_name: foliMail
+method: POST
+url: /api/cart

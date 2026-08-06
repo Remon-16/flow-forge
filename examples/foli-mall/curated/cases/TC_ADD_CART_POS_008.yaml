@@ -1,0 +1,18 @@
+case_type: single
+test_id: TC_ADD_CART_POS_008
+relevance_id: api_api_cart_post
+tag: P0
+api_name: 添加商品到购物车（正向）
+app_name: foliMail
+method: POST
+url: /api/cart
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer02}"
+request_body:
+  productId: 1000000000000003001
+  quantity: 2
+status_code: 200
+assert_dict:
+  code: '100000'
+remark: 修正：使用种子商品真实 ID 1000000000000003001（iPhone 15 Pro Max）。

@@ -1,0 +1,16 @@
+case_type: single
+test_id: TC_CART_DELETE_002
+relevance_id: IF_CART_DELETE
+api_name: 删除购物车项-项不存在
+app_name: foliMail
+method: DELETE
+url: /api/cart/999999999999999999
+request_head:
+  Content-Type: application/json
+  Authorization: "Bearer #{buyer01}"
+request_body: {}
+status_code: 200
+assert_dict:
+  $.code: "207002"
+tag: P1
+remark: 不存在的购物车项应返回 207002

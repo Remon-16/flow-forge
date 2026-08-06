@@ -1,0 +1,35 @@
+case_type: biz
+sheet_name: 跨用户越权-订单详情
+steps:
+  - step_id: Step01
+    relevance_id: IF_AUTH_ME
+    api_name: 为 buyer01 造待支付订单
+    app_name: foliMail
+    method: GET
+    url: /api/auth/me
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer01}"
+    request_body: {}
+    status_code: 200
+    preprocessors:
+      - name: order-fixture
+        config:
+          order_status: 0
+          order_id: 9000000000000000404
+    assert_dict:
+      $.code: "100000"
+  - step_id: Step02
+    relevance_id: IF_ORDER_DETAIL
+    api_name: buyer02 查询 buyer01 订单详情（期望拒绝）
+    app_name: foliMail
+    method: GET
+    url: /api/orders/9000000000000000404
+    request_head:
+      Content-Type: application/json
+      Authorization: "Bearer #{buyer02}"
+    request_body: {}
+    status_code: 200
+    assert_dict:
+      $.code: "200003"
+    remark: "BugEvidence：期望 200003（无权执行此操作）；foli-mall getOrderDetail 已知缺少属主校验，实测预期返回 100000"
