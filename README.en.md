@@ -108,7 +108,7 @@ Both paths produce the same case format, so they are interchangeable and chainab
 
 ## Flow Forge Studio (GUI workbench)
 
-Studio is a Windows desktop app (Vue 3 + Tauri 2) that puts "generate → edit → execute & convert" into a single interface with no CLI flags to memorize. Cases from either path can be opened and edited here.
+Studio is a Windows desktop app (Vue 3 + Tauri 2) that puts "generate → edit → execute & convert" into a single interface with no CLI flags to memorize. Cases from either path can be opened and edited here. **For first-time use, please configure the Python environment and the paths to the agent/ and python/ directories in the Settings `⚙` at the top right.** 
 
 ![Flow Forge Studio home page](./studio/docs/images/studio_main_en.png)
 

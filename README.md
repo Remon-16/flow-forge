@@ -108,7 +108,7 @@ python main.py --requirement docs/req.md --api docs/api.yaml --auto
 
 ## Flow Forge Studio（GUI 工作台）
 
-Studio 是 Windows 桌面应用（Vue 3 + Tauri 2），把「生成 → 编辑 → 执行与转换」集中在一个界面，无需记忆 CLI 参数；两条路径生成的用例都可以在 Studio 中打开编辑。
+Studio 是 Windows 桌面应用（Vue 3 + Tauri 2），把「生成 → 编辑 → 执行与转换」集中在一个界面，无需记忆 CLI 参数；两条路径生成的用例都可以在 Studio 中打开编辑。**首次使用需要在右上角设置`⚙`中配置python环境以及agent/和python/目录地址。** 
 
 ![Flow Forge Studio 首页](./studio/docs/images/studio_main_chs.png)
 

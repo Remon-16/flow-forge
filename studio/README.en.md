@@ -19,7 +19,7 @@ A desktop test-case workbench built with Vue 3 + Ant Design Vue + Tauri 2: AI ca
 
 ![Flow Forge Studio home page](./docs/images/studio_main_en.png)
 
-The home page offers six feature entries grouped by workflow: generation (AI Case Generator / Plan Annotator), editing (Excel / YAML Editor), and execution & conversion (Case Executor / Case Converter). More UI screenshots are in the [Feature Guide](./docs/features.en.md).
+The home page offers six feature entries grouped by workflow: generation (AI Case Generator / Plan Annotator), editing (Excel / YAML Editor), and execution & conversion (Case Executor / Case Converter). More UI screenshots are in the [Feature Guide](./docs/features.en.md). **For first-time use, please configure the Python environment and the paths to the agent/ and python/ directories in the Settings `⚙` at the top right.** 
 
 ## Quick Start
 

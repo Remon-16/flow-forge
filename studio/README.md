@@ -19,7 +19,7 @@
 
 ![Flow Forge Studio 首页（中文）](./docs/images/studio_main_chs.png)
 
-首页提供六大功能入口，按流程分组：生成（AI 用例生成 / 计划批注）、编辑（Excel / YAML 编辑器）、执行与转换（用例执行器 / 用例转换器）。更多界面截图见 [功能详解](./docs/features.md)。
+首页提供六大功能入口，按流程分组：生成（AI 用例生成 / 计划批注）、编辑（Excel / YAML 编辑器）、执行与转换（用例执行器 / 用例转换器）。更多界面截图见 [功能详解](./docs/features.md)。**首次使用需要在右上角设置`⚙`中配置python环境以及agent/和python/目录地址。** 
 
 ## 快速开始
 
